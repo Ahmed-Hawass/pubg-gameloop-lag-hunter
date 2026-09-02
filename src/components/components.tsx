@@ -4,7 +4,7 @@
 
 import { useEffect, useState, useRef, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Check, FileText, Info, X } from "lucide-react";
+import { Check, CircleHelp, FileText, Info, X } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Button — every action in the app
@@ -30,7 +30,7 @@ export function Button(props: {
 
 // ---------------------------------------------------------------------------
 // MetricCard — labeled meter with real sparkline from engine history.
-// Icons render filled (high stroke weight) — expressive, not decorative.
+// A small corner "?" tooltip explains what this metric means.
 // ---------------------------------------------------------------------------
 export function MetricCard(props: {
   label: string;
@@ -38,8 +38,10 @@ export function MetricCard(props: {
   value: number | null;
   /** 0-100 history, newest last; null history = dim "no data" state */
   history: number[] | null;
+  /** what this metric measures — shown as a corner tooltip */
+  hint?: string;
 }) {
-  const { label, icon, value, history } = props;
+  const { label, icon, value, history, hint } = props;
   const dim = value === null || history === null;
   const v = value ?? 0;
   const tone = v >= 85 ? "danger" : v >= 60 ? "warn" : "ok";
@@ -50,7 +52,10 @@ export function MetricCard(props: {
           {icon}
           {label}
         </div>
-        <div className="metric-val num">{dim ? "--" : `${v}%`}</div>
+        <div className="metric-head-right">
+          {hint ? <MetricHint text={hint} /> : null}
+          <div className="metric-val num">{dim ? "--" : `${v}%`}</div>
+        </div>
       </div>
       <div className="bar-track">
         <div className={`bar-fill bar-${tone}`} style={{ width: dim ? 0 : `${v}%` }} />
@@ -297,6 +302,49 @@ export function Tip(props: { text: string; children: ReactNode }) {
       onBlur={() => setAnchor(null)}
     >
       {children}
+      {anchor
+        ? createPortal(
+            <span className="hint-tooltip" role="tooltip" style={{ left: anchor.left, bottom: anchor.bottom }}>
+              {text}
+            </span>,
+            document.body
+          )
+        : null}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// MetricHint — the tiny corner tooltip inside MetricCard: a small circled
+// "?" that opens the same portaled tooltip as everywhere else. Rendered by
+// MetricCard (hint text), not by callers.
+// ---------------------------------------------------------------------------
+function MetricHint(props: { text: string }) {
+  const { text } = props;
+  const ref = useRef<HTMLSpanElement>(null);
+  const [anchor, setAnchor] = useState<{ left: number; bottom: number } | null>(null);
+
+  const show = () => {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const estW = Math.min(280, text.length * 6.5 + 28);
+    let left = r.left + r.width / 2 - estW / 2;
+    left = Math.max(12, Math.min(left, window.innerWidth - estW - 12));
+    setAnchor({ left, bottom: window.innerHeight - r.top + 8 });
+  };
+
+  return (
+    <span
+      ref={ref}
+      className="metric-hint-dot"
+      tabIndex={0}
+      onMouseEnter={show}
+      onFocus={show}
+      onMouseLeave={() => setAnchor(null)}
+      onBlur={() => setAnchor(null)}
+    >
+      <CircleHelp size={12} />
       {anchor
         ? createPortal(
             <span className="hint-tooltip" role="tooltip" style={{ left: anchor.left, bottom: anchor.bottom }}>

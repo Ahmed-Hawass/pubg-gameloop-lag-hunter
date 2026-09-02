@@ -81,6 +81,31 @@
   align-items: center;
   justify-content: space-between;
 }
+/* value + corner tooltip share the right side of the card head */
+.metric-head-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+/* the tiny circled "?" — quiet, sits just before the value */
+.metric-hint-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  color: var(--text-3);
+  opacity: 0.75;
+  cursor: help;
+  outline: none;
+  transition: color 0.15s, opacity 0.15s;
+}
+.metric-hint-dot:hover,
+.metric-hint-dot:focus-visible {
+  color: var(--text-2);
+  opacity: 1;
+}
 .metric-name {
   display: flex;
   align-items: center;

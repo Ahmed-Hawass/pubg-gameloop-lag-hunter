@@ -39,7 +39,6 @@ export function MonitorView(props: {
     if (secs === 600) return t.min10;
     if (secs === 1800) return t.min30;
     if (secs === 3600) return t.min60;
-    if (secs === 7200) return t.hour2;
     return `${Math.round(secs / 60)}m`;
   };
 
@@ -66,14 +65,14 @@ export function MonitorView(props: {
       <div className="controls">
         <Button
           label={running ? t.stop : t.startScanning}
-          icon={running ? <Square size={15} /> : <Play size={16} />}
+          icon={running ? <Square size={16} /> : <Play size={16} />}
           variant={running ? "danger-filled" : "primary"}
           size="lg"
           disabled={busy || status.status === "stopping"}
           onClick={onToggle}
         />
         <div className="scan-duration" role="radiogroup" aria-label={t.autoStop}>
-          {[300, 600, 1800, 3600, 7200].map((v) => (
+          {[300, 600, 1800, 3600].map((v) => (
             <button
               key={v}
               className={`scan-dur-btn ${durationSecs === v ? "is-active" : ""}`}
@@ -90,22 +89,37 @@ export function MonitorView(props: {
         </div>
       </div>
 
-      {/* metrics — always present; neutral until live */}
+      {/* metrics — always present; neutral until live. Each card carries a
+          small corner tooltip explaining what it measures. */}
       <div className="metrics metrics-4">
-        <MetricCard label={t.cpu} icon={<Cpu size={14} />} value={live ? bars!.cpu : null} history={live ? hist!.cpu : null} />
-        <MetricCard label={t.ram} icon={<Activity size={14} />} value={live ? bars!.ram : null} history={live ? hist!.ram : null} />
+        <MetricCard
+          label={t.cpu}
+          icon={<Cpu size={14} />}
+          value={live ? bars!.cpu : null}
+          history={live ? hist!.cpu : null}
+          hint={t.cpuHint}
+        />
+        <MetricCard
+          label={t.ram}
+          icon={<Activity size={14} />}
+          value={live ? bars!.ram : null}
+          history={live ? hist!.ram : null}
+          hint={t.ramHint}
+        />
         <MetricCard
           label={t.gpu}
           icon={<Gauge size={14} />}
           value={live ? bars!.gpu : null}
           history={live && bars!.gpu !== null ? hist!.gpu : null}
+          hint={t.gpuHint}
         />
-        <MetricCard label={t.disk} icon={<HardDrive size={14} />} value={live ? bars!.disk : null} history={live ? hist!.disk : null} />
-      </div>
-      <div className="metrics-hints">
-        {live ? (
-          <Hint text={t.metricsHint}>{t.whatDoTheseMean}</Hint>
-        ) : null}
+        <MetricCard
+          label={t.disk}
+          icon={<HardDrive size={14} />}
+          value={live ? bars!.disk : null}
+          history={live ? hist!.disk : null}
+          hint={t.diskHint}
+        />
       </div>
 
       {/* timeline — always present */}

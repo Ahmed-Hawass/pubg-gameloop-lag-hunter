@@ -1,4 +1,6 @@
 // ChecksView.tsx — read-only environment checks + "take me there" buttons.
+// Gently live: power plan / pagefile / battery state can change while the
+// user is on this tab (unplugging the charger is the classic case).
 
 import { useEffect, useState } from "react";
 import { CheckCircle2, ShieldAlert, XCircle } from "lucide-react";
@@ -6,17 +8,34 @@ import { EmptyState } from "../components/components";
 import { api, type SystemChecks } from "../bridge";
 import { useLang } from "../i18n";
 
-export function ChecksView() {
+const LIVE_INTERVAL_MS = 30000;
+
+export function ChecksView(props: { active: boolean }) {
+  const { active } = props;
   const { t } = useLang();
   const [checks, setChecks] = useState<SystemChecks | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const load = async (silent: boolean) => {
+    try {
+      setChecks(await api.systemChecks());
+      setError(null);
+    } catch (e) {
+      if (!silent) setError(String(e));
+    }
+  };
+
   useEffect(() => {
-    api
-      .systemChecks()
-      .then(setChecks)
-      .catch((e) => setError(String(e)));
+    void load(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!active) return;
+    const timer = window.setInterval(() => void load(true), LIVE_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
 
   if (error) {
     return (

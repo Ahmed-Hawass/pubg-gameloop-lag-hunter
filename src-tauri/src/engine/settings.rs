@@ -17,7 +17,7 @@ pub struct Settings {
     /// legacy from v2 — ignored by the engine (thresholds are dynamic now),
     /// kept only so old files migrate without surprises.
     pub sensitivity: String,
-    /// default auto-stop in minutes (bounded 5..=120 by the UI/engine);
+    /// default auto-stop in minutes (bounded 5..=60 by the UI/engine);
     /// 5 = the lightest scan, the default for every new user
     pub auto_stop_minutes: u32,
     /// "auto" (follow the OS at launch) | "en" | "ar" (user toggle)
@@ -117,7 +117,7 @@ pub fn save(s: &Settings) -> Result<(), String> {
 
 /// Validate + clamp an auto-stop choice coming from the UI.
 pub fn clamp_auto_stop(minutes: u32) -> u32 {
-    minutes.clamp(5, 120)
+    minutes.clamp(5, 60)
 }
 
 /// Language values the UI can send; anything else means "auto".
@@ -198,7 +198,7 @@ mod tests {
     fn auto_stop_clamped() {
         assert_eq!(clamp_auto_stop(0), 5);
         assert_eq!(clamp_auto_stop(30), 30);
-        assert_eq!(clamp_auto_stop(9999), 120);
+        assert_eq!(clamp_auto_stop(9999), 60);
     }
 
     #[test]

@@ -1,18 +1,44 @@
 # Security Policy
 
-## Reporting a vulnerability
+## Reporting a Vulnerability
 
-Found something that shouldn't be possible? Email **ahmedmahmoud7awass@gmail.com** (or open a private security advisory on GitHub). Please include:
+Found something that shouldn't be possible?
 
-- What you can do and what you expected
-- Steps to reproduce
-- The log file from `%LOCALAPPDATA%\LagHunter\logs` if relevant
+Please email **[ahmedmahmoud7awass@gmail.com](mailto:ahmedmahmoud7awass@gmail.com)** or open a private security advisory on GitHub.
 
-We respond within 72 hours.
+When reporting a vulnerability, please include:
+
+* **What you can do** and what you expected to happen
+* **Steps to reproduce**
+* The log file from `%LOCALAPPDATA%\LagHunter\logs\`, if relevant
+
+We aim to respond within **72 hours**.
+
+---
 
 ## Scope
 
-- The tool runs as a normal user — it never requests administrator privileges.
-- It opens only whitelisted Windows panels (`sysdm.cpl`, `powercfg.cpl`).
-- Session deletion validates IDs against path traversal; the logs rotate after 7 days.
-- The updater reads the public GitHub releases feed over HTTPS and never downloads or runs anything itself — it links you to the release page.
+### 👤 Runs as a normal user
+
+The tool never requests administrator privileges.
+
+### 🪟 Whitelisted Windows panels
+
+The tool opens only:
+
+```text
+sysdm.cpl
+powercfg.cpl
+```
+
+### 🗂️ Safe session deletion
+
+Session deletion validates IDs against path traversal.
+
+Logs rotate after **7 days**.
+
+### 🔄 Updater
+
+The updater reads the public GitHub releases feed over **HTTPS**.
+
+It never downloads or runs anything itself — it links you to the release page.

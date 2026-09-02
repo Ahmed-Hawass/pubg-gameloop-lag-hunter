@@ -217,6 +217,38 @@
   padding-inline-end: 4px;
 }
 
+/* ---- keep-alive view switching: all tabs stay mounted, only the active
+   one is displayed. Views render direct children inside wrapper divs, so
+   the page selectors above must reach through the wrapper. ---- */
+.content > div {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.content > div > .reports,
+.content > div > .sys,
+.content > div > .procs,
+.content > div > .checks,
+.content > div > .about,
+.content > div > .settings-page,
+.content > div > .monitor {
+  overflow-y: auto;
+  max-width: min(100%, 760px);
+  padding-inline-end: 4px;
+}
+
+.content > div > .monitor {
+  max-width: none;
+}
+
+/* HIDDEN beats the flex layout above — same specificity class + element
+   chain would lose to `.content > div`; this wins regardless of order */
+.content > div.is-hidden-view {
+  display: none;
+}
+
 /* ---- icon micro-animations (quiet, app-wide) ---- */
 /* sidebar icons: nudge on hover, pop when becoming active */
 .sb-item svg {
@@ -242,6 +274,13 @@
 .content > .checks::-webkit-scrollbar,
 .content > .about::-webkit-scrollbar,
 .content > .settings-page::-webkit-scrollbar,
+.content > div > .reports::-webkit-scrollbar,
+.content > div > .sys::-webkit-scrollbar,
+.content > div > .procs::-webkit-scrollbar,
+.content > div > .checks::-webkit-scrollbar,
+.content > div > .about::-webkit-scrollbar,
+.content > div > .settings-page::-webkit-scrollbar,
+.content > div > .monitor::-webkit-scrollbar,
 .monitor::-webkit-scrollbar,
 .feed-list::-webkit-scrollbar {
   width: 8px;
@@ -252,6 +291,13 @@
 .content > .checks::-webkit-scrollbar-thumb,
 .content > .about::-webkit-scrollbar-thumb,
 .content > .settings-page::-webkit-scrollbar-thumb,
+.content > div > .reports::-webkit-scrollbar-thumb,
+.content > div > .sys::-webkit-scrollbar-thumb,
+.content > div > .procs::-webkit-scrollbar-thumb,
+.content > div > .checks::-webkit-scrollbar-thumb,
+.content > div > .about::-webkit-scrollbar-thumb,
+.content > div > .settings-page::-webkit-scrollbar-thumb,
+.content > div > .monitor::-webkit-scrollbar-thumb,
 .monitor::-webkit-scrollbar-thumb,
 .feed-list::-webkit-scrollbar-thumb {
   background: var(--border-2);
@@ -263,6 +309,13 @@
 .content > .checks::-webkit-scrollbar-track,
 .content > .about::-webkit-scrollbar-track,
 .content > .settings-page::-webkit-scrollbar-track,
+.content > div > .reports::-webkit-scrollbar-track,
+.content > div > .sys::-webkit-scrollbar-track,
+.content > div > .procs::-webkit-scrollbar-track,
+.content > div > .checks::-webkit-scrollbar-track,
+.content > div > .about::-webkit-scrollbar-track,
+.content > div > .settings-page::-webkit-scrollbar-track,
+.content > div > .monitor::-webkit-scrollbar-track,
 .monitor::-webkit-scrollbar-track,
 .feed-list::-webkit-scrollbar-track {
   background: transparent;

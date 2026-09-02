@@ -19,7 +19,7 @@ struct StatusPayload {
 
 /// Hard cap on auto-stop duration: no session may run forever (forgotten scans
 /// would keep typeperf + dmon running and writing to disk indefinitely).
-const MAX_SESSION_SECS: u64 = 2 * 60 * 60; // 2 hours
+const MAX_SESSION_SECS: u64 = 60 * 60; // 1 hour (the longest UI choice)
 
 #[tauri::command]
 fn session_start(app: tauri::AppHandle, auto_stop_secs: Option<u64>) -> Result<StatusPayload, String> {
@@ -119,12 +119,12 @@ fn system_info() -> Result<engine::system::SystemInfo, String> {
 
 #[tauri::command]
 fn top_processes() -> Result<Vec<engine::system::TopProcess>, String> {
-    engine::system::query_top_processes()
+    engine::system::top_processes_cached()
 }
 
 #[tauri::command]
 fn system_checks() -> Result<engine::system::SystemChecks, String> {
-    engine::system::query_system_checks()
+    engine::system::system_checks_cached()
 }
 
 #[tauri::command]
@@ -339,6 +339,16 @@ pub fn run() {
 
             let handle = _app.handle().clone();
             spawn_state_pusher(handle);
+
+            // prefetch the system tabs in the background: rig info, checks,
+            // and top processes each cost a PowerShell spawn (0.5–2 s). By
+            // the user reaches those tabs, the caches are already warm —
+            // first open feels as instant as every later one.
+            std::thread::spawn(|| {
+                let _ = engine::system::system_info_cached();
+                let _ = engine::system::system_checks_cached();
+                let _ = engine::system::top_processes_cached();
+            });
             Ok(())
         })
         .run(tauri::generate_context!())

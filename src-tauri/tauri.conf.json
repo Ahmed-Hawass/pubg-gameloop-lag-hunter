@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "PUBG GameLoop Lag Hunter",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "identifier": "app.laghunter",
   "build": {
     "frontendDist": "../dist",
@@ -44,7 +44,7 @@
     "copyright": "Copyright (c) 2026 Ahmed Hawass. MIT License.",
     "category": "Utility",
     "shortDescription": "Lag diagnosis for PUBG Mobile on GameLoop",
-    "longDescription": "A Windows tool that watches your PC while you play PUBG Mobile on GameLoop, catches every stutter, and tells you what caused it and how to fix it.",
+    "longDescription": "Analyze your PUBG Mobile performance on GameLoop, detect stutters, and uncover exactly what's causing them.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

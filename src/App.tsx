@@ -270,35 +270,45 @@ export default function App() {
               </Tip>
             </nav>
             <main className="content">
-          {view === "monitor" ? (
-            <MonitorView
-              status={effectiveStatus}
-              busy={busy}
-              durationSecs={durationSecs}
-              onDurationChange={chooseDuration}
-              onToggle={toggle}
-              onOpenReport={openLatestReport}
-              gameloopUp={gameloopUp}
-              dismissedSession={dismissedSession}
-              onDismissSummary={dismissSummary}
-            />
-          ) : view === "system" ? (
-            <SystemView />
-          ) : view === "processes" ? (
-            <ProcessesView />
-          ) : view === "checks" ? (
-            <ChecksView />
-          ) : view === "settings" ? (
-            <SettingsView />
-          ) : view === "about" ? (
-            <AboutView updateAvailable={updateAvailable} updateUrl={updateUrl} />
-          ) : (
-            <ReportsView
-              openId={reportOpenId}
-              onOpened={() => setReportOpenId(null)}
-              onDeleted={(id) => setDeletedSession(id)}
-            />
-          )}
+              {/* every view mounts ONCE and stays alive; switching only flips
+                  CSS visibility. Data-carrying tabs (system/processes/checks)
+                  keep their state and never re-pay a PowerShell spawn per
+                  visit — the engine's TTL cache handles freshness. */}
+              <div className={view === "monitor" ? "" : "is-hidden-view"}>
+                <MonitorView
+                  status={effectiveStatus}
+                  busy={busy}
+                  durationSecs={durationSecs}
+                  onDurationChange={chooseDuration}
+                  onToggle={toggle}
+                  onOpenReport={openLatestReport}
+                  gameloopUp={gameloopUp}
+                  dismissedSession={dismissedSession}
+                  onDismissSummary={dismissSummary}
+                />
+              </div>
+              <div className={view === "system" ? "" : "is-hidden-view"}>
+                <SystemView />
+              </div>
+              <div className={view === "processes" ? "" : "is-hidden-view"}>
+                <ProcessesView active={view === "processes"} />
+              </div>
+              <div className={view === "checks" ? "" : "is-hidden-view"}>
+                <ChecksView active={view === "checks"} />
+              </div>
+              <div className={view === "settings" ? "" : "is-hidden-view"}>
+                <SettingsView />
+              </div>
+              <div className={view === "about" ? "" : "is-hidden-view"}>
+                <AboutView updateAvailable={updateAvailable} updateUrl={updateUrl} />
+              </div>
+              <div className={view === "reports" ? "" : "is-hidden-view"}>
+                <ReportsView
+                  openId={reportOpenId}
+                  onOpened={() => setReportOpenId(null)}
+                  onDeleted={(id) => setDeletedSession(id)}
+                />
+              </div>
             </main>
           </>
         )}

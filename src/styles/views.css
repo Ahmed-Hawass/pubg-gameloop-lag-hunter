@@ -18,6 +18,13 @@
   flex: none;
 }
 
+/* the scan toggle keeps a stable width across Start/Stop so switching never
+   nudges the row — the widest label wins */
+.controls .btn-lg {
+  min-width: 158px;
+  justify-content: center;
+}
+
 .session-clock {
   margin-inline-start: auto;
   display: flex;
@@ -42,7 +49,6 @@
   flex: none;
 }
 
-.metrics-hints,
 .timeline-hint {
   display: flex;
   justify-content: flex-end;

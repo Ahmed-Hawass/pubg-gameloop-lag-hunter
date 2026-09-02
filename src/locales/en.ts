@@ -9,7 +9,6 @@ export const en = {
   minimize: "Minimize",
   maximize: "Maximize (window size is fixed)",
   close: "Close",
-  whatDoTheseMean: "What do these values mean?",
 
   // ---- dialog (unified — replaces toasts) ----
   dialog: {
@@ -73,7 +72,7 @@ export const en = {
   // ---- first-run welcome (two pages, once ever) ----
   welcomeTitle: "PUBG GameLoop Lag Hunter",
   welcomeWhat:
-    "We watch your PC while you play PUBG Mobile on GameLoop, catch every stutter, and tell you what caused it — in plain words.",
+    "Analyze your PUBG Mobile performance on GameLoop, detect stutters, and uncover exactly what's causing them.",
   welcomeCardDisk: "Disk paging storms",
   welcomeCardCpu: "CPU saturation & throttling",
   welcomeCardGpu: "GPU power-state hitches",
@@ -116,7 +115,7 @@ export const en = {
   // ---- about tab ----
   aboutTitle: "PUBG GameLoop Lag Hunter",
   aboutWhat:
-    "A Windows tool that watches your PC while you play PUBG Mobile on GameLoop, catches every stutter, and tells you what caused it and how to fix it.",
+    "Analyze your PUBG Mobile performance on GameLoop, detect stutters, and uncover exactly what's causing them.",
   aboutImpact: "What it costs your machine",
   aboutImpactItems: [
     "Under 1% CPU while scanning — it measures, it doesn't compete",
@@ -142,10 +141,7 @@ export const en = {
   min10: "10 min",
   min30: "30 min",
   min60: "60 min",
-  hour2: "2 hours",
   time: "Time",
-  metricsHint:
-    "Processor usage. High while GameLoop is translating the game — fine. Sustained 95%+ with lag means the CPU can't keep up.",
   timelineHint: "Every red dot is a lag spike we captured. The bar fills toward your auto-stop time.",
 
   // ---- monitor: hero states ----
@@ -157,6 +153,14 @@ export const en = {
   ram: "RAM",
   gpu: "GPU",
   disk: "Disk",
+  cpuHint:
+    "Processor usage. High while GameLoop translates the game — fine. Sustained 95%+ with lag means the CPU can't keep up.",
+  ramHint:
+    "Memory in use. When it fills up, the game swaps files to disk — every swap is a stutter.",
+  gpuHint:
+    "Graphics card usage while rendering. Low values during a match can mean power-saving hitches.",
+  diskHint:
+    "Disk activity. Spikes during hot drops are loading — sustained 100% with lag is a paging storm.",
 
   // ---- monitor: activity feed ----
   activity: "Activity",

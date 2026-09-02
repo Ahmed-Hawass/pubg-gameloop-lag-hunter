@@ -1,61 +1,131 @@
 # PUBG GameLoop Lag Hunter
 
-A Windows tool that watches your PC while you play PUBG Mobile on GameLoop, catches every stutter, and tells you what caused it and how to fix it — in plain language, English or Arabic.
+**A Windows performance analyzer for PUBG Mobile on GameLoop that monitors gameplay, detects stutters, and identifies their root causes.**
 
-![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue) ![License](https://img.shields.io/badge/license-MIT-green) ![Version](https://img.shields.io/badge/version-1.0.0-brightgreen)
+![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Version](https://img.shields.io/badge/version-1.1.0-brightgreen)
 
-## Screenshots
+---
 
-The first-run welcome, a live scan, and a diagnosis explained in plain words — click any shot to view it full size.
+## See It in Action
+
+Live monitoring during a scan — CPU, RAM, GPU, and disk every second, with the session timeline and activity feed.
 
 <p align="center">
-  <a href="docs/screenshots/welcome-1.png"><img src="docs/screenshots/welcome-1.png" width="180" alt="Welcome — what the tool does"></a>
-  &nbsp;
-  <a href="docs/screenshots/welcome-2.png"><img src="docs/screenshots/welcome-2.png" width="180" alt="Welcome — what it costs your machine"></a>
-  &nbsp;
-  <a href="docs/screenshots/monitor-idle.png"><img src="docs/screenshots/monitor-idle.png" width="180" alt="Monitor — ready to scan"></a>
-  &nbsp;
-  <a href="docs/screenshots/monitor-live.png"><img src="docs/screenshots/monitor-live.png" width="180" alt="Monitor — live scan in progress"></a>
-  &nbsp;
-  <a href="docs/screenshots/monitor-diagnosis.png"><img src="docs/screenshots/monitor-diagnosis.png" width="180" alt="Monitor — a diagnosis explained in plain language"></a>
+  <a href="docs/screenshots/monitor-live.png">
+    <img src="docs/screenshots/monitor-live.png" width="560" alt="Monitor screen during a live scan.">
+  </a>
 </p>
+
+---
 
 ## Why
 
-Lag in PUBG Mobile on an emulator is almost never one thing. It's a disk paging storm during hot drops, a processor throttling under heat, a GPU waking from power-saving at the worst moment. Most tools show numbers. This one tells you which of those actually happened, how bad it was, and what to do about it.
+Lag in PUBG Mobile on an emulator is rarely caused by a single thing.
 
-## How to use
+It can be a **disk paging storm**, a **processor throttling under heat**, or a **GPU waking from power-saving at the wrong moment**.
 
-1. Open GameLoop and start PUBG Mobile, then press **Start**. If the game isn't running yet, the tool tells you — no guessing.
-2. Press **Start** and play. CPU, RAM, GPU, and disk are sampled every second.
-3. Stop (or let auto-stop finish it) and read the report: findings, key moments, and the numbers — in plain words.
+Most tools show numbers.
 
-The tool is read-only on your system. It diagnoses and advises; it never changes Windows settings.
+**Lag Hunter shows what happened.**
 
-## What it costs your machine
+It monitors CPU, RAM, GPU, and disk activity during gameplay, then identifies the events associated with detected stutters and explains the diagnosis in plain language.
 
-- Under 1% CPU while scanning
-- ~25 MB of RAM
-- ~200 KB per minute on disk
-- Every session stops by itself
+---
+
+## How to Use
+
+**1. Start the game**
+
+Open GameLoop and start PUBG Mobile.
+
+**2. Start monitoring**
+
+Press **Start**. If the game isn't running yet, the tool tells you.
+
+**3. Play normally**
+
+CPU, RAM, GPU, and disk are sampled every second while you play.
+
+**4. Read the diagnosis**
+
+Stop the scan — or let auto-stop finish it — and review the findings, key moments, and measurements.
+
+> **Read-only by design:** Lag Hunter diagnoses and advises. It never changes Windows settings.
+
+---
+
+## What It Costs Your Machine
+
+| Resource |                   Usage |
+| -------- | ----------------------: |
+| CPU      | Under 1% while scanning |
+| RAM      |                  ~25 MB |
+| Disk     |      ~200 KB per minute |
+| Sessions |      Stop automatically |
+
+---
 
 ## Requirements
 
-- Windows 10 or 11 (64-bit)
-- GameLoop with PUBG Mobile
-- An NVIDIA GPU unlocks GPU counters; on AMD/Intel the tool says so honestly and keeps measuring everything else
+* **Windows 10 or 11 (64-bit)**
+* **GameLoop with PUBG Mobile**
+* **NVIDIA GPU** for GPU counters
+
+On AMD/Intel, GPU counter availability is limited. The tool reports this honestly and continues measuring everything else.
+
+---
 
 ## Download
 
-Download `pubg-gameloop-lag-hunter-<version>.exe` (e.g. `pubg-gameloop-lag-hunter-1.0.0.exe`) from the [releases page](https://github.com/Ahmed-Hawass/pubg-gameloop-lag-hunter/releases) and run it. No installer, no setup. Every release ships with a `SHA256SUMS.txt` so you can verify the file.
+Download `pubg-gameloop-lag-hunter-<version>.exe` from the [Releases](https://github.com/Ahmed-Hawass/pubg-gameloop-lag-hunter/releases) page and run it.
 
-**First run on Windows 10?** The app needs Microsoft's free WebView2 runtime. If it's missing, the app tells you and opens the official Microsoft download page. The downloader is tiny (~2 MB), but the full runtime it installs needs a few hundred MB of disk space. Windows 11 has it built in.
+For example:
 
-**SmartScreen note:** the executable is unsigned (independent project), so Windows may show a blue "protected your PC" warning on the very first run. Click **More info → Run anyway**. Each release page lists the SHA-256 hash if you want to verify before running.
+```text
+pubg-gameloop-lag-hunter-1.0.0.exe
+```
 
-All data lives in `%LOCALAPPDATA%\LagHunter` — delete the folder and the tool leaves no trace.
+**No installer. No setup.**
 
-## Build and run from source
+Every release includes `SHA256SUMS.txt` so you can verify the downloaded file.
+
+### First Run on Windows 10
+
+The app requires Microsoft's free **WebView2 Runtime**.
+
+If it isn't installed, the app tells you and opens the official Microsoft download page.
+
+The downloader is ~2 MB. The full runtime requires a few hundred MB of disk space.
+
+Windows 11 has WebView2 built in.
+
+### SmartScreen
+
+The executable is currently **unsigned** because this is an independent project.
+
+Windows may therefore show a blue **"Windows protected your PC"** warning on the first run.
+
+If you trust the downloaded release:
+
+**More info → Run anyway**
+
+Each release also provides a SHA-256 hash for verification.
+
+### Local Data
+
+All application data lives in:
+
+```text
+%LOCALAPPDATA%\LagHunter\
+```
+
+Delete this folder to remove the locally stored application data.
+
+---
+
+## Build from Source
 
 ```bash
 git clone https://github.com/Ahmed-Hawass/pubg-gameloop-lag-hunter.git
@@ -64,27 +134,50 @@ npm install
 npx tauri dev
 ```
 
-Prerequisites: [Node.js 18+](https://nodejs.org), [Rust 1.77+](https://rustup.rs) with the MSVC toolchain.
+### Prerequisites
 
-Release build:
+* [Node.js 18+](https://nodejs.org/)
+* [Rust 1.77+](https://rustup.rs/) with the MSVC toolchain
+
+### Release Build
 
 ```bash
 npx tauri build --no-bundle
 ```
 
-Binary: `src-tauri/target/release/pubg-gameloop-lag-hunter.exe` — rename it with the version (e.g. `pubg-gameloop-lag-hunter-1.0.0.exe`) when attaching it to a release.
+Binary:
 
-## Going deeper
+```text
+src-tauri/target/release/pubg-gameloop-lag-hunter.exe
+```
 
-- [Architecture](docs/ARCHITECTURE.md) — how the engine is built and why
-- [CLI and headless testing](docs/CLI.md) — running the engine without the window
-- [Specification](docs/SPEC.md) — the product's guarantees and non-goals
-- [Changelog](CHANGELOG.md)
+Rename it with the release version when attaching it to a release:
+
+```text
+pubg-gameloop-lag-hunter-1.0.0.exe
+```
+
+---
+
+## Going Deeper
+
+* [Architecture](docs/ARCHITECTURE.md) — how the engine is built and why
+* [CLI and headless testing](docs/CLI.md) — running the engine without the window
+* [Specification](docs/SPEC.md) — product guarantees and non-goals
+* [Changelog](CHANGELOG.md)
+
+---
 
 ## Contributing
 
-Issues and pull requests are welcome. For engineering ground rules see [CONTRIBUTING.md](CONTRIBUTING.md).
+Issues and pull requests are welcome.
+
+For engineering ground rules, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+---
 
 ## License
 
-[MIT](LICENSE) — made with ❤ by Ahmed Hawass
+[MIT](LICENSE)
+
+**Made with 💚 by Ahmed Hawass**

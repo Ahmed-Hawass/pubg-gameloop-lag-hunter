@@ -1,32 +1,52 @@
 // ProcessesView.tsx — who is eating the machine (the game is never a suspect).
+// Stays live while the tab is open: silent refresh every few seconds (the
+// engine's TTL cache decides whether a real query is needed).
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Activity, RefreshCw } from "lucide-react";
 import { Button, EmptyState } from "../components/components";
 import { api, type TopProcess } from "../bridge";
 import { useLang } from "../i18n";
 
-export function ProcessesView() {
+/** live refresh cadence while the tab is visible */
+const LIVE_INTERVAL_MS = 5000;
+
+export function ProcessesView(props: { active: boolean }) {
+  const { active } = props;
   const { t } = useLang();
   const [procs, setProcs] = useState<TopProcess[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
 
-  const load = async () => {
-    setBusy(true);
-    setError(null);
+  const load = async (silent: boolean) => {
+    if (busyRef.current) return; // never stack queries
+    busyRef.current = true;
+    if (!silent) setBusy(true);
     try {
       setProcs(await api.topProcesses());
+      setError(null);
     } catch (e) {
-      setError(String(e));
+      if (!silent) setError(String(e)); // polling failures stay quiet
     } finally {
-      setBusy(false);
+      busyRef.current = false;
+      if (!silent) setBusy(false);
     }
   };
 
+  // first data
   useEffect(() => {
-    void load();
+    void load(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // live while this tab is the active one — paused otherwise
+  useEffect(() => {
+    if (!active) return;
+    const timer = window.setInterval(() => void load(true), LIVE_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
 
   return (
     <div className="procs">
@@ -37,7 +57,7 @@ export function ProcessesView() {
           icon={<RefreshCw size={14} className={busy ? "spin" : ""} />}
           variant="ghost"
           disabled={busy}
-          onClick={() => void load()}
+          onClick={() => void load(false)}
         />
       </div>
 

@@ -35,7 +35,7 @@ fn ps(script: &str) -> Result<String, String> {
 // launches: queried ONCE per app run, cached in memory, instant tab opens.
 // ---------------------------------------------------------------------------
 
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 
 static SYSTEM_CACHE: OnceLock<SystemInfo> = OnceLock::new();
 
@@ -46,6 +46,95 @@ pub fn system_info_cached() -> Result<SystemInfo, String> {
     let info = query_system_info()?;
     let _ = SYSTEM_CACHE.set(info.clone());
     Ok(info)
+}
+
+// ---------------------------------------------------------------------------
+// TTL caches — tab data goes stale, not obsolete. A fresh read costs a full
+// PowerShell spawn (0.5–2 s); a tab switch should never pay it twice inside
+// a few seconds. Stale-while-revalidate: serve the cached copy IMMEDIATELY
+// if it exists, refresh it in the background when the TTL lapsed.
+// ---------------------------------------------------------------------------
+
+struct TtlCache<T> {
+    value: Mutex<Option<(T, std::time::Instant)>>,
+}
+
+impl<T: Clone> TtlCache<T> {
+    const fn new() -> Self {
+        Self {
+            value: Mutex::new(None),
+        }
+    }
+
+    /// cached value if present — caller decides whether to also refresh
+    fn get(&self) -> Option<T> {
+        let guard = self.value.lock().unwrap_or_else(|p| p.into_inner());
+        guard.as_ref().map(|(v, _)| v.clone())
+    }
+
+    /// store/replace the cached value
+    fn set(&self, v: T) {
+        let mut guard = self.value.lock().unwrap_or_else(|p| p.into_inner());
+        *guard = Some((v, std::time::Instant::now()));
+    }
+
+    /// is the cached copy still inside its freshness window?
+    fn fresh_for(&self, ttl: std::time::Duration) -> bool {
+        let guard = self.value.lock().unwrap_or_else(|p| p.into_inner());
+        match guard.as_ref() {
+            Some((_, at)) => at.elapsed() < ttl,
+            None => false,
+        }
+    }
+}
+
+/// top processes: "who is eating the machine RIGHT NOW" — short TTL, still
+// long enough to cover tab-flipping; refresh happens off the click
+static TOP_PROCESSES_CACHE: TtlCache<Vec<TopProcess>> = TtlCache::new();
+/// system checks: power plan/pagefile/battery — people don't flip these
+/// mid-session; a longer window is fine
+static SYSTEM_CHECKS_CACHE: TtlCache<SystemChecks> = TtlCache::new();
+
+/// How long a top-processes snapshot stays fresh.
+const TOP_PROCESSES_TTL: std::time::Duration = std::time::Duration::from_secs(10);
+/// How long a system-checks read stays fresh.
+const SYSTEM_CHECKS_TTL: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// top processes with TTL: returns the cached copy immediately when one
+/// exists (even stale) and refreshes in the background past the TTL.
+pub fn top_processes_cached() -> Result<Vec<TopProcess>, String> {
+    if let Some(cached) = TOP_PROCESSES_CACHE.get() {
+        if !TOP_PROCESSES_CACHE.fresh_for(TOP_PROCESSES_TTL) {
+            // stale — serve the copy now, refresh in the background
+            std::thread::spawn(|| {
+                if let Ok(fresh) = query_top_processes() {
+                    TOP_PROCESSES_CACHE.set(fresh);
+                }
+            });
+        }
+        return Ok(cached);
+    }
+    // first call on this run: pay the cost once, synchronously
+    let fresh = query_top_processes()?;
+    TOP_PROCESSES_CACHE.set(fresh.clone());
+    Ok(fresh)
+}
+
+/// system checks with TTL: same stale-while-revalidate pattern.
+pub fn system_checks_cached() -> Result<SystemChecks, String> {
+    if let Some(cached) = SYSTEM_CHECKS_CACHE.get() {
+        if !SYSTEM_CHECKS_CACHE.fresh_for(SYSTEM_CHECKS_TTL) {
+            std::thread::spawn(|| {
+                if let Ok(fresh) = query_system_checks() {
+                    SYSTEM_CHECKS_CACHE.set(fresh);
+                }
+            });
+        }
+        return Ok(cached);
+    }
+    let fresh = query_system_checks()?;
+    SYSTEM_CHECKS_CACHE.set(fresh.clone());
+    Ok(fresh)
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
