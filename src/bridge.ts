@@ -187,8 +187,9 @@ export interface SystemChecks {
 }
 
 // ---- gameloop watcher events ----------------------------------------------
-// The backend emits `engine://gameloop` (true/false) while idle,
-// so the Start button lights up the moment the user opens GameLoop.
+// The backend emits `engine://gameloop` (true/false) while idle, so the UI
+// knows the moment the user opens GameLoop (the Start button stays pressable
+// either way — pressing without the game shows an explaining dialog).
 
 import type { UnlistenFn } from "@tauri-apps/api/event";
 

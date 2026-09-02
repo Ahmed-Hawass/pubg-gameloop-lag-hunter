@@ -14,7 +14,7 @@ fn main() {
     if !webview2_installed() {
       let msg = "PUBG GameLoop Lag Hunter needs the Microsoft WebView2 runtime, which is missing on this PC.\n\n\
                  Press OK to open the official Microsoft download page in your browser, then run the installer and start this app again.\n\n\
-                 (This is a one-time install, ~2 MB, free from Microsoft.)";
+                 (This is a one-time, free install from Microsoft. The download starts small but the full runtime needs a few hundred MB of disk space.)";
       let title = "PUBG GameLoop Lag Hunter";
       let action = unsafe {
         MessageBoxW(

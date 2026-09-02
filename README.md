@@ -26,7 +26,7 @@ Lag in PUBG Mobile on an emulator is almost never one thing. It's a disk paging 
 
 ## How to use
 
-1. Open GameLoop and start PUBG Mobile — the Start button lights up by itself.
+1. Open GameLoop and start PUBG Mobile, then press **Start**. If the game isn't running yet, the tool tells you — no guessing.
 2. Press **Start** and play. CPU, RAM, GPU, and disk are sampled every second.
 3. Stop (or let auto-stop finish it) and read the report: findings, key moments, and the numbers — in plain words.
 
@@ -49,7 +49,7 @@ The tool is read-only on your system. It diagnoses and advises; it never changes
 
 Download `pubg-gameloop-lag-hunter-<version>.exe` (e.g. `pubg-gameloop-lag-hunter-1.0.0.exe`) from the [releases page](https://github.com/Ahmed-Hawass/pubg-gameloop-lag-hunter/releases) and run it. No installer, no setup. Every release ships with a `SHA256SUMS.txt` so you can verify the file.
 
-**First run on Windows 10?** The app needs Microsoft's free WebView2 runtime (a one-time ~2 MB install). If it's missing, the app tells you and opens the official Microsoft download page. Windows 11 has it built in.
+**First run on Windows 10?** The app needs Microsoft's free WebView2 runtime. If it's missing, the app tells you and opens the official Microsoft download page. The downloader is tiny (~2 MB), but the full runtime it installs needs a few hundred MB of disk space. Windows 11 has it built in.
 
 **SmartScreen note:** the executable is unsigned (independent project), so Windows may show a blue "protected your PC" warning on the very first run. Click **More info → Run anyway**. Each release page lists the SHA-256 hash if you want to verify before running.
 
