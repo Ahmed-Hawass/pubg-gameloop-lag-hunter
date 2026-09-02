@@ -287,8 +287,11 @@ pub fn is_gameloop_process(name: &str) -> bool {
 }
 
 /// Is this OURSELVES? The tool must never appear as a suspect in its own list.
+/// Matches any versioned name (`...-1.0.0`) — releases are versioned by hand,
+/// so the pattern stays true no matter what the exe is called this release.
 pub fn is_self_process(name: &str) -> bool {
-    name.eq_ignore_ascii_case("pubg-gameloop-lag-hunter") || name.eq_ignore_ascii_case("lag-hunter")
+    let lower = name.to_ascii_lowercase();
+    lower.starts_with("pubg-gameloop-lag-hunter") || lower.starts_with("lag-hunter")
 }
 
 /// GameLoop detection: Some("GameLoop") when its processes exist.
@@ -431,7 +434,13 @@ mod tests {
     fn self_process_matched() {
         assert!(is_self_process("pubg-gameloop-lag-hunter"));
         assert!(is_self_process("PUBG-GAMELOOP-LAG-HUNTER"));
+        // versioned release names must match too
+        assert!(is_self_process("pubg-gameloop-lag-hunter-1.0.0"));
+        assert!(is_self_process("pubg-gameloop-lag-hunter-1.2.3"));
+        assert!(is_self_process("lag-hunter-2.0.0"));
+        // anything that doesn't carry our prefix is not us
         assert!(!is_self_process("explorer"));
+        assert!(!is_self_process("chrome"));
     }
 
     #[test]

@@ -47,7 +47,7 @@ The tool is read-only on your system. It diagnoses and advises; it never changes
 
 ## Download
 
-Download `pubg-gameloop-lag-hunter.exe` from the [releases page](https://github.com/Ahmed-Hawass/pubg-gameloop-lag-hunter/releases) and run it. No installer, no setup. Every release ships with a `SHA256SUMS.txt` so you can verify the file.
+Download `pubg-gameloop-lag-hunter-<version>.exe` (e.g. `pubg-gameloop-lag-hunter-1.0.0.exe`) from the [releases page](https://github.com/Ahmed-Hawass/pubg-gameloop-lag-hunter/releases) and run it. No installer, no setup. Every release ships with a `SHA256SUMS.txt` so you can verify the file.
 
 **First run on Windows 10?** The app needs Microsoft's free WebView2 runtime (a one-time ~2 MB install). If it's missing, the app tells you and opens the official Microsoft download page. Windows 11 has it built in.
 
@@ -72,7 +72,7 @@ Release build:
 npx tauri build --no-bundle
 ```
 
-Binary: `src-tauri/target/release/pubg-gameloop-lag-hunter.exe`
+Binary: `src-tauri/target/release/pubg-gameloop-lag-hunter.exe` — rename it with the version (e.g. `pubg-gameloop-lag-hunter-1.0.0.exe`) when attaching it to a release.
 
 ## Going deeper
 
