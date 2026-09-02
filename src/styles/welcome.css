@@ -1,0 +1,134 @@
+/* WelcomeView — the two-page first-run landing.
+   Same identity as the app: dark plane, signal green, one CTA. */
+.welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  max-width: 460px;
+  margin: 0 auto;
+  height: 100%;
+  text-align: center;
+  padding: 24px 16px;
+}
+
+.welcome-icon {
+  border-radius: 16px;
+  animation: settle-in 0.5s var(--ease) both;
+}
+
+.welcome-title {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.welcome-what {
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.65;
+  max-width: 380px;
+}
+
+.welcome-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 340px;
+}
+
+.welcome-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--elev-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: start;
+  animation: rise-in 0.35s var(--ease) both;
+}
+.welcome-card:nth-child(1) { animation-delay: 0.05s; }
+.welcome-card:nth-child(2) { animation-delay: 0.12s; }
+.welcome-card:nth-child(3) { animation-delay: 0.19s; }
+.welcome-card svg {
+  color: var(--primary);
+  flex: none;
+}
+
+.welcome-leaf {
+  color: var(--primary);
+  animation: settle-in 0.5s var(--ease) both;
+}
+
+.welcome-trust {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 380px;
+  text-align: start;
+}
+
+.welcome-trust li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  line-height: 1.5;
+  animation: rise-in 0.35s var(--ease) both;
+}
+.welcome-trust li:nth-child(1) { animation-delay: 0.05s; }
+.welcome-trust li:nth-child(2) { animation-delay: 0.1s; }
+.welcome-trust li:nth-child(3) { animation-delay: 0.15s; }
+.welcome-trust li:nth-child(4) { animation-delay: 0.2s; }
+.welcome-trust li:nth-child(5) { animation-delay: 0.25s; }
+.welcome-trust li svg {
+  color: var(--primary);
+  flex: none;
+}
+
+.welcome-cta {
+  margin-top: 6px;
+  min-width: 180px;
+}
+
+.welcome-dots {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.welcome-dots .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border-2);
+  transition: background 0.2s;
+}
+
+.welcome-dots .dot.on {
+  background: var(--primary);
+}
+
+/* the two entrance keyframes this view uses (kept here, self-contained).
+   rise-in enters from ABOVE — never extends the scroll area (no scrollbar flash). */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@keyframes settle-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85) rotate(-4deg);
+  }
+}

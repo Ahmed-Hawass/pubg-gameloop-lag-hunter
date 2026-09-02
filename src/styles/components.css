@@ -1,0 +1,477 @@
+/* components — design system blocks (monochrome + green) */
+
+/* Button */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.12s var(--ease), background 0.15s, border-color 0.15s;
+  color: var(--text-1);
+}
+.btn:active {
+  transform: translateY(1px) scale(0.99);
+}
+.btn-md {
+  padding: 9px 16px;
+  font-size: 13px;
+}
+.btn-lg {
+  padding: 11px 20px;
+  font-size: 13.5px;
+}
+.btn-primary {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+.btn-primary:hover {
+  background: #6aff3a;
+}
+/* the FILLED danger — used where the destructive action is the point
+   (the running-scan Stop button, the delete-dialog confirm) */
+.btn-danger-filled {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+.btn-danger-filled:hover {
+  background: #ff6f68;
+}
+/* the quiet danger OUTLINE (dark fill, red text) — currently unused; kept
+   as the variant's design language for future "destructive but calm" spots */
+.btn-danger {
+  background: var(--elev-1);
+  color: var(--danger);
+  border-color: var(--danger-dim);
+}
+.btn-danger:hover {
+  background: var(--elev-2);
+}
+.btn-ghost {
+  background: var(--elev-3);
+  border-color: var(--border);
+  color: var(--text-1);
+}
+.btn-ghost:hover {
+  background: var(--hover-bg);
+  border-color: var(--hover-border);
+  color: var(--hover-text);
+}
+.is-disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* MetricCard */
+.metric {
+  background: var(--elev-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.metric-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.metric-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-1);
+  font-size: 13px;
+  font-weight: 700;
+}
+.metric-name svg {
+  width: 17px;
+  height: 17px;
+  stroke-width: 2.4;
+  flex: none;
+}
+/* the icon carries the live tone — expressive at a glance */
+.metric-name-ok svg {
+  color: var(--primary);
+}
+.metric-name-warn svg {
+  color: var(--warn);
+}
+.metric-name-danger svg {
+  color: var(--danger);
+}
+.metric-name-off svg {
+  color: var(--text-3);
+  opacity: 0.6;
+}
+/* metric icons nudge on card hover — expressive micro-interaction */
+.metric .metric-name svg {
+  transition: transform 0.2s var(--ease);
+}
+.metric:hover .metric-name svg {
+  transform: scale(1.18);
+}
+
+/* Start button: hover lift + icon nudge — same language as every icon */
+.btn svg {
+  transition: transform 0.2s var(--ease);
+}
+.btn:hover:not(.is-disabled) svg {
+  transform: scale(1.12);
+}
+.metric-val {
+  font-size: 18px;
+  font-weight: 600;
+}
+.metric.dim .metric-val {
+  color: var(--text-3);
+}
+.bar-track {
+  height: 5px;
+  border-radius: 4px;
+  background: var(--elev-3);
+  overflow: hidden;
+}
+.bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s var(--ease);
+}
+.bar-ok {
+  background: var(--primary);
+}
+.bar-warn {
+  background: var(--warn);
+}
+.bar-danger {
+  background: var(--danger);
+}
+.spark {
+  width: 100%;
+  height: 22px;
+  display: block;
+  opacity: 0.9;
+}
+
+/* Timeline */
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.timeline-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-3);
+}
+.timeline-track {
+  position: relative;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--elev-1);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.timeline-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--primary-dim);
+  transition: width 1s linear;
+}
+.tl-marker {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--danger);
+  box-shadow: 0 0 0 4px var(--danger-dim);
+}
+
+/* NoteCard */
+.note {
+  border: 1px solid var(--border);
+  border-inline-start-width: 3px;
+  border-radius: var(--radius-sm);
+  background: var(--elev-1);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.note-high {
+  border-inline-start-color: var(--danger);
+}
+.note-medium {
+  border-inline-start-color: var(--warn);
+}
+.note-low {
+  border-inline-start-color: var(--text-3);
+}
+.note-title {
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+}
+.note-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.note-dot-high {
+  background: var(--danger);
+}
+.note-dot-medium {
+  background: var(--warn);
+}
+.note-dot-low {
+  background: var(--text-3);
+}
+.note-body {
+  color: var(--text-2);
+  line-height: 1.5;
+  font-size: 12.5px;
+}
+.note-fix {
+  color: var(--primary);
+  font-size: 12px;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.note-fix-label {
+  text-transform: uppercase;
+  font-size: 9.5px;
+  letter-spacing: 0.8px;
+  color: var(--text-3);
+  flex: none;
+}
+
+/* EmptyState */
+.empty {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 26px;
+  text-align: center;
+}
+.empty-ico {
+  width: 38px;
+  height: 38px;
+  margin: 0 auto 12px;
+  border-radius: 50%;
+  background: var(--primary-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.empty-ico svg {
+  width: 18px;
+  height: 18px;
+  color: var(--primary);
+}
+.empty-title {
+  font-size: 14.5px;
+  font-weight: 700;
+  margin-bottom: 5px;
+}
+.empty-hint {
+  font-size: 12.5px;
+  color: var(--text-2);
+  max-width: 380px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+/* SummaryCard */
+.summary {
+  background: var(--elev-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.summary-ico {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--primary-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.summary-ico svg {
+  width: 18px;
+  height: 18px;
+  color: var(--primary);
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: draw-check 0.5s var(--ease) 0.1s forwards;
+}
+@keyframes draw-check {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.summary-text h3 {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.summary-text p {
+  font-size: 12.5px;
+  color: var(--text-2);
+  line-height: 1.6;
+}
+.summary .btn {
+  margin-inline-start: auto;
+  flex: none;
+}
+
+/* instant dismiss — small quiet X at the card's edge */
+.summary-x {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.summary-x:hover {
+  color: var(--hover-text);
+  background: var(--hover-bg);
+  border-color: var(--hover-border);
+}
+
+/* Dialog — the single modal surface (no toasts anywhere) */
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  animation: fade-in 0.15s ease;
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+.dialog-box {
+  background: var(--elev-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px 26px;
+  max-width: 420px;
+  width: calc(100vw - 48px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 30px 60px -20px rgba(0, 0, 0, 0.7);
+}
+.dialog-box.dialog-danger {
+  border-color: var(--danger-dim);
+}
+.dialog-title {
+  font-size: 15.5px;
+  font-weight: 700;
+}
+.dialog-body {
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.6;
+}
+.dialog-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+/* Hint — a real button. The tooltip is PORTALED to <body> with fixed
+   coordinates, so no overflow/transform ancestor can clip it. */
+.hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-3);
+  cursor: pointer;
+  outline: none;
+  font: inherit;
+  font-size: 11.5px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.hint:hover,
+.hint:focus-visible {
+  color: var(--text-2);
+  background: var(--hover-bg);
+  border-color: var(--hover-border);
+}
+.hint svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  opacity: 0.7;
+}
+
+/* Tip wrapper — inline by default; becomes a full-width block inside
+   vertical lists (sidebar) so the wrapped control keeps the list's shape */
+.tip-wrap {
+  display: inline-flex;
+}
+.sidebar .tip-wrap {
+  display: flex;
+  width: 100%;
+}
+.sidebar .tip-wrap > * {
+  flex: 1;
+}
+
+/* the tooltip — fixed to the viewport, rendered at <body> level */
+.hint-tooltip {
+  position: fixed;
+  width: max-content;
+  max-width: 280px;
+  white-space: normal;
+  background: var(--elev-3);
+  color: var(--text-1);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: start;
+  z-index: 999;
+  pointer-events: none;
+  box-shadow: 0 10px 30px -8px rgba(0, 0, 0, 0.7);
+  animation: tooltip-in 0.15s ease;
+}
+@keyframes tooltip-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}

@@ -1,0 +1,269 @@
+/* app shell: custom title bar (44px) + sidebar + content */
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg);
+}
+
+/* ---- custom title bar: own plane, separated by a border from the body ---- */
+.titlebar {
+  height: 44px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0 0 16px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.titlebar-left {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.titlebar-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  flex: none;
+}
+
+/* the collapse control — pinned at the sidebar's floor (after the spacer),
+   quiet, same visual weight as a tab */
+.sb-spacer {
+  flex: 1;
+}
+.sb-collapse {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-3);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.sb-collapse:hover {
+  color: var(--hover-text);
+  background: var(--hover-bg);
+  border-color: var(--hover-border);
+}
+.sidebar.is-collapsed .sb-collapse {
+  padding: 9px 0;
+  justify-content: center;
+}
+/* RTL: the chevrons must point the VISUALLY correct way */
+[dir="rtl"] .sb-collapse svg {
+  transform: scaleX(-1);
+}
+
+.titlebar-title {
+  color: var(--text-2);
+}
+
+.titlebar-version {
+  color: var(--text-3);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+
+
+/* windows controls — real, not decoration */
+.win-controls {
+  display: flex;
+  height: 100%;
+}
+
+.win-controls button {
+  width: 46px;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+  transition: background 0.12s;
+}
+
+.win-controls button:hover {
+  background: var(--elev-3);
+  color: var(--text-1);
+}
+
+.win-controls button.is-disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.win-controls button.is-disabled:hover {
+  background: transparent;
+  color: var(--text-2);
+}
+
+.win-controls button.close:hover {
+  background: #e81123;
+  color: #fff;
+}
+
+/* ---- body: sidebar + content ---- */
+.shell-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.sidebar {
+  width: 200px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 10px 12px;
+  gap: 4px;
+  background: var(--bg);
+  border-inline-end: 1px solid var(--border);
+}
+
+.sidebar .sb-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  padding: 10px 10px 6px;
+}
+
+.sb-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.sb-item:hover:not(.is-active) {
+  color: var(--hover-text);
+  background: var(--hover-bg);
+}
+
+/* active = FILLED green, exactly the Start button's language — one selection
+   style everywhere in the app */
+.sb-item.is-active {
+  color: var(--on-primary);
+  background: var(--primary);
+  border-color: var(--primary);
+  font-weight: 700;
+}
+
+/* collapsed rail: icons only */
+.sidebar.is-collapsed {
+  width: 56px;
+  padding: 14px 8px;
+}
+
+.sidebar.is-collapsed .sb-item {
+  justify-content: center;
+  padding: 10px 0;
+}
+
+.sidebar.is-collapsed .sb-label {
+  display: none;
+}
+
+/* ---- content area ---- */
+.content {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 20px 20px;
+}
+
+/* every view page fills the fixed window; long pages (reports) scroll,
+   monitor manages its own internal layout */
+.content > .reports,
+.content > .sys,
+.content > .procs,
+.content > .checks,
+.content > .about,
+.content > .settings-page {
+  overflow-y: auto;
+  max-width: min(100%, 760px);
+  padding-inline-end: 4px;
+}
+
+/* ---- icon micro-animations (quiet, app-wide) ---- */
+/* sidebar icons: nudge on hover, pop when becoming active */
+.sb-item svg {
+  transition: transform 0.25s var(--ease);
+}
+.sb-item:hover:not(.is-active) svg {
+  transform: scale(1.22) rotate(-6deg);
+}
+.sb-item.is-active svg {
+  animation: sb-pop 0.3s var(--ease);
+}
+@keyframes sb-pop {
+  0% { transform: scale(0.7); }
+  60% { transform: scale(1.28); }
+  100% { transform: scale(1); }
+}
+
+/* clean scrollbars: thin, theme-matched — About/Reports scroll without the
+   always-on gray bar */
+.content > .reports::-webkit-scrollbar,
+.content > .sys::-webkit-scrollbar,
+.content > .procs::-webkit-scrollbar,
+.content > .checks::-webkit-scrollbar,
+.content > .about::-webkit-scrollbar,
+.content > .settings-page::-webkit-scrollbar,
+.monitor::-webkit-scrollbar,
+.feed-list::-webkit-scrollbar {
+  width: 8px;
+}
+.content > .reports::-webkit-scrollbar-thumb,
+.content > .sys::-webkit-scrollbar-thumb,
+.content > .procs::-webkit-scrollbar-thumb,
+.content > .checks::-webkit-scrollbar-thumb,
+.content > .about::-webkit-scrollbar-thumb,
+.content > .settings-page::-webkit-scrollbar-thumb,
+.monitor::-webkit-scrollbar-thumb,
+.feed-list::-webkit-scrollbar-thumb {
+  background: var(--border-2);
+  border-radius: 4px;
+}
+.content > .reports::-webkit-scrollbar-track,
+.content > .sys::-webkit-scrollbar-track,
+.content > .procs::-webkit-scrollbar-track,
+.content > .checks::-webkit-scrollbar-track,
+.content > .about::-webkit-scrollbar-track,
+.content > .settings-page::-webkit-scrollbar-track,
+.monitor::-webkit-scrollbar-track,
+.feed-list::-webkit-scrollbar-track {
+  background: transparent;
+}

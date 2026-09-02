@@ -1,0 +1,259 @@
+/* ReportsView */
+.reports {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: min(100%, 760px);
+}
+
+.reports-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reports-title {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.reports-error {
+  color: var(--danger);
+  font-size: 12.5px;
+}
+
+/* back button */
+.reports-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  align-self: flex-start;
+}
+.reports-back:hover {
+  color: var(--text-1);
+}
+
+/* report header */
+.report-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px;
+  background: var(--elev-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.report-head-title h2 {
+  font-size: 17px;
+  font-weight: 700;
+}
+.report-head-title p {
+  font-size: 12.5px;
+  color: var(--text-2);
+  margin-top: 3px;
+}
+.report-badge {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 12px;
+  border-radius: 999px;
+  flex: none;
+}
+.badge-ok {
+  background: var(--primary-dim);
+  color: var(--primary);
+}
+.badge-bad {
+  background: var(--danger-dim);
+  color: var(--danger);
+}
+
+/* report sections */
+.report-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.report-section h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  font-weight: 700;
+}
+
+.report-moments,
+.report-metrics {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--elev-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.report-moments li,
+.report-metrics li {
+  font-size: 12.5px;
+  color: var(--text-2);
+  line-height: 1.5;
+  padding-inline-start: 14px;
+  position: relative;
+}
+.report-moments li::before,
+.report-metrics li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 7px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+.report-moments li::before {
+  background: var(--danger);
+}
+
+.report-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* one global folder button at the bottom of the sessions list */
+.reports-folder-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 14px;
+  cursor: pointer;
+  align-self: flex-start;
+  transition: color 0.12s, border-color 0.12s;
+}
+.reports-folder-btn:hover {
+  color: var(--hover-text);
+  border-color: var(--hover-border);
+}
+
+/* session row actions (delete only — folder is global now) */
+.sl-actions {
+  display: flex;
+  gap: 6px;
+  flex: none;
+}
+.sl-act {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+}
+.sl-act:hover {
+  color: var(--hover-text);
+  border-color: var(--hover-border);
+  background: var(--hover-bg);
+}
+.sl-act-danger:hover {
+  color: var(--danger);
+  border-color: var(--danger-dim);
+}
+
+/* responsive session rows on narrow windows */
+@media (max-width: 620px) {
+  .sl-sub {
+    display: none;
+  }
+  .sl-badge {
+    display: none;
+  }
+}
+.session-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.session-list li {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  background: var(--elev-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 13px 16px;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+.session-list li:hover {
+  border-color: var(--hover-border);
+  background: var(--hover-bg);
+}
+.session-list li.is-loading {
+  opacity: 0.5;
+}
+.sl-icon {
+  display: flex;
+  color: var(--text-3);
+}
+.sl-icon-ok { color: var(--primary); }
+.sl-icon-bad {
+  color: var(--danger);
+}
+.sl-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.sl-date {
+  font-size: 13px;
+  font-weight: 600;
+}
+.sl-sub {
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+.sl-badge {
+  margin-inline-start: auto;
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+.sl-badge-ok {
+  background: var(--primary-dim);
+  color: var(--primary);
+}
+.sl-badge-bad {
+  background: var(--danger-dim);
+  color: var(--danger);
+}
+.sl-badge-mid {
+  background: var(--warn-dim);
+  color: var(--warn);
+}

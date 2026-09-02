@@ -1,0 +1,179 @@
+/* MonitorView — the page scrolls as a whole when cards overflow the fixed
+   window. The feed gets a guaranteed share of the space, not a monopoly. */
+.monitor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  max-width: none;
+  overflow-y: auto;
+  padding-inline-end: 4px;
+}
+
+/* controls row: normal rounded-rect Start + duration + clock */
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: none;
+}
+
+.session-clock {
+  margin-inline-start: auto;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.session-clock .timer-label {
+  font-size: 10.5px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.session-clock .timer-val {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  flex: none;
+}
+
+.metrics-hints,
+.timeline-hint {
+  display: flex;
+  justify-content: flex-end;
+  flex: none;
+}
+
+/* feed: a guaranteed share of the page; scrolls internally only when
+   its own content exceeds that share */
+.feed {  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 0 140px;
+  min-height: 140px;
+  overflow: hidden;
+}
+.feed-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  font-weight: 700;
+  flex: none;
+}
+.feed-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--elev-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  overflow-y: auto;
+  flex: 1;
+}
+.feed-item {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 12.5px;
+  color: var(--text-2);
+  line-height: 1.45;
+  /* from above: the feed list scrolls — a downward offset would flash
+     its scrollbar on every new entry */
+  animation: feed-in 0.18s var(--ease);
+}
+@keyframes feed-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.feed-clock {
+  color: var(--text-3);
+  font-size: 11px;
+  flex: none;
+}
+.feed-crit .feed-text {
+  color: var(--danger);
+}
+.feed-warn .feed-text {
+  color: var(--warn);
+}
+.feed-empty {
+  font-size: 12.5px;
+  color: var(--text-3);
+  background: var(--elev-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  flex: 1;
+}
+
+/* quiet in-game note: the window is minimized, GPU monitoring is paused */
+.bg-note {
+  flex: none;
+  font-size: 12px;
+  color: var(--warn);
+  background: var(--warn-dim);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  animation: summary-in 0.3s var(--ease);
+}
+
+.notes {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: none;
+}
+
+/* 4 cards on normal widths, 2 on narrow (windowed), natural stretch on wide */
+.metrics-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+@media (min-width: 1500px) {
+  .metrics-4 {
+    grid-template-columns: repeat(4, minmax(0, 320px));
+    justify-content: center;
+  }
+}
+
+@media (max-width: 760px) {
+  .metrics,
+  .metrics-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 520px) {
+  .metrics,
+  .metrics-4 {
+    grid-template-columns: 1fr;
+  }
+  .controls {
+    flex-wrap: wrap;
+  }
+}
+
+/* summary entrance — from above, never extends the scroll area */
+.summary-wrap {
+  animation: summary-in 0.3s var(--ease);
+}
+@keyframes summary-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "PUBG GameLoop Lag Hunter",
+  "version": "1.0.0",
+  "identifier": "app.laghunter",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "PUBG GameLoop Lag Hunter",
+        "width": 940,
+        "height": 600,
+        "minWidth": 940,
+        "minHeight": 600,
+        "maxWidth": 940,
+        "maxHeight": 600,
+        "resizable": false,
+        "fullscreen": false,
+        "center": true,
+        "decorations": false,
+        "visible": false
+      }
+    ],
+    "security": {
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self'",
+        "style-src": "'self' 'unsafe-inline'",
+        "img-src": "'self' data:",
+        "font-src": "'self' data:",
+        "connect-src": "'self' https://api.github.com"
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "publisher": "Ahmed Hawass",
+    "copyright": "Copyright (c) 2026 Ahmed Hawass. MIT License.",
+    "category": "Utility",
+    "shortDescription": "Lag diagnosis for PUBG Mobile on GameLoop",
+    "longDescription": "A Windows tool that watches your PC while you play PUBG Mobile on GameLoop, catches every stutter, and tells you what caused it and how to fix it.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

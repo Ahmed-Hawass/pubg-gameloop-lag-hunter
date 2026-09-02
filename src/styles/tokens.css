@@ -1,0 +1,76 @@
+/* design tokens — monochrome + signal green, from the concept direction */
+:root {
+  /* surfaces — ONE plane: the shell is a single surface split by borders */
+  --bg: #060706;
+  --elev-1: #101210;
+  --elev-2: #161816;
+  --elev-3: #1d201d;
+  /* border */
+  --border: #232622;
+  --border-2: #2e332c;
+  /* signal */
+  --primary: #53fc18;
+  --primary-dim: rgba(83, 252, 24, 0.1);
+  --primary-dim-2: rgba(83, 252, 24, 0.2);
+  --on-primary: #06210a;
+  /* status */
+  --ok: #53fc18;
+  --warn: #f5c518;
+  --warn-dim: rgba(245, 197, 24, 0.12);
+  --danger: #ff5a52;
+  --danger-dim: rgba(255, 90, 82, 0.12);
+  /* hover — LIGHT, not green: the accent belongs to states, not to passing hovers */
+  --hover-bg: #22251f;
+  --hover-text: #edefec;
+  --hover-border: #34392f;
+  /* text */
+  --text-1: #edefec;
+  --text-2: #8c948d;
+  --text-3: #5a605a;
+  /* type — Arabic falls back to system fonts (Segoe UI covers it natively) */
+  --font-ui: "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "Consolas", monospace;
+  /* shape & motion */
+  --radius: 12px;
+  --radius-sm: 9px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text-1);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  overflow: hidden;
+}
+
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-2);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
