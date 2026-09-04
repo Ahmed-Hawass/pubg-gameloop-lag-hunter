@@ -1,7 +1,8 @@
 // bridge.ts — typed Tauri bindings. The ONLY file that talks to the backend.
 // All types mirror engine/types.rs exactly.
 
-import type { EventCallback } from "@tauri-apps/api/event";
+import { listen } from "@tauri-apps/api/event";
+import type { EventCallback, UnlistenFn } from "@tauri-apps/api/event";
 
 // ---- types mirroring Rust ------------------------------------------------
 
@@ -190,11 +191,11 @@ export interface SystemChecks {
 // The backend emits `engine://gameloop` (true/false) while idle, so the UI
 // knows the moment the user opens GameLoop (the Start button stays pressable
 // either way — pressing without the game shows an explaining dialog).
-
-import type { UnlistenFn } from "@tauri-apps/api/event";
+// Note: static import — @tauri-apps/api/event is already in the main chunk
+// via TitleBar's window import, so a dynamic import split nothing (Vite
+// warned INEFFECTIVE_DYNAMIC_IMPORT).
 
 export async function onGameloopChange(cb: (up: boolean) => void): Promise<UnlistenFn> {
-  const { listen } = await import("@tauri-apps/api/event");
   return listen<boolean>("engine://gameloop", (ev) => cb(ev.payload));
 }
 
@@ -259,7 +260,6 @@ export interface FriendlyReport {
 // ---- event helpers --------------------------------------------------------
 
 export async function onEngineState(cb: EventCallback<StatusPayload>): Promise<() => void> {
-  const { listen } = await import("@tauri-apps/api/event");
   const un = await listen<StatusPayload>("engine://state", cb);
   return un;
 }

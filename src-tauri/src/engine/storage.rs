@@ -25,6 +25,7 @@ pub fn settings_path() -> PathBuf {
 }
 
 /// Create a new session directory named by local time: session-YYYY-MM-DD_HHMMSS
+/// (local = wall-clock time on the user's machine, DST-aware).
 pub fn new_session_dir() -> Result<(String, PathBuf), String> {
     let id = session_id_from(&super::sampler::iso_now());
     let dir = sessions_root().join(&id);
@@ -79,7 +80,10 @@ impl SessionWriter {
             "thresholds": thresholds,
             "eventsCount": events.len(),
         });
-        let _ = fs::write(self.dir.join("summary.json"), serde_json::to_string_pretty(&summary).unwrap_or_default());
+        let _ = fs::write(
+            self.dir.join("summary.json"),
+            serde_json::to_string_pretty(&summary).unwrap_or_default(),
+        );
     }
 
     /// Final write: events, summary, CSV, Markdown report.
@@ -149,7 +153,10 @@ impl SessionWriter {
                 "backgroundPct": stats.background_pct,
             },
         });
-        let _ = fs::write(self.dir.join("summary.json"), serde_json::to_string_pretty(&summary).unwrap_or_default());
+        let _ = fs::write(
+            self.dir.join("summary.json"),
+            serde_json::to_string_pretty(&summary).unwrap_or_default(),
+        );
 
         let report = build_report(&stats, events, samples.len() as u64);
         let rp = self.dir.join("report.md");
@@ -180,31 +187,48 @@ pub struct SessionStats {
 
 impl SessionStats {
     pub fn from(samples: &[Sample]) -> Self {
-        let mut cpus = samples.iter().filter_map(|s| s.cpu_total).collect::<Vec<_>>();
+        let mut cpus = samples
+            .iter()
+            .filter_map(|s| s.cpu_total)
+            .collect::<Vec<_>>();
         cpus.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        let p95 = |v: &mut Vec<f64>| v.get((v.len() as f64 * 0.95) as usize % v.len().max(1)).copied();
-        let avg = |v: &[f64]| if v.is_empty() { None } else { Some(v.iter().sum::<f64>() / v.len() as f64) };
+        let p95 = |v: &mut Vec<f64>| {
+            v.get((v.len() as f64 * 0.95) as usize % v.len().max(1))
+                .copied()
+        };
+        let avg = |v: &[f64]| {
+            if v.is_empty() {
+                None
+            } else {
+                Some(v.iter().sum::<f64>() / v.len() as f64)
+            }
+        };
 
         let perfs: Vec<f64> = samples.iter().filter_map(|s| s.proc_perf).collect();
         let avails: Vec<f64> = samples.iter().filter_map(|s| s.avail_mb).collect();
-        let sms: Vec<f64> = samples.iter().filter_map(|s| s.gpu.as_ref().and_then(|g| g.sm_pct)).collect();
-        let temps: Vec<f64> = samples.iter().filter_map(|s| s.gpu.as_ref().and_then(|g| g.temp)).collect();
+        let sms: Vec<f64> = samples
+            .iter()
+            .filter_map(|s| s.gpu.as_ref().and_then(|g| g.sm_pct))
+            .collect();
+        let temps: Vec<f64> = samples
+            .iter()
+            .filter_map(|s| s.gpu.as_ref().and_then(|g| g.temp))
+            .collect();
 
         let duration_sec = samples
             .first()
             .zip(samples.last())
             .and_then(|(a, b)| {
-                let (Some(x), Some(y)) = (iso_ms_local(&a.t), iso_ms_local(&b.t)) else { return None };
+                let (Some(x), Some(y)) = (iso_ms_local(&a.t), iso_ms_local(&b.t)) else {
+                    return None;
+                };
                 Some((y.saturating_sub(x) / 1000).max(0) as u64)
             })
             .unwrap_or(0);
 
         // window-visibility share: only over samples that carry the field
         // (older sessions parse without it → None → the report says nothing)
-        let vis: Vec<bool> = samples
-            .iter()
-            .filter_map(|s| s.game_visible)
-            .collect();
+        let vis: Vec<bool> = samples.iter().filter_map(|s| s.game_visible).collect();
         let background_pct = if vis.is_empty() {
             None
         } else {
@@ -229,7 +253,9 @@ fn iso_ms_local(iso: &str) -> Option<i64> {
     if b.len() != 24 {
         return None;
     }
-    let num = |r: std::ops::Range<usize>| -> Option<i64> { std::str::from_utf8(&b[r]).ok()?.parse().ok() };
+    let num = |r: std::ops::Range<usize>| -> Option<i64> {
+        std::str::from_utf8(&b[r]).ok()?.parse().ok()
+    };
     let (y, mo, d) = (num(0..4)?, num(5..7)?, num(8..10)?);
     let (h, mi, s) = (num(11..13)?, num(14..16)?, num(17..19)?);
     let ms = num(20..23)?;
@@ -279,7 +305,9 @@ fn build_report(stats: &SessionStats, events: &[EngineEvent], n: u64) -> String 
     if events.is_empty() {
         md.push_str("No notable events captured.\n");
     } else {
-        md.push_str("| Time | Type | Severity | Phase | Duration | Detail |\n|---|---|---|---|---|---|\n");
+        md.push_str(
+            "| Time | Type | Severity | Phase | Duration | Detail |\n|---|---|---|---|---|---|\n",
+        );
         for e in events.iter().take(200) {
             md.push_str(&format!(
                 "| {} | {} | {} | {:?} | {} | {} |\n",
@@ -287,7 +315,9 @@ fn build_report(stats: &SessionStats, events: &[EngineEvent], n: u64) -> String 
                 e.kind,
                 e.severity.as_str(),
                 e.phase,
-                e.duration_sec.map(|d| format!("{d:.0}s")).unwrap_or_else(|| "-".into()),
+                e.duration_sec
+                    .map(|d| format!("{d:.0}s"))
+                    .unwrap_or_else(|| "-".into()),
                 e.detail.replace('|', "/"),
             ));
         }
@@ -304,7 +334,9 @@ fn build_report(stats: &SessionStats, events: &[EngineEvent], n: u64) -> String 
 
 /// All session dirs sorted by name (= chronological, newest last).
 pub fn list_sessions() -> Vec<String> {
-    let Ok(rd) = fs::read_dir(sessions_root()) else { return vec![] };
+    let Ok(rd) = fs::read_dir(sessions_root()) else {
+        return vec![];
+    };
     let mut v: Vec<String> = rd
         .flatten()
         .filter(|e| e.path().is_dir())
@@ -414,8 +446,12 @@ pub fn session_entries() -> Vec<SessionEntry> {
 /// Frame freezes + distinct issue kinds from a session's events.
 /// Returns (lag_spikes, distinct_issue_kinds).
 fn classify_events(dir: &Path) -> (u64, u64) {
-    let Ok(text) = fs::read_to_string(dir.join("events.json")) else { return (0, 0) };
-    let Ok(evs) = serde_json::from_str::<Vec<serde_json::Value>>(&text) else { return (0, 0) };
+    let Ok(text) = fs::read_to_string(dir.join("events.json")) else {
+        return (0, 0);
+    };
+    let Ok(evs) = serde_json::from_str::<Vec<serde_json::Value>>(&text) else {
+        return (0, 0);
+    };
     let mut spikes = 0u64;
     let mut kinds: std::collections::HashSet<String> = std::collections::HashSet::new();
     for e in &evs {
@@ -533,9 +569,15 @@ pub fn friendly_report(id: &str) -> Result<FriendlyReport, String> {
         .map(|t| t.lines().filter(|l| !l.trim().is_empty()).count() as u64)
         .unwrap_or(0);
 
-    let duration = summary.get("durationSec").and_then(|d| d.as_u64()).unwrap_or(0);
+    let duration = summary
+        .get("durationSec")
+        .and_then(|d| d.as_u64())
+        .unwrap_or(0);
     let (spikes, distinct_issues) = classify_events(&dir);
-    let partial = summary.get("partial").and_then(|p| p.as_bool()).unwrap_or(false);
+    let partial = summary
+        .get("partial")
+        .and_then(|p| p.as_bool())
+        .unwrap_or(false);
     let outcome = if partial {
         "partial".to_string()
     } else {
@@ -558,7 +600,10 @@ pub fn friendly_report(id: &str) -> Result<FriendlyReport, String> {
     let mut findings: Vec<FriendlyFinding> = Vec::new();
     for ev in &events {
         let kind = ev.get("kind").and_then(|k| k.as_str()).unwrap_or("");
-        let sev = ev.get("severity").and_then(|s| s.as_str()).unwrap_or("warn");
+        let sev = ev
+            .get("severity")
+            .and_then(|s| s.as_str())
+            .unwrap_or("warn");
         if sev == "ok" || kind.is_empty() {
             continue;
         }
@@ -582,7 +627,10 @@ pub fn friendly_report(id: &str) -> Result<FriendlyReport, String> {
     let mut highlights: Vec<HighlightEntry> = Vec::new();
     for ev in &events {
         let kind = ev.get("kind").and_then(|k| k.as_str()).unwrap_or("");
-        let sev = ev.get("severity").and_then(|s| s.as_str()).unwrap_or("warn");
+        let sev = ev
+            .get("severity")
+            .and_then(|s| s.as_str())
+            .unwrap_or("warn");
         let phase = ev.get("phase").and_then(|p| p.as_str()).unwrap_or("");
         if sev == "ok" || phase == "end" || phase == "End" {
             continue;
@@ -623,14 +671,20 @@ pub fn friendly_report(id: &str) -> Result<FriendlyReport, String> {
     }
 
     // metrics summary from summary.json stats
-    let stats = summary.get("stats").cloned().unwrap_or(serde_json::json!({}));
+    let stats = summary
+        .get("stats")
+        .cloned()
+        .unwrap_or(serde_json::json!({}));
     let mut metrics_summary = Vec::new();
     if let Some(v) = stats.get("cpuP95").and_then(|v| v.as_f64()) {
         metrics_summary.push(format!("CPU peaked around {:.0}% under load.", v));
     }
     if let Some(v) = stats.get("procPerfMin").and_then(|v| v.as_f64()) {
         if v < 90.0 {
-            metrics_summary.push(format!("CPU dropped to {:.0}% of its speed at some point.", v));
+            metrics_summary.push(format!(
+                "CPU dropped to {:.0}% of its speed at some point.",
+                v
+            ));
         }
     }
     if let Some(v) = stats.get("availMin").and_then(|v| v.as_f64()) {
@@ -640,13 +694,13 @@ pub fn friendly_report(id: &str) -> Result<FriendlyReport, String> {
         metrics_summary.push(format!("GPU reached {:.0}°C at its hottest.", v));
     }
     if let Some(v) = stats.get("gpuSmAvg").and_then(|v| v.as_f64()) {
-        metrics_summary.push(format!("GPU averaged around {:.0}% usage while rendering.", v));
+        metrics_summary.push(format!(
+            "GPU averaged around {:.0}% usage while rendering.",
+            v
+        ));
     }
 
-    let raw_path = dir
-        .join("report.md")
-        .to_string_lossy()
-        .to_string();
+    let raw_path = dir.join("report.md").to_string_lossy().to_string();
 
     Ok(FriendlyReport {
         id: id.to_string(),
@@ -755,7 +809,10 @@ mod tests {
     #[test]
     fn iso_ms_known_epoch() {
         assert_eq!(iso_ms_local("1970-01-01T00:00:00.000Z"), Some(0));
-        assert_eq!(iso_ms_local("2026-08-31T00:00:00.000Z"), Some(1_788_134_400_000));
+        assert_eq!(
+            iso_ms_local("2026-08-31T00:00:00.000Z"),
+            Some(1_788_134_400_000)
+        );
     }
 
     #[test]

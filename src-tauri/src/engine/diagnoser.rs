@@ -15,7 +15,11 @@ fn key_for(ev: &EngineEvent, latest: &Sample) -> &'static str {
             // healthy elsewhere → scene hitch; loaded → gpu busy
             let others_ok = latest.disk_queue.map(|q| q < 0.5).unwrap_or(true)
                 && latest.cpu_total.map(|c| c < 85.0).unwrap_or(true);
-            if others_ok { "scene_hitch" } else { "gpu_busy" }
+            if others_ok {
+                "scene_hitch"
+            } else {
+                "gpu_busy"
+            }
         }
         "render_stall_loaded" => "gpu_busy",
         "gpu_clock_low" | "gpu_temp" => "gpu_busy",
@@ -25,7 +29,15 @@ fn key_for(ev: &EngineEvent, latest: &Sample) -> &'static str {
 
 /// Static copy per diagnosis key: title / simple / cause / fix / severity.
 /// One place to edit all user-facing strings.
-pub fn diagnosis_copy(key: &str) -> Option<(&'static str, &'static str, &'static str, &'static str, &'static str)> {
+pub fn diagnosis_copy(
+    key: &str,
+) -> Option<(
+    &'static str,
+    &'static str,
+    &'static str,
+    &'static str,
+    &'static str,
+)> {
     Some(match key {
         "disk_wait" => (
             "Game is waiting on disk",
@@ -116,7 +128,9 @@ fn diagnoses_from(events: &[EngineEvent], latest: &Sample, now_iso: &str) -> Vec
         let entry = buckets.entry(key).or_insert((0, 0, ""));
         entry.1 = entry.1.max(ev_ms);
         // severity: keep the WORST raw event severity ("crit" > "warn")
-        if ev.phase != Phase::End && (entry.2.is_empty() || (ev.severity == Severity::Crit && entry.2 != "crit")) {
+        if ev.phase != Phase::End
+            && (entry.2.is_empty() || (ev.severity == Severity::Crit && entry.2 != "crit"))
+        {
             entry.2 = ev.severity.as_str();
         }
         match ev.phase {
@@ -177,7 +191,11 @@ fn diagnoses_from(events: &[EngineEvent], latest: &Sample, now_iso: &str) -> Vec
         if let Some((title, simple, cause, fix, sev_default)) = diagnosis_copy(key) {
             // confirmed cards are always "high" if their worst event was crit,
             // otherwise keep the copy's own weight
-            let sev = if *raw_sev == "crit" { "high" } else { sev_default };
+            let sev = if *raw_sev == "crit" {
+                "high"
+            } else {
+                sev_default
+            };
             out.push(Diagnosis {
                 key: key.to_string(),
                 title: title.to_string(),
@@ -199,20 +217,37 @@ fn diagnoses_from(events: &[EngineEvent], latest: &Sample, now_iso: &str) -> Vec
     out
 }
 
+/// Everything `build_ui_state` needs, bundled — keeps the call site readable
+/// and clippy happy (too_many_arguments on the old 11-param form).
+pub struct UiStateInput<'a> {
+    pub session: Option<&'a str>,
+    pub started_at: Option<&'a str>,
+    pub samples: &'a [Sample],
+    pub samples_total: u64,
+    pub events: &'a [EngineEvent],
+    pub active_count: usize,
+    pub game_running: bool,
+    pub emulator: Option<&'a str>,
+    pub total_mem_mb: f64,
+    pub session_secs: u64,
+    pub auto_stop_sec: Option<u64>,
+}
+
 /// Build the complete UI state — the only payload the frontend receives.
-pub fn build_ui_state(
-    session: Option<&str>,
-    started_at: Option<&str>,
-    samples: &[Sample],
-    samples_total: u64,
-    events: &[EngineEvent],
-    active_count: usize,
-    game_running: bool,
-    emulator: Option<&str>,
-    total_mem_mb: f64,
-    session_secs: u64,
-    auto_stop_sec: Option<u64>,
-) -> UiState {
+pub fn build_ui_state(inp: UiStateInput) -> UiState {
+    let UiStateInput {
+        session,
+        started_at,
+        samples,
+        samples_total,
+        events,
+        active_count,
+        game_running,
+        emulator,
+        total_mem_mb,
+        session_secs,
+        auto_stop_sec,
+    } = inp;
     let latest = samples.last().cloned().unwrap_or_default();
     let now_iso = super::sampler::iso_now();
     let diagnoses = diagnoses_from(events, &latest, &now_iso);
@@ -227,7 +262,11 @@ pub fn build_ui_state(
         ram: latest
             .avail_mb
             .map(|a| (100.0 - (a / total_mem_mb) * 100.0).clamp(0.0, 100.0) as u8),
-        gpu: latest.gpu.as_ref().and_then(|g| g.sm_pct).map(|v| v.clamp(0.0, 100.0) as u8),
+        gpu: latest
+            .gpu
+            .as_ref()
+            .and_then(|g| g.sm_pct)
+            .map(|v| v.clamp(0.0, 100.0) as u8),
         disk: pct(latest.disk_busy_pct),
     };
 
@@ -235,7 +274,9 @@ pub fn build_ui_state(
     let hist_window = samples.iter().rev().take(60).collect::<Vec<_>>();
     let mut history = super::types::History::default();
     for s in hist_window.iter().rev() {
-        history.cpu.push(s.cpu_total.map(|v| v.clamp(0.0, 100.0) as u8).unwrap_or(0));
+        history
+            .cpu
+            .push(s.cpu_total.map(|v| v.clamp(0.0, 100.0) as u8).unwrap_or(0));
         let ram = s
             .avail_mb
             .map(|a| (100.0 - (a / total_mem_mb) * 100.0).clamp(0.0, 100.0) as u8)
@@ -248,7 +289,11 @@ pub fn build_ui_state(
             .map(|v| v.clamp(0.0, 100.0) as u8)
             .unwrap_or(0);
         history.gpu.push(gpu);
-        history.disk.push(s.disk_busy_pct.map(|v| v.clamp(0.0, 100.0) as u8).unwrap_or(0));
+        history.disk.push(
+            s.disk_busy_pct
+                .map(|v| v.clamp(0.0, 100.0) as u8)
+                .unwrap_or(0),
+        );
     }
 
     // live event feed: recent non-ok events, newest first, max 20
@@ -360,12 +405,48 @@ mod tests {
     fn one_disk_storm_is_one_card_not_three() {
         // the real-world disk storm: queue + hard faults + CPU sat, one cause
         let events = vec![
-            ev("disk_queue", Phase::Start, Severity::Warn, "2026-08-31T05:00:00.000Z", None),
-            ev("hard_faults", Phase::Instant, Severity::Warn, "2026-08-31T05:00:01.000Z", None),
-            ev("hard_faults", Phase::Instant, Severity::Warn, "2026-08-31T05:00:02.000Z", None),
-            ev("cpu_saturation", Phase::Start, Severity::Warn, "2026-08-31T05:00:03.000Z", None),
-            ev("cpu_saturation", Phase::End, Severity::Ok, "2026-08-31T05:00:05.000Z", Some(2.0)),
-            ev("disk_queue", Phase::End, Severity::Ok, "2026-08-31T05:00:12.000Z", Some(12.0)),
+            ev(
+                "disk_queue",
+                Phase::Start,
+                Severity::Warn,
+                "2026-08-31T05:00:00.000Z",
+                None,
+            ),
+            ev(
+                "hard_faults",
+                Phase::Instant,
+                Severity::Warn,
+                "2026-08-31T05:00:01.000Z",
+                None,
+            ),
+            ev(
+                "hard_faults",
+                Phase::Instant,
+                Severity::Warn,
+                "2026-08-31T05:00:02.000Z",
+                None,
+            ),
+            ev(
+                "cpu_saturation",
+                Phase::Start,
+                Severity::Warn,
+                "2026-08-31T05:00:03.000Z",
+                None,
+            ),
+            ev(
+                "cpu_saturation",
+                Phase::End,
+                Severity::Ok,
+                "2026-08-31T05:00:05.000Z",
+                Some(2.0),
+            ),
+            ev(
+                "disk_queue",
+                Phase::End,
+                Severity::Ok,
+                "2026-08-31T05:00:12.000Z",
+                Some(12.0),
+            ),
         ];
         let latest = Sample::default();
         let now = "2026-08-31T05:00:13.000Z";
@@ -379,8 +460,20 @@ mod tests {
     fn blips_stay_in_feed_not_cards() {
         // a single 1s queue bump: recorded, but NOT card-worthy
         let events = vec![
-            ev("disk_queue", Phase::Start, Severity::Warn, "2026-08-31T05:00:00.000Z", None),
-            ev("disk_queue", Phase::End, Severity::Ok, "2026-08-31T05:00:01.000Z", Some(1.0)),
+            ev(
+                "disk_queue",
+                Phase::Start,
+                Severity::Warn,
+                "2026-08-31T05:00:00.000Z",
+                None,
+            ),
+            ev(
+                "disk_queue",
+                Phase::End,
+                Severity::Ok,
+                "2026-08-31T05:00:01.000Z",
+                Some(1.0),
+            ),
         ];
         let latest = Sample::default();
         let now = "2026-08-31T05:00:02.000Z";
@@ -391,8 +484,20 @@ mod tests {
     #[test]
     fn sustained_throttle_earns_card() {
         let events = vec![
-            ev("cpu_throttle", Phase::Start, Severity::Crit, "2026-08-31T05:00:00.000Z", None),
-            ev("cpu_throttle", Phase::End, Severity::Ok, "2026-08-31T05:00:08.000Z", Some(8.0)),
+            ev(
+                "cpu_throttle",
+                Phase::Start,
+                Severity::Crit,
+                "2026-08-31T05:00:00.000Z",
+                None,
+            ),
+            ev(
+                "cpu_throttle",
+                Phase::End,
+                Severity::Ok,
+                "2026-08-31T05:00:08.000Z",
+                Some(8.0),
+            ),
         ];
         let latest = Sample::default();
         let now = "2026-08-31T05:00:09.000Z";
@@ -406,8 +511,20 @@ mod tests {
         // sustained mem-idle evidence but ZERO measured freezes — the old
         // bug: a "visible hitch" card with no hitch ever recorded
         let events = vec![
-            ev("gpu_mem_idle", Phase::Start, Severity::Warn, "2026-08-31T05:00:00.000Z", None),
-            ev("gpu_mem_idle", Phase::End, Severity::Ok, "2026-08-31T05:00:20.000Z", Some(20.0)),
+            ev(
+                "gpu_mem_idle",
+                Phase::Start,
+                Severity::Warn,
+                "2026-08-31T05:00:00.000Z",
+                None,
+            ),
+            ev(
+                "gpu_mem_idle",
+                Phase::End,
+                Severity::Ok,
+                "2026-08-31T05:00:20.000Z",
+                Some(20.0),
+            ),
         ];
         let latest = Sample::default();
         let now = "2026-08-31T05:00:21.000Z";
@@ -423,13 +540,34 @@ mod tests {
         // same wake evidence, but a render_stall freeze happened right after
         // the wake — correlation confirms the hitch was real
         let events = vec![
-            ev("gpu_mem_idle", Phase::Start, Severity::Warn, "2026-08-31T05:00:00.000Z", None),
-            ev("render_stall", Phase::Instant, Severity::Crit, "2026-08-31T05:00:05.000Z", None),
-            ev("gpu_mem_idle", Phase::End, Severity::Ok, "2026-08-31T05:00:20.000Z", Some(20.0)),
+            ev(
+                "gpu_mem_idle",
+                Phase::Start,
+                Severity::Warn,
+                "2026-08-31T05:00:00.000Z",
+                None,
+            ),
+            ev(
+                "render_stall",
+                Phase::Instant,
+                Severity::Crit,
+                "2026-08-31T05:00:05.000Z",
+                None,
+            ),
+            ev(
+                "gpu_mem_idle",
+                Phase::End,
+                Severity::Ok,
+                "2026-08-31T05:00:20.000Z",
+                Some(20.0),
+            ),
         ];
         let latest = Sample::default();
         let now = "2026-08-31T05:00:21.000Z";
         let d = diagnoses_from(&events, &latest, now);
-        assert!(d.iter().any(|x| x.key == "gpu_wake"), "a wake followed by a measured freeze is a confirmed hitch");
+        assert!(
+            d.iter().any(|x| x.key == "gpu_wake"),
+            "a wake followed by a measured freeze is a confirmed hitch"
+        );
     }
 }

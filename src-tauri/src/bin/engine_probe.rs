@@ -14,7 +14,11 @@ fn main() {
         println!("    START FAILED: {e}");
         std::process::exit(1);
     }
-    println!("    started ok, status = {:?}", eng.status());
+    println!(
+        "    started ok (generation {}), status = {:?}",
+        eng.current_generation(),
+        eng.status()
+    );
 
     let start = Instant::now();
     let mut last_count = 0u64;

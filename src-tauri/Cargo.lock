@@ -2676,9 +2676,8 @@ dependencies = [
 
 [[package]]
 name = "pubg-gameloop-lag-hunter"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
- "log",
  "serde",
  "serde_json",
  "tauri",

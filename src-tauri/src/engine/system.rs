@@ -183,15 +183,13 @@ fn nvidia_vram_mb() -> Option<f64> {
 }
 
 pub fn query_system_info() -> Result<SystemInfo, String> {
-    let text = ps(
-        r#"
+    let text = ps(r#"
 $cpu = (Get-CimInstance Win32_Processor | Select-Object -First 1).Name
 "cpu|$cpu"
 Get-CimInstance Win32_VideoController | ForEach-Object { "gpu|$($_.Name)|$([math]::Round($_.AdapterRAM/1GB,1))" }
 "ram|$([math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB,1))"
 Get-PhysicalDisk | ForEach-Object { "disk|$($_.FriendlyName)|$($_.MediaType)|$($_.BusType)|$([math]::Round($_.Size/1GB,0))" }
-"#,
-    )?;
+"#)?;
     let mut info = SystemInfo {
         cpu: "Unknown".into(),
         gpus: Vec::new(),
@@ -213,18 +211,32 @@ Get-PhysicalDisk | ForEach-Object { "disk|$($_.FriendlyName)|$($_.MediaType)|$($
                     (true, Some(mb)) => Some(mb / 1024.0),
                     _ => cim_vram,
                 };
-                info.gpus.push(GpuInfo { name, vram_gb: vram });
+                info.gpus.push(GpuInfo {
+                    name,
+                    vram_gb: vram,
+                });
             }
             Some("ram") => {
-                info.ram_gb = parts.next().and_then(|v| v.trim().parse().ok()).unwrap_or(0.0);
+                info.ram_gb = parts
+                    .next()
+                    .and_then(|v| v.trim().parse().ok())
+                    .unwrap_or(0.0);
             }
             Some("disk") => {
                 let name = parts.next().unwrap_or("").trim().to_string();
                 let media = parts.next().unwrap_or("").trim().to_string();
                 let bus = parts.next().unwrap_or("").trim().to_string();
-                let size = parts.next().and_then(|v| v.trim().parse().ok()).unwrap_or(0.0);
+                let size = parts
+                    .next()
+                    .and_then(|v| v.trim().parse().ok())
+                    .unwrap_or(0.0);
                 if !name.is_empty() {
-                    info.disks.push(DiskInfo { name, media, bus, size_gb: size });
+                    info.disks.push(DiskInfo {
+                        name,
+                        media,
+                        bus,
+                        size_gb: size,
+                    });
                 }
             }
             _ => {}
@@ -250,8 +262,7 @@ pub fn query_top_processes() -> Result<Vec<TopProcess>, String> {
     // ONE PowerShell process: two quick snapshots 400ms apart, top-by-RAM only
     // (60 processes max) — snappy on busy machines, still accurate for the
     // processes that matter. CPU% = delta between the two snapshots.
-    let text = ps(
-        r#"
+    let text = ps(r#"
 $cores = [Environment]::ProcessorCount
 $a = @{}
 Get-Process | Sort-Object WorkingSet64 -Descending | Select-Object -First 60 | ForEach-Object { $a[$_.Id] = $_.CPU }
@@ -263,8 +274,7 @@ Get-Process | Sort-Object WorkingSet64 -Descending | Select-Object -First 60 | F
     "{0}|{1}|{2}|{3}" -f $_.ProcessName, $_.Id, $pct, [math]::Round($_.WorkingSet64/1MB,0)
   }
 }
-"#,
-    )?;
+"#)?;
     let mut out: Vec<TopProcess> = Vec::new();
     for line in text.lines().map(|l| l.trim()).filter(|l| !l.is_empty()) {
         let mut parts = line.split('|');
@@ -285,9 +295,18 @@ Get-Process | Sort-Object WorkingSet64 -Descending | Select-Object -First 60 | F
         if pct < 0.5 {
             continue;
         }
-        out.push(TopProcess { name: name.to_string(), pid, cpu_pct: pct, ram_mb: ram });
+        out.push(TopProcess {
+            name: name.to_string(),
+            pid,
+            cpu_pct: pct,
+            ram_mb: ram,
+        });
     }
-    out.sort_by(|a, b| b.cpu_pct.partial_cmp(&a.cpu_pct).unwrap_or(std::cmp::Ordering::Equal));
+    out.sort_by(|a, b| {
+        b.cpu_pct
+            .partial_cmp(&a.cpu_pct)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     out.truncate(12);
     Ok(out)
 }
@@ -313,8 +332,7 @@ pub struct SystemChecks {
 }
 
 pub fn query_system_checks() -> Result<SystemChecks, String> {
-    let text = ps(
-        r#"
+    let text = ps(r#"
 $scheme = (powercfg /getactivescheme) -join ' '
 "power|$scheme"
 $cs = Get-CimInstance Win32_ComputerSystem
@@ -324,8 +342,7 @@ elseif ($pf) { "pagefile|manual|$($pf.AllocatedBaseSize)" }
 else { "pagefile|off|0" }
 $bat = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue
 if ($bat) { "battery|$($bat.BatteryStatus)" } else { "battery|none" }
-"#,
-    )?;
+"#)?;
     let mut c = SystemChecks {
         power_name: "Unknown".into(),
         power_ok: false,
@@ -341,7 +358,7 @@ if ($bat) { "battery|$($bat.BatteryStatus)" } else { "battery|none" }
             Some("power") => {
                 let raw = parts.next().unwrap_or("");
                 c.power_name = extract_power_name(raw);
-                c.power_ok = is_performance_plan(&c.power_name);
+                c.power_ok = is_performance_plan(&c.power_name, &extract_power_guid(raw));
             }
             Some("pagefile") => {
                 c.pagefile_mode = parts.next().unwrap_or("off").trim().to_string();
@@ -364,6 +381,8 @@ if ($bat) { "battery|$($bat.BatteryStatus)" } else { "battery|none" }
 }
 
 /// "Power Scheme GUID: xxx  (High performance)" → "High performance"
+/// The raw line always carries the GUID (language-independent) plus the
+/// localized display name; both are kept so callers can match on either.
 fn extract_power_name(raw: &str) -> String {
     let open = raw.rfind('(');
     let close = raw.rfind(')');
@@ -373,9 +392,47 @@ fn extract_power_name(raw: &str) -> String {
     }
 }
 
-fn is_performance_plan(name: &str) -> bool {
+/// The scheme GUID from the same powercfg line: `...: <guid>  (Name)`.
+/// GUIDs are identical on every Windows language — the only reliable
+/// signal on an Arabic (or any localized) Windows where the display name
+/// comes back translated ("أقصى أداء" etc.).
+fn extract_power_guid(raw: &str) -> String {
+    // "Power Scheme GUID: e72c17b6-94d2-4509-adfc-8f2302229d1a  (High performance)"
+    let after = raw.split(':').nth(1).unwrap_or("");
+    let guid = after.split_whitespace().next().unwrap_or("");
+    let looks_like_guid = guid.len() == 36
+        && guid.as_bytes()[8] == b'-'
+        && guid.as_bytes()[13] == b'-'
+        && guid.chars().all(|c| c.is_ascii_hexdigit() || c == '-');
+    if looks_like_guid {
+        guid.to_ascii_lowercase()
+    } else {
+        String::new()
+    }
+}
+
+/// Built-in Windows performance-class scheme GUIDs (locale-independent).
+const POWER_GUID_HIGH_PERFORMANCE: &str = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
+const POWER_GUID_ULTIMATE_PERFORMANCE: &str = "e9a42b02-d5df-448d-aa66-1f0f8455410a";
+
+fn is_performance_plan(name: &str, guid: &str) -> bool {
+    // GUID first: exact, language-independent truth for built-in plans.
+    if guid == POWER_GUID_HIGH_PERFORMANCE || guid == POWER_GUID_ULTIMATE_PERFORMANCE {
+        return true;
+    }
+    // OEM/custom schemes carry their own GUIDs we can't know — fall back to
+    // matching the display name. English + Arabic covered (user base is
+    // largely Arabic Windows); other languages fall through to "not matched".
     let n = name.to_lowercase();
-    n.contains("high performance") || n.contains("ultimate performance") || n.contains("performance")
+    let english = n.contains("high performance")
+        || n.contains("ultimate performance")
+        || n.contains("performance");
+    let arabic = n.contains("أقصى أداء")
+        || n.contains("الأداء العالي")
+        || n.contains("أداء عالي")
+        || n.contains("أقصى الأداء")
+        || n.contains("الأداء الأقصى");
+    english || arabic
 }
 
 fn pagefile_ok(mode: &str, mb: u64) -> bool {
@@ -392,7 +449,10 @@ fn pagefile_ok(mode: &str, mb: u64) -> bool {
 pub fn open_windows_panel(panel: &str) -> Result<(), String> {
     let applet = match panel {
         "power" => "powercfg.cpl",
-        "system" => "sysdm.cpl",
+        // SystemPropertiesAdvanced.exe opens the Advanced System Properties
+        // page DIRECTLY (the Performance/Virtual memory dialog is one click
+        // away) — sysdm.cpl would open the General tab instead.
+        "system" => "SystemPropertiesAdvanced.exe",
         _ => return Err("unknown panel".into()),
     };
     #[cfg(windows)]
@@ -415,18 +475,58 @@ mod tests {
     #[test]
     fn power_name_extracted() {
         assert_eq!(
-            extract_power_name("Power Scheme GUID: e72c17b6-94d2-4509-adfc-8f2302229d1a  (High performance)"),
+            extract_power_name(
+                "Power Scheme GUID: e72c17b6-94d2-4509-adfc-8f2302229d1a  (High performance)"
+            ),
             "High performance"
         );
         assert_eq!(extract_power_name("garbage"), "Unknown");
     }
 
     #[test]
+    fn power_guid_extracted() {
+        assert_eq!(
+            extract_power_guid(
+                "Power Scheme GUID: e72c17b6-94d2-4509-adfc-8f2302229d1a  (High performance)"
+            ),
+            "e72c17b6-94d2-4509-adfc-8f2302229d1a"
+        );
+        // Arabic Windows: same GUID, translated name — GUID must still parse
+        assert_eq!(
+            extract_power_guid(
+                "Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (أقصى أداء)"
+            ),
+            "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"
+        );
+        assert_eq!(extract_power_guid("garbage"), "");
+    }
+
+    #[test]
     fn performance_plan_detected() {
-        assert!(is_performance_plan("High performance"));
-        assert!(is_performance_plan("Ultimate Performance"));
-        assert!(!is_performance_plan("Power saver"));
-        assert!(!is_performance_plan("Balanced"));
+        // by display name (English)
+        assert!(is_performance_plan("High performance", ""));
+        assert!(is_performance_plan("Ultimate Performance", ""));
+        assert!(!is_performance_plan("Power saver", ""));
+        assert!(!is_performance_plan("Balanced", ""));
+        // by GUID — locale-independent truth (Arabic Windows shows the
+        // translated name; the GUID is what must match)
+        assert!(is_performance_plan(
+            "أقصى أداء",
+            POWER_GUID_HIGH_PERFORMANCE
+        ));
+        assert!(is_performance_plan(
+            "whatever",
+            POWER_GUID_ULTIMATE_PERFORMANCE
+        ));
+        assert!(!is_performance_plan(
+            "",
+            "381b4226-f694-41f0-9685-ff5bb260df2e"
+        )); // Balanced GUID
+            // by Arabic display name (custom OEM schemes carry unknown GUIDs)
+        assert!(is_performance_plan("أقصى أداء", ""));
+        assert!(is_performance_plan("الأداء العالي", ""));
+        assert!(!is_performance_plan("موفر الطاقة", "")); // Power saver (Arabic)
+        assert!(!is_performance_plan("متوازن", "")); // Balanced (Arabic)
     }
 
     #[test]

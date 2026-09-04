@@ -282,16 +282,18 @@ impl Thresholds {
     /// Ratio fields stay fixed (they're already relative); machine-bound
     /// fields are derived from the actual hardware.
     pub fn for_machine(p: MachineProfile) -> Self {
-        let mut th = Self::default();
+        // start from the static defaults, override only the machine-bound
+        // fields (ratio fields are already relative)
+        let base = Self::default();
 
         // RAM floor: 6% of installed RAM, clamped 1–4 GB.
         // 4GB machine → 1GB (half its RAM free is normal, not a crisis)
         // 32GB machine → ~2GB (matches the diagnosis that found the real bug)
-        th.avail_mem_floor_mb = (p.total_mem_mb * 0.06).clamp(1024.0, 4096.0);
+        let avail_mem_floor_mb = (p.total_mem_mb * 0.06).clamp(1024.0, 4096.0);
 
         // Hard faults: paging storms scale inversely with RAM headroom —
         // smaller machines hit pressure sooner, so the bar sits lower.
-        th.hard_faults_per_sec = if p.total_mem_mb < 8192.0 {
+        let hard_faults_per_sec = if p.total_mem_mb < 8192.0 {
             200.0
         } else if p.total_mem_mb > 32_768.0 {
             400.0
@@ -301,8 +303,13 @@ impl Thresholds {
 
         // Disk queue: each physical spindle can legitimately serve ~1 request;
         // the total-device counter can run that many in parallel.
-        th.disk_queue_len = (p.disk_count.max(1) as f64).clamp(1.0, 6.0);
+        let disk_queue_len = (p.disk_count.max(1) as f64).clamp(1.0, 6.0);
 
-        th
+        Self {
+            avail_mem_floor_mb,
+            hard_faults_per_sec,
+            disk_queue_len,
+            ..base
+        }
     }
 }

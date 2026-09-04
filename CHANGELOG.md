@@ -4,6 +4,59 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] — 2026-09-04
+
+### Fixed
+- Clock and session times showed UTC instead of the user's local time — on Egypt (UTC+3) a
+  session run at 03:19 was named and reported as 00:19. All timestamps (session names, the
+  report clock column, technical logs) now show real wall-clock time, DST-aware, with the
+  time-zone offset re-read every ~10 minutes so a session crossing a DST boundary stays honest.
+- Power-plan check failed on Arabic Windows: the plan name comes back localized ("أقصى أداء")
+  and the English-only match marked a perfectly good plan as "not good". The check now matches
+  the scheme GUID (language-independent) first, with localized names (English + Arabic) as
+  fallback for OEM/custom schemes.
+- Monitoring on localized (Arabic) Windows could run CPU/RAM/disk-blind: typeperf sometimes
+  rejects the English counter paths on translated Windows builds, and the session would show
+  GPU-only numbers with no error. A one-shot probe at session start detects this and switches
+  to a locale-proof sampling path (PowerShell `Get-Counter`, verified live on real machines).
+- Arabic-Indic thousands separators (٬) in process memory numbers now parse correctly.
+- The reports list did not refresh after a session finished — a finished scan only appeared
+  after restarting the app. The list now re-reads every time the Reports tab is opened.
+- First-run flash: on a fresh install the main UI appeared for a few seconds, then flipped to
+  the welcome screen. The welcome decision now resolves before anything decisive renders.
+- The "GameLoop closed" notice could appear in a stale language if the user switched language
+  mid-session — dialog text now always follows the current language.
+- Duplicate guard threads: rapidly starting a new session could leave the previous session's
+  liveness guard and auto-stop timer running in parallel (doubling the probe cadence). Each
+  session now carries a generation number; old guards retire the moment a new session starts.
+- Child-process leak on hard crashes: with `panic = "abort"`, a force-killed app left
+  typeperf (up to ~9 h) and `nvidia-smi dmon` (forever — it had no cap) running behind. All
+  spawned sources are now assigned to a Windows Job Object with kill-on-close — if the app
+  dies, the kernel reaps the children with it.
+- The pagefile "Open setting" button opened the System Properties **General** tab, not the
+  page where virtual memory lives. It now opens the Advanced System Properties page (the
+  Performance/Virtual memory dialog is one click away), and the promise in the checks tab
+  copy was softened to match reality.
+- Build warnings: 6 clippy warnings (an 11-argument function, missing `Default`, clamp-like
+  patterns, and more) and a Vite `INEFFECTIVE_DYNAMIC_IMPORT` warning — all gone.
+
+### Security
+- `open_url` now enforces its own allowlist in Rust (https + github.com/api.github.com/paypal.me
+  only). The comment previously claimed the opener plugin's capabilities scoped this command —
+  they do not: plugin capabilities only guard the JS-side command path, and a Rust-side opener
+  call was unconstrained. Practical risk was low (the UI passes fixed URLs), but the claimed
+  protection now actually exists.
+
+### Changed
+- The release binary now carries its version in the filename straight from the build
+  (`pubg-gameloop-lag-hunter-<version>.exe`, via Tauri's `mainBinaryName`) — no manual renaming.
+- Removed the unused `log = "0.4"` dependency (the engine has its own logger).
+- Docs: the "capped at 2 h" comment corrected (the cap is 1 h), the reference to a
+  nonexistent release workflow removed, and the headless `engine_probe`'s unbounded sessions
+  documented as intentional.
+- Test suite grew from 44 to 46 (time-zone truth test against the OS clock, live Get-Counter
+  emitter check, GUID and Arabic-name power-plan matching).
+
 ## [1.1.0] — 2026-09-02
 
 ### Fixed

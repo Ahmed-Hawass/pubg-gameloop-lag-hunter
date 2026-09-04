@@ -27,7 +27,11 @@ fn write_line(level: &str, msg: &str) {
     let _ = fs::create_dir_all(logs_dir());
     let iso = sampler::iso_now();
     let clock = &iso[11..23];
-    if let Ok(mut f) = fs::OpenOptions::new().create(true).append(true).open(log_path()) {
+    if let Ok(mut f) = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_path())
+    {
         let _ = writeln!(f, "{clock} [{level}] {msg}");
     }
 }
@@ -43,15 +47,21 @@ pub fn error(msg: &str) {
 /// Delete log files older than 7 days — called once at app start.
 pub fn cleanup_old_logs() {
     let _ = fs::create_dir_all(logs_dir());
-    let Ok(rd) = fs::read_dir(logs_dir()) else { return };
+    let Ok(rd) = fs::read_dir(logs_dir()) else {
+        return;
+    };
     let cutoff = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64 - 7 * 86_400)
         .unwrap_or(0);
     for entry in rd.flatten() {
         let Ok(meta) = entry.metadata() else { continue };
-        let Ok(modified) = meta.modified() else { continue };
-        let Ok(age) = modified.duration_since(std::time::UNIX_EPOCH) else { continue };
+        let Ok(modified) = meta.modified() else {
+            continue;
+        };
+        let Ok(age) = modified.duration_since(std::time::UNIX_EPOCH) else {
+            continue;
+        };
         if (age.as_secs() as i64) < cutoff {
             let _ = fs::remove_file(entry.path());
         }

@@ -146,16 +146,29 @@ impl Detector {
     fn check_cpu_saturation(&mut self, s: &Sample, evs: &mut Vec<EngineEvent>) {
         let Some(cpu) = s.cpu_total else { return };
         let active = cpu >= self.th.cpu_saturation_pct;
-        let sev = if cpu >= 95.0 { Severity::Crit } else { Severity::Warn };
-        let detail = if active { format!("CPU at {:.0}%", cpu) } else { String::new() };
+        let sev = if cpu >= 95.0 {
+            Severity::Crit
+        } else {
+            Severity::Warn
+        };
+        let detail = if active {
+            format!("CPU at {:.0}%", cpu)
+        } else {
+            String::new()
+        };
         self.condition("cpu_saturation", sev, active, detail, &s.t, evs);
     }
 
     fn check_throttle(&mut self, s: &Sample, evs: &mut Vec<EngineEvent>) {
-        let (Some(perf), Some(cpu)) = (s.proc_perf, s.cpu_total) else { return };
+        let (Some(perf), Some(cpu)) = (s.proc_perf, s.cpu_total) else {
+            return;
+        };
         let active = perf < self.th.proc_perf_floor_pct && cpu >= self.th.proc_perf_load_gate;
         let detail = if active {
-            format!("CPU frequency at {:.0}% of nominal under {:.0}% load", perf, cpu)
+            format!(
+                "CPU frequency at {:.0}% of nominal under {:.0}% load",
+                perf, cpu
+            )
         } else {
             String::new()
         };
@@ -170,7 +183,11 @@ impl Detector {
         } else {
             Severity::Warn
         };
-        let detail = if active { format!("Only {:.0} MB RAM available", avail) } else { String::new() };
+        let detail = if active {
+            format!("Only {:.0} MB RAM available", avail)
+        } else {
+            String::new()
+        };
         self.condition("mem_pressure", sev, active, detail, &s.t, evs);
 
         // Hard faults: instant events when spiking
@@ -191,8 +208,16 @@ impl Detector {
     fn check_disk(&mut self, s: &Sample, evs: &mut Vec<EngineEvent>) {
         let Some(q) = s.disk_queue else { return };
         let active = q >= self.th.disk_queue_len;
-        let sev = if q >= self.th.disk_queue_len * 2.0 { Severity::Crit } else { Severity::Warn };
-        let detail = if active { format!("Disk queue length {:.1}", q) } else { String::new() };
+        let sev = if q >= self.th.disk_queue_len * 2.0 {
+            Severity::Crit
+        } else {
+            Severity::Warn
+        };
+        let detail = if active {
+            format!("Disk queue length {:.1}", q)
+        } else {
+            String::new()
+        };
         self.condition("disk_queue", sev, active, detail, &s.t, evs);
 
         if let Some(busy) = s.disk_busy_pct {
@@ -222,8 +247,16 @@ impl Detector {
         // GPU temp
         if let Some(temp) = g.temp {
             let active = temp >= self.th.gpu_temp_warn_c;
-            let sev = if temp >= self.th.gpu_temp_crit_c { Severity::Crit } else { Severity::Warn };
-            let detail = if active { format!("GPU temperature {:.0}C", temp) } else { String::new() };
+            let sev = if temp >= self.th.gpu_temp_crit_c {
+                Severity::Crit
+            } else {
+                Severity::Warn
+            };
+            let detail = if active {
+                format!("GPU temperature {:.0}C", temp)
+            } else {
+                String::new()
+            };
             self.condition("gpu_temp", sev, active, detail, &s.t, evs);
         }
 
@@ -232,7 +265,11 @@ impl Detector {
             if max > 0.0 {
                 let ratio = pclk / max * 100.0;
                 let active = ratio < self.th.gpu_clock_floor_pct;
-                let sev = if ratio < self.th.gpu_clock_floor_pct / 2.0 { Severity::Crit } else { Severity::Warn };
+                let sev = if ratio < self.th.gpu_clock_floor_pct / 2.0 {
+                    Severity::Crit
+                } else {
+                    Severity::Warn
+                };
                 let detail = if active {
                     format!("GPU core at {:.0} MHz ({:.0}% of max)", pclk, ratio)
                 } else {
@@ -247,8 +284,7 @@ impl Detector {
         // under 25% and used to fire this rule endlessly.
         if let (Some(mclk), Some(max)) = (g.mclk, self.gpu_max_mem) {
             if max > 0.0 {
-                let active = mclk < max * 0.5
-                    && g.sm_pct.map(|sm| sm > 25.0).unwrap_or(false);
+                let active = mclk < max * 0.5 && g.sm_pct.map(|sm| sm > 25.0).unwrap_or(false);
                 let detail = if active {
                     format!("GPU memory clock idle at {:.0} MHz while rendering", mclk)
                 } else {
@@ -282,7 +318,10 @@ impl Detector {
                 let (kind, detail) = if others_ok {
                     (
                         "render_stall",
-                        format!("Render stalled: SM {:.0}% -> {:.0}% with healthy CPU/disk/RAM", prev, sm),
+                        format!(
+                            "Render stalled: SM {:.0}% -> {:.0}% with healthy CPU/disk/RAM",
+                            prev, sm
+                        ),
                     )
                 } else {
                     (
@@ -312,7 +351,10 @@ impl Detector {
                         severity: Severity::Crit,
                         t: s.t.clone(),
                         duration_sec: None,
-                        detail: format!("Sustained perf cliff: {:.0}% for {}s", perf, self.spike_acc),
+                        detail: format!(
+                            "Sustained perf cliff: {:.0}% for {}s",
+                            perf, self.spike_acc
+                        ),
                     });
                 }
             } else {
@@ -369,16 +411,22 @@ mod tests {
     fn saturation_and_recovery() {
         let mut d = Detector::new(Thresholds::default());
         let e1 = d.feed(&sample(90.0, 120.0, 20000.0, 0.1, None));
-        assert!(e1.iter().any(|e| e.kind == "cpu_saturation" && e.phase == Phase::Start));
+        assert!(e1
+            .iter()
+            .any(|e| e.kind == "cpu_saturation" && e.phase == Phase::Start));
         let e2 = d.feed(&sample(40.0, 120.0, 20000.0, 0.1, None));
-        assert!(e2.iter().any(|e| e.kind == "cpu_saturation" && e.phase == Phase::End));
+        assert!(e2
+            .iter()
+            .any(|e| e.kind == "cpu_saturation" && e.phase == Phase::End));
     }
 
     #[test]
     fn throttle_detect() {
         let mut d = Detector::new(Thresholds::default());
         let e = d.feed(&sample(80.0, 60.0, 20000.0, 0.1, None));
-        assert!(e.iter().any(|e| e.kind == "cpu_throttle" && e.severity == Severity::Crit));
+        assert!(e
+            .iter()
+            .any(|e| e.kind == "cpu_throttle" && e.severity == Severity::Crit));
     }
 
     #[test]
@@ -387,7 +435,9 @@ mod tests {
         let mut s = sample(60.0, 119.0, 20000.0, 5.0, None);
         s.pages_in = Some(800.0);
         let e = d.feed(&s);
-        assert!(e.iter().any(|e| e.kind == "disk_queue" && e.phase == Phase::Start));
+        assert!(e
+            .iter()
+            .any(|e| e.kind == "disk_queue" && e.phase == Phase::Start));
         assert!(e.iter().any(|e| e.kind == "hard_faults"));
     }
 
@@ -396,7 +446,9 @@ mod tests {
         let mut d = Detector::new(Thresholds::default());
         warm_playing(&mut d, 52.0);
         let e = d.feed(&live_sample(2.0));
-        assert!(e.iter().any(|e| e.kind == "render_stall" && e.severity == Severity::Crit));
+        assert!(e
+            .iter()
+            .any(|e| e.kind == "render_stall" && e.severity == Severity::Crit));
     }
 
     #[test]
@@ -415,7 +467,9 @@ mod tests {
         let mut d = Detector::new(Thresholds::default());
         d.feed(&sample(90.0, 120.0, 20000.0, 0.1, None));
         let e = d.finish("2026-08-31T00:01:00.000Z");
-        assert!(e.iter().any(|e| e.kind == "cpu_saturation" && e.phase == Phase::End));
+        assert!(e
+            .iter()
+            .any(|e| e.kind == "cpu_saturation" && e.phase == Phase::End));
     }
 
     // ---- visibility + activity gates (the desktop/lobby phantom fix) ----

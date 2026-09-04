@@ -9,7 +9,9 @@ use super::detector::Detector;
 use super::diagnoser::build_ui_state;
 use super::sampler;
 use super::storage::SessionWriter;
-use super::types::{EngineEvent, GpuSample, Sample, SessionStatus, StopReason, Thresholds, UiState};
+use super::types::{
+    EngineEvent, GpuSample, Sample, SessionStatus, StopReason, Thresholds, UiState,
+};
 
 /// Shared session state owned by the engine, locked by commands.
 pub struct Engine {
@@ -18,6 +20,9 @@ pub struct Engine {
     total_mem_mb: std::sync::RwLock<f64>,
     /// consecutive GameLoop probe misses (auto-stop after ~15s of silence)
     gameloop_misses: AtomicU32,
+    /// bumped on every start(): guard/timer threads capture it and die as
+    /// soon as it's no longer current — no duplicate guards can ever run.
+    generation: AtomicU32,
 }
 
 struct SessionInner {
@@ -38,6 +43,13 @@ struct SessionInner {
     last_ui: Option<UiState>,
     auto_stop_at: Option<Instant>,
     thresholds: Thresholds,
+}
+
+impl Default for Engine {
+    /// Same as `Engine::new` — thresholds come from the settings store.
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Engine {
@@ -66,6 +78,7 @@ impl Engine {
             running_flag: Arc::new(AtomicBool::new(false)),
             total_mem_mb: std::sync::RwLock::new(8_192.0), // refreshed at session start
             gameloop_misses: AtomicU32::new(0),
+            generation: AtomicU32::new(0),
         }
     }
 
@@ -75,16 +88,26 @@ impl Engine {
 
     /// Why the last session ended (survives until the next start).
     pub fn stop_reason(&self) -> Option<StopReason> {
-        self.state.lock().unwrap_or_else(|p| p.into_inner()).stop_reason
+        self.state
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .stop_reason
     }
 
     pub fn last_ui(&self) -> Option<UiState> {
-        self.state.lock().unwrap_or_else(|p| p.into_inner()).last_ui.clone()
+        self.state
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .last_ui
+            .clone()
     }
 
-    /// Start a monitoring session. `auto_stop_secs`: None = manual stop only.
+    /// Start a monitoring session. `auto_stop_secs`: None = manual stop only
+    /// (used by the headless `engine_probe` binary; the Tauri command always
+    /// sends a bounded value — see MAX_SESSION_SECS in lib.rs).
+    /// Returns the session generation (guards/timers use it to self-retire).
     /// Requires GameLoop to be running — the tool measures the game, not the desktop.
-    pub fn start(&self, auto_stop_secs: Option<u64>) -> Result<(), String> {
+    pub fn start(&self, auto_stop_secs: Option<u64>) -> Result<u32, String> {
         {
             let st = self.state.lock().unwrap_or_else(|p| p.into_inner());
             if st.status == SessionStatus::Running {
@@ -109,7 +132,10 @@ impl Engine {
         super::logging::info(&format!(
             "session starting: ram={total_mem:.0}MB disks={disk_count}"
         ));
-        let profile = super::types::MachineProfile { total_mem_mb: total_mem, disk_count };
+        let profile = super::types::MachineProfile {
+            total_mem_mb: total_mem,
+            disk_count,
+        };
         let thresholds = Thresholds::for_machine(profile);
         if let Ok(mut t) = self.total_mem_mb.write() {
             *t = total_mem;
@@ -126,6 +152,8 @@ impl Engine {
         st.game_running = true; // gate confirmed it
         st.last_ui = None;
         self.gameloop_misses.store(0, Ordering::SeqCst);
+        // invalidate any guard/timer threads from previous sessions
+        let gen = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
 
         let writer = SessionWriter::create()?;
         st.session_id = writer
@@ -165,7 +193,19 @@ impl Engine {
             route_on_gpu(g);
         });
 
-        Ok(())
+        Ok(gen)
+    }
+
+    /// The generation this session runs under (matches Engine::generation
+    /// while the session it started is still the current one).
+    pub fn current_generation(&self) -> u32 {
+        self.generation.load(Ordering::SeqCst)
+    }
+
+    /// True while `gen` is still the latest start() — guards let old
+    /// sessions' threads detect they've been superseded.
+    pub fn generation_is_current(&self, gen: u32) -> bool {
+        self.generation.load(Ordering::SeqCst) == gen
     }
 
     /// Stop the session; finalize files and return the report path.
@@ -206,7 +246,10 @@ impl Engine {
                 let started = st.started_at.clone().unwrap_or_default();
                 let th = st.thresholds.clone();
                 let total = st.samples_total;
-                super::logging::info(&format!("session stopping: {total} samples, {} events", events.len()));
+                super::logging::info(&format!(
+                    "session stopping: {total} samples, {} events",
+                    events.len()
+                ));
                 let path = w.finalize_from_disk(&events, &started, &th, total);
                 match &path {
                     Ok(p) => super::logging::info(&format!("report written: {}", p.display())),
@@ -262,7 +305,11 @@ impl Engine {
         // autosave every ~50 ticks (crash safety for the events file)
         if st.samples_total % 50 == 0 {
             if let Some(w) = st.writer.as_ref() {
-                w.autosave(&st.events, &st.thresholds, st.started_at.as_deref().unwrap_or(""));
+                w.autosave(
+                    &st.events,
+                    &st.thresholds,
+                    st.started_at.as_deref().unwrap_or(""),
+                );
             }
         }
 
@@ -283,19 +330,19 @@ impl Engine {
             .auto_stop_at
             .and_then(|at| at.checked_duration_since(Instant::now()))
             .map(|rem| elapsed_sec + rem.as_secs());
-        let ui = build_ui_state(
-            st.session_id.as_deref(),
-            st.started_at.as_deref(),
-            &st.samples,
-            st.samples_total,
-            &st.events,
-            active_conditions(&st.events),
-            st.game_running,
-            st.emulator.as_deref(),
-            self.total_mem_mb.read().map(|v| *v).unwrap_or(8_192.0),
-            elapsed_sec,
+        let ui = build_ui_state(super::diagnoser::UiStateInput {
+            session: st.session_id.as_deref(),
+            started_at: st.started_at.as_deref(),
+            samples: &st.samples,
+            samples_total: st.samples_total,
+            events: &st.events,
+            active_count: active_conditions(&st.events),
+            game_running: st.game_running,
+            emulator: st.emulator.as_deref(),
+            total_mem_mb: self.total_mem_mb.read().map(|v| *v).unwrap_or(8_192.0),
+            session_secs: elapsed_sec,
             auto_stop_sec,
-        );
+        });
         st.last_ui = Some(ui);
     }
 
@@ -334,7 +381,11 @@ impl Engine {
     }
 
     pub fn thresholds(&self) -> Thresholds {
-        self.state.lock().unwrap_or_else(|p| p.into_inner()).thresholds.clone()
+        self.state
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .thresholds
+            .clone()
     }
 
     /// Called by the probe loop: if GameLoop died mid-session, the scan has
@@ -344,7 +395,10 @@ impl Engine {
         if st.status != SessionStatus::Running {
             return true; // nothing to guard
         }
-        let alive = !LATEST_EMU.lock().unwrap_or_else(|p| p.into_inner()).is_empty();
+        let alive = !LATEST_EMU
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .is_empty();
         if !alive {
             // first miss → arm the counter; 3 consecutive misses (~15s) → stop
             self.gameloop_misses.fetch_add(1, Ordering::SeqCst)
@@ -369,8 +423,12 @@ fn active_conditions(events: &[EngineEvent]) -> usize {
     let mut open: HashMap<&str, bool> = HashMap::new();
     for e in events {
         match e.phase {
-            super::types::Phase::Start => { open.insert(e.kind.as_str(), true); }
-            super::types::Phase::End => { open.insert(e.kind.as_str(), false); }
+            super::types::Phase::Start => {
+                open.insert(e.kind.as_str(), true);
+            }
+            super::types::Phase::End => {
+                open.insert(e.kind.as_str(), false);
+            }
             super::types::Phase::Instant => {}
         }
     }
@@ -383,7 +441,9 @@ fn iso_ms_pub(iso: &str) -> Option<i64> {
     if b.len() != 24 {
         return None;
     }
-    let num = |r: std::ops::Range<usize>| -> Option<i64> { std::str::from_utf8(&b[r]).ok()?.parse().ok() };
+    let num = |r: std::ops::Range<usize>| -> Option<i64> {
+        std::str::from_utf8(&b[r]).ok()?.parse().ok()
+    };
     let (y, mo, d) = (num(0..4)?, num(5..7)?, num(8..10)?);
     let (h, mi, s) = (num(11..13)?, num(14..16)?, num(17..19)?);
     let ms = num(20..23)?;
@@ -402,7 +462,12 @@ fn iso_ms_pub(iso: &str) -> Option<i64> {
 fn total_ram_mb() -> f64 {
     use std::os::windows::process::CommandExt;
     let out = std::process::Command::new("powershell.exe")
-        .args(["-NoProfile", "-NonInteractive", "-Command", "[math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1MB,0)"])
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "[math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1MB,0)",
+        ])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
         .creation_flags(0x0800_0000)
@@ -421,7 +486,12 @@ fn total_ram_mb() -> f64 {
 fn physical_disk_count() -> u32 {
     use std::os::windows::process::CommandExt;
     let out = std::process::Command::new("powershell.exe")
-        .args(["-NoProfile", "-NonInteractive", "-Command", "@(Get-PhysicalDisk).Count"])
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "@(Get-PhysicalDisk).Count",
+        ])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
         .creation_flags(0x0800_0000)
@@ -447,7 +517,7 @@ static LATEST_VISIBLE: Mutex<Option<bool>> = Mutex::new(None);
 static GLOBAL_ENGINE: std::sync::OnceLock<&'static Engine> = std::sync::OnceLock::new();
 
 pub fn init_global() -> &'static Engine {
-    *GLOBAL_ENGINE.get_or_init(|| Box::leak(Box::new(Engine::new())))
+    GLOBAL_ENGINE.get_or_init(|| Box::leak(Box::new(Engine::new())))
 }
 
 pub fn global() -> Option<&'static Engine> {
@@ -481,9 +551,30 @@ mod tests {
     fn active_conditions_counted() {
         use super::super::types::{Phase, Severity};
         let evs = vec![
-            EngineEvent { kind: "cpu_saturation".into(), phase: Phase::Start, severity: Severity::Warn, t: "t".into(), duration_sec: None, detail: String::new() },
-            EngineEvent { kind: "disk_queue".into(), phase: Phase::Start, severity: Severity::Warn, t: "t".into(), duration_sec: None, detail: String::new() },
-            EngineEvent { kind: "cpu_saturation".into(), phase: Phase::End, severity: Severity::Ok, t: "t".into(), duration_sec: Some(2.0), detail: String::new() },
+            EngineEvent {
+                kind: "cpu_saturation".into(),
+                phase: Phase::Start,
+                severity: Severity::Warn,
+                t: "t".into(),
+                duration_sec: None,
+                detail: String::new(),
+            },
+            EngineEvent {
+                kind: "disk_queue".into(),
+                phase: Phase::Start,
+                severity: Severity::Warn,
+                t: "t".into(),
+                duration_sec: None,
+                detail: String::new(),
+            },
+            EngineEvent {
+                kind: "cpu_saturation".into(),
+                phase: Phase::End,
+                severity: Severity::Ok,
+                t: "t".into(),
+                duration_sec: Some(2.0),
+                detail: String::new(),
+            },
         ];
         assert_eq!(active_conditions(&evs), 1);
     }

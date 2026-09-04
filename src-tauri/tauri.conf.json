@@ -1,7 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "PUBG GameLoop Lag Hunter",
-  "version": "1.1.0",
+  "version": "1.2.0",
+  "mainBinaryName": "pubg-gameloop-lag-hunter-1.2.0",
   "identifier": "app.laghunter",
   "build": {
     "frontendDist": "../dist",

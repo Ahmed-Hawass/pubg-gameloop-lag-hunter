@@ -85,6 +85,31 @@ export default function App() {
       .catch(() => {});
   }, [appVersion]);
 
+  // state pushes land here (live + final): a finished session caused by
+  // GameLoop dying gets its explanation dialog — once per session, never
+  // for manual stops or the auto-stop timer (those need no apology).
+  // Kept fresh through a ref: the engine-state subscription is registered
+  // ONCE below, but reads the latest handler — so `t` and the once-per-
+  // session flag can never go stale (language switch mid-session included).
+  const handleStateRef = useRef<(p: StatusPayload) => void>(() => {});
+  const handleState = (payload: StatusPayload) => {
+    setStatus(payload);
+    if (payload.status === "running") setGameloopUp(true);
+    if (
+      payload.status === "finished" &&
+      payload.stop_reason === "gameloop_closed" &&
+      !closedNoticeShown
+    ) {
+      setToastTitle(t.dialog.gameloopClosed);
+      setToastBody(t.dialog.gameloopClosedBody);
+      setToast("gameloop_closed");
+      setClosedNoticeShown(true);
+    }
+  };
+  useEffect(() => {
+    handleStateRef.current = handleState;
+  });
+
   // initial state + live pushes + saved preferences + gameloop watcher
   useEffect(() => {
     api
@@ -111,7 +136,7 @@ export default function App() {
       .catch(() => setGameloopUp(false));
     void api.watchGameloop();
     const un = onEngineState((ev) => {
-      handleState(ev.payload);
+      handleStateRef.current(ev.payload);
     }).catch(() => null);
     const un2 = onGameloopChange((up) => setGameloopUp(up)).catch(() => null);
     return () => {
@@ -119,24 +144,6 @@ export default function App() {
       un2.then((f) => f?.());
     };
   }, []);
-
-  // state pushes land here (live + final): a finished session caused by
-  // GameLoop dying gets its explanation dialog — once per session, never
-  // for manual stops or the auto-stop timer (those need no apology)
-  const handleState = (payload: StatusPayload) => {
-    setStatus(payload);
-    if (payload.status === "running") setGameloopUp(true);
-    if (
-      payload.status === "finished" &&
-      payload.stop_reason === "gameloop_closed" &&
-      !closedNoticeShown
-    ) {
-      setToastTitle(t.dialog.gameloopClosed);
-      setToastBody(t.dialog.gameloopClosedBody);
-      setToast("gameloop_closed");
-      setClosedNoticeShown(true);
-    }
-  };
 
   const chooseDuration = (secs: number) => {
     setDurationSecs(secs);
@@ -219,7 +226,11 @@ export default function App() {
     <div className="shell">
       <TitleBar />
       <div className="shell-body">
-        {onboardingDone === false ? (
+        {/* null = settings still loading (IPC round-trip): show NOTHING
+            decisive. The old bug rendered the main UI immediately, then
+            swapped in the welcome screen seconds later — a flash of the
+            full app on every first run. */}
+        {onboardingDone == null ? null : onboardingDone === false ? (
           <main className="content">
             <WelcomeView
               onDone={() => {
@@ -304,6 +315,7 @@ export default function App() {
               </div>
               <div className={view === "reports" ? "" : "is-hidden-view"}>
                 <ReportsView
+                  active={view === "reports"}
                   openId={reportOpenId}
                   onOpened={() => setReportOpenId(null)}
                   onDeleted={(id) => setDeletedSession(id)}

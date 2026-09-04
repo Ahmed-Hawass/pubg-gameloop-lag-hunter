@@ -47,8 +47,62 @@ fn typeperf_produces_samples_live() {
     }
     let _ = child.wait();
     println!("headers={header_lines} data_lines={got}");
-    assert!(header_lines >= 1, "no header line seen; all output:\n{}", all_lines.join("\n"));
-    assert!(got >= 2, "no data lines seen; all output:\n{}", all_lines.join("\n"));
+    assert!(
+        header_lines >= 1,
+        "no header line seen; all output:\n{}",
+        all_lines.join("\n")
+    );
+    assert!(
+        got >= 2,
+        "no data lines seen; all output:\n{}",
+        all_lines.join("\n")
+    );
     let _ = Duration::from_secs(0);
     let _ = Arc::new(AtomicBool::new(true)).load(Ordering::Relaxed);
+}
+
+/// Live check of the localized-Windows fallback path: the Get-Counter
+/// emitter must produce parseable `path=value` lines with all six metrics.
+/// This is what runs when typeperf rejects English counter names
+/// (Arabic Windows) — so it must work everywhere, not just here.
+#[test]
+#[cfg(windows)]
+fn get_counter_emitter_produces_lines_live() {
+    let script = r#"
+$paths = @(
+  '\Processor(_Total)\% Processor Time',
+  '\Processor Information(_Total)\% Processor Performance',
+  '\Memory\Available MBytes',
+  '\Memory\Pages Input/sec',
+  '\PhysicalDisk(_Total)\Avg. Disk Queue Length',
+  '\PhysicalDisk(_Total)\% Idle Time'
+)
+$c = Get-Counter -Counter $paths -SampleInterval 1 -MaxSamples 1 -ErrorAction Stop
+($c.CounterSamples | ForEach-Object { $_.Path + '=' + $_.CookedValue }) -join ','
+"#;
+    let out = Command::new("powershell.exe")
+        .args(["-NoProfile", "-NonInteractive", "-Command", script])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .expect("powershell spawn");
+    assert!(out.status.success(), "powershell exited nonzero");
+    let line = String::from_utf8_lossy(&out.stdout);
+    let line = line.trim();
+    assert!(!line.is_empty(), "emitter produced no output");
+    let pairs: Vec<&str> = line.split(',').collect();
+    assert!(
+        pairs.len() >= 6,
+        "expected 6 metrics, got {}: {line}",
+        pairs.len()
+    );
+    for pair in &pairs {
+        assert!(pair.contains('='), "malformed pair: {pair}");
+        let v = pair.split('=').nth(1).unwrap_or("");
+        assert!(
+            v.parse::<f64>().is_ok(),
+            "non-numeric value in pair: {pair}"
+        );
+    }
+    println!("EMITTER: {line}");
 }

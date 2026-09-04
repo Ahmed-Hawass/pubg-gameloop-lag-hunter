@@ -56,7 +56,9 @@ pub fn settings_path() -> PathBuf {
 /// legacy layout by CONTENT (missing `sensitivity` key) before deciding.
 pub fn load() -> Settings {
     let path = settings_path();
-    let Ok(text) = fs::read_to_string(&path) else { return Settings::default() };
+    let Ok(text) = fs::read_to_string(&path) else {
+        return Settings::default();
+    };
 
     // v3/v2 file: has both "version" and "sensitivity" keys
     if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {

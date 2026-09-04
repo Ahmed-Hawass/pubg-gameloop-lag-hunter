@@ -10,6 +10,6 @@ pub mod system;
 pub mod types;
 
 /// The one true version string — set by tauri-build from tauri.conf.json
-/// (which release.yml tags against). Read this instead of hardcoding "1.0.0"
-/// in yet another place.
+/// (releases are tagged by hand when attaching to a GitHub release). Read
+/// this instead of hardcoding "1.0.0" in yet another place.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

@@ -99,7 +99,7 @@ export const en = {
 
   // ---- system checks tab ----
   checksHint:
-    "Read-only checks of settings that silently cause lag. Nothing is changed for you — each fix opens the exact Windows page where you change it yourself.",
+    "Read-only checks of settings that silently cause lag. Nothing is changed for you — each fix opens the relevant Windows settings page so you can change it yourself.",
   checkPower: "Power plan",
   checkPagefile: "Pagefile",
   checkCharger: "Power source",

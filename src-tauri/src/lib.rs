@@ -22,24 +22,28 @@ struct StatusPayload {
 const MAX_SESSION_SECS: u64 = 60 * 60; // 1 hour (the longest UI choice)
 
 #[tauri::command]
-fn session_start(app: tauri::AppHandle, auto_stop_secs: Option<u64>) -> Result<StatusPayload, String> {
+fn session_start(
+    app: tauri::AppHandle,
+    auto_stop_secs: Option<u64>,
+) -> Result<StatusPayload, String> {
     let eng = session::init_global();
-    // always bound the session — default 30 min, capped at 2 h
-    let bounded = auto_stop_secs.unwrap_or(1800).min(MAX_SESSION_SECS).max(60);
+    // always bound the session — default 30 min, clamped to [60s, MAX_SESSION_SECS]
+    let bounded = auto_stop_secs.unwrap_or(1800).clamp(60, MAX_SESSION_SECS);
     // probe BEFORE starting: if the game is already open, the first sample knows it
     eng.probe_emulator();
-    eng.start(Some(bounded))?;
+    let gen = eng.start(Some(bounded))?;
     // emulator probe + liveness guard + window-visibility probe: every ~5s
     // while running. If GameLoop dies mid-session, 3 consecutive misses
     // (~15s) stop the scan. The visibility probe (a transient PowerShell call)
     // runs every OTHER cycle (~10s staleness) — GPU attribution never gets
     // stale enough to misread desktop activity as in-game.
+    // Generation-gated: a quick restart spawns a new guard; THIS one notices
+    // it's superseded and exits instead of running in parallel with it.
     let app_guard = app.clone();
     std::thread::spawn(move || {
         let mut cycle: u32 = 0;
-        loop {
-            let Some(e) = session::global() else { break };
-            if e.status() != SessionStatus::Running {
+        while let Some(e) = session::global() {
+            if !e.generation_is_current(gen) || e.status() != SessionStatus::Running {
                 break;
             }
             e.probe_emulator();
@@ -55,11 +59,12 @@ fn session_start(app: tauri::AppHandle, auto_stop_secs: Option<u64>) -> Result<S
             std::thread::sleep(Duration::from_secs(5));
         }
     });
-    // auto-stop timer
+    // auto-stop timer (same generation gate — only the current session's
+    // timer can stop it; orphans exit on their first 1s tick)
     std::thread::spawn(move || loop {
         std::thread::sleep(Duration::from_secs(1));
         let Some(e) = session::global() else { break };
-        if e.status() != SessionStatus::Running {
+        if !e.generation_is_current(gen) || e.status() != SessionStatus::Running {
             break;
         }
         if e.tick_auto_stop() {
@@ -238,10 +243,26 @@ fn get_version() -> String {
     engine::VERSION.to_string()
 }
 
+/// Hosts we ever open in the system browser. This is the REAL enforcement
+/// (checked here in Rust, before anything reaches the opener plugin) —
+/// plugin capabilities only guard the JS-side command path, while this
+/// command is invoked from our own frontend anyway. Anything outside
+/// these hosts is refused, end of story.
+const OPEN_URL_ALLOWED_HOSTS: [&str; 3] = ["github.com", "api.github.com", "paypal.me"];
+
 #[tauri::command]
 fn open_url(url: &str, app: tauri::AppHandle) -> Result<(), String> {
     // open external links (repo, support, releases) in the system browser.
-    // Scope-limited by capabilities to github.com and paypal.me only.
+    // Enforced allowlist: same hosts the capability file lists, verified on
+    // OUR side (Rust) because plugin capabilities only scope the JS command
+    // path — a Rust-side opener call is NOT constrained by them.
+    let parsed = url
+        .parse::<tauri::Url>()
+        .map_err(|_| format!("invalid url: {url}"))?;
+    let scheme = parsed.scheme();
+    if scheme != "https" || !OPEN_URL_ALLOWED_HOSTS.contains(&parsed.host_str().unwrap_or("")) {
+        return Err(format!("url not allowed: {url}"));
+    }
     use tauri_plugin_opener::OpenerExt;
     app.opener()
         .open_url(url.to_string(), None::<&str>)
@@ -249,7 +270,11 @@ fn open_url(url: &str, app: tauri::AppHandle) -> Result<(), String> {
 }
 
 fn current_status(eng: &Engine) -> StatusPayload {
-    StatusPayload { status: eng.status(), ui: eng.last_ui(), stop_reason: eng.stop_reason() }
+    StatusPayload {
+        status: eng.status(),
+        ui: eng.last_ui(),
+        stop_reason: eng.stop_reason(),
+    }
 }
 
 fn push_state(app: &tauri::AppHandle) -> Result<(), tauri::Error> {
@@ -354,4 +379,3 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
-

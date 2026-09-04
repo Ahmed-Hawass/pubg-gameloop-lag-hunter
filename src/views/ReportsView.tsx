@@ -19,8 +19,10 @@ export function ReportsView(props: {
   onOpened: () => void;
   /** tells App which session was deleted (Monitor resets if it was showing it) */
   onDeleted?: (id: string) => void;
+  /** true while the Reports tab is the visible one */
+  active?: boolean;
 }) {
-  const { openId, onOpened, onDeleted } = props;
+  const { openId, onOpened, onDeleted, active } = props;
   const { t } = useLang();
   const [entries, setEntries] = useState<SessionEntry[] | null>(null);
   const [report, setReport] = useState<FriendlyReport | null>(null);
@@ -43,6 +45,15 @@ export function ReportsView(props: {
   };
 
   useEffect(refresh, []);
+
+  // The view stays MOUNTED (tab switch = CSS visibility only), so a session
+  // that just finished would never appear without this: re-read the list
+  // every time the tab becomes visible — the report of the session the user
+  // just ran is there the moment they switch to it.
+  useEffect(() => {
+    if (active) refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
 
   // deep-link: "Open full report" on the Monitor tab jumps here + opens the session
   useEffect(() => {
