@@ -8,6 +8,7 @@ import { Coffee, Code2, Download, Heart, Leaf } from "lucide-react";
 import { Button } from "../components/components";
 import { api } from "../bridge";
 import { useLang } from "../i18n";
+import { isNewerRelease } from "../version";
 import appIcon from "../assets/app-icon.png";
 
 const REPO_URL = "https://github.com/Ahmed-Hawass/pubg-gameloop-lag-hunter";
@@ -47,7 +48,10 @@ export function AboutView(props: { updateAvailable: boolean; updateUrl: string |
       if (!res.ok) throw new Error(String(res.status));
       const data: { tag_name?: string; html_url?: string } = await res.json();
       const remote = (data.tag_name ?? "").replace(/^v/, "");
-      if (remote && appVersion && remote !== appVersion) {
+      if (!remote || !appVersion) {
+        // no tag or no local version → we genuinely don't know; never claim "latest"
+        setResult("err");
+      } else if (isNewerRelease(remote, appVersion)) {
         setResult("update");
         setDownloadUrl(data.html_url ?? REPO_URL + "/releases");
       } else {

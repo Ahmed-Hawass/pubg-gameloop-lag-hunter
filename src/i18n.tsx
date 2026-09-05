@@ -10,7 +10,7 @@ import { api } from "./bridge";
 export type LangCode = "en" | "ar";
 export type LangSetting = LangCode | "auto";
 
-const LOCALES: Record<LangCode, Locale> = { en, ar: ar as unknown as Locale };
+const LOCALES: Record<LangCode, Locale> = { en, ar };
 
 /** OS locale → our languages. Windows Arabic variants all map to "ar". */
 function osLanguage(): LangCode {

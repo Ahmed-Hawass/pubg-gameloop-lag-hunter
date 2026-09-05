@@ -24,6 +24,8 @@ import { SettingsView } from "./views/SettingsView";
 import { WelcomeView } from "./views/WelcomeView";
 import { api, onEngineState, onGameloopChange, type StatusPayload } from "./bridge";
 import { useLang } from "./i18n";
+import { isNewerRelease } from "./version";
+import { errorDialog } from "./errors";
 
 type View = "monitor" | "system" | "processes" | "checks" | "reports" | "settings" | "about";
 
@@ -57,6 +59,8 @@ export default function App() {
   /** a newer version is available on GitHub (checked at startup, quietly) */
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [updateUrl, setUpdateUrl] = useState<string | null>(null);
+  /** PowerShell probe result — true = limited mode banner on the monitor */
+  const [psLimited, setPsLimited] = useState(false);
 
   // quiet startup update check — sets the About badge only, never interrupts.
   // version comes from the backend (tauri.conf.json) so it can never drift.
@@ -77,7 +81,7 @@ export default function App() {
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((d: { tag_name?: string; html_url?: string }) => {
         const remote = (d.tag_name ?? "").replace(/^v/, "");
-        if (remote && remote !== appVersion) {
+        if (isNewerRelease(remote, appVersion)) {
           setUpdateAvailable(true);
           setUpdateUrl(d.html_url ?? null);
         }
@@ -134,6 +138,10 @@ export default function App() {
       .gameloopStatus()
       .then(setGameloopUp)
       .catch(() => setGameloopUp(false));
+    api
+      .psAvailable()
+      .then((ok) => setPsLimited(!ok))
+      .catch(() => setPsLimited(false)); // probe failure ≠ limited claim
     void api.watchGameloop();
     const un = onEngineState((ev) => {
       handleStateRef.current(ev.payload);
@@ -166,20 +174,14 @@ export default function App() {
       }
     } catch (e) {
       const raw = typeof e === "string" ? e : String(e);
-      const code = Object.keys(t.errors).find((c) => raw.includes(c));
-      if (code === "GAMELOOP_NOT_RUNNING") {
-        setToastTitle(t.dialog.scanNeedsGame);
-        setToastBody(t.dialog.scanNeedsGameBody);
-        setToast(code);
-      } else if (code) {
-        setToastTitle(t.dialog.somethingWrong);
-        setToastBody(t.errors[code]);
-        setToast(code);
-      } else {
-        setToastTitle(t.dialog.somethingWrong);
-        setToastBody(raw);
-        setToast(raw);
-      }
+      const d = errorDialog(raw, t.errors, {
+        somethingWrong: t.dialog.somethingWrong,
+        scanNeedsGame: t.dialog.scanNeedsGame,
+        scanNeedsGameBody: t.dialog.scanNeedsGameBody,
+      });
+      setToastTitle(d.title);
+      setToastBody(d.body);
+      setToast(d.key);
     } finally {
       setBusy(false);
     }
@@ -204,7 +206,6 @@ export default function App() {
       setToastBody(t.dialog.firstRunAdviceBody);
       setToast("first_run_advice");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onboardingDone]);
 
   // a session deleted from Reports must not linger as a "finished" state
@@ -296,6 +297,7 @@ export default function App() {
                   gameloopUp={gameloopUp}
                   dismissedSession={dismissedSession}
                   onDismissSummary={dismissSummary}
+                  psLimited={psLimited}
                 />
               </div>
               <div className={view === "system" ? "" : "is-hidden-view"}>

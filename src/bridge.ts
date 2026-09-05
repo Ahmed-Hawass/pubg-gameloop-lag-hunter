@@ -128,6 +128,7 @@ export const api = {
   sessionStop: () => invoke<StatusPayload>("session_stop"),
   getState: () => invoke<StatusPayload>("get_state"),
   gameloopStatus: () => invoke<boolean>("gameloop_status"),
+  psAvailable: () => invoke<boolean>("ps_available"),
   watchGameloop: () => invoke<void>("watch_gameloop"),
   sessionEntries: () => invoke<SessionEntry[]>("session_entries"),
   loadReport: (id: string) => invoke<FriendlyReport>("load_report", { id }),
@@ -168,6 +169,8 @@ export interface SystemInfo {
   disks: DiskInfo[];
   /** can the tool read NVIDIA GPU counters? */
   gpu_counters: boolean;
+  /** is PowerShell usable? false = limited mode (defaults, muted GPU checks) */
+  powershell_available: boolean;
 }
 
 export interface TopProcess {

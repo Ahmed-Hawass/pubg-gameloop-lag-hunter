@@ -52,7 +52,6 @@ export function ReportsView(props: {
   // just ran is there the moment they switch to it.
   useEffect(() => {
     if (active) refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
   // deep-link: "Open full report" on the Monitor tab jumps here + opens the session
@@ -73,7 +72,6 @@ export function ReportsView(props: {
         onOpened();
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openId, entries]);
 
   const openReport = (id: string) => {

@@ -26,8 +26,10 @@ export function MonitorView(props: {
   /** the session whose summary the user dismissed (never show it again) */
   dismissedSession: string | null;
   onDismissSummary: (session: string) => void;
+  /** PowerShell unavailable on this machine — limited mode */
+  psLimited: boolean;
 }) {
-  const { status, busy, durationSecs, onDurationChange, onToggle, onOpenReport, dismissedSession, onDismissSummary } = props;
+  const { status, busy, durationSecs, onDurationChange, onToggle, onOpenReport, dismissedSession, onDismissSummary, psLimited } = props;
   const { t } = useLang();
   const ui = status.ui;
   const running = status.status === "running";
@@ -144,6 +146,14 @@ export function MonitorView(props: {
       {live && ui!.game_visible === false ? (
         <div className="bg-note">
           {t.gameBackground}
+        </div>
+      ) : null}
+
+      {/* limited-mode note: PowerShell unavailable — scans still work, some
+          checks run on safe defaults. Shown once per app run (not per tick). */}
+      {psLimited ? (
+        <div className="bg-note" role="note">
+          <strong>{t.psLimitedTitle}:</strong> {t.psLimitedBody}
         </div>
       ) : null}
 

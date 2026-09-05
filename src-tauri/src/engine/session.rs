@@ -108,6 +108,7 @@ impl Engine {
     /// Returns the session generation (guards/timers use it to self-retire).
     /// Requires GameLoop to be running — the tool measures the game, not the desktop.
     pub fn start(&self, auto_stop_secs: Option<u64>) -> Result<u32, String> {
+        let _t = super::logging::timed("session start");
         {
             let st = self.state.lock().unwrap_or_else(|p| p.into_inner());
             if st.status == SessionStatus::Running {
@@ -126,11 +127,23 @@ impl Engine {
             return Err("GAMELOOP_NOT_RUNNING".into());
         }
 
-        // machine profile once per session → dynamic thresholds
-        let total_mem = total_ram_mb();
-        let disk_count = physical_disk_count();
+        // machine profile per session → dynamic thresholds. RAM + disk count
+        // ride the rig profile's disk cache (instant after first machine run)
+        // instead of their own PowerShell round-trips; a missing cache falls
+        // back to the documented defaults — the scan never waits on hardware.
+        let ps_ok = super::system::powershell_available();
+        let (total_mem, disk_count) = match super::system::cached_machine_profile() {
+            Some((mem, disks)) => (mem, disks),
+            None => {
+                if ps_ok {
+                    (total_ram_mb(), physical_disk_count())
+                } else {
+                    (8_192.0, 1)
+                }
+            }
+        };
         super::logging::info(&format!(
-            "session starting: ram={total_mem:.0}MB disks={disk_count}"
+            "session starting: ram={total_mem:.0}MB disks={disk_count} powershell={ps_ok}"
         ));
         let profile = super::types::MachineProfile {
             total_mem_mb: total_mem,
@@ -166,9 +179,14 @@ impl Engine {
         st.status = SessionStatus::Running;
         st.auto_stop_at = auto_stop_secs.map(|s| Instant::now() + Duration::from_secs(s));
 
-        // GPU max clocks (best effort)
-        if let Some((gr, mem)) = sampler::query_gpu_max_clocks() {
-            st.detector.set_gpu_max(gr, mem);
+        // GPU max clocks (best effort — logged: a silent miss here is why a
+        // gpu_clock_low rule could fire with bogus ratios)
+        match sampler::query_gpu_max_clocks() {
+            Some((gr, mem)) => {
+                super::logging::info(&format!("gpu max clocks: gr={gr}MHz mem={mem}MHz"));
+                st.detector.set_gpu_max(gr, mem);
+            }
+            None => super::logging::info("gpu max clocks unavailable (non-NVIDIA or nvidia-smi missing)"),
         }
 
         st.emulator = sampler::detect_emulator();
@@ -176,22 +194,34 @@ impl Engine {
         // first visibility probe BEFORE the first sample lands, so the very
         // first ticks already know whether the window is up (minimized users
         // opening the tool get correct muting from tick zero)
-        if let Some(vis) = sampler::query_game_visible() {
-            *LATEST_VISIBLE.lock().unwrap_or_else(|p| p.into_inner()) = Some(vis);
+        match sampler::query_game_visible() {
+            Some(vis) => {
+                super::logging::info(&format!("game window visible at start: {vis}"));
+                *LATEST_VISIBLE.lock().unwrap_or_else(|p| p.into_inner()) = Some(vis);
+            }
+            None => super::logging::info("game window visibility unknown at start (probe returned None)"),
         }
 
         // ---- spawn streaming sources ----
         // Routes thread callbacks to the global engine instance (set in lib.rs).
         let running = Arc::clone(&self.running_flag);
         running.store(true, Ordering::SeqCst);
+        let _ = FIRST_SAMPLE_AT.set(Instant::now());
 
-        let _ = sampler::spawn_typeperf(1, Arc::clone(&self.running_flag), |s| {
+        match sampler::spawn_typeperf(1, Arc::clone(&self.running_flag), |s| {
             route_on_sample(s);
-        });
+        }) {
+            Ok(()) => super::logging::info("typeperf sampler: spawned"),
+            Err(e) => super::logging::error(&format!("typeperf sampler: SPAWN FAILED: {e}")),
+        }
 
-        let _ = sampler::spawn_dmon(1, Arc::clone(&self.running_flag), |g| {
+        match sampler::spawn_dmon(1, Arc::clone(&self.running_flag), |g| {
             route_on_gpu(g);
-        });
+        }) {
+            Ok(true) => super::logging::info("nvidia-smi dmon sampler: spawned"),
+            Ok(false) => super::logging::info("nvidia-smi dmon sampler: unavailable (non-NVIDIA machine)"),
+            Err(e) => super::logging::error(&format!("nvidia-smi dmon sampler: SPAWN FAILED: {e}")),
+        }
 
         Ok(gen)
     }
@@ -216,6 +246,8 @@ impl Engine {
     /// Stop with the reason the session ended — the UI explains it instead
     /// of staying silent when GameLoop dies mid-session.
     pub fn stop_with_reason(&self, reason: StopReason) -> Result<Option<String>, String> {
+        let _t = super::logging::timed_with("session stop", 3_000);
+        super::logging::info(&format!("session stop: reason={reason:?}"));
         {
             let mut st = self.state.lock().unwrap_or_else(|p| p.into_inner());
             if st.status != SessionStatus::Running {
@@ -296,7 +328,12 @@ impl Engine {
 
         // first sample arriving is the health signal of the whole pipeline
         if st.samples_total == 1 {
-            super::logging::info("first sample received — pipeline healthy");
+            if let Some(at) = FIRST_SAMPLE_AT.get() {
+                super::logging::perf(
+                    "pipeline: first sample",
+                    at.elapsed().as_millis(),
+                );
+            }
         }
 
         let evs = st.detector.feed(&s);
@@ -458,6 +495,10 @@ fn iso_ms_pub(iso: &str) -> Option<i64> {
 
 // lock_ok: kept for future Mutex<T> acquisitions on named fields — the
 // pattern used throughout this file is inline unwrap_or_else (same behavior).
+
+/// When the CURRENT session's samplers were spawned — the first-sample log
+/// measures pipeline latency from here (spawn → first tick).
+static FIRST_SAMPLE_AT: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
 
 fn total_ram_mb() -> f64 {
     use std::os::windows::process::CommandExt;

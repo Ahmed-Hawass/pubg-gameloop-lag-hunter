@@ -1,6 +1,7 @@
 // system.rs — one-shot, read-only system queries: rig info, top processes,
 // environment checks. Nothing here ever modifies the user's machine.
 
+use std::fs;
 use std::process::{Command, Stdio};
 
 #[cfg(windows)]
@@ -31,21 +32,199 @@ fn ps(script: &str) -> Result<String, String> {
 }
 
 // ---------------------------------------------------------------------------
+// PowerShell availability — the one-shot startup probe.
+// Sessions still work without it (typeperf/tasklist/nvidia-smi are native),
+// but the PS-backed paths degrade: machine-adaptive thresholds fall back to
+// defaults, timestamp correction reverts to UTC, the window-visibility probe
+// stays None (GPU rules muted). The UI tells the user instead of staying
+// silent about it.
+// ---------------------------------------------------------------------------
+
+/// Is PowerShell usable on this machine? Probed ONCE per app run.
+/// Conservative: a missing binary, a policy block, or a hang past the
+/// deadline all read as unavailable — the banner can appear on a false
+/// negative, never stay hidden on a false positive.
+pub fn powershell_available() -> bool {
+    static AVAILABLE: OnceLock<bool> = OnceLock::new();
+    *AVAILABLE.get_or_init(|| {
+        let ok = probe_powershell();
+        if !ok {
+            // one log line for user reports: everything downstream degrades
+            // silently by design — this is the only trace of why
+            super::logging::info("PowerShell unavailable — limited mode: \
+                adaptive thresholds default, timestamps may read UTC, \
+                GPU window checks muted");
+        }
+        ok
+    })
+}
+
+fn probe_powershell() -> bool {
+    #[cfg(windows)]
+    {
+        use std::io::Read;
+        use std::os::windows::process::CommandExt;
+        let Ok(mut child) = Command::new("powershell.exe")
+            .args(["-NoProfile", "-NonInteractive", "-Command", "Write-Output ok"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .creation_flags(NO_WINDOW)
+            .spawn()
+        else {
+            return false;
+        };
+        // bounded wait: a blocked PS must never hang the app startup
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    if !status.success() {
+                        return false;
+                    }
+                    let mut out = String::new();
+                    if let Some(mut s) = child.stdout.take() {
+                        let _ = s.read_to_string(&mut out);
+                    }
+                    return out.trim().eq_ignore_ascii_case("ok");
+                }
+                Ok(None) => {
+                    if std::time::Instant::now() >= deadline {
+                        let _ = child.kill();
+                        return false;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
+                Err(_) => return false,
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    false
+}
+
+// ---------------------------------------------------------------------------
 // System info — the "Your rig" tab. Hardware identity doesn't change between
-// launches: queried ONCE per app run, cached in memory, instant tab opens.
+// launches: queried at most once per MACHINE, cached on DISK, instant boots.
+//
+// The bug this layout fixes: `Get-PhysicalDisk` performs a live hardware
+// inventory (SMART probes over every spindle) — 20+ seconds on machines with
+// an HDD, EVERY launch. The rig doesn't change between runs, so after the
+// first successful query the result is persisted under the app dir and all
+// later launches read it in microseconds. The in-memory OnceLock then guards
+// within the run itself.
+//
+// async callers only (see lib.rs): the first-ever query still takes its
+// hardware-inventory time — off the UI thread, never freezing the window.
 // ---------------------------------------------------------------------------
 
 use std::sync::{Mutex, OnceLock};
 
 static SYSTEM_CACHE: OnceLock<SystemInfo> = OnceLock::new();
+/// one query in flight at a time — a second caller waits for the first
+/// result instead of racing a second 20s inventory. Held INSIDE the
+/// blocking task (see system_info_async): the std Mutex guard lives and
+/// dies on the blocking pool thread, never across an await point.
+static SYSTEM_QUERY_LOCK: Mutex<()> = Mutex::new(());
 
+/// Where the rig profile lives on disk. Same folder as settings/sessions —
+/// `%LOCALAPPDATA%\LagHunter\system-cache.json`.
+fn system_cache_path() -> std::path::PathBuf {
+    super::storage::app_dir().join("system-cache.json")
+}
+
+/// Load the persisted rig profile. `None` when absent/corrupt — callers fall
+/// back to a live query. Corrupt = silently ignored (fail-soft, like the
+/// settings store).
+fn load_system_cache() -> Option<SystemInfo> {
+    let text = fs::read_to_string(system_cache_path()).ok()?;
+    serde_json::from_str(&text).ok()
+}
+
+/// Persist the rig profile. Best effort — a failed write only means the next
+/// launch pays the query cost again.
+fn save_system_cache(info: &SystemInfo) {
+    let _ = fs::create_dir_all(super::storage::app_dir());
+    if let Ok(body) = serde_json::to_string(info) {
+        let _ = fs::write(system_cache_path(), body);
+    }
+}
+
+/// Rig info, disk-cached across runs: instant after the first launch on a
+/// machine. MUST be called from an async context — the first run pays the
+/// PowerShell hardware inventory on the blocking pool (see module notes).
+/// The whole first-query path (std lock + live query + cache save) runs
+/// INSIDE one blocking task so the lock guard never crosses an await.
+pub async fn system_info_async() -> Result<SystemInfo, String> {
+    if let Some(cached) = SYSTEM_CACHE.get() {
+        return Ok(cached.clone());
+    }
+    // disk cache: the machine doesn't change between launches
+    if let Some(disk) = load_system_cache() {
+        let _ = SYSTEM_CACHE.set(disk.clone());
+        super::logging::info("rig profile loaded from disk cache");
+        return Ok(disk);
+    }
+    // first run on this machine: one blocking task owns the whole query —
+    // callers that race in behind it wait for the task, not a second query
+    let started = std::time::Instant::now();
+    let info = tauri::async_runtime::spawn_blocking(|| -> Result<SystemInfo, String> {
+        // serialize: whoever got here first runs the inventory; the rest
+        // find the cache filled when the lock reaches them
+        let _serial = SYSTEM_QUERY_LOCK
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        if let Some(cached) = SYSTEM_CACHE.get() {
+            return Ok(cached.clone());
+        }
+        let info = query_system_info()?;
+        save_system_cache(&info);
+        let _ = SYSTEM_CACHE.set(info.clone());
+        Ok(info)
+    })
+    .await
+    .map_err(|e| format!("system info task failed: {e}"))??;
+    super::logging::perf("system_info first query", started.elapsed().as_millis());
+    Ok(info)
+}
+
+/// Synchronous cached read — the memory/disk caches ONLY. Never spawns the
+/// live query (a sync call site would block its thread for the hardware
+/// inventory). Falls back to an empty-but-usable profile when no cache
+/// exists yet; the async path fills the caches shortly after.
 pub fn system_info_cached() -> Result<SystemInfo, String> {
     if let Some(cached) = SYSTEM_CACHE.get() {
         return Ok(cached.clone());
     }
-    let info = query_system_info()?;
-    let _ = SYSTEM_CACHE.set(info.clone());
-    Ok(info)
+    if let Some(disk) = load_system_cache() {
+        let _ = SYSTEM_CACHE.set(disk.clone());
+        return Ok(disk);
+    }
+    // no cache yet and no blocking allowed: an honest placeholder. The rig
+    // tab will show it for a moment, then the async warm-up replaces it.
+    Ok(SystemInfo {
+        cpu: "Loading…".into(),
+        gpus: Vec::new(),
+        ram_gb: 0.0,
+        disks: Vec::new(),
+        gpu_counters: super::sampler::query_gpu_max_clocks().is_some(),
+        powershell_available: powershell_available(),
+    })
+}
+
+/// Machine facts the session needs (RAM MB + physical disk count) straight
+/// from the rig cache — no PowerShell round-trip, no hardware inventory.
+/// `None` when the cache isn't filled yet (first machine run before the
+/// async warm-up completes): the caller falls back to its own probe path.
+pub fn cached_machine_profile() -> Option<(f64, u32)> {
+    let info = SYSTEM_CACHE
+        .get()
+        .cloned()
+        .or_else(load_system_cache)?;
+    // a placeholder/never-filled profile carries ram_gb = 0 — not usable
+    if info.ram_gb <= 0.0 {
+        return None;
+    }
+    Some((info.ram_gb * 1024.0, info.disks.len().max(1) as u32))
 }
 
 // ---------------------------------------------------------------------------
@@ -120,7 +299,7 @@ pub fn top_processes_cached() -> Result<Vec<TopProcess>, String> {
     Ok(fresh)
 }
 
-/// system checks with TTL: same stale-while-revalidate pattern.
+/// System checks with TTL: same stale-while-revalidate pattern.
 pub fn system_checks_cached() -> Result<SystemChecks, String> {
     if let Some(cached) = SYSTEM_CHECKS_CACHE.get() {
         if !SYSTEM_CHECKS_CACHE.fresh_for(SYSTEM_CHECKS_TTL) {
@@ -137,13 +316,51 @@ pub fn system_checks_cached() -> Result<SystemChecks, String> {
     Ok(fresh)
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+/// Boot-time warm-up for every engine cache, called ONCE from setup() on a
+/// background async task. The OLD code spawned raw threads that ran the
+/// PowerShell scripts WITHOUT a blocking pool — the 20s Get-PhysicalDisk
+/// inventory froze the UI on HDD machines. Now:
+///   * rig profile  — disk-cache hit (instant) or one async query
+///   * checks        — refreshed off-thread; the tab reads the cache
+///   * top processes — refreshed off-thread
+///
+/// The one-line rig log it produces answers most support questions:
+/// `rig: ram=8192MB disks=2 gpu_counters=true powershell=true`
+pub async fn warm_system_caches() {
+    let _t = super::logging::timed("startup warm-up");
+    // rig (fills memory + disk cache on first machine run)
+    match system_info_async().await {
+        Ok(info) => {
+            super::logging::info(&format!(
+                "rig: ram={:.0}MB disks={} gpu_counters={} powershell={}",
+                info.ram_gb * 1024.0,
+                info.disks.len(),
+                info.gpu_counters,
+                info.powershell_available
+            ));
+        }
+        Err(e) => super::logging::warn(&format!("rig warm-up failed: {e}")),
+    }
+    // checks + top processes: off-thread refreshes, results land in caches
+    let checks = tauri::async_runtime::spawn_blocking(query_system_checks);
+    let procs = tauri::async_runtime::spawn_blocking(query_top_processes);
+    match checks.await {
+        Ok(Ok(c)) => SYSTEM_CHECKS_CACHE.set(c),
+        _ => super::logging::warn("system checks warm-up failed"),
+    }
+    match procs.await {
+        Ok(Ok(p)) => TOP_PROCESSES_CACHE.set(p),
+        _ => super::logging::warn("top processes warm-up failed"),
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GpuInfo {
     pub name: String,
     pub vram_gb: Option<f64>,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DiskInfo {
     pub name: String,
     pub media: String,
@@ -151,7 +368,7 @@ pub struct DiskInfo {
     pub size_gb: f64,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SystemInfo {
     pub cpu: String,
     pub gpus: Vec<GpuInfo>,
@@ -159,6 +376,9 @@ pub struct SystemInfo {
     pub disks: Vec<DiskInfo>,
     /// can the tool read NVIDIA GPU counters? (false on AMD/Intel-only machines)
     pub gpu_counters: bool,
+    /// is PowerShell usable? (false = limited mode: defaults, UTC-ish timestamps,
+    /// muted GPU window checks — the UI surfaces this honestly)
+    pub powershell_available: bool,
 }
 
 /// NVIDIA VRAM in MB via nvidia-smi. Win32_VideoController.AdapterRAM is a
@@ -196,6 +416,7 @@ Get-PhysicalDisk | ForEach-Object { "disk|$($_.FriendlyName)|$($_.MediaType)|$($
         ram_gb: 0.0,
         disks: Vec::new(),
         gpu_counters: super::sampler::query_gpu_max_clocks().is_some(),
+        powershell_available: powershell_available(),
     };
     // truthful VRAM for NVIDIA cards (AdapterRAM lies above 4 GB)
     let nv_vram_mb = nvidia_vram_mb();
@@ -471,6 +692,14 @@ pub fn open_windows_panel(panel: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn powershell_probe_matches_availability() {
+        // the probe itself runs on this machine — availability is whatever it
+        // says, and the cached flag must agree with a fresh probe result.
+        // (On dev machines PS exists; the point is the two paths agree.)
+        assert_eq!(powershell_available(), probe_powershell());
+    }
 
     #[test]
     fn power_name_extracted() {

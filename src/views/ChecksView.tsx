@@ -27,14 +27,12 @@ export function ChecksView(props: { active: boolean }) {
 
   useEffect(() => {
     void load(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (!active) return;
     const timer = window.setInterval(() => void load(true), LIVE_INTERVAL_MS);
     return () => window.clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
   if (error) {

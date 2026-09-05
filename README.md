@@ -4,7 +4,7 @@
 
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Version](https://img.shields.io/badge/version-1.1.0-brightgreen)
+![Version](https://img.shields.io/github/package-json/v/Ahmed-Hawass/pubg-gameloop-lag-hunter)
 
 ---
 
@@ -148,14 +148,10 @@ npx tauri build --no-bundle
 Binary:
 
 ```text
-src-tauri/target/release/pubg-gameloop-lag-hunter.exe
+src-tauri/target/release/pubg-gameloop-lag-hunter-<version>.exe
 ```
 
-Rename it with the release version when attaching it to a release:
-
-```text
-pubg-gameloop-lag-hunter-1.0.0.exe
-```
+The exe is already versioned — attach it to the release as-is.
 
 ---
 

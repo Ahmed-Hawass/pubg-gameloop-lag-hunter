@@ -50,6 +50,7 @@ Anything that samples, caches, or stores must have a cap.
 ```bash
 npx tauri dev              # dev mode
 cd src-tauri && cargo test # the engine test suite — must stay green
+npm test                   # frontend unit tests (Vitest)
 npx tsc                    # frontend typecheck — zero errors tolerated
 ```
 
@@ -59,7 +60,14 @@ npx tsc                    # frontend typecheck — zero errors tolerated
 
 Make sure:
 
-* `cargo test` passes (**42+ tests**)
-* `npx tsc` is clean
-* New user-facing strings exist in **both** locales
+* CI passes — it runs the same things on `windows-latest`: vitest, the frontend
+  build (which type-checks the locale bond: `ar.ts` must match `en.ts`
+  key-for-key), engine tests, and clippy with `-D warnings`
+* New user-facing strings exist in **both** locales (the build enforces this,
+  but the copy itself is on you)
+* Slow IPC commands are `async` and park blocking work on
+  `spawn_blocking` — sync commands run on the IPC dispatcher thread and one
+  slow command freezes the window (the original "Not Responding" bug)
+* New engine operations log what happened: spawn results, durations
+  (`logging::timed`), failures — the log is how we diagnose user machines
 * New IPC commands are added to `capabilities/default.json` **only if the UI truly needs them**

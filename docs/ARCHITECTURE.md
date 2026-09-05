@@ -12,9 +12,11 @@ They meet in exactly one place: a JSON state contract pushed over Tauri events.
 │                                                   │
 │  views/       seven pages, zero logic             │
 │  components/  the design system                   │
-│  locales/     every human string                  │
-│  bridge.ts    the ONLY file that talks            │
-│               to the backend                      │
+│  locales/     every human string                   │
+│  bridge.ts    the ONLY file that talks             │
+│               to the backend                       │
+│  version.ts   numeric release comparison           │
+│  errors.ts    error codes → dialog copy            │
 │                                                   │
 └──────────────────────┬────────────────────────────┘
                        │
@@ -40,10 +42,12 @@ They meet in exactly one place: a JSON state contract pushed over Tauri events.
 │                                                   │
 │  settings   schema v3, atomic writes, migration   │
 │                                                   │
-│  system     rig info (cached), top processes,     │
-│             checks                                 │
+│  system     rig info (disk-cached across runs),  │
+│             top processes, checks                │
 │                                                   │
-│  logging    7-day rotating technical log           │
+│  logging    the flight recorder: boot timing,    │
+│             panics, IPC durations, 7-day        │
+│             rotation                              │
 │                                                   │
 └───────────────────────────────────────────────────┘
 ```
@@ -84,6 +88,19 @@ It never flips a switch.
 * Logs rotate at **7 days**
 * Process lists truncate at **12**
 
+### ⚡ Nothing slow on the UI's threads
+
+Sync Tauri commands run on the IPC dispatcher thread — one slow command
+freezes the window (the original "Not Responding for a minute" bug:
+a 20-second `Get-PhysicalDisk` hardware inventory). Every potentially
+slow command is `async` and parks its blocking work on `spawn_blocking`.
+
+### 📼 The log is a flight recorder
+
+If it matters for diagnosing a user's machine, it gets a line: boot
+timings, panics (even with `panic = "abort"`), IPC durations, sampler
+spawn results, session lifecycle events.
+
 ---
 
 ## Why These Choices
@@ -106,6 +123,8 @@ A fixed 2 GB RAM floor would cry wolf on a 4 GB machine and sleep through pressu
 
 The floor is **6% of installed RAM**, clamped to **1–4 GB**. Disk-queue tolerance scales with spindle count.
 
+The rig profile (RAM, disks, GPU) is cached **on disk** (`system-cache.json`): the hardware inventory (`Get-PhysicalDisk`) costs 20+ seconds on HDD machines and the rig doesn't change between launches — the first run pays it once, every later launch reads the cache in microseconds.
+
 ### `tasklist` over PowerShell for the GameLoop probe
 
 ~5 MB transient per call, zero resident cost, no script host in the process list.
@@ -127,3 +146,12 @@ The floor is **6% of installed RAM**, clamped to **1–4 GB**. Disk-queue tolera
 The disk-storm test is literally the session that started this project.
 
 A crashed session can **never** be reported as `"clean"`.
+
+`npm test` (Vitest) covers the frontend's pure logic:
+
+* Version comparison (the update check)
+* Error-code → dialog mapping
+* Locale key parity between en and ar
+
+CI (`.github/workflows/ci.yml`) runs both suites plus clippy
+(`-D warnings`) on every push and PR.

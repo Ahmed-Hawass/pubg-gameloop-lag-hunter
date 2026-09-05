@@ -21,17 +21,106 @@ struct StatusPayload {
 /// would keep typeperf + dmon running and writing to disk indefinitely).
 const MAX_SESSION_SECS: u64 = 60 * 60; // 1 hour (the longest UI choice)
 
+/// Is PowerShell usable? (UI shows the limited-mode banner when false.)
 #[tauri::command]
-fn session_start(
+fn ps_available() -> bool {
+    engine::system::powershell_available()
+}
+
+/// Idle watcher: polls for GameLoop so the UI's Start button reflects reality.
+/// NEVER exits on its own — after a session stops it keeps watching, so the
+/// button state can never go stale (the old version died after the first
+/// session and left the gate stuck).
+#[tauri::command]
+fn watch_gameloop(app: tauri::AppHandle) {
+    std::thread::spawn(move || {
+        use tauri::Emitter;
+        let mut last: Option<bool> = None;
+        loop {
+            let Some(eng) = session::global() else {
+                std::thread::sleep(Duration::from_secs(2));
+                continue;
+            };
+            // while a session runs, its own probe is the source of truth —
+            // skip here, but remember "up" so the next idle check diffs cleanly
+            if eng.status() == SessionStatus::Running {
+                last = Some(true);
+                std::thread::sleep(Duration::from_secs(5));
+                continue;
+            }
+            let up = engine::sampler::detect_emulator().is_some();
+            // emit on CHANGE only (and on the very first check)
+            if last.is_none() || last != Some(up) {
+                let _ = app.emit("engine://gameloop", up);
+                last = Some(up);
+            }
+            std::thread::sleep(Duration::from_secs(3));
+        }
+    });
+}
+
+// ---- system tabs (read-only queries) --------------------------------------
+// Every command that can take longer than a few milliseconds is ASYNC: Tauri
+// runs sync commands on the IPC dispatcher thread — one slow command froze
+// the whole window ("Not Responding") on HDD machines. Async commands run on
+// the async runtime; the UI stays alive no matter how slow the query.
+
+#[tauri::command]
+async fn system_info() -> Result<engine::system::SystemInfo, String> {
+    let _t = engine::logging::timed("ipc: system_info");
+    engine::system::system_info_async().await
+}
+
+#[tauri::command]
+async fn top_processes() -> Result<Vec<engine::system::TopProcess>, String> {
+    let _t = engine::logging::timed("ipc: top_processes");
+    // first call on a run pays a PowerShell spawn — blocking pool, never the
+    // async runtime
+    tauri::async_runtime::spawn_blocking(engine::system::top_processes_cached)
+        .await
+        .map_err(|e| format!("top processes task failed: {e}"))?
+}
+
+#[tauri::command]
+async fn system_checks() -> Result<engine::system::SystemChecks, String> {
+    let _t = engine::logging::timed("ipc: system_checks");
+    tauri::async_runtime::spawn_blocking(engine::system::system_checks_cached)
+        .await
+        .map_err(|e| format!("system checks task failed: {e}"))?
+}
+
+#[tauri::command]
+async fn gameloop_status() -> Result<bool, String> {
+    let _t = engine::logging::timed("ipc: gameloop_status");
+    session::init_global();
+    // tasklist spawn (~1s, ~5MB transient) — blocking pool
+    let up = tauri::async_runtime::spawn_blocking(|| {
+        engine::sampler::detect_emulator().is_some()
+    })
+    .await
+    .map_err(|e| format!("gameloop status task failed: {e}"))?;
+    Ok(up)
+}
+
+#[tauri::command]
+async fn session_start(
     app: tauri::AppHandle,
     auto_stop_secs: Option<u64>,
 ) -> Result<StatusPayload, String> {
-    let eng = session::init_global();
-    // always bound the session — default 30 min, clamped to [60s, MAX_SESSION_SECS]
+    let _t = engine::logging::timed("ipc: session_start");
+    // start() runs PowerShell probes (RAM/disks on cache miss, visibility,
+    // gpu clocks) + creates the session files — all blocking, all parked on
+    // the blocking pool so the async runtime (and the UI) never stall
     let bounded = auto_stop_secs.unwrap_or(1800).clamp(60, MAX_SESSION_SECS);
-    // probe BEFORE starting: if the game is already open, the first sample knows it
-    eng.probe_emulator();
-    let gen = eng.start(Some(bounded))?;
+    let eng = session::init_global();
+    let gen = tauri::async_runtime::spawn_blocking(move || {
+        // probe BEFORE starting: if the game is already open, the first
+        // sample knows it
+        eng.probe_emulator();
+        eng.start(Some(bounded))
+    })
+    .await
+    .map_err(|e| format!("session start task failed: {e}"))??;
     // emulator probe + liveness guard + window-visibility probe: every ~5s
     // while running. If GameLoop dies mid-session, 3 consecutive misses
     // (~15s) stop the scan. The visibility probe (a transient PowerShell call)
@@ -76,76 +165,21 @@ fn session_start(
     Ok(current_status(eng))
 }
 
-/// Is GameLoop running right now? (UI uses this to gate the Start button.)
 #[tauri::command]
-fn gameloop_status() -> bool {
-    session::init_global();
-    engine::sampler::detect_emulator().is_some()
-}
-
-/// Idle watcher: polls for GameLoop so the UI's Start button reflects reality.
-/// NEVER exits on its own — after a session stops it keeps watching, so the
-/// button state can never go stale (the old version died after the first
-/// session and left the gate stuck).
-#[tauri::command]
-fn watch_gameloop(app: tauri::AppHandle) {
-    std::thread::spawn(move || {
-        use tauri::Emitter;
-        let mut last: Option<bool> = None;
-        loop {
-            let Some(eng) = session::global() else {
-                std::thread::sleep(Duration::from_secs(2));
-                continue;
-            };
-            // while a session runs, its own probe is the source of truth —
-            // skip here, but remember "up" so the next idle check diffs cleanly
-            if eng.status() == SessionStatus::Running {
-                last = Some(true);
-                std::thread::sleep(Duration::from_secs(5));
-                continue;
-            }
-            let up = engine::sampler::detect_emulator().is_some();
-            // emit on CHANGE only (and on the very first check)
-            if last.is_none() || last != Some(up) {
-                let _ = app.emit("engine://gameloop", up);
-                last = Some(up);
-            }
-            std::thread::sleep(Duration::from_secs(3));
-        }
-    });
-}
-
-// ---- system tabs (read-only queries) --------------------------------------
-
-#[tauri::command]
-fn system_info() -> Result<engine::system::SystemInfo, String> {
-    engine::system::system_info_cached()
-}
-
-#[tauri::command]
-fn top_processes() -> Result<Vec<engine::system::TopProcess>, String> {
-    engine::system::top_processes_cached()
-}
-
-#[tauri::command]
-fn system_checks() -> Result<engine::system::SystemChecks, String> {
-    engine::system::system_checks_cached()
-}
-
-#[tauri::command]
-fn open_windows_panel(panel: &str) -> Result<(), String> {
-    engine::system::open_windows_panel(panel)
-}
-
-#[tauri::command]
-fn session_stop(app: tauri::AppHandle) -> Result<StatusPayload, String> {
+async fn session_stop(app: tauri::AppHandle) -> Result<StatusPayload, String> {
+    let _t = engine::logging::timed_with("ipc: session_stop", 3_000);
+    // the stop path sleeps 600ms + reads the whole samples file back from
+    // disk — genuinely blocking work, parked on the blocking pool so the
+    // async runtime never stalls (the UI keeps breathing meanwhile)
     let eng = session::init_global();
-    let report = eng.stop()?;
+    let report = tauri::async_runtime::spawn_blocking(move || eng.stop())
+        .await
+        .map_err(|e| format!("stop task failed: {e}"))??;
     if let Some(_path) = report {
         // report path available via last session query if needed
     }
     let _ = push_state(&app);
-    Ok(current_status(eng))
+    Ok(current_status(session::init_global()))
 }
 
 #[tauri::command]
@@ -155,23 +189,40 @@ fn get_state() -> StatusPayload {
 }
 
 #[tauri::command]
-fn session_entries() -> Vec<engine::storage::SessionEntry> {
-    engine::storage::session_entries()
+async fn session_entries() -> Vec<engine::storage::SessionEntry> {
+    let _t = engine::logging::timed("ipc: session_entries");
+    tauri::async_runtime::spawn_blocking(engine::storage::session_entries)
+        .await
+        .unwrap_or_default()
 }
 
 #[tauri::command]
-fn load_report(id: &str) -> Result<engine::storage::FriendlyReport, String> {
-    engine::storage::friendly_report(id)
+async fn load_report(id: String) -> Result<engine::storage::FriendlyReport, String> {
+    let _t = engine::logging::timed("ipc: load_report");
+    tauri::async_runtime::spawn_blocking(move || engine::storage::friendly_report(&id))
+        .await
+        .map_err(|e| format!("load report task failed: {e}"))?
 }
 
 #[tauri::command]
-fn delete_session(id: &str) -> Result<(), String> {
-    engine::storage::delete_session(id)
+async fn delete_session(id: String) -> Result<(), String> {
+    let _t = engine::logging::timed("ipc: delete_session");
+    tauri::async_runtime::spawn_blocking(move || engine::storage::delete_session(&id))
+        .await
+        .map_err(|e| format!("delete task failed: {e}"))?
 }
 
 #[tauri::command]
 fn session_folder(id: &str) -> Result<String, String> {
     engine::storage::session_dir(id)
+}
+
+#[tauri::command]
+async fn open_windows_panel(panel: String) -> Result<(), String> {
+    let _t = engine::logging::timed("ipc: open_windows_panel");
+    tauri::async_runtime::spawn_blocking(move || engine::system::open_windows_panel(&panel))
+        .await
+        .map_err(|e| format!("open panel task failed: {e}"))?
 }
 
 #[tauri::command]
@@ -304,6 +355,11 @@ fn spawn_state_pusher(app: tauri::AppHandle) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // the panic hook runs FIRST: with panic="abort" this is the one chance
+    // to record why the app died on a user's machine. Installed before any
+    // thread exists so nothing can panic before it's armed.
+    engine::logging::init_panic_hook();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         // ONE instance only: a second launch focuses the existing window and exits.
@@ -328,6 +384,7 @@ pub fn run() {
             set_sidebar_collapsed,
             finish_onboarding,
             gameloop_status,
+            ps_available,
             watch_gameloop,
             system_info,
             top_processes,
@@ -351,9 +408,15 @@ pub fn run() {
         })
         .setup(|_app| {
             use tauri::Manager;
+            // boot timing: the whole freeze investigation starts here —
+            // "app ready in Xms" tells us at a glance whether a machine
+            // had a slow launch, before reading anything else
+            let boot = std::time::Instant::now();
+
             // rotate the technical log once per launch (7-day retention)
             engine::logging::cleanup_old_logs();
             engine::logging::info("app starting");
+            engine::logging::info(&format!("app version: {}", engine::VERSION));
 
             // fixed-size window: show once, centered — no resize flash possible
             if let Some(win) = _app.get_webview_window("main") {
@@ -361,18 +424,23 @@ pub fn run() {
                 let _ = win.show();
                 let _ = win.set_focus();
             }
+            engine::logging::perf("window shown", boot.elapsed().as_millis());
 
             let handle = _app.handle().clone();
             spawn_state_pusher(handle);
 
-            // prefetch the system tabs in the background: rig info, checks,
-            // and top processes each cost a PowerShell spawn (0.5–2 s). By
-            // the user reaches those tabs, the caches are already warm —
-            // first open feels as instant as every later one.
-            std::thread::spawn(|| {
-                let _ = engine::system::system_info_cached();
-                let _ = engine::system::system_checks_cached();
-                let _ = engine::system::top_processes_cached();
+            // Warm the system caches ASYNC (never on the setup thread):
+            // rig info on a first machine run pays the PowerShell hardware
+            // inventory (Get-PhysicalDisk: 20+s on HDD machines — the original
+            // "Not Responding" bug). The async runtime keeps the UI alive
+            // while it happens; afterwards the result lives in the disk
+            // cache and every later launch reads it in microseconds.
+            tauri::async_runtime::spawn(async move {
+                engine::system::warm_system_caches().await;
+                engine::logging::info(&format!(
+                    "app ready in {}ms",
+                    boot.elapsed().as_millis()
+                ));
             });
             Ok(())
         })

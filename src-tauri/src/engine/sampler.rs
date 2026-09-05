@@ -295,7 +295,7 @@ while ($true) {{
 
     thread::spawn(move || {
         let _keep = SpawnedProcess { child };
-        eprintln!("[sampler] pdh emitter reader thread started");
+        super::logging::info("pdh emitter reader thread started");
         let reader = BufReader::new(stdout);
         // path suffix → our key (robust to the \\HOST prefix Get-Counter adds)
         let key_of = |path: &str| -> Option<&'static str> {
@@ -351,7 +351,7 @@ while ($true) {{
                 emit(s);
             }
         }
-        eprintln!("[sampler] pdh emitter reader loop ended");
+        super::logging::info("pdh emitter reader loop ended");
         // _keep drops here: powershell killed after the stream ends
     });
     Ok(())
@@ -393,22 +393,26 @@ where
     // the reader thread OWNS the child — kills it on exit (Drop), never before
     thread::spawn(move || {
         let _keep = SpawnedProcess { child };
-        eprintln!("[sampler] typeperf reader thread started");
+        super::logging::info("typeperf reader thread started");
         let reader = BufReader::new(stdout);
         let mut header: Vec<&'static str> = Vec::new();
         let mut line_no: u32 = 0;
         for line in reader.lines() {
             line_no += 1;
             if !running.load(Ordering::Relaxed) {
-                eprintln!("[sampler] typeperf reader: running flag went false at line {line_no}");
+                super::logging::info(&format!(
+                    "typeperf reader: running flag went false at line {line_no}"
+                ));
                 break;
             }
             let Ok(line) = line else {
-                eprintln!("[sampler] typeperf stream errored at line {line_no}");
+                super::logging::error(&format!(
+                    "typeperf stream errored at line {line_no}"
+                ));
                 break;
             };
             if line_no <= 3 {
-                eprintln!("[sampler] typeperf line {line_no}: {line}");
+                super::logging::info(&format!("typeperf line {line_no}: {line}"));
             }
             let line = line.trim().to_string();
             if line.is_empty() {
@@ -424,10 +428,10 @@ where
                         map_counter_key(clean)
                     })
                     .collect();
-                eprintln!(
-                    "[sampler] typeperf header parsed: {} counters",
+                super::logging::info(&format!(
+                    "typeperf header parsed: {} counters",
                     header.len()
-                );
+                ));
                 continue;
             }
             if header.is_empty() {
@@ -436,11 +440,11 @@ where
             // data line: "datetime","val1","val2",...
             let parts: Vec<&str> = line.split("\",\"").collect();
             if parts.len() < header.len() + 1 {
-                eprintln!(
-                    "[sampler] typeperf data line dropped (parts={} header={})",
+                super::logging::warn(&format!(
+                    "typeperf data line dropped (parts={} header={})",
                     parts.len(),
                     header.len()
-                );
+                ));
                 continue;
             }
             let values = &parts[1..]; // first element = datetime
@@ -465,7 +469,9 @@ where
                 emit(s);
             }
         }
-        eprintln!("[sampler] typeperf reader loop ended after {line_no} lines");
+        super::logging::info(&format!(
+            "typeperf reader loop ended after {line_no} lines"
+        ));
         // _keep drops here: typeperf killed after the stream truly ends
     });
     Ok(())

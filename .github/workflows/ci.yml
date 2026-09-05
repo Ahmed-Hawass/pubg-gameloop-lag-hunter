@@ -1,0 +1,78 @@
+# CI — the verification chain this project is built on.
+# Windows-only by design: the engine speaks typeperf / nvidia-smi / tasklist.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  frontend:
+    name: Frontend (typecheck + build)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Unit tests (vitest)
+        run: npm test
+
+      # tsc runs as part of the build script — this is also the locale
+      # type bond check (ar.ts must match en.ts key-for-key)
+      - run: npm run build
+
+  engine:
+    name: Engine (tests + clippy)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Tests (incl. live typeperf pipeline)
+        run: cargo test --manifest-path src-tauri/Cargo.toml --all-targets
+
+      - name: Clippy (zero warnings)
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+  release-build:
+    name: Release build (full LTO profile)
+    # the profile unit tests never touch — built on demand until proven stable
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      - name: Build release exe
+        run: npx tauri build --no-bundle

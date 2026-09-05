@@ -4,6 +4,66 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- Startup freeze ("Not Responding" for up to a minute, every launch on machines with an
+  HDD): the rig-info query runs `Get-PhysicalDisk` — a live hardware inventory (SMART
+  probes over every spindle) that costs 20+ seconds on such machines — and it ran on the
+  IPC dispatcher thread, freezing the whole window until it finished. The rig profile is
+  now cached on disk (`system-cache.json`): the first run pays the inventory once in the
+  background, every later launch reads the cache in microseconds (measured: 28 s → 2.3 s
+  ready on the dev machine's HDD+NVMe setup). All potentially slow commands became async
+  on the blocking pool in the same pass — no IPC command can freeze the window anymore.
+- Update check compared versions as strings: any different tag — including an OLDER
+  one — showed "new version available", and "1.10.0" would lose to "1.2.0". Versions
+  are now compared numerically (major/minor/patch) in one shared helper used by both
+  the startup check and the About tab.
+- About's manual update check claimed "up to date" when it actually couldn't know (no
+  release tag or no local version) — those cases now honestly report a check failure.
+
+### Added
+- Flight-recorder technical log — the log was near-useless for diagnosing user reports
+  (13 lines on a busy day, zero durations, panics invisible). It now covers:
+  - Boot timing: `window shown: Xms`, `app ready in Xms` — slow launches visible at a glance
+  - Every panic recorded via a panic hook that works even with `panic = "abort"`
+    (installed before any thread spawns, lock-free writer for the dying moment)
+  - Timings for every IPC command (`ipc: system_info: 21s (slow)` — WARN above 2 s)
+  - Session lifecycle: stop reason, sampler spawn results, first-sample latency, GPU
+    max clocks, window visibility at start
+  - A one-line rig profile at boot (`rig: ram=…MB disks=… gpu_counters=… powershell=…`)
+  - The sampler's 9 debug lines moved from `eprintln` (which is wiped in release builds,
+    where the app has no console) into the real log
+- Limited mode: a conservative one-shot probe detects whether PowerShell is usable at
+  all (missing binary, execution-policy block, or a 5 s hang all read as unavailable).
+  Sessions keep working (typeperf/tasklist/nvidia-smi are native), but the UI honestly
+  shows what degrades — adaptive thresholds fall back to defaults, timestamps may read
+  UTC, GPU window checks stay muted — instead of failing silently.
+- CI (GitHub Actions, `windows-latest`): vitest + frontend build, engine tests including
+  the live typeperf pipeline, and clippy with `-D warnings`. A full release build job is
+  available on manual dispatch until it proves stable.
+- Frontend unit tests (Vitest, 13 tests): version comparison, error-code-to-dialog
+  mapping (extracted from App.tsx into a pure, testable function), and locale key parity
+  between en and ar.
+
+### Changed
+- The Arabic locale is now type-checked against the English one (`ar: Locale`) — a
+  missing or extra key is a build error instead of a silent runtime gap. The previous
+  `as unknown as Locale` cast is gone.
+- Session start reads RAM/disk facts from the rig cache instead of its own PowerShell
+  round-trips; a cache miss (first machine run) falls back to the documented defaults
+  rather than blocking the scan.
+- README: the version badge reads from package.json (was a hardcoded "1.1.0" that
+  drifted); the manual exe-renaming instructions removed (the binary has been
+  version-named by the build since 1.2.0).
+
+### Engineering
+- Slow engine work (system queries, session start/stop, report loading, deletion) runs
+  via `spawn_blocking` — the async runtime and the UI thread never stall on it.
+- Rust test suite grew from 46 to 47 (PowerShell probe consistency; the timing
+  and panic-hook writers are exercised too); frontend gained its first test
+  suite (13 Vitest tests).
+
 ## [1.2.0] — 2026-09-04
 
 ### Fixed

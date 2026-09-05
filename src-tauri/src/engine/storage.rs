@@ -274,6 +274,9 @@ fn build_report(stats: &SessionStats, events: &[EngineEvent], n: u64) -> String 
     md.push_str("# Lag Hunter Report\n\n");
     md.push_str(&format!("- Samples: {n}\n"));
     md.push_str(&format!("- Duration: {}s\n", stats.duration_sec));
+    // honesty line: timestamps are wall-clock LOCAL time (the trailing Z is a
+    // fixed-format artifact, not a UTC claim)
+    md.push_str("- All times are your machine's local clock\n");
     if let Some(v) = stats.cpu_avg {
         md.push_str(&format!("- CPU avg: {v:.1}%\n"));
     }

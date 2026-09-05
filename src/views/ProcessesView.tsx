@@ -37,7 +37,6 @@ export function ProcessesView(props: { active: boolean }) {
   // first data
   useEffect(() => {
     void load(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // live while this tab is the active one — paused otherwise
@@ -45,7 +44,6 @@ export function ProcessesView(props: { active: boolean }) {
     if (!active) return;
     const timer = window.setInterval(() => void load(true), LIVE_INTERVAL_MS);
     return () => window.clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
   return (

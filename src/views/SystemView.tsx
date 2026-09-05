@@ -82,6 +82,10 @@ export function SystemView() {
             <span className={`see-dot ${info.gpu_counters ? "ok" : "off"}`} />
             {info.gpu_counters ? t.seeGpu : t.gpuCountersOff}
           </li>
+          <li className={info.powershell_available ? "ok" : "off"}>
+            <span className={`see-dot ${info.powershell_available ? "ok" : "off"}`} />
+            {info.powershell_available ? t.seePs : t.seePsOff}
+          </li>
           <li className="ok">
             <span className="see-dot ok" />
             {t.seeGame}
