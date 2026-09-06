@@ -2,25 +2,29 @@
 // updates from GitHub, and a way to support the developer.
 // Visual rule: three consistent blocks (identity → cost → updates) and a
 // quiet footer — no extra elements, one rhythm.
+// The update check lives in the ENGINE (Rust): the manual button asks the
+// same backend command the startup check uses, then opens the SAME modal
+// (manual checks ignore the once-per-version announcement on purpose).
 
 import { useEffect, useState } from "react";
 import { Coffee, Code2, Download, Heart, Leaf } from "lucide-react";
 import { Button } from "../components/components";
-import { api } from "../bridge";
+import { api, type UpdateInfo } from "../bridge";
 import { useLang } from "../i18n";
-import { isNewerRelease } from "../version";
 import appIcon from "../assets/app-icon.png";
 
 const REPO_URL = "https://github.com/Ahmed-Hawass/pubg-gameloop-lag-hunter";
-const RELEASES_LATEST = "https://api.github.com/repos/Ahmed-Hawass/pubg-gameloop-lag-hunter/releases/latest";
 const SUPPORT_URL = "https://paypal.me/ahmedhawass";
 
-export function AboutView(props: { updateAvailable: boolean; updateUrl: string | null }) {
+export function AboutView(props: {
+  /** the startup check's result — dot + "download" affordance when set */
+  updateInfo: UpdateInfo | null;
+  onOpenUpdateModal: () => void;
+}) {
   const { t } = useLang();
-  const { updateAvailable, updateUrl } = props;
+  const { updateInfo, onOpenUpdateModal } = props;
   const [checking, setChecking] = useState(false);
-  const [result, setResult] = useState<"latest" | "update" | "err" | null>(null);
-  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [result, setResult] = useState<"latest" | "err" | null>(null);
   // version from the backend — the same string tauri.conf.json owns
   const [appVersion, setAppVersion] = useState<string>("");
 
@@ -31,29 +35,22 @@ export function AboutView(props: { updateAvailable: boolean; updateUrl: string |
       .catch(() => setAppVersion(""));
   }, []);
 
-  // the startup check already knows — surface it immediately
+  // the startup check already knows — the dot shows immediately
   useEffect(() => {
-    if (updateAvailable) {
-      setResult("update");
-      setDownloadUrl(updateUrl);
+    if (updateInfo) {
+      setResult(null); // not "latest" — there IS something newer
     }
-  }, [updateAvailable, updateUrl]);
+  }, [updateInfo]);
 
+  // manual check: same engine command as startup; a found update opens the
+  // modal directly (manual checks ignore once-per-version by design)
   const check = async () => {
     setChecking(true);
     setResult(null);
-    setDownloadUrl(null);
     try {
-      const res = await fetch(`${RELEASES_LATEST}?t=${Date.now()}`, { headers: { Accept: "application/vnd.github+json" } });
-      if (!res.ok) throw new Error(String(res.status));
-      const data: { tag_name?: string; html_url?: string } = await res.json();
-      const remote = (data.tag_name ?? "").replace(/^v/, "");
-      if (!remote || !appVersion) {
-        // no tag or no local version → we genuinely don't know; never claim "latest"
-        setResult("err");
-      } else if (isNewerRelease(remote, appVersion)) {
-        setResult("update");
-        setDownloadUrl(data.html_url ?? REPO_URL + "/releases");
+      const info = await api.checkUpdate();
+      if (info) {
+        onOpenUpdateModal();
       } else {
         setResult("latest");
       }
@@ -89,11 +86,13 @@ export function AboutView(props: { updateAvailable: boolean; updateUrl: string |
         </ul>
       </div>
 
-      {/* block 3: updates */}
+      {/* block 3: updates — the dot sits on the heading when a newer
+          release exists; it is not dismissible and matches the sidebar's */}
       <div className="about-card">
         <h3 className="about-h">
           <Download size={13} />
           {t.aboutUpdate}
+          {updateInfo ? <span className="about-dot" aria-label={t.updateAvailableTitle} /> : null}
         </h3>
         <div className="about-update">
           <Button
@@ -104,9 +103,9 @@ export function AboutView(props: { updateAvailable: boolean; updateUrl: string |
             onClick={() => void check()}
           />
           {result === "latest" ? <span className="about-result ok">{t.aboutUpToDate}</span> : null}
-          {result === "update" && downloadUrl ? (
-            <button className="about-result update" onClick={() => void api.openUrl(downloadUrl)}>
-              {t.aboutNewVersion}
+          {updateInfo ? (
+            <button className="about-result update" onClick={onOpenUpdateModal}>
+              {t.aboutNewVersion} (v{updateInfo.version})
             </button>
           ) : null}
           {result === "err" ? <span className="about-result err">{t.aboutUpdateErr}</span> : null}

@@ -178,6 +178,31 @@
   font-weight: 700;
 }
 
+/* the update dot on the About entry: a quiet WARN-yellow badge in the corner
+   (matches "a new version is available" — green reads as "all good" and
+   vanished against the active/hover state), present for the whole life of
+   a newer release — never dismissible */
+.sb-item {
+  position: relative;
+}
+
+.sb-dot {
+  position: absolute;
+  top: 7px;
+  inset-inline-end: 9px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warn);
+  border: 2px solid var(--bg-1);
+  pointer-events: none;
+}
+
+/* active entry: the dot keeps its ring against the filled background */
+.sb-item.is-active .sb-dot {
+  border-color: var(--warn);
+}
+
 /* collapsed rail: icons only */
 .sidebar.is-collapsed {
   width: 56px;

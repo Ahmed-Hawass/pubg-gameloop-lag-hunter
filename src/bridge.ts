@@ -2,6 +2,7 @@
 // All types mirror engine/types.rs exactly.
 
 import { listen } from "@tauri-apps/api/event";
+import { Channel } from "@tauri-apps/api/core";
 import type { EventCallback, UnlistenFn } from "@tauri-apps/api/event";
 
 // ---- types mirroring Rust ------------------------------------------------
@@ -146,6 +147,19 @@ export const api = {
   topProcesses: () => invoke<TopProcess[]>("top_processes"),
   systemChecks: () => invoke<SystemChecks>("system_checks"),
   openWindowsPanel: (panel: string) => invoke<void>("open_windows_panel", { panel }),
+  // update flow
+  checkUpdate: () => invoke<UpdateInfo | null>("check_update"),
+  updateAlreadyAnnounced: (version: string) =>
+    invoke<boolean>("update_already_announced", { version }),
+  announceUpdate: (version: string) => invoke<void>("announce_update", { version }),
+  downloadUpdate: (info: UpdateInfo, dest: string, onEvent: (ev: DownloadEvent) => void) =>
+    invoke<string>("download_update", {
+      info,
+      dest,
+      onEvent: new Channel<DownloadEvent>(onEvent),
+    }),
+  cancelUpdateDownload: () => invoke<void>("cancel_update_download"),
+  openDownloadFolder: (path: string) => invoke<void>("open_download_folder", { path }),
 };
 
 // ---- system tabs -----------------------------------------------------------
@@ -259,6 +273,23 @@ export interface FriendlyReport {
   findings: FriendlyFinding[];
   raw_path: string;
 }
+
+// ---- update flow (backend engine/update.rs) ------------------------------
+
+export interface UpdateInfo {
+  version: string;
+  /** release notes, plain text — rendered pre-wrap, never HTML */
+  notes: string;
+  asset_url: string;
+  asset_name: string;
+  sums_url: string;
+}
+
+/** progress events streamed over the download channel */
+export type DownloadEvent =
+  | { event: "progress"; downloaded: number; total: number }
+  | { event: "done"; path: string }
+  | { event: "failed"; reason: string };
 
 // ---- event helpers --------------------------------------------------------
 

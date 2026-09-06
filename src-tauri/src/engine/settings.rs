@@ -26,6 +26,11 @@ pub struct Settings {
     pub sidebar_collapsed: bool,
     /// first-run welcome screen done — never shown again after the first launch
     pub onboarding_done: bool,
+    /// the release version whose update modal has already been shown once
+    /// (the modal appears ONCE per version; after that the About dot is the
+    /// only signal until the next version lands)
+    #[serde(default)]
+    pub announced_update_version: Option<String>,
     /// schema-compat placeholder — recomputed per session, never read back
     pub thresholds: Thresholds,
 }
@@ -40,6 +45,7 @@ impl Default for Settings {
             language: "auto".into(),
             sidebar_collapsed: false,
             onboarding_done: false,
+            announced_update_version: None,
             thresholds: Thresholds::default(),
         }
     }
@@ -173,6 +179,7 @@ mod tests {
             language: "ar".into(),
             sidebar_collapsed: false,
             onboarding_done: true,
+            announced_update_version: Some("1.3.0".into()),
             thresholds: Thresholds::default(),
         };
         let text = serde_json::to_string(&s).unwrap();
@@ -180,6 +187,24 @@ mod tests {
         assert_eq!(back.language, "ar");
         assert_eq!(back.auto_stop_minutes, 60);
         assert_eq!(back.version, 3);
+        assert_eq!(back.announced_update_version.as_deref(), Some("1.3.0"));
+    }
+
+    #[test]
+    fn pre_update_settings_file_parses_without_the_new_field() {
+        // a settings.json written BEFORE the updater existed has no
+        // announced_update_version key — serde default keeps it None
+        let old = serde_json::json!({
+            "version": 3,
+            "sensitivity": "standard",
+            "auto_stop_minutes": 5,
+            "language": "auto",
+            "sidebar_collapsed": false,
+            "onboarding_done": true,
+            "thresholds": Thresholds::default()
+        });
+        let s: Settings = serde_json::from_value(old).unwrap();
+        assert_eq!(s.announced_update_version, None);
     }
 
     #[test]

@@ -6,6 +6,36 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- In-app update flow. When a newer release exists, a modal appears once on
+  the Monitor screen (and the same modal opens from About, both via the
+  manual check and the "download it" link). The update check moved from the
+  webview into the engine (Rust, allowlisted GitHub hosts, blocking pool) —
+  the webview makes no network requests anymore and the CSP
+  `connect-src` entry is gone. The flow is deliberately honest for a
+  portable tool: no self-replace, no auto-restart:
+  - "Update" opens the native save dialog (official dialog plugin) with the
+    official versioned file name pre-filled, then downloads with a live
+    progress bar and a cancel that leaves no partial file behind.
+  - The downloaded exe is verified against the published SHA256SUMS.txt
+    before it is ever written to the chosen path — files fetched by an HTTP
+    client carry no Mark-of-the-Web (SmartScreen will not warn), so the
+    hash check is the real protection here.
+  - On success: "Open folder" opens Explorer with the file selected, plus
+    one line of guidance ("close the app and run the new file"). Release
+    notes render as plain text — never HTML.
+  - Once-per-version: closing the modal records the announced version; the
+    modal never nags again for that version, but a warn-yellow dot on the
+    About entries (sidebar + Updates heading) carries the signal for the
+    whole life of the release. The next version announces fresh. Manual
+    checks from About always open the modal, announced or not.
+  - First-run priority: the modal never appears for a user who has not
+    completed the welcome screen — welcome first, updates later.
+  - A GitHub 403/429 (rate-limited shared IPs — common behind Cloudflare
+    WARP) is logged with the API's own reason line, not a bare "http 403".
+  - The Windows system proxy (registry, the same setting browsers use) is
+    honored for users whose VPN/proxy tools don't set env vars.
+
 ### Fixed
 - Startup freeze ("Not Responding" for up to a minute, every launch on machines with an
   HDD): the rig-info query runs `Get-PhysicalDisk` — a live hardware inventory (SMART
@@ -21,6 +51,9 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   the startup check and the About tab.
 - About's manual update check claimed "up to date" when it actually couldn't know (no
   release tag or no local version) — those cases now honestly report a check failure.
+- The Checks tab's "Open setting" buttons never actually sent the panel argument over
+  IPC (the webview-side binding dropped it) — the power/pagefile buttons did nothing.
+  Found while wiring the update flow's dialog permission; both are fixed.
 
 ### Added
 - Flight-recorder technical log — the log was near-useless for diagnosing user reports
@@ -60,9 +93,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 ### Engineering
 - Slow engine work (system queries, session start/stop, report loading, deletion) runs
   via `spawn_blocking` — the async runtime and the UI thread never stall on it.
-- Rust test suite grew from 46 to 47 (PowerShell probe consistency; the timing
-  and panic-hook writers are exercised too); frontend gained its first test
-  suite (13 Vitest tests).
+- The update flow's security surfaces are unit-tested: SHA256SUMS line parsing
+  (including the GNU `*name` marker), the download-host allowlist (https +
+  GitHub hosts only, redirect-aware), and the numeric version comparison on
+  the engine side (mirroring the frontend's). The once-per-version decision
+  logic is a pure function with its own Vitest suite.
+- Rust test suite grew from 46 to 54; frontend grew from zero to 19 Vitest
+  tests (version comparison, error-to-dialog mapping, locale parity, and the
+  update-modal decision rules).
 
 ## [1.2.0] — 2026-09-04
 

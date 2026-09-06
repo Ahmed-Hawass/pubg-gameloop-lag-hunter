@@ -8,6 +8,8 @@ pub mod settings;
 pub mod storage;
 pub mod system;
 pub mod types;
+pub mod update;
+pub mod version;
 
 /// The one true version string — set by tauri-build from tauri.conf.json
 /// (releases are tagged by hand when attaching to a GitHub release). Read

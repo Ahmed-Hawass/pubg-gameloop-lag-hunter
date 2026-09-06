@@ -91,10 +91,10 @@ export const ar: Locale = {
   seeGame: "اكتشاف تشغيل PUBG Mobile داخل GameLoop",
   gpuCountersOff: "غير متاح على هذا الجهاز، لذا سيظهر كرت الشاشة كـ \"--\" أثناء الفحص.",
   seePs: "الضبط الدقيق للجهاز (PowerShell)",
-  seePsOff: "غير متاح — الفحص يعمل، لكن ضبط الجهاز وتصحيح الساعة بيتجاوزوا.",
+  seePsOff: "غير متاح. الفحص يعمل، لكن ضبط الجهاز وتصحيح الساعة بيتجاوزوا.",
   psLimitedTitle: "الأداة شغالة في وضع محدود",
   psLimitedBody:
-    "PowerShell مش متاح على جهازك، فبعض الفحوصات بتشتغل على إعدادات افتراضية آمنة: ضبط الجهاز على مقاسه بيتعملش، الأوقات ممكن تظهر بتوقيت UTC، وكشف توقف كرت الشاشة متوقف. الفحص نفسه شغال عادي — العدادات الأساسية بتتقرأ من ويندوز مباشرة.",
+    "PowerShell مش متاح على جهازك، فبعض الفحوصات بتشتغل على إعدادات افتراضية آمنة: ضبط الجهاز على مقاسه بيتعملش، والأوقات ممكن تظهر بتوقيت UTC، وكشف توقف كرت الشاشة متوقف. الفحص نفسه شغال عادي والعدادات الأساسية بتتقرأ من ويندوز مباشرة.",
 
 
   // ---- top processes tab ----
@@ -138,6 +138,20 @@ export const ar: Locale = {
   aboutSupport: "اشترِ لي قهوة",
   aboutMade: "صُنع باستخدام",
   version: "الإصدار",
+
+  // ---- update modal ----
+  updateAvailableTitle: "يتوفر إصدار جديد",
+  updateDownload: "تحديث",
+  updateClose: "إغلاق",
+  updateCancel: "إلغاء",
+  updateDownloading: "جارٍ التنزيل…",
+  updateRetry: "أعد المحاولة",
+  updateDoneTitle: "تم تنزيل التحديث",
+  updateDoneHint: "أغلق الأداة وشغّل الملف الجديد متى ما كنت مستعدًا.",
+  updateOpenFolder: "افتح المجلد",
+  updateOk: "تمام",
+  updateFailedTitle: "فشل التنزيل",
+  updateNotesLabel: "ملاحظات الإصدار",
 
   // ---- monitor: controls ----
   startScanning: "ابدأ",

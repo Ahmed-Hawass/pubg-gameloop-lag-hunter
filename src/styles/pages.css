@@ -389,6 +389,22 @@
   gap: 14px;
   flex-wrap: wrap;
 }
+/* the dot beside the Updates heading — mirrors the sidebar's About dot:
+   warn-yellow like the "new version" copy, never green */
+.about-h {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.about-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warn);
+  display: inline-block;
+  margin-inline-start: 2px;
+}
 .about-result {
   font-size: 12px;
 }

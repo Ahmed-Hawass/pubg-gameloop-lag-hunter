@@ -89,10 +89,10 @@ export const en = {
   seeGame: "PUBG Mobile detection (GameLoop)",
   gpuCountersOff: "Not available on this machine. GPU shows \"--\" during scans.",
   seePs: "System fine-tuning (PowerShell)",
-  seePsOff: "Unavailable — scans still work, but machine tuning and clock correction are skipped.",
+  seePsOff: "Unavailable. Scans still work, but machine tuning and clock correction are skipped.",
   psLimitedTitle: "Running in limited mode",
   psLimitedBody:
-    "PowerShell is unavailable, so some checks run on safe defaults: machine tuning is skipped, clock times may read in UTC, and GPU pause/resume detection is muted. Scans still work — the core counters are native Windows.",
+    "PowerShell is unavailable, so some checks run on safe defaults: machine tuning is skipped, clock times may read in UTC, and GPU pause/resume detection is muted. Scans still work; the core counters are native Windows.",
 
   // ---- top processes tab ----
   topProcessesHint:
@@ -136,6 +136,20 @@ export const en = {
   aboutSupport: "Buy me a coffee",
   aboutMade: "Made with",
   version: "Version",
+
+  // ---- update modal ----
+  updateAvailableTitle: "A new version is available",
+  updateDownload: "Update",
+  updateClose: "Close",
+  updateCancel: "Cancel",
+  updateDownloading: "Downloading…",
+  updateRetry: "Try again",
+  updateDoneTitle: "Update downloaded",
+  updateDoneHint: "Close the app and run the new file whenever you're ready.",
+  updateOpenFolder: "Open folder",
+  updateOk: "Done",
+  updateFailedTitle: "Download failed",
+  updateNotesLabel: "Release notes",
 
   // ---- monitor: controls ----
   startScanning: "Start",

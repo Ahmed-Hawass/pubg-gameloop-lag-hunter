@@ -264,6 +264,87 @@ fn set_auto_stop(minutes: u32) -> Result<u32, String> {
     Ok(s.auto_stop_minutes)
 }
 
+// ---- update flow (see engine/update.rs for the scope contract) ----------
+// check at boot + manual check from About; download only ever starts from
+// an explicit user click; verification against SHA256SUMS is mandatory.
+
+/// Ask GitHub whether a newer release exists. Ok(None) = nothing newer.
+/// The IPC thread never blocks — the HTTP call is parked on the blocking
+/// pool (GitHub latency, offline machines, proxy timeouts).
+#[tauri::command]
+async fn check_update() -> Result<Option<engine::update::UpdateInfo>, String> {
+    let _t = engine::logging::timed("ipc: check_update");
+    let local = engine::VERSION.to_string();
+    tauri::async_runtime::spawn_blocking(move || engine::update::check_latest(&local))
+        .await
+        .map_err(|e| format!("check failed: {e}"))
+}
+
+/// Was this version's modal already announced once? (once-per-version rule)
+#[tauri::command]
+fn update_already_announced(version: String) -> bool {
+    engine::settings::load()
+        .announced_update_version
+        .as_deref()
+        .map(|v| v.eq_ignore_ascii_case(&version))
+        .unwrap_or(false)
+}
+
+/// Mark a version as announced (called when the modal is SHOWN).
+#[tauri::command]
+fn announce_update(version: String) -> Result<(), String> {
+    let mut s = engine::settings::load();
+    s.announced_update_version = Some(version);
+    engine::settings::save(&s)
+}
+
+/// Download the update to `dest`, streaming progress over `on_event`.
+/// The channel carries Progress events; the final result arrives as the
+/// command's own return (Ok(path) / Err(reason)) — the UI updates its
+/// modal from both.
+#[tauri::command]
+async fn download_update(
+    info: engine::update::UpdateInfo,
+    dest: String,
+    on_event: tauri::ipc::Channel<engine::update::DownloadEvent>,
+) -> Result<String, String> {
+    let _t = engine::logging::timed_with("ipc: download_update", 10_000);
+    let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    // register the global cancel handle so app-exit / user-cancel can kill it
+    engine::update::register_cancel(cancel.clone());
+    let info = std::sync::Arc::new(info);
+    let res = tauri::async_runtime::spawn_blocking(move || {
+        engine::update::download_and_verify(&info, std::path::PathBuf::from(dest), &cancel, {
+            let on_event = on_event.clone();
+            move |ev| {
+                let _ = on_event.send(ev);
+            }
+        })
+    })
+    .await
+    .map_err(|e| format!("download task failed: {e}"))?;
+    if res.is_err() {
+        // cancelled or failed — make sure no partial file survives
+        engine::update::cleanup_active_download();
+    }
+    res
+}
+
+/// Cancel the running download (the modal's cancel button / app exit).
+#[tauri::command]
+fn cancel_update_download() {
+    engine::update::cancel_active();
+}
+
+/// Open Explorer with the downloaded file selected (the success state).
+#[tauri::command]
+async fn open_download_folder(path: String) -> Result<(), String> {
+    let _t = engine::logging::timed("ipc: open_download_folder");
+    tauri::async_runtime::spawn_blocking(move || engine::update::open_folder_selected(&path))
+        .await
+        .map_err(|e| format!("open folder task failed: {e}"))?
+}
+
 #[tauri::command]
 fn open_path(path: &str, app: tauri::AppHandle) -> Result<(), String> {
     // open files/folders with the shell default handler — via the official plugin.
@@ -362,6 +443,9 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        // native save dialog for the update download (official plugin —
+        // never hand-rolled Win32 FFI, per the user32 lesson in sampler.rs)
+        .plugin(tauri_plugin_dialog::init())
         // ONE instance only: a second launch focuses the existing window and exits.
         // Two instances would race over the same sessions folder (same-second ids collide).
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -394,10 +478,19 @@ pub fn run() {
             open_path,
             open_url,
             get_version,
+            check_update,
+            update_already_announced,
+            announce_update,
+            download_update,
+            cancel_update_download,
+            open_download_folder,
         ])
         .on_window_event(|window, event| {
             // graceful exit: a running session finalizes its files before the app dies
             if let tauri::WindowEvent::CloseRequested { .. } = event {
+                // an in-flight update download is cancelled and its partial
+                // file removed — nothing half-written outlives the app
+                engine::update::cancel_active();
                 if let Some(eng) = session::global() {
                     if eng.status() == engine::types::SessionStatus::Running {
                         let _ = eng.stop();

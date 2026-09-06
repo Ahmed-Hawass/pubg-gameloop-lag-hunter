@@ -22,10 +22,11 @@ import { ChecksView } from "./views/ChecksView";
 import { AboutView } from "./views/AboutView";
 import { SettingsView } from "./views/SettingsView";
 import { WelcomeView } from "./views/WelcomeView";
-import { api, onEngineState, onGameloopChange, type StatusPayload } from "./bridge";
+import { api, onEngineState, onGameloopChange, type StatusPayload, type UpdateInfo } from "./bridge";
 import { useLang } from "./i18n";
-import { isNewerRelease } from "./version";
 import { errorDialog } from "./errors";
+import { shouldShowUpdateModal } from "./updateFlow";
+import { UpdateModal } from "./components/UpdateModal";
 
 type View = "monitor" | "system" | "processes" | "checks" | "reports" | "settings" | "about";
 
@@ -57,37 +58,48 @@ export default function App() {
   /** the session deleted from Reports — resets the whole finished state */
   const [deletedSession, setDeletedSession] = useState<string | null>(null);
   /** a newer version is available on GitHub (checked at startup, quietly) */
-  const [updateAvailable, setUpdateAvailable] = useState(false);
-  const [updateUrl, setUpdateUrl] = useState<string | null>(null);
+  /** a newer version is available on GitHub (checked at startup, quietly) */
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  /** the update modal: shown at startup (once per version) or via manual check */
+  const [updateModal, setUpdateModal] = useState(false);
+  /** first-run advice is up this launch — the update modal defers (one modal
+      surface at a time; the advice has priority) */
+  const [adviceUp, setAdviceUp] = useState(false);
   /** PowerShell probe result — true = limited mode banner on the monitor */
   const [psLimited, setPsLimited] = useState(false);
 
-  // quiet startup update check — sets the About badge only, never interrupts.
-  // version comes from the backend (tauri.conf.json) so it can never drift.
-  const [appVersion, setAppVersion] = useState<string>("");
-
+  // quiet startup update check — the ENGINE does the asking (Rust, blocking
+  // pool, allowlisted hosts). The UI only decides whether to show the modal.
   useEffect(() => {
+    let cancelled = false;
     api
-      .getVersion()
-      .then(setAppVersion)
-      .catch(() => setAppVersion(""));
+      .checkUpdate()
+      .then((info) => {
+        if (cancelled || !info) return;
+        setUpdateInfo(info);
+      })
+      .catch(() => {}); // offline/unavailable — silence, exactly like today
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
+  // the once-per-version rule (pure logic in updateFlow.ts). Gated by
+  // onboardingDone: a FIRST-RUN user must never meet the update modal —
+  // not over the welcome screen, not over the advice dialog that follows
+  // it. The version is announced only when the modal truly shows.
   useEffect(() => {
-    if (!appVersion) return;
-    fetch(`https://api.github.com/repos/Ahmed-Hawass/pubg-gameloop-lag-hunter/releases/latest?t=${Date.now()}`, {
-      headers: { Accept: "application/vnd.github+json" },
-    })
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((d: { tag_name?: string; html_url?: string }) => {
-        const remote = (d.tag_name ?? "").replace(/^v/, "");
-        if (isNewerRelease(remote, appVersion)) {
-          setUpdateAvailable(true);
-          setUpdateUrl(d.html_url ?? null);
+    if (!updateInfo || onboardingDone !== true) return;
+    void api
+      .updateAlreadyAnnounced(updateInfo.version)
+      .then((announced) => {
+        if (shouldShowUpdateModal(updateInfo, adviceUp, announced ? updateInfo.version : null)) {
+          setUpdateModal(true);
+          void api.announceUpdate(updateInfo.version).catch(() => {});
         }
       })
       .catch(() => {});
-  }, [appVersion]);
+  }, [updateInfo, adviceUp, onboardingDone]);
 
   // state pushes land here (live + final): a finished session caused by
   // GameLoop dying gets its explanation dialog — once per session, never
@@ -202,9 +214,13 @@ export default function App() {
   useEffect(() => {
     if (onboardingDone && !adviceShown && !wasOnboardedRef.current) {
       setAdviceShown(true);
+      setAdviceUp(true); // the update modal defers while this is up
       setToastTitle(t.dialog.firstRunAdvice);
       setToastBody(t.dialog.firstRunAdviceBody);
       setToast("first_run_advice");
+    } else if (onboardingDone) {
+      // advice not showing this launch — the modal may show after all
+      setAdviceUp(false);
     }
   }, [onboardingDone]);
 
@@ -266,6 +282,10 @@ export default function App() {
                 >
                   <Info size={17} />
                   {!collapsed ? <span>{t.about}</span> : null}
+                  {/* the update dot: not dismissible, present for the whole
+                      life of the newer version — the silent signal behind
+                      the once-per-version modal */}
+                  {updateInfo ? <span className="sb-dot" aria-label={t.updateAvailableTitle} /> : null}
                 </button>
               </Tip>
 
@@ -313,7 +333,10 @@ export default function App() {
                 <SettingsView />
               </div>
               <div className={view === "about" ? "" : "is-hidden-view"}>
-                <AboutView updateAvailable={updateAvailable} updateUrl={updateUrl} />
+                <AboutView
+                  updateInfo={updateInfo}
+                  onOpenUpdateModal={() => setUpdateModal(true)}
+                />
               </div>
               <div className={view === "reports" ? "" : "is-hidden-view"}>
                 <ReportsView
@@ -328,7 +351,9 @@ export default function App() {
         )}
       </div>
 
-      {/* the ONE modal surface — no toasts anywhere in the app */}
+      {/* the ONE modal surface — no toasts anywhere in the app.
+          Order matters: the advice/error dialog wins over the update modal;
+          the update modal (with its live download) wins over nothing else. */}
       {toast ? (
         <Dialog
           title={toastTitle ?? t.dialog.somethingWrong}
@@ -341,6 +366,8 @@ export default function App() {
             setToastBody(null);
           }}
         />
+      ) : updateModal && updateInfo ? (
+        <UpdateModal info={updateInfo} onClose={() => setUpdateModal(false)} />
       ) : null}
     </div>
   );
