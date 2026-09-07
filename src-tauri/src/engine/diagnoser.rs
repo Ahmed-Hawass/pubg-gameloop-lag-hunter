@@ -3,6 +3,14 @@
 
 use super::types::{Diagnosis, EngineEvent, Overall, Phase, Sample, Severity, UiState};
 
+/// How recent an event must be to count as live evidence for a card.
+/// Was a bare inline `5 * 60 * 1000` — now named, and every window reads it.
+const LIVE_WINDOW_MS: i64 = 5 * 60 * 1000;
+/// How far back the correlator looks for a cliff that could confirm a wake
+/// card. Must be ≥ LIVE_WINDOW_MS (a cliff can age out of the live window
+/// while the wake it confirmed is still open — the pairing survives here).
+const CORRELATION_WINDOW_MS: i64 = 15 * 60 * 1000;
+
 /// Map an engine event to a diagnosis key.
 fn key_for(ev: &EngineEvent, latest: &Sample) -> &'static str {
     match ev.kind.as_str() {
@@ -11,7 +19,7 @@ fn key_for(ev: &EngineEvent, latest: &Sample) -> &'static str {
         "cpu_throttle" | "spike" => "cpu_throttle",
         "mem_pressure" => "mem_low",
         "gpu_mem_idle" => "gpu_wake",
-        "render_stall" => {
+        "gpu_activity_cliff" => {
             // healthy elsewhere → scene hitch; loaded → gpu busy
             let others_ok = latest.disk_queue.map(|q| q < 0.5).unwrap_or(true)
                 && latest.cpu_total.map(|c| c < 85.0).unwrap_or(true);
@@ -21,7 +29,7 @@ fn key_for(ev: &EngineEvent, latest: &Sample) -> &'static str {
                 "gpu_busy"
             }
         }
-        "render_stall_loaded" => "gpu_busy",
+        "gpu_activity_cliff_loaded" => "gpu_busy",
         "gpu_clock_low" | "gpu_temp" => "gpu_busy",
         _ => "",
     }
@@ -118,7 +126,7 @@ fn diagnoses_from(events: &[EngineEvent], latest: &Sample, now_iso: &str) -> Vec
             continue;
         }
         let ev_ms = iso_ms(&ev.t).unwrap_or(0);
-        if now_ms.saturating_sub(ev_ms) > 5 * 60 * 1000 {
+        if now_ms.saturating_sub(ev_ms) > LIVE_WINDOW_MS {
             continue; // outside the live window
         }
         let key = key_for(ev, latest);
@@ -156,20 +164,42 @@ fn diagnoses_from(events: &[EngineEvent], latest: &Sample, now_iso: &str) -> Vec
         }
     }
     // still-open conditions count time elapsed since their Start (once)
-    for (key, start_ms) in open_starts {
+    for (key, start_ms) in &open_starts {
         if let Some(entry) = buckets.get_mut(key) {
-            entry.0 += now_ms.saturating_sub(start_ms).min(5 * 60 * 1000);
+            entry.0 += now_ms.saturating_sub(*start_ms).min(LIVE_WINDOW_MS);
         }
     }
 
     // pass 2: a bucket earns a card only with ≥3s of confirmed evidence
     let mut out: Vec<Diagnosis> = Vec::new();
-    // CORRELATION EVIDENCE: did a real freeze happen in the live window?
-    // gpu_wake claims "that transition appeared as a visible hitch" — the
-    // card only exists if a render_stall (a measured SM cliff) backs it.
+    // CORRELATION EVIDENCE: did a real activity collapse happen in the live
+    // window, and did it happen DURING or AFTER the wake it explains? A
+    // cliff from BEFORE the wake started is not evidence for it — the old
+    // 15-minute window used to let a stall from 12 minutes prior "confirm"
+    // a wake card (false correlation).
+    // First: the EARLIEST wake start in the evidence stream (open or closed),
+    // so a cliff that precedes every wake cannot ride on any of them.
+    let wake_first_start_ms = events
+        .iter()
+        .filter(|e| e.kind == "gpu_mem_idle" && e.phase == Phase::Start)
+        .filter_map(|e| iso_ms(&e.t))
+        .min();
     let stall_evidence = events.iter().any(|e| {
-        e.kind.starts_with("render_stall")
-            && matches!(iso_ms(&e.t), Some(ev_ms) if now_ms.saturating_sub(ev_ms) <= 15 * 60 * 1000)
+        if !e.kind.starts_with("gpu_activity_cliff") {
+            return false;
+        }
+        let Some(ev_ms) = iso_ms(&e.t) else {
+            return false;
+        };
+        if now_ms.saturating_sub(ev_ms) > CORRELATION_WINDOW_MS {
+            return false; // too old to matter
+        }
+        // the cliff must fall inside (or after) a wake window: an earlier
+        // collapse explains nothing about a later wake
+        match wake_first_start_ms {
+            Some(wake_start_ms) => ev_ms >= wake_start_ms,
+            None => false, // no wake at all — nothing for a cliff to confirm
+        }
     });
     for (key, (sustained_ms, _last, raw_sev)) in &buckets {
         if *sustained_ms < 3000 {
@@ -253,7 +283,7 @@ pub fn build_ui_state(inp: UiStateInput) -> UiState {
     let diagnoses = diagnoses_from(events, &latest, &now_iso);
     let lag_count = events
         .iter()
-        .filter(|e| e.kind.starts_with("render_stall") || e.kind == "spike")
+        .filter(|e| e.kind.starts_with("gpu_activity_cliff") || e.kind == "spike")
         .count() as u32;
 
     let pct = |v: Option<f64>| -> Option<u8> { v.map(|x| x.clamp(0.0, 100.0) as u8) };
@@ -318,7 +348,7 @@ pub fn build_ui_state(inp: UiStateInput) -> UiState {
     let start_ms = started_at.and_then(iso_ms);
     let spikes: Vec<super::types::SpikeMark> = events
         .iter()
-        .filter(|e| e.kind.starts_with("render_stall") || e.kind == "spike")
+        .filter(|e| e.kind.starts_with("gpu_activity_cliff") || e.kind == "spike")
         .filter_map(|e| {
             let ev_ms = iso_ms(&e.t)?;
             let start = start_ms?;
@@ -536,9 +566,9 @@ mod tests {
     }
 
     #[test]
-    fn gpu_wake_with_stall_earns_card() {
-        // same wake evidence, but a render_stall freeze happened right after
-        // the wake — correlation confirms the hitch was real
+    fn gpu_wake_with_cliff_earns_card() {
+        // same wake evidence, but a GPU activity cliff happened DURING the
+        // wake window — correlation confirms the hitch was real
         let events = vec![
             ev(
                 "gpu_mem_idle",
@@ -548,7 +578,7 @@ mod tests {
                 None,
             ),
             ev(
-                "render_stall",
+                "gpu_activity_cliff",
                 Phase::Instant,
                 Severity::Crit,
                 "2026-08-31T05:00:05.000Z",
@@ -567,7 +597,44 @@ mod tests {
         let d = diagnoses_from(&events, &latest, now);
         assert!(
             d.iter().any(|x| x.key == "gpu_wake"),
-            "a wake followed by a measured freeze is a confirmed hitch"
+            "a wake followed by a measured activity cliff is a confirmed hitch"
+        );
+    }
+
+    #[test]
+    fn cliff_before_wake_is_not_evidence_for_it() {
+        // the false-correlation bug: a cliff at 04:55 used to "confirm" a
+        // wake that only started at 05:00 — an earlier collapse explains
+        // nothing about a later wake. The card must NOT appear.
+        let events = vec![
+            ev(
+                "gpu_activity_cliff",
+                Phase::Instant,
+                Severity::Crit,
+                "2026-08-31T05:00:00.000Z", // cliff FIRST
+                None,
+            ),
+            ev(
+                "gpu_mem_idle",
+                Phase::Start,
+                Severity::Warn,
+                "2026-08-31T05:00:01.000Z", // wake starts AFTER
+                None,
+            ),
+            ev(
+                "gpu_mem_idle",
+                Phase::End,
+                Severity::Ok,
+                "2026-08-31T05:00:20.000Z",
+                Some(19.0),
+            ),
+        ];
+        let latest = Sample::default();
+        let now = "2026-08-31T05:00:21.000Z";
+        let d = diagnoses_from(&events, &latest, now);
+        assert!(
+            !d.iter().any(|x| x.key == "gpu_wake"),
+            "evidence must fall inside the window it explains, not before it"
         );
     }
 }

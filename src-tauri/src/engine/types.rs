@@ -60,7 +60,7 @@ pub struct ProcInfo {
 /// Raw engine event, produced by the Detector. Phase = state transitions.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EngineEvent {
-    /// Machine key, e.g. "disk_queue", "render_stall"
+    /// Machine key, e.g. "disk_queue", "gpu_activity_cliff"
     pub kind: String,
     /// "start" | "end" | "instant"
     pub phase: Phase,
@@ -196,7 +196,7 @@ pub struct FeedEntry {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpikeMark {
     pub offset_ms: i64,
-    /// machine key: "render_stall" | "spike" | ...
+    /// machine key: "gpu_activity_cliff" | "spike" | ...
     pub kind: String,
 }
 

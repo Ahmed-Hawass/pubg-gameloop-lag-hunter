@@ -339,7 +339,10 @@ while ($true) {{
                 };
                 match key {
                     "cpu" => s.cpu_total = Some(v),
-                    "perf" => s.proc_perf = Some(v),
+                    // same sentinel guard as the typeperf path: a negative
+                    // performance ratio is a PDH glitch, not a measurement
+                    "perf" if v >= 0.0 => s.proc_perf = Some(v),
+                    "perf" => {}
                     "avail" => s.avail_mb = Some(v),
                     "pages_in" => s.pages_in = Some(v),
                     "disk_q" => s.disk_queue = Some(v),
@@ -457,7 +460,13 @@ where
                 let Ok(v) = raw.parse::<f64>() else { continue };
                 match *key {
                     "cpu" => s.cpu_total = Some(v),
-                    "perf" => s.proc_perf = Some(v),
+                    // % Processor Performance is a ratio: physically it cannot
+                    // go below ~0. typeperf occasionally emits a sentinel
+                    // (-1) on transient PDH glitches; accepting it produced
+                    // phantom "cpu_throttle" crit events (perf=-1 under 51%
+                    // load). A negative reading is no reading.
+                    "perf" if v >= 0.0 => s.proc_perf = Some(v),
+                    "perf" => {}
                     "avail" => s.avail_mb = Some(v),
                     "pages_in" => s.pages_in = Some(v),
                     "disk_q" => s.disk_queue = Some(v),

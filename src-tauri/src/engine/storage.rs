@@ -464,7 +464,7 @@ fn classify_events(dir: &Path) -> (u64, u64) {
         if sev == "ok" || kind.is_empty() {
             continue;
         }
-        if kind.starts_with("render_stall") || kind == "spike" {
+        if kind.starts_with("gpu_activity_cliff") || kind == "spike" {
             spikes += 1;
         }
         if phase != "end" {
@@ -738,8 +738,8 @@ fn finding_key(kind: &str) -> &'static str {
         "cpu_throttle" | "spike" => "cpu_throttle",
         "mem_pressure" => "mem_low",
         "gpu_mem_idle" => "gpu_wake",
-        "render_stall" => "scene_hitch",
-        "render_stall_loaded" => "gpu_busy",
+        "gpu_activity_cliff" => "scene_hitch",
+        "gpu_activity_cliff_loaded" => "gpu_busy",
         "gpu_clock_low" | "gpu_temp" => "gpu_busy",
         _ => "gpu_busy",
     }
@@ -778,9 +778,9 @@ fn finding_copy(kind: &str) -> (&'static str, &'static str, &'static str, &'stat
             "In the GPU control panel, set power management to 'Prefer maximum performance' for every GameLoop process. If it still appears, the driver is trimming memory clocks in light scenes — common on laptops with hybrid graphics; the effect is usually a brief hitch, not a persistent problem.",
             "medium",
         ),
-        "render_stall" => (
-            "Sudden frame freeze",
-            "Rendering stopped for a moment while everything else looked healthy — a classic first-load hitch.",
+        "gpu_activity_cliff" => (
+            "Sudden GPU activity collapse",
+            "GPU activity dropped sharply while everything else looked healthy — a visible hitch (first-load or scene transition).",
             "No permanent fix — it fades as scenes repeat and shrinks with GPU driver updates.",
             "low",
         ),
@@ -858,8 +858,8 @@ mod tests {
         let _ = fs::remove_dir_all(&d);
         fs::create_dir_all(&d).unwrap();
         let events = serde_json::json!([
-            {"kind": "render_stall", "severity": "crit", "phase": "instant"},
-            {"kind": "render_stall", "severity": "crit", "phase": "instant"},
+            {"kind": "gpu_activity_cliff", "severity": "crit", "phase": "instant"},
+            {"kind": "gpu_activity_cliff", "severity": "crit", "phase": "instant"},
             {"kind": "cpu_saturation", "severity": "warn", "phase": "start"},
             {"kind": "cpu_saturation", "severity": "ok", "phase": "end"},
             {"kind": "disk_queue", "severity": "warn", "phase": "start"}

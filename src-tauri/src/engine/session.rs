@@ -197,16 +197,21 @@ impl Engine {
         match sampler::query_game_visible() {
             Some(vis) => {
                 super::logging::info(&format!("game window visible at start: {vis}"));
-                *LATEST_VISIBLE.lock().unwrap_or_else(|p| p.into_inner()) = Some(vis);
+                *LATEST_VISIBLE.lock().unwrap_or_else(|p| p.into_inner()) =
+                    Some(Timestamped::fresh(vis));
             }
             None => super::logging::info("game window visibility unknown at start (probe returned None)"),
         }
 
         // ---- spawn streaming sources ----
         // Routes thread callbacks to the global engine instance (set in lib.rs).
+        reset_snapshots(); // no evidence survives from a previous session
         let running = Arc::clone(&self.running_flag);
         running.store(true, Ordering::SeqCst);
-        let _ = FIRST_SAMPLE_AT.set(Instant::now());
+        {
+            let mut slot = FIRST_SAMPLE_AT.lock().unwrap_or_else(|p| p.into_inner());
+            *slot = Some(Instant::now());
+        }
 
         match sampler::spawn_typeperf(1, Arc::clone(&self.running_flag), |s| {
             route_on_sample(s);
@@ -303,13 +308,37 @@ impl Engine {
             return;
         }
 
-        // attach the freshest GPU + emulator + window-visibility snapshot
+        // attach the freshest GPU + emulator + window-visibility snapshot —
+        // freshness-gated: a snapshot older than SNAPSHOT_TTL is dropped to
+        // None instead of being worn as fresh evidence (stale attribution)
         let mut s = raw;
-        if let Some(g) = LATEST_GPU.lock().unwrap_or_else(|p| p.into_inner()).clone() {
+        if let Some(g) = LATEST_GPU
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .as_ref()
+            .and_then(|t| t.get())
+            .cloned()
+        {
             s.gpu = Some(g);
         }
-        s.emu = LATEST_EMU.lock().unwrap_or_else(|p| p.into_inner()).clone();
-        s.game_visible = *LATEST_VISIBLE.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some(emu) = LATEST_EMU
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .as_ref()
+            .and_then(|t| t.get())
+            .cloned()
+        {
+            s.emu = emu;
+        }
+        if let Some(vis) = LATEST_VISIBLE
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .as_ref()
+            .and_then(|t| t.get())
+            .copied()
+        {
+            s.game_visible = Some(vis);
+        }
 
         st.game_running = !s.emu.is_empty();
 
@@ -328,11 +357,9 @@ impl Engine {
 
         // first sample arriving is the health signal of the whole pipeline
         if st.samples_total == 1 {
-            if let Some(at) = FIRST_SAMPLE_AT.get() {
-                super::logging::perf(
-                    "pipeline: first sample",
-                    at.elapsed().as_millis(),
-                );
+            let slot = FIRST_SAMPLE_AT.lock().unwrap_or_else(|p| p.into_inner());
+            if let Some(at) = slot.as_ref() {
+                super::logging::perf("pipeline: first sample", at.elapsed().as_millis());
             }
         }
 
@@ -385,20 +412,20 @@ impl Engine {
 
     /// Called by the dmon thread for each GPU tick.
     fn on_gpu(&self, g: super::types::GpuSample) {
-        *LATEST_GPU.lock().unwrap_or_else(|p| p.into_inner()) = Some(g);
+        *LATEST_GPU.lock().unwrap_or_else(|p| p.into_inner()) = Some(Timestamped::fresh(g));
     }
 
     /// Emulator watcher thread body (called every ~5s while running).
     pub fn probe_emulator(&self) {
         if let Ok(procs) = sampler::query_emulator_procs() {
-            *LATEST_EMU.lock().unwrap_or_else(|p| p.into_inner()) = procs;
+            *LATEST_EMU.lock().unwrap_or_else(|p| p.into_inner()) = Some(Timestamped::fresh(procs));
         }
     }
 
     /// Window-visibility probe (called every ~10s from the guard thread).
     pub fn probe_visibility(&self) {
         if let Some(vis) = sampler::query_game_visible() {
-            *LATEST_VISIBLE.lock().unwrap_or_else(|p| p.into_inner()) = Some(vis);
+            *LATEST_VISIBLE.lock().unwrap_or_else(|p| p.into_inner()) = Some(Timestamped::fresh(vis));
         }
     }
 
@@ -432,10 +459,14 @@ impl Engine {
         if st.status != SessionStatus::Running {
             return true; // nothing to guard
         }
-        let alive = !LATEST_EMU
+        // freshness matters: a stale "alive" snapshot would keep the session
+        // running on ghost evidence after the probe thread itself died
+        let alive = LATEST_EMU
             .lock()
             .unwrap_or_else(|p| p.into_inner())
-            .is_empty();
+            .as_ref()
+            .map(|t| !t.value.is_empty())
+            .unwrap_or(false);
         if !alive {
             // first miss → arm the counter; 3 consecutive misses (~15s) → stop
             self.gameloop_misses.fetch_add(1, Ordering::SeqCst)
@@ -497,8 +528,10 @@ fn iso_ms_pub(iso: &str) -> Option<i64> {
 // pattern used throughout this file is inline unwrap_or_else (same behavior).
 
 /// When the CURRENT session's samplers were spawned — the first-sample log
-/// measures pipeline latency from here (spawn → first tick).
-static FIRST_SAMPLE_AT: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+/// measures pipeline latency from here (spawn → first tick). Reset at every
+/// start(): the old OnceLock version was set once per process, so session #2
+/// in the same run logged absurd latencies ("first sample: 860383ms").
+static FIRST_SAMPLE_AT: Mutex<Option<std::time::Instant>> = Mutex::new(None);
 
 fn total_ram_mb() -> f64 {
     use std::os::windows::process::CommandExt;
@@ -548,11 +581,52 @@ fn physical_disk_count() -> u32 {
 
 // ---- process-wide singletons ------------------------------------------------
 // LATEST_GPU / LATEST_EMU / LATEST_VISIBLE: freshest snapshots shared between
-// sampler threads. LATEST_VISIBLE: None = not probed yet (conservative mute).
+// sampler threads — each stamped with the moment it was captured, so samples
+// never attach evidence older than SNAPSHOT_TTL. LATEST_VISIBLE: None = not
+// probed yet (conservative mute). All three are cleared at every start():
+// a snapshot from a previous session is not evidence in this one.
 
-static LATEST_GPU: Mutex<Option<GpuSample>> = Mutex::new(None);
-static LATEST_EMU: Mutex<Vec<super::types::ProcInfo>> = Mutex::new(Vec::new());
-static LATEST_VISIBLE: Mutex<Option<bool>> = Mutex::new(None);
+/// How fresh a sampler snapshot must be to count as evidence. dmon emits at
+/// 1 Hz; anything older than 2s means the source stalled (or died) —
+/// attaching it would be stale attribution, the original "desktop GPU
+/// activity masquerading as in-game" bug in slow motion.
+const SNAPSHOT_TTL: Duration = Duration::from_secs(2);
+
+/// A sampler snapshot plus its capture time — freshness is part of the data.
+struct Timestamped<T> {
+    value: T,
+    at: Instant,
+}
+
+impl<T> Timestamped<T> {
+    fn fresh(value: T) -> Self {
+        Self {
+            value,
+            at: Instant::now(),
+        }
+    }
+    /// Some(value) when inside the TTL, None when stale.
+    fn get(&self) -> Option<&T> {
+        if self.at.elapsed() <= SNAPSHOT_TTL {
+            Some(&self.value)
+        } else {
+            None
+        }
+    }
+}
+
+static LATEST_GPU: Mutex<Option<Timestamped<GpuSample>>> = Mutex::new(None);
+static LATEST_EMU: Mutex<Option<Timestamped<Vec<super::types::ProcInfo>>>> = Mutex::new(None);
+static LATEST_VISIBLE: Mutex<Option<Timestamped<bool>>> = Mutex::new(None);
+
+/// Drop every cross-session snapshot so a new session starts from zero
+/// evidence. Called at every start(): the old bug — session #2 silently
+/// inherited session #1's GPU/visibility snapshots (fresh-looking but old).
+pub fn reset_snapshots() {
+    *LATEST_GPU.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    *LATEST_EMU.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    *LATEST_VISIBLE.lock().unwrap_or_else(|p| p.into_inner()) = None;
+}
 
 /// The global engine instance (created once in lib.rs, leaked).
 static GLOBAL_ENGINE: std::sync::OnceLock<&'static Engine> = std::sync::OnceLock::new();
