@@ -18,6 +18,7 @@ fn key_for(ev: &EngineEvent, latest: &Sample) -> &'static str {
         "cpu_saturation" => "cpu_busy",
         "cpu_throttle" | "spike" => "cpu_throttle",
         "mem_pressure" => "mem_low",
+        "paging_churn" => "paging_churn",
         "gpu_mem_idle" => "gpu_wake",
         "gpu_activity_cliff" => {
             // healthy elsewhere → scene hitch; loaded → gpu busy
@@ -74,6 +75,13 @@ pub fn diagnosis_copy(
             "Memory pressure",
             "Close background apps and increase the pagefile (or add more GameLoop RAM)",
             "high",
+        ),
+        "paging_churn" => (
+            "Background file shuffling",
+            "The system was moving game files between RAM and disk in the background, even though both were running normally. It's normal housekeeping, not a shortage, but each move can show up as a tiny hitch.",
+            "Memory manager trimming game working sets to standby (healthy RAM + flat disk queue + sustained page reads)",
+            "Give GameLoop more RAM in its settings. If it keeps happening, increase the pagefile size on an SSD.",
+            "medium",
         ),
         "gpu_wake" => (
             "GPU waking from sleep",
@@ -201,6 +209,36 @@ fn diagnoses_from(events: &[EngineEvent], latest: &Sample, now_iso: &str) -> Vec
             None => false, // no wake at all — nothing for a cliff to confirm
         }
     });
+    // PAGING CORRELATION: a churn card must be backed by a cliff that fell
+    // INSIDE a churn window (same direction as the wake rule: the evidence
+    // must occur during the condition it explains). A churn with zero
+    // correlated stutters is background behavior — feed-only observation.
+    let churn_first_start_ms = events
+        .iter()
+        .filter(|e| e.kind == "paging_churn" && e.phase == Phase::Start)
+        .filter_map(|e| iso_ms(&e.t))
+        .min();
+    let churn_last_end_ms = events
+        .iter()
+        .filter(|e| e.kind == "paging_churn" && e.phase == Phase::End)
+        .filter_map(|e| iso_ms(&e.t))
+        .max();
+    let churn_evidence = events.iter().any(|e| {
+        if !e.kind.starts_with("gpu_activity_cliff") {
+            return false;
+        }
+        let Some(ev_ms) = iso_ms(&e.t) else {
+            return false;
+        };
+        if now_ms.saturating_sub(ev_ms) > CORRELATION_WINDOW_MS {
+            return false;
+        }
+        match (churn_first_start_ms, churn_last_end_ms) {
+            (Some(start), Some(end)) => ev_ms >= start && ev_ms <= end,
+            (Some(start), None) => ev_ms >= start,
+            _ => false,
+        }
+    });
     for (key, (sustained_ms, _last, raw_sev)) in &buckets {
         if *sustained_ms < 3000 {
             continue; // blip — feed-worthy, not card-worthy
@@ -208,6 +246,11 @@ fn diagnoses_from(events: &[EngineEvent], latest: &Sample, now_iso: &str) -> Vec
         // a wake-up story without a measured freeze is an observation, not a
         // confirmed problem — it stays in the feed only
         if *key == "gpu_wake" && !stall_evidence {
+            continue;
+        }
+        // churn without a correlated stutter is background paging, not a
+        // confirmed problem — the feed keeps the observation
+        if *key == "paging_churn" && !churn_evidence {
             continue;
         }
         // SUBORDINATION: a short CPU spike riding a strong disk storm is a
@@ -635,6 +678,110 @@ mod tests {
         assert!(
             !d.iter().any(|x| x.key == "gpu_wake"),
             "evidence must fall inside the window it explains, not before it"
+        );
+    }
+
+    // ---- paging churn: observation vs confirmed card ------------------------
+
+    #[test]
+    fn churn_without_stutter_stays_in_feed() {
+        // minutes of sustained churn (duration ≥3s earns the bucket) but
+        // ZERO measured cliffs inside it — background reordering, not a
+        // confirmed problem. No card; the feed keeps the observation.
+        let events = vec![
+            ev(
+                "paging_churn",
+                Phase::Start,
+                Severity::Warn,
+                "2026-08-31T05:00:00.000Z",
+                None,
+            ),
+            ev(
+                "paging_churn",
+                Phase::End,
+                Severity::Ok,
+                "2026-08-31T05:00:40.000Z",
+                Some(40.0),
+            ),
+        ];
+        let latest = Sample::default();
+        let now = "2026-08-31T05:00:41.000Z";
+        let d = diagnoses_from(&events, &latest, now);
+        assert!(
+            !d.iter().any(|x| x.key == "paging_churn"),
+            "churn without a correlated stutter is an observation, not a card"
+        );
+    }
+
+    #[test]
+    fn churn_with_cliff_inside_earns_card() {
+        // same churn window, but a GPU activity cliff fired mid-churn — the
+        // temporal overlap is the correlation that upgrades the observation
+        let events = vec![
+            ev(
+                "paging_churn",
+                Phase::Start,
+                Severity::Warn,
+                "2026-08-31T05:00:00.000Z",
+                None,
+            ),
+            ev(
+                "gpu_activity_cliff",
+                Phase::Instant,
+                Severity::Crit,
+                "2026-08-31T05:00:12.000Z", // inside the churn window
+                None,
+            ),
+            ev(
+                "paging_churn",
+                Phase::End,
+                Severity::Ok,
+                "2026-08-31T05:00:40.000Z",
+                Some(40.0),
+            ),
+        ];
+        let latest = Sample::default();
+        let now = "2026-08-31T05:00:41.000Z";
+        let d = diagnoses_from(&events, &latest, now);
+        assert!(
+            d.iter().any(|x| x.key == "paging_churn"),
+            "churn with a stutter inside it is a confirmed, explained problem"
+        );
+    }
+
+    #[test]
+    fn churn_with_cliff_outside_stays_in_feed() {
+        // churn window 05:00-05:00:40, but the cliff fired AFTER the churn
+        // ended — no overlap, no correlation, no card
+        let events = vec![
+            ev(
+                "paging_churn",
+                Phase::Start,
+                Severity::Warn,
+                "2026-08-31T05:00:00.000Z",
+                None,
+            ),
+            ev(
+                "paging_churn",
+                Phase::End,
+                Severity::Ok,
+                "2026-08-31T05:00:40.000Z",
+                Some(40.0),
+            ),
+            ev(
+                "gpu_activity_cliff",
+                Phase::Instant,
+                Severity::Crit,
+                "2026-08-31T05:00:50.000Z", // after the churn ended
+                None,
+            ),
+        ];
+        let latest = Sample::default();
+        let now = "2026-08-31T05:00:51.000Z";
+        let d = diagnoses_from(&events, &latest, now);
+        assert!(
+            !d.iter().any(|x| x.key == "paging_churn"),
+            "a stutter after the churn ended does not explain the churn"
         );
     }
 }

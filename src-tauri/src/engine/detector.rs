@@ -19,10 +19,10 @@ pub struct Detector {
     /// last samples for spike logic
     prev_sm: Option<f64>,
     spike_acc: u32,
-    /// consecutive ticks below the cliff floor (sustained-collapse evidence)
-    cliff_acc: u32,
     /// true after this collapse emitted its (single) event — one per cliff
     cliff_fired: bool,
+    /// consecutive sustained-churn ticks (paging_churn evidence)
+    churn_acc: u32,
     /// rolling SM history for the activity gate (true rendering vs idle lobby)
     sm_hist: Vec<f64>,
 }
@@ -37,25 +37,31 @@ pub struct Detector {
 const SM_ACTIVITY_FLOOR: f64 = 15.0;
 /// Learned per session once enough visible SM evidence exists: the typical
 /// rendering level while playing. Gates compare against max(learned, floor).
-const SM_BASELINE_WARMUP_TICKS: usize = 20;
+/// 10 ticks (~10s of visible play): session #3's lobby->match level shift
+/// was recognizable within ~5 ticks, and a 20-tick window left the first
+/// minutes of real play evaluated against the static floor instead of the
+/// machine's own level.
+const SM_BASELINE_WARMUP_TICKS: usize = 10;
 /// The playing gate accepts a healthy SHARE of the learned baseline — during
 /// a real stutter the rolling average sags, and a strict-equality gate would
 /// silence the engine exactly when it must listen. 60% = clearly active.
 const ACTIVITY_GATE_RATIO: f64 = 0.60;
-/// A cliff is a RELATIVE collapse: SM under 35% of the learned baseline
-/// (hysteresis on the ratio, not absolute numbers tied to one GPU).
-const CLIFF_BASELINE_RATIO: f64 = 0.35;
-/// How deep a SINGLE low tick must be to count as a cliff by itself.
-/// Session #2 ground truth: 8 of the 9 real stutters lasted exactly one
-/// 1 Hz tick (SM 15-16 -> 3-5) and a flat 2-tick rule missed them all.
-/// BOTH conditions must hold for a lone tick to fire:
-/// - relative: under 40% of the learned baseline (real craters landed at
-///   20-33%; light-scene dips on high-baseline GPUs hover above it), AND
-/// - absolute: under 10% SM (an emulator-GPU "collapse" from 16 to 13 is a
-///   light scene, not a crater — no absolute guard and the relative check
-///   alone would misfire on machines whose baseline sags naturally).
+/// How many consecutive churning ticks before "paging_churn" opens: 3s of
+/// sustained background paging (two real sessions: 243 ticks >300/s in one
+/// 13-min match, i.e. the pattern is chronic, not incidental). Below 3 is
+/// the existing one-off hard_faults instant event.
+const PAGING_CHURN_MIN_TICKS: u32 = 3;
+/// A cliff is a DEEP CRATER, both relative AND absolute:
+/// - relative: under 40% of the learned quiet-level baseline
+/// - absolute: under 10% SM
 ///
-/// The burst-ending pattern (14 of a 16 baseline) fails both checks.
+/// Session #4 ground truth separated the real stutters from the mode
+/// transitions cleanly: real craters landed at 1-5% SM (deep on both
+/// axes), while combat->roaming transitions sat at 12-15% (rejected by
+/// the absolute axis) and light-scene dips at 8-9% (rejected by the
+/// relative axis against the quiet baseline). The old two-tick shallow
+/// path produced 16 false cliffs per match on bimodal gameplay and is
+/// gone; depth is the only evidence at 1 Hz.
 const CLIFF_DEEP_RATIO: f64 = 0.40;
 const CLIFF_DEEP_ABS: f64 = 10.0;
 
@@ -69,8 +75,8 @@ impl Detector {
             active: HashMap::new(),
             prev_sm: None,
             spike_acc: 0,
-            cliff_acc: 0,
             cliff_fired: false,
+            churn_acc: 0,
             sm_hist: Vec::new(),
         }
     }
@@ -140,17 +146,22 @@ impl Detector {
         avg >= baseline * ACTIVITY_GATE_RATIO
     }
 
-    /// The machine's own rendering level: median of visible SM history once
-    /// warm (robust to bursts), clamped from below by the static floor.
+    /// The machine's own QUIET level: the lower quartile (P25) of visible SM
+    /// history once warm. Games are BIMODAL — combat renders at 40-50% while
+    /// roaming/looting sits at 13-16% on the same machine (session #4: 1300
+    /// ticks in the quiet band, 310 in the combat band). A median baseline
+    /// rides between the two modes and misreads every mode TRANSITION as a
+    /// collapse (16 false cliffs in one match); P25 latches onto the quiet
+    /// mode, so transitions never fire and only true craters (1-5%) do.
+    /// Clamped from below by the static floor.
     fn learned_baseline(&self) -> f64 {
         if self.sm_hist.len() < SM_BASELINE_WARMUP_TICKS {
             return SM_ACTIVITY_FLOOR;
         }
         let mut sorted = self.sm_hist.clone();
         sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-        let mid = sorted.len() / 2;
-        let median = sorted[mid];
-        median.max(SM_ACTIVITY_FLOOR)
+        let q1 = sorted[sorted.len() / 4];
+        q1.max(SM_ACTIVITY_FLOOR)
     }
 
     /// Close all open conditions (session end) and return their "end" events.
@@ -273,6 +284,66 @@ impl Detector {
                 });
             }
         }
+
+        // PAGING CHURN — the observed-but-unclassified pattern from two real
+        // sessions: sustained hard faults (300-1900/s) with a FLAT disk
+        // queue (~0) and plenty of free RAM (20 GB free of 32). That shape
+        // is NOT memory pressure (nothing is starved) and NOT a disk storm
+        // (nothing is queued): it is the memory manager trimming game
+        // working sets to standby and the game faulting them back in. The
+        // old engine had no bucket for this — if it ever earned a card, it
+        // would have been mislabeled "disk_wait / memory pressure". This
+        // rule is an OBSERVATION with its own honest name; the diagnoser
+        // decides (correlation rules) whether it explains a stutter.
+        // Sustained-churn gate: 3+ consecutive ticks above the hard-fault
+        // threshold, while queue and RAM stay healthy — one noisy tick is
+        // the existing instant event, not churn.
+        let churning_now = match (s.pages_in, s.disk_queue) {
+            (Some(pi), Some(q)) => {
+                pi > self.th.hard_faults_per_sec
+                    && q < self.th.disk_queue_len
+                    && avail >= self.th.avail_mem_floor_mb
+            }
+            // missing paging counters: no evidence either way — do not open,
+            // but an already-open window still needs its chance to close
+            _ => false,
+        };
+        if churning_now {
+            self.churn_acc += 1;
+            if self.churn_acc == PAGING_CHURN_MIN_TICKS {
+                evs.push(EngineEvent {
+                    kind: "paging_churn".into(),
+                    phase: Phase::Start,
+                    severity: Severity::Warn,
+                    t: s.t.clone(),
+                    duration_sec: None,
+                    detail: format!(
+                        "Background paging: {:.0} reads/s with healthy disk/RAM",
+                        s.pages_in.unwrap_or(0.0)
+                    ),
+                });
+                // open the condition so hysteresis tracks it like the rest
+                self.active
+                    .insert("paging_churn".into(), (now_ms(), Severity::Warn));
+            }
+        } else {
+            if self.churn_acc >= PAGING_CHURN_MIN_TICKS {
+                let (since, _) = self
+                    .active
+                    .remove("paging_churn")
+                    .unwrap_or((now_ms(), Severity::Warn));
+                let dur = (now_ms() - since) as f64 / 1000.0;
+                evs.push(EngineEvent {
+                    kind: "paging_churn".into(),
+                    phase: Phase::End,
+                    severity: Severity::Ok,
+                    t: s.t.clone(),
+                    duration_sec: Some(dur.max(0.0)),
+                    detail: String::new(),
+                });
+            }
+            self.churn_acc = 0;
+        }
     }
 
     fn check_disk(&mut self, s: &Sample, evs: &mut Vec<EngineEvent>) {
@@ -381,50 +452,37 @@ impl Detector {
     }
 
     /// The killer fingerprint — now honest about what it measures: a sharp
-    /// drop in GPU activity relative to the machine's own learned baseline.
-    /// We do not measure frame time; the event is named for the measurement
-    /// (an activity cliff), not for a claim (a "render stall").
-    /// Fires when EITHER:
-    /// - a lone tick craters under CLIFF_DEEP_RATIO of baseline (session #2:
-    ///   8 of 9 real stutters were exactly one 1 Hz tick deep), or
-    /// - 2+ consecutive ticks sit under CLIFF_BASELINE_RATIO (shallower but
-    ///   sustained — a longer stutter).
-    ///
-    /// Bursts returning to baseline are NOT cliffs (session #1 false pattern:
-    /// 47% burst → 14% baseline — 87% of baseline, nowhere near a cliff).
+    /// drop in GPU activity to a DEEP CRATER, relative to the machine's own
+    /// learned quiet-level baseline. We do not measure frame time; the event
+    /// is named for the measurement (an activity cliff), not for a claim.
+    /// Both axes must agree: under CLIFF_DEEP_RATIO of baseline AND under
+    /// CLIFF_DEEP_ABS — the relative axis alone misfires on mode
+    /// transitions (12-15% quiet band vs a 40s combat-flavored baseline),
+    /// the absolute axis alone misfires on light scenes of low-baseline
+    /// GPUs. One event per collapse: continuation ticks never re-emit.
     fn check_gpu_activity_cliff(&mut self, s: &Sample, evs: &mut Vec<EngineEvent>, playing: bool) {
         let Some(g) = s.gpu.as_ref() else { return };
         // not in real play: reset the running comparison so the return to
         // the game never reads as one giant cliff (idle SM -> live SM)
         if !playing {
             self.prev_sm = None;
-            self.cliff_acc = 0;
             self.cliff_fired = false;
             return;
         }
         let Some(sm) = g.sm_pct else {
             self.prev_sm = None;
-            self.cliff_acc = 0;
             self.cliff_fired = false;
             return;
         };
         let baseline = self.learned_baseline();
-        let cliff_floor = baseline * CLIFF_BASELINE_RATIO;
         let deep_floor = baseline * CLIFF_DEEP_RATIO;
         let prev = self.prev_sm.replace(sm);
 
-        let below_floor = sm < cliff_floor;
-        // a lone tick must CRATER (relative AND absolute) to fire alone;
-        // a shallower dip needs a second tick to confirm — depth and
-        // duration stand in for each other at 1 Hz resolution
         let deep = sm < deep_floor && sm < CLIFF_DEEP_ABS;
-        if below_floor {
-            let first_or_second = self.cliff_acc < 2;
-            let fires_now = deep || self.cliff_acc + 1 >= 2;
-            self.cliff_acc += 1;
-            // ONE event per cliff: the first qualifying tick emits, later
-            // ticks of the same collapse are continuation, not new events
-            if first_or_second && fires_now && !self.cliff_fired {
+        if deep {
+            // ONE event per collapse: the first qualifying tick emits, later
+            // ticks of the same crater are continuation, not new events
+            if !self.cliff_fired {
                 let others_ok = s.disk_queue.map(|q| q < 0.5).unwrap_or(true)
                     && s.cpu_total.map(|c| c < 85.0).unwrap_or(true)
                     && s.avail_mb.map(|a| a > 2048.0).unwrap_or(true);
@@ -432,7 +490,7 @@ impl Detector {
                     (
                         "gpu_activity_cliff",
                         format!(
-                            "GPU activity collapsed: {:.0}% -> {:.0}% (baseline {:.0}%) with healthy CPU/disk/RAM",
+                            "GPU activity collapsed: {:.0}% -> {:.0}% (quiet level {:.0}%) with healthy CPU/disk/RAM",
                             prev.unwrap_or(baseline), sm, baseline
                         ),
                     )
@@ -440,7 +498,7 @@ impl Detector {
                     (
                         "gpu_activity_cliff_loaded",
                         format!(
-                            "GPU activity collapsed under load: {:.0}% -> {:.0}% (baseline {:.0}%)",
+                            "GPU activity collapsed under load: {:.0}% -> {:.0}% (quiet level {:.0}%)",
                             prev.unwrap_or(baseline), sm, baseline
                         ),
                     )
@@ -456,7 +514,6 @@ impl Detector {
                 self.cliff_fired = true;
             }
         } else {
-            self.cliff_acc = 0;
             self.cliff_fired = false;
         }
 
@@ -513,6 +570,17 @@ mod tests {
         }
     }
 
+    /// Test helper: set hard faults on a sample.
+    trait WithPagesIn {
+        fn with_pages_in(self, pi: f64) -> Sample;
+    }
+    impl WithPagesIn for Sample {
+        fn with_pages_in(mut self, pi: f64) -> Sample {
+            self.pages_in = Some(pi);
+            self
+        }
+    }
+
     /// A sample from a VISIBLE window (the only state where GPU rules run).
     fn live_sample(sm: f64) -> Sample {
         let mut s = sample(50.0, 119.0, 20000.0, 0.0, Some(sm));
@@ -563,6 +631,73 @@ mod tests {
             .any(|e| e.kind == "cpu_throttle" && e.severity == Severity::Crit));
     }
 
+    // ---- paging churn: the healthy-RAM background paging fingerprint -------
+
+    /// A churning sample: hard faults high, queue flat, RAM plentiful.
+    fn churn_sample(pi: f64) -> Sample {
+        sample(55.0, 119.0, 20000.0, 0.1, None).with_pages_in(pi)
+    }
+
+    #[test]
+    fn sustained_churn_opens_and_closes() {
+        // two real sessions: 300-1900 reads/s for minutes with a flat queue
+        // and 20 GB free. 3+ consecutive ticks open the condition; recovery
+        // closes it with the measured duration.
+        let mut d = Detector::new(Thresholds::default());
+        for _ in 0..2 {
+            let e = d.feed(&churn_sample(700.0));
+            assert!(!e.iter().any(|e| e.kind == "paging_churn"));
+        }
+        let e3 = d.feed(&churn_sample(700.0));
+        assert!(e3
+            .iter()
+            .any(|e| e.kind == "paging_churn" && e.phase == Phase::Start));
+        let e4 = d.feed(&churn_sample(800.0)); // continues, no duplicate
+        assert!(!e4.iter().any(|e| e.kind == "paging_churn"));
+        let end = d.feed(&sample(55.0, 119.0, 20000.0, 0.1, None));
+        assert!(end
+            .iter()
+            .any(|e| e.kind == "paging_churn" && e.phase == Phase::End));
+    }
+
+    #[test]
+    fn churn_under_real_pressure_is_not_churn() {
+        // the guard: high faults + LOW available RAM = classic mem_pressure
+        // territory — the churn rule must stay silent so the story stays
+        // "memory shortage", not "background reordering"
+        let mut d = Detector::new(Thresholds::default());
+        for _ in 0..5 {
+            let e = d.feed(&sample(55.0, 119.0, 800.0, 0.1, None).with_pages_in(900.0));
+            assert!(
+                !e.iter().any(|e| e.kind == "paging_churn"),
+                "starved RAM means mem_pressure owns the story"
+            );
+        }
+    }
+
+    #[test]
+    fn churn_with_busy_disk_is_not_churn() {
+        // the other guard: faults + a LOADED queue = a disk storm — again,
+        // disk_wait owns that story; churn must not speak over it
+        let mut d = Detector::new(Thresholds::default());
+        for _ in 0..5 {
+            let e = d.feed(&sample(55.0, 119.0, 20000.0, 6.0, None).with_pages_in(900.0));
+            assert!(
+                !e.iter().any(|e| e.kind == "paging_churn"),
+                "a queued disk means disk_wait owns the story"
+            );
+        }
+    }
+
+    #[test]
+    fn one_churn_tick_is_just_hard_faults() {
+        // a single spiking tick: the classic instant event, never churn
+        let mut d = Detector::new(Thresholds::default());
+        let e = d.feed(&churn_sample(600.0));
+        assert!(!e.iter().any(|e| e.kind == "paging_churn"));
+        assert!(e.iter().any(|e| e.kind == "hard_faults"));
+    }
+
     #[test]
     fn disk_storm() {
         let mut d = Detector::new(Thresholds::default());
@@ -584,7 +719,7 @@ mod tests {
         // and missed it entirely; the learned-baseline rule must catch it.
         let mut d = Detector::new(Thresholds::default());
         warm_baseline(&mut d, 15.0); // learn: this machine renders at ~15%
-        d.cliff_acc = 0;
+
         d.feed(&live_sample(15.0));
         let e1 = d.feed(&live_sample(5.0)); // deep tick 1 (25-33% of baseline)
         assert!(e1
@@ -604,7 +739,7 @@ mod tests {
         // 1 Hz tick (SM 15-16 -> 3-5). A single deep crater IS the stutter.
         let mut d = Detector::new(Thresholds::default());
         warm_baseline(&mut d, 16.0);
-        d.cliff_acc = 0;
+
         d.feed(&live_sample(16.0));
         let e = d.feed(&live_sample(4.0)); // 25% of baseline → deep
         assert!(e
@@ -613,17 +748,43 @@ mod tests {
     }
 
     #[test]
-    fn shallow_single_tick_waits_for_confirmation() {
-        // a dip to 30% of baseline (below floor, NOT deep): one tick alone
-        // is not enough — it must confirm with a second tick or recover
+    fn mode_transition_is_never_a_cliff() {
+        // session #4's FALSE pattern (16 times in one match): combat at
+        // 40-50% ends, SM settles into the 12-15% roaming band. The quiet
+        // band is ABOVE the deep floor (40% of a 40% quiet level = 16) and
+        // above the absolute axis (10) — a mode transition, never a crater.
+        // No number of consecutive quiet ticks may fire a cliff.
         let mut d = Detector::new(Thresholds::default());
-        warm_baseline(&mut d, 40.0); // floor = 14, deep = 10
-        d.cliff_acc = 0;
-        d.feed(&live_sample(40.0));
-        let e1 = d.feed(&live_sample(13.0)); // below floor but not deep
-        assert!(!e1.iter().any(|e| e.kind.starts_with("gpu_activity_cliff")));
-        let e2 = d.feed(&live_sample(13.0)); // second tick → confirmed
-        assert!(e2.iter().any(|e| e.kind.starts_with("gpu_activity_cliff")));
+        // build a mixed history like a real match: quiet ticks dominate,
+        // combat bursts ride on top — P25 latches onto the quiet band (40)
+        let quiet = 40.0;
+        for i in 0..40 {
+            let s = if i % 4 == 0 { live_sample(48.0) } else { live_sample(quiet) };
+            d.feed(&s);
+        }
+        d.feed(&live_sample(48.0)); // last combat tick
+        for _ in 0..10 {
+            let e = d.feed(&live_sample(13.0)); // roaming band
+            assert!(
+                !e.iter().any(|e| e.kind.starts_with("gpu_activity_cliff")),
+                "combat->roaming is a mode transition, not a collapse"
+            );
+        }
+    }
+
+    #[test]
+    fn light_scene_dip_on_low_baseline_gpu_is_not_a_cliff() {
+        // a light scene (menus, map) at 8-9% on a GPU whose quiet level is
+        // 16: under the absolute axis (10) but ABOVE 40% of the baseline
+        // (6.4) — the relative axis rejects it; light scenes are not craters
+        let mut d = Detector::new(Thresholds::default());
+        warm_baseline(&mut d, 16.0);
+        d.feed(&live_sample(16.0));
+        let e = d.feed(&live_sample(9.0)); // 56% of baseline
+        assert!(
+            !e.iter().any(|e| e.kind.starts_with("gpu_activity_cliff")),
+            "a light scene at half the quiet level is not a stutter"
+        );
     }
 
     #[test]
@@ -646,7 +807,7 @@ mod tests {
         // noise at 1 Hz — neither deep enough alone nor sustained
         let mut d = Detector::new(Thresholds::default());
         warm_baseline(&mut d, 40.0); // floor = 14, deep = 10
-        d.cliff_acc = 0;
+
         d.feed(&live_sample(40.0));
         let e1 = d.feed(&live_sample(13.5)); // just under floor
         assert!(!e1.iter().any(|e| e.kind.starts_with("gpu_activity_cliff")));
@@ -658,7 +819,7 @@ mod tests {
     fn cliff_under_load_reports_loaded_variant() {
         let mut d = Detector::new(Thresholds::default());
         warm_baseline(&mut d, 40.0);
-        d.cliff_acc = 0;
+
         d.feed(&live_sample(40.0));
         let mut low1 = live_sample(5.0);
         low1.cpu_total = Some(95.0); // CPU saturated → loaded variant

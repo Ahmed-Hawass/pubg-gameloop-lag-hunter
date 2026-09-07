@@ -45,6 +45,7 @@ export const en = {
     cpu_saturation: "CPU reached its limit",
     cpu_throttle: "CPU reduced its speed under load",
     mem_pressure: "Memory under pressure",
+    paging_churn: "Background file shuffling",
     gpu_mem_idle: "GPU in power-saving while rendering",
     gpu_activity_cliff: "GPU activity dropped sharply",
     gpu_activity_cliff_loaded: "GPU activity dropped under load",
@@ -196,6 +197,7 @@ export const en = {
     cpu_saturation: "CPU reached its limit",
     cpu_throttle: "CPU reduced its speed under load",
     mem_pressure: "Memory under pressure",
+    paging_churn: "Background file shuffling",
     gpu_mem_idle: "GPU power-saving while rendering",
     gpu_activity_cliff: "GPU activity dropped sharply",
     gpu_activity_cliff_loaded: "GPU activity dropped under load",
@@ -230,6 +232,12 @@ export const en = {
       title: "Memory nearly full",
       simple: "Memory filled up and the game kept moving files between RAM and disk, and every transfer caused a stutter.",
       fix: "Close background apps and increase the pagefile size.",
+    },
+    paging_churn: {
+      title: "Background file shuffling",
+      simple:
+        "The system was moving game files between RAM and disk in the background, even though both were running normally. It's normal housekeeping, not a shortage, but each move can show up as a tiny hitch.",
+      fix: "Give GameLoop more RAM in its settings. If it keeps happening, increase the pagefile size on an SSD.",
     },
     gpu_wake: {
       title: "GPU returning from power-saving mode",

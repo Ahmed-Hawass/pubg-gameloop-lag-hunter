@@ -198,7 +198,7 @@ impl Engine {
             Some(vis) => {
                 super::logging::info(&format!("game window visible at start: {vis}"));
                 *LATEST_VISIBLE.lock().unwrap_or_else(|p| p.into_inner()) =
-                    Some(Timestamped::fresh(vis));
+                    Some(Timestamped::fresh(vis, SNAPSHOT_TTLS.visible));
             }
             None => super::logging::info("game window visibility unknown at start (probe returned None)"),
         }
@@ -412,20 +412,23 @@ impl Engine {
 
     /// Called by the dmon thread for each GPU tick.
     fn on_gpu(&self, g: super::types::GpuSample) {
-        *LATEST_GPU.lock().unwrap_or_else(|p| p.into_inner()) = Some(Timestamped::fresh(g));
+        *LATEST_GPU.lock().unwrap_or_else(|p| p.into_inner()) =
+            Some(Timestamped::fresh(g, SNAPSHOT_TTLS.gpu));
     }
 
     /// Emulator watcher thread body (called every ~5s while running).
     pub fn probe_emulator(&self) {
         if let Ok(procs) = sampler::query_emulator_procs() {
-            *LATEST_EMU.lock().unwrap_or_else(|p| p.into_inner()) = Some(Timestamped::fresh(procs));
+            *LATEST_EMU.lock().unwrap_or_else(|p| p.into_inner()) =
+                Some(Timestamped::fresh(procs, SNAPSHOT_TTLS.emu));
         }
     }
 
     /// Window-visibility probe (called every ~10s from the guard thread).
     pub fn probe_visibility(&self) {
         if let Some(vis) = sampler::query_game_visible() {
-            *LATEST_VISIBLE.lock().unwrap_or_else(|p| p.into_inner()) = Some(Timestamped::fresh(vis));
+            *LATEST_VISIBLE.lock().unwrap_or_else(|p| p.into_inner()) =
+                Some(Timestamped::fresh(vis, SNAPSHOT_TTLS.visible));
         }
     }
 
@@ -582,32 +585,52 @@ fn physical_disk_count() -> u32 {
 // ---- process-wide singletons ------------------------------------------------
 // LATEST_GPU / LATEST_EMU / LATEST_VISIBLE: freshest snapshots shared between
 // sampler threads — each stamped with the moment it was captured, so samples
-// never attach evidence older than SNAPSHOT_TTL. LATEST_VISIBLE: None = not
-// probed yet (conservative mute). All three are cleared at every start():
+// never attach evidence older than its source's TTL. LATEST_VISIBLE: None =
+// not probed yet (conservative mute). All three are cleared at every start():
 // a snapshot from a previous session is not evidence in this one.
 
-/// How fresh a sampler snapshot must be to count as evidence. dmon emits at
-/// 1 Hz; anything older than 2s means the source stalled (or died) —
-/// attaching it would be stale attribution, the original "desktop GPU
-/// activity masquerading as in-game" bug in slow motion.
-const SNAPSHOT_TTL: Duration = Duration::from_secs(2);
+/// Per-source freshness windows, matched to how often each source SPEAKS:
+/// a TTL must cover the source's native interval plus slack for one missed
+/// cycle — anything tighter starves evidence (a flat 2s TTL against a 10s
+/// probe cadence left 85% of ticks visibility-blind in session #2/#3).
+///
+/// - gpu: dmon emits at 1 Hz; 2s = the reading plus one missed cycle. GPU
+///   data is a MEASUREMENT — a stalled dmon means stale numbers, drop them.
+/// - emu: the emulator probe runs every ~5s (guard thread cycle); 12s = two
+///   full misses tolerated before "game alive" evidence lapses.
+/// - visible: the visibility probe runs every ~10s; 30s = generous slack
+///   because window state is a rarely-changing FACT, not a 1 Hz measurement
+///   — a 10s-old "visible" is still true unless the user just minimized.
+const SNAPSHOT_TTLS: SnapshotTtls = SnapshotTtls {
+    gpu: Duration::from_secs(2),
+    emu: Duration::from_secs(12),
+    visible: Duration::from_secs(30),
+};
+
+struct SnapshotTtls {
+    gpu: Duration,
+    emu: Duration,
+    visible: Duration,
+}
 
 /// A sampler snapshot plus its capture time — freshness is part of the data.
 struct Timestamped<T> {
     value: T,
     at: Instant,
+    ttl: Duration,
 }
 
 impl<T> Timestamped<T> {
-    fn fresh(value: T) -> Self {
+    fn fresh(value: T, ttl: Duration) -> Self {
         Self {
             value,
             at: Instant::now(),
+            ttl,
         }
     }
-    /// Some(value) when inside the TTL, None when stale.
+    /// Some(value) when inside its TTL, None when stale.
     fn get(&self) -> Option<&T> {
-        if self.at.elapsed() <= SNAPSHOT_TTL {
+        if self.at.elapsed() <= self.ttl {
             Some(&self.value)
         } else {
             None

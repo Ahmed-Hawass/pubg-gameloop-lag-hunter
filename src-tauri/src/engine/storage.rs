@@ -737,6 +737,7 @@ fn finding_key(kind: &str) -> &'static str {
         "cpu_saturation" => "cpu_busy",
         "cpu_throttle" | "spike" => "cpu_throttle",
         "mem_pressure" => "mem_low",
+        "paging_churn" => "paging_churn",
         "gpu_mem_idle" => "gpu_wake",
         "gpu_activity_cliff" => "scene_hitch",
         "gpu_activity_cliff_loaded" => "gpu_busy",
@@ -768,9 +769,15 @@ fn finding_copy(kind: &str) -> (&'static str, &'static str, &'static str, &'stat
         ),
         "mem_pressure" => (
             "Running out of memory",
-            "RAM was filling up and the game kept swapping files in and out — each swap is a stutter.",
+            "RAM was filling up and the game kept swapping files in and out — every transfer caused a stutter.",
             "Close background apps and increase the pagefile.",
             "high",
+        ),
+        "paging_churn" => (
+            "Background file shuffling",
+            "The system was moving game files between RAM and disk in the background, even though both were running normally. It's normal housekeeping, not a shortage, but each move can show up as a tiny hitch.",
+            "Give GameLoop more RAM in its settings. If it keeps happening, increase the pagefile size on an SSD.",
+            "medium",
         ),
         "gpu_mem_idle" => (
             "GPU waking from sleep",
