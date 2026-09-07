@@ -140,6 +140,7 @@ export const api = {
   setSidebarCollapsed: (collapsed: boolean) => invoke<boolean>("set_sidebar_collapsed", { collapsed }),
   finishOnboarding: () => invoke<void>("finish_onboarding"),
   finishGameAdvice: () => invoke<void>("finish_game_advice"),
+  finishBackgroundAdvice: () => invoke<void>("finish_background_advice"),
   setAutoStop: (minutes: number) => invoke<number>("set_auto_stop", { minutes }),
   openPath: (path: string) => invoke<void>("open_path", { path }),
   openUrl: (url: string) => invoke<void>("open_url", { url }),
@@ -232,6 +233,8 @@ export interface Settings {
   onboarding_done: boolean;
   /** pre-scan advice ("close background apps") shown once ever */
   game_advice_done: boolean;
+  /** stay-in-game advice shown once ever */
+  background_advice_done: boolean;
   thresholds: Thresholds;
 }
 

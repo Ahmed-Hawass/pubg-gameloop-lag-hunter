@@ -141,14 +141,6 @@ export function MonitorView(props: {
         <Timeline elapsedSec={0} autoStopSec={null} spikes={[]} hasData={false} />
       )}
 
-      {/* quiet note while the game window sits in the background: GPU
-          monitoring is paused — no mystery, no phantom cards */}
-      {live && ui!.game_visible === false ? (
-        <div className="bg-note">
-          {t.gameBackground}
-        </div>
-      ) : null}
-
       {/* limited-mode note: PowerShell unavailable — scans still work, some
           checks run on safe defaults. Shown once per app run (not per tick). */}
       {psLimited ? (

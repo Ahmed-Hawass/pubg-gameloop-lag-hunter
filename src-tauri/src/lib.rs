@@ -266,6 +266,15 @@ fn finish_game_advice() -> Result<(), String> {
     engine::settings::save(&s)
 }
 
+/// Mark the stay-in-game advice as seen — it shows once EVER, the first time
+/// a running session measures the game window in the background.
+#[tauri::command]
+fn finish_background_advice() -> Result<(), String> {
+    let mut s = engine::settings::load();
+    s.background_advice_done = true;
+    engine::settings::save(&s)
+}
+
 #[tauri::command]
 fn set_auto_stop(minutes: u32) -> Result<u32, String> {
     let mut s = engine::settings::load();
@@ -478,6 +487,7 @@ pub fn run() {
             set_sidebar_collapsed,
             finish_onboarding,
             finish_game_advice,
+            finish_background_advice,
             gameloop_status,
             ps_available,
             watch_gameloop,

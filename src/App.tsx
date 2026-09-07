@@ -50,6 +50,11 @@ export default function App() {
   /** the pre-scan advice dialog is up (defers the update modal like the
       first-run advice does — one modal surface at a time) */
   const [gameAdviceUp, setGameAdviceUp] = useState(false);
+  /** stay-in-game advice: shows ONCE EVER, the first time a RUNNING session
+      measures the game window in the background; null = still loading */
+  const [backgroundAdviceDone, setBackgroundAdviceDone] = useState<boolean | null>(null);
+  /** the stay-in-game advice dialog is up (same one-modal deferral rule) */
+  const [backgroundAdviceUp, setBackgroundAdviceUp] = useState(false);
   /** the first-run advice dialog: shows ONCE, only right after the user
       finishes the welcome flow (loaded-true users never see it) */
   const [adviceShown, setAdviceShown] = useState(false);
@@ -102,7 +107,7 @@ export default function App() {
         if (
           shouldShowUpdateModal(
             updateInfo,
-            adviceUp || gameAdviceUp,
+            adviceUp || gameAdviceUp || backgroundAdviceUp,
             announced ? updateInfo.version : null,
           )
         ) {
@@ -111,7 +116,7 @@ export default function App() {
         }
       })
       .catch(() => {});
-  }, [updateInfo, adviceUp, gameAdviceUp, onboardingDone]);
+  }, [updateInfo, adviceUp, gameAdviceUp, backgroundAdviceUp, onboardingDone]);
 
   // state pushes land here (live + final): a finished session caused by
   // GameLoop dying gets its explanation dialog — once per session, never
@@ -151,12 +156,15 @@ export default function App() {
         setCollapsed(s.sidebar_collapsed);
         setOnboardingDone(s.onboarding_done);
         setGameAdviceDone(s.game_advice_done);
+        setBackgroundAdviceDone(s.background_advice_done);
         // remember: was onboarding ALREADY done before this launch?
         if (s.onboarding_done) wasOnboardedRef.current = true;
       })
       .catch(() => {
         setCollapsed(false);
         setOnboardingDone(true);
+        setGameAdviceDone(true);
+        setBackgroundAdviceDone(true);
         wasOnboardedRef.current = true;
       });
     api
@@ -242,12 +250,18 @@ export default function App() {
   // show the close-background-apps tip once. Never blocks Start: a session
   // can begin while the dialog is up; it just waits for a click.
   // One-modal rule: not over the welcome, not over the first-run advice.
+  // Sequencing: BOTH inputs must be loaded — gameloopUp AND the settings —
+  // before the gate answers. The old version failed silently when the game
+  // was already running before launch (probe answered first, settings still
+  // loading → the gate saw `gameAdviceDone === null`, skipped, and the
+  // advice appeared only after a restart).
   useEffect(() => {
     if (
       gameloopUp !== true ||
       onboardingDone !== true ||
       gameAdviceDone !== false ||
-      adviceUp
+      adviceUp ||
+      backgroundAdviceUp
     ) {
       return;
     }
@@ -256,7 +270,31 @@ export default function App() {
     setToastTitle(t.dialog.gameAdviceTitle);
     setToastBody(t.dialog.gameAdviceBody);
     setToast("game_advice");
-  }, [gameloopUp, onboardingDone, gameAdviceDone, adviceUp]);
+  }, [gameloopUp, onboardingDone, gameAdviceDone, adviceUp, backgroundAdviceUp]);
+
+  // the STAY-IN-GAME advice: the first time EVER a RUNNING session measures
+  // the game window in the background, show the "stay inside the game" tip.
+  // Fires only on a MEASURED false (never on null = probe not back yet) and
+  // only mid-session. Waits for its turn behind the other one-shot dialogs —
+  // if another advice is up when the moment arrives, this one skips: all of
+  // these are one-forever, and the pre-scan advice already covers the topic.
+  useEffect(() => {
+    if (
+      status.status !== "running" ||
+      status.ui?.game_visible !== false ||
+      onboardingDone !== true ||
+      backgroundAdviceDone !== false ||
+      adviceUp ||
+      gameAdviceUp
+    ) {
+      return;
+    }
+    setBackgroundAdviceDone(true); // never again
+    setBackgroundAdviceUp(true);
+    setToastTitle(t.dialog.backgroundAdviceTitle);
+    setToastBody(t.dialog.backgroundAdviceBody);
+    setToast("background_advice");
+  }, [status, onboardingDone, backgroundAdviceDone, adviceUp, gameAdviceUp]);
 
   // a session deleted from Reports must not linger as a "finished" state
   const effectiveStatus: StatusPayload =
@@ -395,10 +433,14 @@ export default function App() {
           kind="notice"
           okLabel={t.dialog.ok}
           onClose={() => {
-            // the pre-scan advice is one-forever: persist its dismissal
+            // one-forever advice dialogs: persist their dismissal
             if (toast === "game_advice") {
               setGameAdviceUp(false);
               void api.finishGameAdvice().catch(() => {});
+            }
+            if (toast === "background_advice") {
+              setBackgroundAdviceUp(false);
+              void api.finishBackgroundAdvice().catch(() => {});
             }
             setToast(null);
             setToastTitle(null);

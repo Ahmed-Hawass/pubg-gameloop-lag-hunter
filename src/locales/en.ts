@@ -29,7 +29,10 @@ export const en = {
       "Start GameLoop and the game first, then press Start, and stay in the game while scanning. Minimizing GameLoop pauses GPU monitoring, and closing it ends the scan.",
     gameAdviceTitle: "One tip before your first scan",
     gameAdviceBody:
-      "Close background apps before playing — browsers, downloads, and chat programs compete with the game for the processor, and each of them can appear in the results as a cause of stuttering. This reminder appears only once.",
+      "Close background apps before playing — browsers, downloads, and chat programs compete with the game for the processor, and each of them can appear in the results as a cause of stuttering.",
+    backgroundAdviceTitle: "Stay in the game while scanning",
+    backgroundAdviceBody:
+      "The game window was in the background during this scan. GPU analysis pauses while the window is minimized, and other measurements continue. For the most complete results, stay inside the game until the scan finishes.",
   },
 
   // ---- error codes from the backend ----
@@ -190,7 +193,6 @@ export const en = {
     "Everything the tool detects during play, newest first. Whenever you feel a stutter, check this section: it will explain what happened.",
   nothingUnusual: "Nothing unusual so far. That's good.",
   waitingGameloopFeed: "Waiting for PUBG Mobile to start...",
-  gameBackground: "Game window is in the background, so GPU monitoring is paused until you return",
 
   // feed lines (by engine event kind)
   feed: {
