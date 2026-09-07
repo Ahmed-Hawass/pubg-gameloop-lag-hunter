@@ -256,6 +256,16 @@ fn finish_onboarding() -> Result<(), String> {
     engine::settings::save(&s)
 }
 
+/// Mark the pre-scan advice ("close background apps") as seen — it shows once
+/// EVER, the first time the app confirms the game is running. The dismissal
+/// itself is the user's click; this only records it.
+#[tauri::command]
+fn finish_game_advice() -> Result<(), String> {
+    let mut s = engine::settings::load();
+    s.game_advice_done = true;
+    engine::settings::save(&s)
+}
+
 #[tauri::command]
 fn set_auto_stop(minutes: u32) -> Result<u32, String> {
     let mut s = engine::settings::load();
@@ -467,6 +477,7 @@ pub fn run() {
             set_language,
             set_sidebar_collapsed,
             finish_onboarding,
+            finish_game_advice,
             gameloop_status,
             ps_available,
             watch_gameloop,

@@ -44,6 +44,12 @@ export default function App() {
   const [collapsed, setCollapsed] = useState<boolean | null>(null); // null = loading saved pref
   /** first-run welcome: null = still loading the setting */
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
+  /** pre-scan advice ("close background apps"): shows ONCE EVER, the first
+      time the app confirms the game is running; null = still loading */
+  const [gameAdviceDone, setGameAdviceDone] = useState<boolean | null>(null);
+  /** the pre-scan advice dialog is up (defers the update modal like the
+      first-run advice does — one modal surface at a time) */
+  const [gameAdviceUp, setGameAdviceUp] = useState(false);
   /** the first-run advice dialog: shows ONCE, only right after the user
       finishes the welcome flow (loaded-true users never see it) */
   const [adviceShown, setAdviceShown] = useState(false);
@@ -93,13 +99,19 @@ export default function App() {
     void api
       .updateAlreadyAnnounced(updateInfo.version)
       .then((announced) => {
-        if (shouldShowUpdateModal(updateInfo, adviceUp, announced ? updateInfo.version : null)) {
+        if (
+          shouldShowUpdateModal(
+            updateInfo,
+            adviceUp || gameAdviceUp,
+            announced ? updateInfo.version : null,
+          )
+        ) {
           setUpdateModal(true);
           void api.announceUpdate(updateInfo.version).catch(() => {});
         }
       })
       .catch(() => {});
-  }, [updateInfo, adviceUp, onboardingDone]);
+  }, [updateInfo, adviceUp, gameAdviceUp, onboardingDone]);
 
   // state pushes land here (live + final): a finished session caused by
   // GameLoop dying gets its explanation dialog — once per session, never
@@ -138,6 +150,7 @@ export default function App() {
         setDurationSecs(s.auto_stop_minutes * 60);
         setCollapsed(s.sidebar_collapsed);
         setOnboardingDone(s.onboarding_done);
+        setGameAdviceDone(s.game_advice_done);
         // remember: was onboarding ALREADY done before this launch?
         if (s.onboarding_done) wasOnboardedRef.current = true;
       })
@@ -223,6 +236,27 @@ export default function App() {
       setAdviceUp(false);
     }
   }, [onboardingDone]);
+
+  // the PRE-SCAN advice: the first time EVER the app confirms the game is
+  // running (initial probe, watcher, or a started session — any source),
+  // show the close-background-apps tip once. Never blocks Start: a session
+  // can begin while the dialog is up; it just waits for a click.
+  // One-modal rule: not over the welcome, not over the first-run advice.
+  useEffect(() => {
+    if (
+      gameloopUp !== true ||
+      onboardingDone !== true ||
+      gameAdviceDone !== false ||
+      adviceUp
+    ) {
+      return;
+    }
+    setGameAdviceDone(true); // never again — even if closed without a click
+    setGameAdviceUp(true);
+    setToastTitle(t.dialog.gameAdviceTitle);
+    setToastBody(t.dialog.gameAdviceBody);
+    setToast("game_advice");
+  }, [gameloopUp, onboardingDone, gameAdviceDone, adviceUp]);
 
   // a session deleted from Reports must not linger as a "finished" state
   const effectiveStatus: StatusPayload =
@@ -361,6 +395,11 @@ export default function App() {
           kind="notice"
           okLabel={t.dialog.ok}
           onClose={() => {
+            // the pre-scan advice is one-forever: persist its dismissal
+            if (toast === "game_advice") {
+              setGameAdviceUp(false);
+              void api.finishGameAdvice().catch(() => {});
+            }
             setToast(null);
             setToastTitle(null);
             setToastBody(null);

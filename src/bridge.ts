@@ -139,6 +139,7 @@ export const api = {
   setLanguage: (lang: string) => invoke<string>("set_language", { lang }),
   setSidebarCollapsed: (collapsed: boolean) => invoke<boolean>("set_sidebar_collapsed", { collapsed }),
   finishOnboarding: () => invoke<void>("finish_onboarding"),
+  finishGameAdvice: () => invoke<void>("finish_game_advice"),
   setAutoStop: (minutes: number) => invoke<number>("set_auto_stop", { minutes }),
   openPath: (path: string) => invoke<void>("open_path", { path }),
   openUrl: (url: string) => invoke<void>("open_url", { url }),
@@ -229,6 +230,8 @@ export interface Settings {
   sidebar_collapsed: boolean;
   /** first-run welcome screen completed */
   onboarding_done: boolean;
+  /** pre-scan advice ("close background apps") shown once ever */
+  game_advice_done: boolean;
   thresholds: Thresholds;
 }
 

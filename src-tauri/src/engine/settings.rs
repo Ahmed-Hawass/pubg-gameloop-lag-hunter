@@ -26,6 +26,11 @@ pub struct Settings {
     pub sidebar_collapsed: bool,
     /// first-run welcome screen done — never shown again after the first launch
     pub onboarding_done: bool,
+    /// the pre-scan advice ("close background apps") — shown ONCE EVER, the
+    /// first time the app confirms the game is running; never again after
+    /// the user dismisses it
+    #[serde(default)]
+    pub game_advice_done: bool,
     /// the release version whose update modal has already been shown once
     /// (the modal appears ONCE per version; after that the About dot is the
     /// only signal until the next version lands)
@@ -45,6 +50,7 @@ impl Default for Settings {
             language: "auto".into(),
             sidebar_collapsed: false,
             onboarding_done: false,
+            game_advice_done: false,
             announced_update_version: None,
             thresholds: Thresholds::default(),
         }
@@ -179,6 +185,7 @@ mod tests {
             language: "ar".into(),
             sidebar_collapsed: false,
             onboarding_done: true,
+            game_advice_done: true,
             announced_update_version: Some("1.3.0".into()),
             thresholds: Thresholds::default(),
         };
@@ -188,6 +195,7 @@ mod tests {
         assert_eq!(back.auto_stop_minutes, 60);
         assert_eq!(back.version, 3);
         assert_eq!(back.announced_update_version.as_deref(), Some("1.3.0"));
+        assert!(back.game_advice_done);
     }
 
     #[test]

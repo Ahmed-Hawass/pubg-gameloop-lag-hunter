@@ -69,6 +69,11 @@
 [dir="rtl"] .sb-collapse svg {
   transform: scaleX(-1);
 }
+/* RTL: the reports back-arrow is a direction-aware chevron too — in Arabic
+   "back" points right, same rule as the sidebar collapse chevron */
+[dir="rtl"] .reports-back svg {
+  transform: scaleX(-1);
+}
 
 .titlebar-title {
   color: var(--text-2);

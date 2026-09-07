@@ -27,6 +27,9 @@ export const en = {
     firstRunAdvice: "For accurate results",
     firstRunAdviceBody:
       "Start GameLoop and the game first, then press Start, and stay in the game while scanning. Minimizing GameLoop pauses GPU monitoring, and closing it ends the scan.",
+    gameAdviceTitle: "One tip before your first scan",
+    gameAdviceBody:
+      "Close background apps before playing — browsers, downloads, and chat programs compete with the game for the processor, and each of them can appear in the results as a cause of stuttering. This reminder appears only once.",
   },
 
   // ---- error codes from the backend ----

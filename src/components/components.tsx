@@ -106,12 +106,15 @@ export function Timeline(props: {
   const pct = Math.min(100, (elapsedSec / Math.max(total, 1)) * 100);
   return (
     <div className="timeline">
-      <div className="timeline-head">
+      {/* the whole timeline is LTR by design: it plots CLOCK TIME left-to-right
+          (numbers are LTR even in RTL locales); pinning it avoids the marker
+          drifting against the reading direction in Arabic */}
+      <div className="timeline-head" dir="ltr">
         <span className="num">00:00</span>
         <span>{autoStopSec ? "Auto-stop" : "Session duration"}</span>
         <span className="num">{fmtDur(elapsedSec)}</span>
       </div>
-      <div className="timeline-track">
+      <div className="timeline-track" dir="ltr">
         {autoStopSec ? <div className="timeline-fill" style={{ width: `${pct}%` }} /> : null}
         {hasData
           ? spikes.map((s, i) => (

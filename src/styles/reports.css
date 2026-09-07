@@ -115,7 +115,7 @@
 .report-metrics li::before {
   content: "";
   position: absolute;
-  left: 0;
+  inset-inline-start: 0;
   top: 7px;
   width: 5px;
   height: 5px;

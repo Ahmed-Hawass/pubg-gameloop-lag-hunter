@@ -27,8 +27,9 @@
   --text-1: #edefec;
   --text-2: #8c948d;
   --text-3: #5a605a;
-  /* type — Arabic falls back to system fonts (Segoe UI covers it natively) */
-  --font-ui: "Inter", "Segoe UI", system-ui, sans-serif;
+  /* type — Google Sans covers latin; "Google Sans Arabic" (Cairo) covers the
+     Arabic codepoints via unicode-range — one stack, both scripts, inlined */
+  --font-ui: "Google Sans", "Google Sans Arabic", "Segoe UI", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", "Consolas", monospace;
   /* shape & motion */
   --radius: 12px;
