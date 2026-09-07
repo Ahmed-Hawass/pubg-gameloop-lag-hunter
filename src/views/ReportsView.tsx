@@ -258,10 +258,12 @@ export function ReportsView(props: {
 
       {/* one global folder button at the bottom of the sessions list */}
       {entries && entries.length > 0 ? (
-        <button className="reports-folder-btn" onClick={() => openRootFolder()}>
-          <Folder size={14} />
-          {t.openSessionsFolder}
-        </button>
+        <Button
+          label={t.openSessionsFolder}
+          icon={<Folder size={14} />}
+          variant="ghost"
+          onClick={() => openRootFolder()}
+        />
       ) : null}
 
       {/* delete confirmation — the unified Dialog component */}

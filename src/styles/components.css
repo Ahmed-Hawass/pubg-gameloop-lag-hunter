@@ -87,7 +87,8 @@
   align-items: center;
   gap: 6px;
 }
-/* the tiny circled "?" — quiet, sits just before the value */
+/* the tiny hint glyph — same Info icon and pointer cursor as the Hint
+   button elsewhere; quiet, sits just before the value */
 .metric-hint-dot {
   display: inline-flex;
   align-items: center;
@@ -97,7 +98,7 @@
   border-radius: 50%;
   color: var(--text-3);
   opacity: 0.75;
-  cursor: help;
+  cursor: pointer;
   outline: none;
   transition: color 0.15s, opacity 0.15s;
 }

@@ -114,14 +114,19 @@ export function AboutView(props: {
 
       {/* footer: links + signature — same row, quiet */}
       <div className="about-footer">
-        <button className="about-link" onClick={() => void api.openUrl(REPO_URL)}>
-          <Code2 size={14} />
-          GitHub
-        </button>
-        <button className="about-link support" onClick={() => void api.openUrl(SUPPORT_URL)}>
-          <Coffee size={14} />
-          {t.aboutSupport}
-        </button>
+        <Button
+          label="GitHub"
+          icon={<Code2 size={14} />}
+          variant="ghost"
+          onClick={() => void api.openUrl(REPO_URL)}
+        />
+        <Button
+          label={t.aboutSupport}
+          icon={<Coffee size={14} />}
+          variant="ghost"
+          className="about-support"
+          onClick={() => void api.openUrl(SUPPORT_URL)}
+        />
         <span className="about-made">
           {t.aboutMade} <Heart size={11} className="about-heart" /> <span className="by">Ahmed Hawass</span>
         </span>

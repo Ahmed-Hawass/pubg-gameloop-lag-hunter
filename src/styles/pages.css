@@ -435,27 +435,9 @@
   flex-wrap: wrap;
   padding: 4px 2px 0;
 }
-.about-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 13px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--elev-1);
-  color: var(--text-2);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: color 0.15s, background 0.15s, border-color 0.15s;
-}
-.about-link:hover {
-  color: var(--hover-text);
-  background: var(--hover-bg);
-  border-color: var(--hover-border);
-}
-.about-link.support:hover {
+/* footer links ride the standard ghost Button; the support one keeps its
+   warm accent on hover */
+.about-support:hover {
   color: var(--warn);
   border-color: var(--warn-dim);
 }

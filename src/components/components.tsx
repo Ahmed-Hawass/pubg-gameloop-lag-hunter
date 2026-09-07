@@ -4,7 +4,7 @@
 
 import { useEffect, useState, useRef, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Check, CircleHelp, FileText, Info, X } from "lucide-react";
+import { Check, FileText, Info, X } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Button — every action in the app
@@ -17,9 +17,19 @@ export function Button(props: {
   size?: "md" | "lg";
   disabled?: boolean;
   style?: CSSProperties;
+  /** extra classes for spot styling (e.g. per-button hover accents) */
+  className?: string;
 }) {
-  const { label, icon, onClick, variant = "primary", size = "md", disabled, style } = props;
-  const cls = ["btn", `btn-${variant}`, `btn-${size}`, disabled ? "is-disabled" : ""].join(" ");
+  const { label, icon, onClick, variant = "primary", size = "md", disabled, style, className } = props;
+  const cls = [
+    "btn",
+    `btn-${variant}`,
+    `btn-${size}`,
+    disabled ? "is-disabled" : "",
+    className ?? "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   return (
     <button className={cls} onClick={onClick} disabled={disabled} style={style}>
       {icon}
@@ -318,9 +328,9 @@ export function Tip(props: { text: string; children: ReactNode }) {
 }
 
 // ---------------------------------------------------------------------------
-// MetricHint — the tiny corner tooltip inside MetricCard: a small circled
-// "?" that opens the same portaled tooltip as everywhere else. Rendered by
-// MetricCard (hint text), not by callers.
+// MetricHint — the tiny corner tooltip inside MetricCard: the SAME Info icon
+// as the Hint button everywhere else (one hint glyph across the app), opening
+// the same portaled tooltip. Rendered by MetricCard (hint text), not callers.
 // ---------------------------------------------------------------------------
 function MetricHint(props: { text: string }) {
   const { text } = props;
@@ -347,7 +357,7 @@ function MetricHint(props: { text: string }) {
       onMouseLeave={() => setAnchor(null)}
       onBlur={() => setAnchor(null)}
     >
-      <CircleHelp size={12} />
+      <Info size={12} />
       {anchor
         ? createPortal(
             <span className="hint-tooltip" role="tooltip" style={{ left: anchor.left, bottom: anchor.bottom }}>

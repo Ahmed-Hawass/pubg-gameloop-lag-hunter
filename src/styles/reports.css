@@ -131,34 +131,14 @@
   gap: 10px;
 }
 
-/* one global folder button at the bottom of the sessions list */
-.reports-folder-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text-2);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 8px 14px;
-  cursor: pointer;
-  align-self: flex-start;
-  transition: color 0.12s, border-color 0.12s;
-}
-.reports-folder-btn:hover {
-  color: var(--hover-text);
-  border-color: var(--hover-border);
-}
-
 /* session row actions (delete only — folder is global now) */
 .sl-actions {
   display: flex;
   gap: 6px;
   flex: none;
 }
+/* an icon-sized ghost button: the same materials as .btn-ghost (elev-3 fill,
+   border, unified hover) in the compact 28px row-action footprint */
 .sl-act {
   display: flex;
   align-items: center;
@@ -167,10 +147,10 @@
   height: 28px;
   border-radius: 7px;
   border: 1px solid var(--border);
-  background: transparent;
+  background: var(--elev-3);
   color: var(--text-3);
   cursor: pointer;
-  transition: color 0.12s, border-color 0.12s;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
 }
 .sl-act:hover {
   color: var(--hover-text);
