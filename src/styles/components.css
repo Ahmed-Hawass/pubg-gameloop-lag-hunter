@@ -29,7 +29,7 @@
   color: var(--on-primary);
 }
 .btn-primary:hover {
-  background: #6aff3a;
+  background: var(--primary-hover);
 }
 /* the FILLED danger — used where the destructive action is the point
    (the running-scan Stop button, the delete-dialog confirm) */
@@ -39,7 +39,7 @@
   color: #fff;
 }
 .btn-danger-filled:hover {
-  background: #ff6f68;
+  background: var(--danger-hover);
 }
 /* the quiet danger OUTLINE (dark fill, red text) — currently unused; kept
    as the variant's design language for future "destructive but calm" spots */

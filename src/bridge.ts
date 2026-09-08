@@ -139,6 +139,7 @@ export const api = {
   sessionFolder: (id: string) => invoke<string>("session_folder", { id }),
   getSettings: () => invoke<Settings>("get_settings"),
   setLanguage: (lang: string) => invoke<string>("set_language", { lang }),
+  setTheme: (theme: string) => invoke<string>("set_theme", { theme }),
   setSidebarCollapsed: (collapsed: boolean) => invoke<boolean>("set_sidebar_collapsed", { collapsed }),
   finishOnboarding: () => invoke<void>("finish_onboarding"),
   finishGameAdvice: () => invoke<void>("finish_game_advice"),
@@ -230,6 +231,8 @@ export interface Settings {
   auto_stop_minutes: number;
   /** "auto" | "en" | "ar" — "auto" follows the OS at launch */
   language: string;
+  /** "dark" | "light" | "auto" — "auto" follows the OS theme */
+  theme: string;
   sidebar_collapsed: boolean;
   /** first-run welcome screen completed */
   onboarding_done: boolean;

@@ -22,6 +22,10 @@ pub struct Settings {
     pub auto_stop_minutes: u32,
     /// "auto" (follow the OS at launch) | "en" | "ar" (user toggle)
     pub language: String,
+    /// "dark" | "light" | "auto" (follow the OS theme); dark preserves the
+    /// look every existing install already has
+    #[serde(default = "default_theme")]
+    pub theme: String,
     /// sidebar collapsed (icons-only rail)
     pub sidebar_collapsed: bool,
     /// first-run welcome screen done — never shown again after the first launch
@@ -52,6 +56,7 @@ impl Default for Settings {
             // new users start with the lightest scan: 5 minutes
             auto_stop_minutes: 5,
             language: "auto".into(),
+            theme: default_theme(),
             sidebar_collapsed: false,
             onboarding_done: false,
             game_advice_done: false,
@@ -148,6 +153,21 @@ pub fn normalize_language(lang: &str) -> String {
     }
 }
 
+/// Theme values the UI can send. Default is "dark" (not "auto") on purpose:
+/// existing installs must keep the exact look they already have; "auto"
+/// would flip light-OS users without consent. New users opt in explicitly.
+pub fn normalize_theme(theme: &str) -> String {
+    match theme {
+        "light" => "light".into(),
+        "auto" => "auto".into(),
+        _ => "dark".into(),
+    }
+}
+
+pub fn default_theme() -> String {
+    "dark".into()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -188,6 +208,7 @@ mod tests {
             sensitivity: "standard".into(),
             auto_stop_minutes: 60,
             language: "ar".into(),
+            theme: "light".into(),
             sidebar_collapsed: false,
             onboarding_done: true,
             game_advice_done: true,
@@ -198,11 +219,38 @@ mod tests {
         let text = serde_json::to_string(&s).unwrap();
         let back: Settings = serde_json::from_str(&text).unwrap();
         assert_eq!(back.language, "ar");
+        assert_eq!(back.theme, "light");
         assert_eq!(back.auto_stop_minutes, 60);
         assert_eq!(back.version, 3);
         assert_eq!(back.announced_update_version.as_deref(), Some("1.3.0"));
         assert!(back.game_advice_done);
         assert!(back.background_advice_done);
+    }
+
+    #[test]
+    fn old_settings_file_defaults_theme_to_dark() {
+        // settings.json written before the theme existed has no theme key —
+        // serde default keeps "dark" so existing installs never change look
+        let old = serde_json::json!({
+            "version": 3,
+            "sensitivity": "standard",
+            "auto_stop_minutes": 5,
+            "language": "auto",
+            "sidebar_collapsed": false,
+            "onboarding_done": true
+        });
+        let text = serde_json::to_string(&old).unwrap();
+        let back: Settings = serde_json::from_str(&text).unwrap();
+        assert_eq!(back.theme, "dark");
+    }
+
+    #[test]
+    fn normalize_theme_rejects_unknown() {
+        assert_eq!(normalize_theme("light"), "light");
+        assert_eq!(normalize_theme("auto"), "auto");
+        assert_eq!(normalize_theme("dark"), "dark");
+        assert_eq!(normalize_theme("blue"), "dark");
+        assert_eq!(normalize_theme(""), "dark");
     }
 
     #[test]

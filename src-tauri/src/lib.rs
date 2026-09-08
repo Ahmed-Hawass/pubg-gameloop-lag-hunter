@@ -262,6 +262,14 @@ fn set_language(lang: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn set_theme(theme: String) -> Result<String, String> {
+    let mut s = engine::settings::load();
+    s.theme = engine::settings::normalize_theme(&theme);
+    engine::settings::save(&s)?;
+    Ok(s.theme)
+}
+
+#[tauri::command]
 fn set_sidebar_collapsed(collapsed: bool) -> Result<bool, String> {
     let mut s = engine::settings::load();
     s.sidebar_collapsed = collapsed;
@@ -505,6 +513,7 @@ pub fn run() {
             session_folder,
             get_settings,
             set_language,
+            set_theme,
             set_sidebar_collapsed,
             finish_onboarding,
             finish_game_advice,

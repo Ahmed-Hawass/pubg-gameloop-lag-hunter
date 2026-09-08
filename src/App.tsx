@@ -26,6 +26,7 @@ import { api, onEngineState, onGameloopChange, type StatusPayload, type UpdateIn
 import { useLang } from "./i18n";
 import { errorDialog } from "./errors";
 import { shouldShowUpdateModal } from "./updateFlow";
+import { resolveTheme, type ThemeSetting } from "./theme";
 import { UpdateModal } from "./components/UpdateModal";
 
 type View = "monitor" | "system" | "processes" | "checks" | "reports" | "settings" | "about";
@@ -81,6 +82,26 @@ export default function App() {
       while this dialog is on screen, and stop deferring the moment it is
       dismissed (a sticky boolean once deferred them for the whole launch) */
   const adviceUp = toast === "first_run_advice";
+  /** theme setting ("auto" follows the OS); the resolved value drives
+      document.documentElement.dataset.theme — single source of truth,
+      SettingsView only sends changes through onThemeChange below */
+  const [themeSetting, setThemeSetting] = useState<ThemeSetting>("dark");
+
+  // apply the resolved theme to <html> and follow OS changes while "auto"
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: light)");
+    const apply = () => {
+      document.documentElement.dataset.theme = resolveTheme(themeSetting, mq.matches);
+    };
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, [themeSetting]);
+
+  const onThemeChange = (v: ThemeSetting) => {
+    setThemeSetting(v);
+    void api.setTheme(v).catch(() => {});
+  };
   /** PowerShell probe result — true = limited mode banner on the monitor */
   const [psLimited, setPsLimited] = useState(false);
 
@@ -162,6 +183,8 @@ export default function App() {
         setOnboardingDone(s.onboarding_done);
         setGameAdviceDone(s.game_advice_done);
         setBackgroundAdviceDone(s.background_advice_done);
+        const th = s.theme;
+        setThemeSetting(th === "light" || th === "auto" ? th : "dark");
         // remember: was onboarding ALREADY done before this launch?
         if (s.onboarding_done) wasOnboardedRef.current = true;
       })
@@ -423,7 +446,7 @@ export default function App() {
                 <ChecksView active={view === "checks"} />
               </div>
               <div className={view === "settings" ? "" : "is-hidden-view"}>
-                <SettingsView />
+                <SettingsView theme={themeSetting} onThemeChange={onThemeChange} />
               </div>
               <div className={view === "about" ? "" : "is-hidden-view"}>
                 <AboutView

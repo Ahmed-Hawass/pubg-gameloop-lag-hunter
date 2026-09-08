@@ -81,6 +81,10 @@ export const ar: Locale = {
   settings: "الإعدادات",
   about: "عن الأداة",
   language: "اللغة",
+  theme: "السمة",
+  themeAuto: "تلقائي",
+  themeDark: "داكن",
+  themeLight: "فاتح",
 
   // ---- first-run welcome (two pages, once ever) ----
   welcomeTitle: "PUBG GameLoop Lag Hunter",

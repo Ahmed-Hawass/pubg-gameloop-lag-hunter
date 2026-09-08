@@ -77,6 +77,10 @@ export const en = {
   settings: "Settings",
   about: "About",
   language: "Language",
+  theme: "Theme",
+  themeAuto: "Automatic",
+  themeDark: "Dark",
+  themeLight: "Light",
 
   // ---- first-run welcome (two pages, once ever) ----
   welcomeTitle: "PUBG GameLoop Lag Hunter",

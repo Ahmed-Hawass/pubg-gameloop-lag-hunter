@@ -1,13 +1,16 @@
 /* design tokens — monochrome + signal green, from the concept direction */
 :root {
-  /* surfaces — ONE plane: the shell is a single surface split by borders */
-  --bg: #060706;
-  --elev-1: #101210;
-  --elev-2: #161816;
-  --elev-3: #1d201d;
+  color-scheme: dark;
+  /* surfaces — ONE plane: the shell is a single surface split by borders.
+     Soft dark, deliberately NOT pure black: lifted surfaces keep depth
+     without the harsh AMOLED contrast. */
+  --bg: #141613;
+  --elev-1: #1c1f1c;
+  --elev-2: #242824;
+  --elev-3: #2c312c;
   /* border */
-  --border: #232622;
-  --border-2: #2e332c;
+  --border: #383d38;
+  --border-2: #484e48;
   /* signal */
   --primary: #53fc18;
   --primary-dim: rgba(83, 252, 24, 0.1);
@@ -20,9 +23,9 @@
   --danger: #ff5a52;
   --danger-dim: rgba(255, 90, 82, 0.12);
   /* hover — LIGHT, not green: the accent belongs to states, not to passing hovers */
-  --hover-bg: #22251f;
+  --hover-bg: #343a34;
   --hover-text: #edefec;
-  --hover-border: #34392f;
+  --hover-border: #4a504a;
   /* text */
   --text-1: #edefec;
   --text-2: #8c948d;
@@ -31,10 +34,59 @@
      Arabic codepoints via unicode-range — one stack, both scripts, inlined */
   --font-ui: "Google Sans", "Google Sans Arabic", "Segoe UI", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", "Consolas", monospace;
+  /* hover lifts for filled actions — direction differs per theme (lighten on
+     dark, deepen on light), so they are tokens, not literals */
+  --primary-hover: #6aff3a;
+  --danger-hover: #ff6f68;
   /* shape & motion */
   --radius: 12px;
   --radius-sm: 9px;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ---- light theme: the same green-tinted identity on paper ----
+   Surfaces go white-on-paper (borders carry the separation instead of
+   elevation glow); signal colors deepen so text/icons keep contrast on
+   light backgrounds (neon-on-white would wash out). Applied via
+   document.documentElement.dataset.theme from the App shell. */
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #eef1ec;
+  --elev-1: #ffffff;
+  --elev-2: #f7f9f6;
+  --elev-3: #e9ede8;
+  --border: #d9ded7;
+  --border-2: #c4cbc2;
+  --primary: #1b8737;
+  --primary-dim: rgba(27, 135, 55, 0.12);
+  --primary-dim-2: rgba(27, 135, 55, 0.22);
+  --on-primary: #ffffff;
+  --ok: #1b8737;
+  --warn: #8a5f00;
+  --warn-dim: rgba(138, 95, 0, 0.14);
+  --danger: #d92d20;
+  --danger-dim: rgba(217, 45, 32, 0.12);
+  --hover-bg: #e4e9e2;
+  --hover-text: #141815;
+  --hover-border: #b9c2b7;
+  --text-1: #141815;
+  --text-2: #4d554e;
+  --text-3: #7a817b;
+  --primary-hover: #146c2a;
+  --danger-hover: #e5484d;
+}
+
+/* light-theme adjustments for the few non-token surfaces: the modal scrim
+   stays dark (standard dim over light UI) but lighter, and the heavy black
+   dialog/tooltip shadows soften to match paper elevation */
+[data-theme="light"] .dialog-overlay {
+  background: rgba(20, 24, 20, 0.4);
+}
+[data-theme="light"] .dialog-box {
+  box-shadow: 0 30px 60px -20px rgba(20, 30, 20, 0.35);
+}
+[data-theme="light"] .hint-tooltip {
+  box-shadow: 0 10px 30px -8px rgba(20, 30, 20, 0.3);
 }
 
 * {
