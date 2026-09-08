@@ -131,6 +131,21 @@
   gap: 10px;
 }
 
+/* bottom action row (folder + delete-all): same ghost family, danger for
+   the destructive one — the row itself carries the list alignment */
+.reports-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-self: flex-start;
+}
+/* delete-all keeps the ghost fill/border of its neighbor; only the hover
+   turns red — same language as the row delete buttons (sl-act-danger) */
+.btn.reports-delete-all:hover:not(:disabled) {
+  color: var(--danger);
+  border-color: var(--danger-dim);
+}
+
 /* session row actions (delete only — folder is global now) */
 .sl-actions {
   display: flex;

@@ -19,12 +19,12 @@ export function ProcessesView(props: { active: boolean }) {
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
 
-  const load = async (silent: boolean) => {
+  const load = async (silent: boolean, force = false) => {
     if (busyRef.current) return; // never stack queries
     busyRef.current = true;
     if (!silent) setBusy(true);
     try {
-      setProcs(await api.topProcesses());
+      setProcs(await api.topProcesses(force));
       setError(null);
     } catch (e) {
       if (!silent) setError(String(e)); // polling failures stay quiet
@@ -55,7 +55,7 @@ export function ProcessesView(props: { active: boolean }) {
           icon={<RefreshCw size={14} className={busy ? "spin" : ""} />}
           variant="ghost"
           disabled={busy}
-          onClick={() => void load(false)}
+          onClick={() => void load(false, true)}
         />
       </div>
 

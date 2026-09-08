@@ -66,16 +66,21 @@ export default function App() {
   /** the session whose summary the user dismissed — App-level so tab
       switches (which unmount MonitorView) can never resurrect it */
   const [dismissedSession, setDismissedSession] = useState<string | null>(null);
-  /** the session deleted from Reports — resets the whole finished state */
-  const [deletedSession, setDeletedSession] = useState<string | null>(null);
+  /** sessions deleted from Reports (single or bulk) — the Monitor must
+      never show a finished state for one of them */
+  const [deletedSessions, setDeletedSessions] = useState<string[]>([]);
+  const markDeleted = (ids: string[]) =>
+    setDeletedSessions((prev) => [...prev, ...ids.filter((id) => !prev.includes(id))]);
   /** a newer version is available on GitHub (checked at startup, quietly) */
   /** a newer version is available on GitHub (checked at startup, quietly) */
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   /** the update modal: shown at startup (once per version) or via manual check */
   const [updateModal, setUpdateModal] = useState(false);
-  /** first-run advice is up this launch — the update modal defers (one modal
-      surface at a time; the advice has priority) */
-  const [adviceUp, setAdviceUp] = useState(false);
+  /** first-run advice is up RIGHT NOW — derived from the live toast state,
+      never a sticky flag: the update modal and the one-shot advices defer
+      while this dialog is on screen, and stop deferring the moment it is
+      dismissed (a sticky boolean once deferred them for the whole launch) */
+  const adviceUp = toast === "first_run_advice";
   /** PowerShell probe result — true = limited mode banner on the monitor */
   const [psLimited, setPsLimited] = useState(false);
 
@@ -231,33 +236,37 @@ export default function App() {
 
   // the FIRST-RUN advice: appears exactly once — in the same launch where
   // the user completed the welcome flow. Users who onboarded in a previous
-  // launch never see it.
+  // launch never see it. (adviceUp is derived from the live toast above, so
+  // no reset logic is needed here — dismissing the dialog unblocks the rest.)
   useEffect(() => {
     if (onboardingDone && !adviceShown && !wasOnboardedRef.current) {
       setAdviceShown(true);
-      setAdviceUp(true); // the update modal defers while this is up
       setToastTitle(t.dialog.firstRunAdvice);
       setToastBody(t.dialog.firstRunAdviceBody);
       setToast("first_run_advice");
-    } else if (onboardingDone) {
-      // advice not showing this launch — the modal may show after all
-      setAdviceUp(false);
     }
   }, [onboardingDone]);
 
-  // the PRE-SCAN advice: the first time EVER the app confirms the game is
-  // running (initial probe, watcher, or a started session — any source),
-  // show the close-background-apps tip once. Never blocks Start: a session
-  // can begin while the dialog is up; it just waits for a click.
-  // One-modal rule: not over the welcome, not over the first-run advice.
-  // Sequencing: BOTH inputs must be loaded — gameloopUp AND the settings —
-  // before the gate answers. The old version failed silently when the game
-  // was already running before launch (probe answered first, settings still
-  // loading → the gate saw `gameAdviceDone === null`, skipped, and the
-  // advice appeared only after a restart).
+  // the PRE-SCAN advice: the first time EVER a session actually STARTS
+  // (status flips idle -> running = the user pressed Start and the engine
+  // gate confirmed the game), show the close-background-apps tip once.
+  // Never blocks Start: the session is already running while the dialog
+  // waits for a click. One-modal rule: not over the welcome, not over the
+  // first-run advice (then it defers to the NEXT session start, not lost).
+  // Persisted AT SHOW, not at close: closing the app with the dialog open
+  // must not resurrect it next launch.
+  const wasRunningRef = useRef(false);
+  /** the window was seen VISIBLE at least once in the current session —
+      the background advice only fires on a visible→background TRANSITION,
+      never on the starting state (pressing Start from an already-minimized
+      game is expected, not a behavior worth nagging about) */
+  const sawVisibleRef = useRef(false);
   useEffect(() => {
+    const running = status.status === "running";
+    const justStarted = running && !wasRunningRef.current;
+    wasRunningRef.current = running;
     if (
-      gameloopUp !== true ||
+      !justStarted ||
       onboardingDone !== true ||
       gameAdviceDone !== false ||
       adviceUp ||
@@ -265,12 +274,13 @@ export default function App() {
     ) {
       return;
     }
-    setGameAdviceDone(true); // never again — even if closed without a click
+    setGameAdviceDone(true); // never again
+    void api.finishGameAdvice().catch(() => {});
     setGameAdviceUp(true);
     setToastTitle(t.dialog.gameAdviceTitle);
     setToastBody(t.dialog.gameAdviceBody);
     setToast("game_advice");
-  }, [gameloopUp, onboardingDone, gameAdviceDone, adviceUp, backgroundAdviceUp]);
+  }, [status, onboardingDone, gameAdviceDone, adviceUp, backgroundAdviceUp]);
 
   // the STAY-IN-GAME advice: the first time EVER a RUNNING session measures
   // the game window in the background, show the "stay inside the game" tip.
@@ -279,17 +289,28 @@ export default function App() {
   // if another advice is up when the moment arrives, this one skips: all of
   // these are one-forever, and the pre-scan advice already covers the topic.
   useEffect(() => {
+    // track the transition, not the state: reset on session end so a new
+    // session starts clean and can never inherit an old session's sighting
+    if (status.status !== "running") {
+      sawVisibleRef.current = false;
+      return;
+    }
+    if (status.ui?.game_visible === true) {
+      sawVisibleRef.current = true;
+      return; // visible now — nothing to warn about
+    }
     if (
-      status.status !== "running" ||
       status.ui?.game_visible !== false ||
       onboardingDone !== true ||
       backgroundAdviceDone !== false ||
       adviceUp ||
-      gameAdviceUp
+      gameAdviceUp ||
+      !sawVisibleRef.current
     ) {
       return;
     }
     setBackgroundAdviceDone(true); // never again
+    void api.finishBackgroundAdvice().catch(() => {});
     setBackgroundAdviceUp(true);
     setToastTitle(t.dialog.backgroundAdviceTitle);
     setToastBody(t.dialog.backgroundAdviceBody);
@@ -298,7 +319,7 @@ export default function App() {
 
   // a session deleted from Reports must not linger as a "finished" state
   const effectiveStatus: StatusPayload =
-    deletedSession && status.ui?.session === deletedSession
+    status.ui?.session != null && deletedSessions.includes(status.ui.session)
       ? { status: "idle", ui: null }
       : status;
 
@@ -415,7 +436,13 @@ export default function App() {
                   active={view === "reports"}
                   openId={reportOpenId}
                   onOpened={() => setReportOpenId(null)}
-                  onDeleted={(id) => setDeletedSession(id)}
+                  onDeleted={(id) => markDeleted([id])}
+                  onDeletedAll={(ids) => markDeleted(ids)}
+                  runningSessionId={
+                    effectiveStatus.status === "running" || effectiveStatus.status === "stopping"
+                      ? (effectiveStatus.ui?.session ?? null)
+                      : null
+                  }
                 />
               </div>
             </main>

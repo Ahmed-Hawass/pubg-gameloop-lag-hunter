@@ -134,6 +134,8 @@ export const api = {
   sessionEntries: () => invoke<SessionEntry[]>("session_entries"),
   loadReport: (id: string) => invoke<FriendlyReport>("load_report", { id }),
   deleteSession: (id: string) => invoke<void>("delete_session", { id }),
+  deleteAllSessions: (excludeId: string | null) =>
+    invoke<string[]>("delete_all_sessions", { excludeId }),
   sessionFolder: (id: string) => invoke<string>("session_folder", { id }),
   getSettings: () => invoke<Settings>("get_settings"),
   setLanguage: (lang: string) => invoke<string>("set_language", { lang }),
@@ -146,7 +148,7 @@ export const api = {
   openUrl: (url: string) => invoke<void>("open_url", { url }),
   getVersion: () => invoke<string>("get_version"),
   systemInfo: () => invoke<SystemInfo>("system_info"),
-  topProcesses: () => invoke<TopProcess[]>("top_processes"),
+  topProcesses: (force?: boolean) => invoke<TopProcess[]>("top_processes", { force: force ?? false }),
   systemChecks: () => invoke<SystemChecks>("system_checks"),
   openWindowsPanel: (panel: string) => invoke<void>("open_windows_panel", { panel }),
   // update flow

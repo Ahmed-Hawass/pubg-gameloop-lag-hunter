@@ -299,6 +299,16 @@ pub fn top_processes_cached() -> Result<Vec<TopProcess>, String> {
     Ok(fresh)
 }
 
+/// top processes, bypassing the cache: a synchronous fresh read for the
+/// manual refresh button (the cached path would return the same numbers
+/// the silent poll already shows). Warms the cache so the next silent
+/// poll doesn't flash older numbers right after a manual refresh.
+pub fn top_processes_fresh() -> Result<Vec<TopProcess>, String> {
+    let fresh = query_top_processes()?;
+    TOP_PROCESSES_CACHE.set(fresh.clone());
+    Ok(fresh)
+}
+
 /// System checks with TTL: same stale-while-revalidate pattern.
 pub fn system_checks_cached() -> Result<SystemChecks, String> {
     if let Some(cached) = SYSTEM_CHECKS_CACHE.get() {

@@ -1,6 +1,7 @@
 /* WelcomeView — the two-page first-run landing.
    Same identity as the app: dark plane, signal green, one CTA. */
 .welcome {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -11,6 +12,42 @@
   height: 100%;
   text-align: center;
   padding: 24px 16px;
+}
+
+/* language switcher: pinned to the bottom corner, out of the CTA flow —
+   inline-end so it mirrors with the direction automatically */
+.welcome-lang {
+  /* fixed to the WINDOW corner, not the centered column: absolute here
+     landed mid-screen because .welcome is 460px centered in a 940px
+     window. Safe: no transformed/filtered ancestors up to the viewport. */
+  position: fixed;
+  bottom: 16px;
+  inset-inline-end: 16px;
+  z-index: 5;
+}
+
+/* quiet utility icon, not a CTA: transparent until hover, same language
+   as the Hint pattern (text-3 → text-2). No border, no label — the tooltip
+   carries the target language name. */
+.welcome-lang-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.welcome-lang-btn:hover,
+.welcome-lang-btn:focus-visible {
+  color: var(--text-2);
+  background: var(--hover-bg);
+  border-color: var(--hover-border);
+  outline: none;
 }
 
 .welcome-icon {

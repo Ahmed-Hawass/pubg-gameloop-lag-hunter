@@ -17,6 +17,9 @@ export const en = {
     delete: "Delete",
     deleteTitle: "Delete this session?",
     deleteBody: "Its samples and report will be permanently removed from your PC.",
+    deleteAllTitle: "Delete all sessions?",
+    deleteAllBody: (n: number) =>
+      `All ${n} saved sessions and their reports will be permanently removed from your PC.`,
     scanNeedsGame: "The game must be running to start a scan",
     scanNeedsGameBody:
       "PUBG Mobile must be running inside GameLoop before a scan can start. Start the game, then press Start again.",
@@ -29,7 +32,7 @@ export const en = {
       "Start GameLoop and the game first, then press Start, and stay in the game while scanning. Minimizing GameLoop pauses GPU monitoring, and closing it ends the scan.",
     gameAdviceTitle: "One tip before your first scan",
     gameAdviceBody:
-      "Close background apps before playing — browsers, downloads, and chat programs compete with the game for the processor, and each of them can appear in the results as a cause of stuttering.",
+      "Close background apps before playing. Browsers, downloads, and chat programs compete with the game for the processor, and each of them can appear in the results as a cause of stuttering.",
     backgroundAdviceTitle: "Stay in the game while scanning",
     backgroundAdviceBody:
       "The game window was in the background during this scan. GPU analysis pauses while the window is minimized, and other measurements continue. For the most complete results, stay inside the game until the scan finishes.",
@@ -279,6 +282,7 @@ export const en = {
   openReportFile: "Open report file",
   openSessionsFolder: "Open sessions folder",
   deleteSession: "Delete session",
+  deleteAllSessions: "Delete all",
   // honest outcomes
   clean: "Clean",
   findings: "Findings",

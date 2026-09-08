@@ -19,16 +19,21 @@ export function ReportsView(props: {
   onOpened: () => void;
   /** tells App which session was deleted (Monitor resets if it was showing it) */
   onDeleted?: (id: string) => void;
+  /** bulk deletion completed (ids actually removed) */
+  onDeletedAll?: (ids: string[]) => void;
+  /** id of the currently-running session, if any (bulk delete disabled while set) */
+  runningSessionId?: string | null;
   /** true while the Reports tab is the visible one */
   active?: boolean;
 }) {
-  const { openId, onOpened, onDeleted, active } = props;
+  const { openId, onOpened, onDeleted, onDeletedAll, runningSessionId, active } = props;
   const { t } = useLang();
   const [entries, setEntries] = useState<SessionEntry[] | null>(null);
   const [report, setReport] = useState<FriendlyReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
 
   const outcomeMeta: Record<string, { label: string; tone: "ok" | "bad" | "mid" }> = {
     clean: { label: t.clean, tone: "ok" },
@@ -90,6 +95,18 @@ export function ReportsView(props: {
       setConfirmDelete(null);
       if (report?.id === id) setReport(null);
       onDeleted?.(id);
+      refresh();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const removeAllSessions = async () => {
+    try {
+      const ids = await api.deleteAllSessions(runningSessionId ?? null);
+      setConfirmDeleteAll(false);
+      setReport(null);
+      onDeletedAll?.(ids);
       refresh();
     } catch (e) {
       setError(String(e));
@@ -258,12 +275,22 @@ export function ReportsView(props: {
 
       {/* one global folder button at the bottom of the sessions list */}
       {entries && entries.length > 0 ? (
-        <Button
-          label={t.openSessionsFolder}
-          icon={<Folder size={14} />}
-          variant="ghost"
-          onClick={() => openRootFolder()}
-        />
+        <div className="reports-actions">
+          <Button
+            label={t.openSessionsFolder}
+            icon={<Folder size={14} />}
+            variant="ghost"
+            onClick={() => openRootFolder()}
+          />
+          <Button
+            label={t.deleteAllSessions}
+            icon={<Trash2 size={14} />}
+            variant="ghost"
+            className="reports-delete-all"
+            disabled={runningSessionId != null}
+            onClick={() => setConfirmDeleteAll(true)}
+          />
+        </div>
       ) : null}
 
       {/* delete confirmation — the unified Dialog component */}
@@ -280,6 +307,23 @@ export function ReportsView(props: {
             void removeSession(confirmDelete);
           }}
           onClose={() => setConfirmDelete(null)}
+        />
+      ) : null}
+
+      {/* delete-all confirmation — same Dialog, dynamic count in the body */}
+      {confirmDeleteAll ? (
+        <Dialog
+          title={t.dialog.deleteAllTitle}
+          body={t.dialog.deleteAllBody(entries?.length ?? 0)}
+          kind="confirm"
+          danger
+          confirmLabel={t.dialog.delete}
+          cancelLabel={t.dialog.cancel}
+          okLabel={t.dialog.ok}
+          onConfirm={() => {
+            void removeAllSessions();
+          }}
+          onClose={() => setConfirmDeleteAll(false)}
         />
       ) : null}
     </div>

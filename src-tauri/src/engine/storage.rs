@@ -505,6 +505,35 @@ pub fn delete_session(id: &str) -> Result<(), String> {
     fs::remove_dir_all(&dir).map_err(|e| format!("cannot delete: {e}"))
 }
 
+/// Delete every saved session directory (bulk cleanup from Reports).
+/// Only `session-*` directories are touched — anything else in the folder
+/// (and anything failing the id guard) is left alone; a locked file skips
+/// its session instead of aborting the whole run (the list refresh right
+/// after shows what is really gone).
+/// The live writer's directory is skipped when its id is passed: deleting
+/// it mid-write would corrupt its report. The UI also disables the button
+/// while a session runs — this is the second lock.
+pub fn delete_all_sessions(root: &Path, exclude_id: Option<&str>) -> Result<Vec<String>, String> {
+    let mut deleted = Vec::new();
+    let Ok(rd) = fs::read_dir(root) else {
+        return Ok(deleted);
+    };
+    for e in rd.flatten() {
+        let name = e.file_name().to_str().unwrap_or("").to_string();
+        if !name.starts_with("session-") || name.contains("..") || name.contains('\\') || name.contains('/') {
+            continue;
+        }
+        if Some(name.as_str()) == exclude_id {
+            continue;
+        }
+        if e.path().is_dir() && fs::remove_dir_all(e.path()).is_ok() {
+            deleted.push(name);
+        }
+    }
+    deleted.sort();
+    Ok(deleted)
+}
+
 /// Full path of a session dir (for "open folder").
 pub fn session_dir(id: &str) -> Result<String, String> {
     validate_session_id(id)?;
@@ -857,6 +886,22 @@ mod tests {
         };
         let stats = SessionStats::from(&[mk(), mk()]);
         assert_eq!(stats.background_pct, None);
+    }
+
+    #[test]
+    fn delete_all_removes_only_sessions_and_skips_active() {
+        let d = std::env::temp_dir().join(format!("lh-delall-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(d.join("session-2026-01-01_000000")).unwrap();
+        fs::create_dir_all(d.join("session-2026-01-02_000000")).unwrap();
+        fs::create_dir_all(d.join("not-a-session")).unwrap();
+        fs::write(d.join("loose.txt"), "x").unwrap();
+        let out = delete_all_sessions(&d, Some("session-2026-01-02_000000")).unwrap();
+        assert_eq!(out, vec!["session-2026-01-01_000000".to_string()]);
+        assert!(d.join("session-2026-01-02_000000").is_dir());
+        assert!(d.join("not-a-session").is_dir());
+        assert!(d.join("loose.txt").is_file());
+        let _ = fs::remove_dir_all(&d);
     }
 
     #[test]

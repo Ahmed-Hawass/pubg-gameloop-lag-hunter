@@ -72,13 +72,20 @@ async fn system_info() -> Result<engine::system::SystemInfo, String> {
 }
 
 #[tauri::command]
-async fn top_processes() -> Result<Vec<engine::system::TopProcess>, String> {
+async fn top_processes(force: bool) -> Result<Vec<engine::system::TopProcess>, String> {
     let _t = engine::logging::timed("ipc: top_processes");
     // first call on a run pays a PowerShell spawn — blocking pool, never the
-    // async runtime
-    tauri::async_runtime::spawn_blocking(engine::system::top_processes_cached)
-        .await
-        .map_err(|e| format!("top processes task failed: {e}"))?
+    // async runtime. force=true (manual refresh button) pays it every time
+    // and warms the cache; the silent poll keeps using the cached path.
+    if force {
+        tauri::async_runtime::spawn_blocking(engine::system::top_processes_fresh)
+            .await
+            .map_err(|e| format!("top processes task failed: {e}"))?
+    } else {
+        tauri::async_runtime::spawn_blocking(engine::system::top_processes_cached)
+            .await
+            .map_err(|e| format!("top processes task failed: {e}"))?
+    }
 }
 
 #[tauri::command]
@@ -210,6 +217,19 @@ async fn delete_session(id: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || engine::storage::delete_session(&id))
         .await
         .map_err(|e| format!("delete task failed: {e}"))?
+}
+
+/// Delete every saved session except the live writer's directory (bulk
+/// cleanup). The frontend passes the running session's id when one exists
+/// and disables the button while running — both locks together.
+#[tauri::command]
+async fn delete_all_sessions(exclude_id: Option<String>) -> Result<Vec<String>, String> {
+    let _t = engine::logging::timed("ipc: delete_all_sessions");
+    tauri::async_runtime::spawn_blocking(move || {
+        engine::storage::delete_all_sessions(&engine::storage::sessions_root(), exclude_id.as_deref())
+    })
+    .await
+    .map_err(|e| format!("delete-all task failed: {e}"))?
 }
 
 #[tauri::command]
@@ -481,6 +501,7 @@ pub fn run() {
             session_entries,
             load_report,
             delete_session,
+            delete_all_sessions,
             session_folder,
             get_settings,
             set_language,

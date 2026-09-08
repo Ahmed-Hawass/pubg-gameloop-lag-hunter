@@ -21,6 +21,9 @@ export const ar: Locale = {
     delete: "حذف",
     deleteTitle: "هل تريد حذف هذه الجلسة؟",
     deleteBody: "ستُحذف عيناتها وتقريرها نهائيًا من جهازك.",
+    deleteAllTitle: "هل تريد حذف جميع الجلسات؟",
+    deleteAllBody: (n: number) =>
+      `ستُحذف جميع الجلسات المحفوظة (${n}) وتقاريرها نهائيًا من جهازك.`,
     scanNeedsGame: "يجب تشغيل اللعبة أولًا لبدء الفحص",
     scanNeedsGameBody:
       "يجب أن تكون PUBG Mobile قيد التشغيل داخل GameLoop قبل بدء الفحص. شغّل اللعبة، ثم اضغط زر البدء مرة أخرى.",
@@ -280,6 +283,7 @@ export const ar: Locale = {
   openReportFile: "افتح ملف التقرير",
   openSessionsFolder: "افتح مجلد الجلسات",
   deleteSession: "حذف الجلسة",
+  deleteAllSessions: "حذف الكل",
   // honest outcomes
   clean: "سليمة",
   findings: "نتائج",
