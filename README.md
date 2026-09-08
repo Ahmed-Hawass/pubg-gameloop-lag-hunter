@@ -10,12 +10,10 @@
 
 ## See It in Action
 
-Live monitoring during a scan — CPU, RAM, GPU, and disk every second, with the session timeline and activity feed.
+Live monitoring during a scan, CPU, RAM, GPU, and disk every second, with the session timeline and activity feed. Dark and light themes included.
 
 <p align="center">
-  <a href="docs/screenshots/monitor-live.png">
-    <img src="docs/screenshots/monitor-live.png" width="560" alt="Monitor screen during a live scan.">
-  </a>
+  <img src="docs/screenshots/monitor-light.png" width="560" alt="Monitor screen during a live scan.">
 </p>
 
 ---
@@ -50,7 +48,9 @@ CPU, RAM, GPU, and disk are sampled every second while you play.
 
 **4. Read the diagnosis**
 
-Stop the scan — or let auto-stop finish it — and review the findings, key moments, and measurements.
+Stop the scan, or let auto-stop finish it, and review the findings, key moments, and measurements.
+
+The **Reports** tab keeps every finished session with its full report. **System** shows your rig as the tool sees it, **Processes** shows what's eating the machine right now, and **Checks** points at Windows settings that silently cause lag (it only opens the right page, you flip the switch).
 
 > **Read-only by design:** Lag Hunter diagnoses and advises. It never changes Windows settings.
 
@@ -75,6 +75,8 @@ Stop the scan — or let auto-stop finish it — and review the findings, key mo
 
 On AMD/Intel, GPU counter availability is limited. The tool reports this honestly and continues measuring everything else.
 
+The interface speaks **English and Arabic**, with a **dark and light theme** (Settings tab).
+
 ---
 
 ## Download
@@ -84,12 +86,14 @@ Download `pubg-gameloop-lag-hunter-<version>.exe` from the [Releases](https://gi
 For example:
 
 ```text
-pubg-gameloop-lag-hunter-1.0.0.exe
+pubg-gameloop-lag-hunter-1.4.0.exe
 ```
 
 **No installer. No setup.**
 
 Every release includes `SHA256SUMS.txt` so you can verify the downloaded file.
+
+The app also checks for updates itself and offers new releases from inside the About tab, same signed-by-hash files, no auto-install, no restart.
 
 ### First Run on Windows 10
 
@@ -151,15 +155,15 @@ Binary:
 src-tauri/target/release/pubg-gameloop-lag-hunter-<version>.exe
 ```
 
-The exe is already versioned — attach it to the release as-is.
+The exe is already versioned, attach it to the release as-is.
 
 ---
 
 ## Going Deeper
 
-* [Architecture](docs/ARCHITECTURE.md) — how the engine is built and why
-* [CLI and headless testing](docs/CLI.md) — running the engine without the window
-* [Specification](docs/SPEC.md) — product guarantees and non-goals
+* [Architecture](docs/ARCHITECTURE.md): how the engine is built and why
+* [CLI and headless testing](docs/CLI.md): running the engine without the window
+* [Specification](docs/SPEC.md): product guarantees and non-goals
 * [Changelog](CHANGELOG.md)
 
 ---
@@ -169,6 +173,14 @@ The exe is already versioned — attach it to the release as-is.
 Issues and pull requests are welcome.
 
 For engineering ground rules, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+---
+
+## Support
+
+Lag Hunter is free and independent. If it helped you find your stutter, you can support its development here:
+
+**[paypal.me/ahmedhawass](https://paypal.me/ahmedhawass)**
 
 ---
 

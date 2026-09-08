@@ -1,6 +1,6 @@
 [package]
 name = "pubg-gameloop-lag-hunter"
-version = "1.3.0"
+version = "1.4.0"
 description = "Real-time lag diagnosis for PUBG Mobile on GameLoop"
 authors = ["Ahmed Hawass"]
 license = "MIT"

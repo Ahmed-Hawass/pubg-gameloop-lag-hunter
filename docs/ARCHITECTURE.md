@@ -90,7 +90,7 @@ It never flips a switch.
 
 ### ⚡ Nothing slow on the UI's threads
 
-Sync Tauri commands run on the IPC dispatcher thread — one slow command
+Sync Tauri commands run on the IPC dispatcher thread, one slow command
 freezes the window (the original "Not Responding for a minute" bug:
 a 20-second `Get-PhysicalDisk` hardware inventory). Every potentially
 slow command is `async` and parks its blocking work on `spawn_blocking`.
@@ -123,7 +123,7 @@ A fixed 2 GB RAM floor would cry wolf on a 4 GB machine and sleep through pressu
 
 The floor is **6% of installed RAM**, clamped to **1–4 GB**. Disk-queue tolerance scales with spindle count.
 
-The rig profile (RAM, disks, GPU) is cached **on disk** (`system-cache.json`): the hardware inventory (`Get-PhysicalDisk`) costs 20+ seconds on HDD machines and the rig doesn't change between launches — the first run pays it once, every later launch reads the cache in microseconds.
+The rig profile (RAM, disks, GPU) is cached **on disk** (`system-cache.json`): the hardware inventory (`Get-PhysicalDisk`) costs 20+ seconds on HDD machines and the rig doesn't change between launches, the first run pays it once, every later launch reads the cache in microseconds.
 
 ### `tasklist` over PowerShell for the GameLoop probe
 

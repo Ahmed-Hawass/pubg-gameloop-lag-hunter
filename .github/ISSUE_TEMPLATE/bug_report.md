@@ -17,4 +17,4 @@ A clear description of the problem.
 - GameLoop running? PUBG Mobile running?
 
 **Log file**
-Attach `%LOCALAPPDATA%\LagHunter\logs\laghunter-<date>.log` — it usually tells us everything.
+Attach `%LOCALAPPDATA%\LagHunter\logs\laghunter-<date>.log`, it usually tells us everything.

@@ -41,4 +41,4 @@ Logs rotate after **7 days**.
 
 The updater reads the public GitHub releases feed over **HTTPS**.
 
-It never downloads or runs anything itself — it links you to the release page.
+It never downloads or runs anything itself, it links you to the release page.

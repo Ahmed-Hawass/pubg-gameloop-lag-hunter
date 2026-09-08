@@ -50,28 +50,28 @@ pub fn diagnosis_copy(
     Some(match key {
         "disk_wait" => (
             "Game is waiting on disk",
-            "The game stalls while loading files from disk — this causes heavy lag during hot drops and crowded fights.",
+            "The game stalls while loading files from disk, causing heavy lag during hot drops and crowded fights.",
             "Memory pressure forces active paging (hard faults + disk queue)",
             "Increase the pagefile size and give GameLoop more RAM in its settings",
             "high",
         ),
         "cpu_busy" => (
             "CPU maxed out",
-            "The processor is running at full capacity — the game needs more cores than available.",
+            "The processor is running at full capacity, so the game needs more cores than available.",
             "CPU saturation",
             "Limit GameLoop cores to physical cores, close background apps (browsers, Discord) before playing",
             "high",
         ),
         "cpu_throttle" => (
             "CPU slowing itself down",
-            "The processor is hot and protecting itself by dropping its speed — performance collapses under load.",
+            "The processor is hot and protecting itself by dropping its speed, so performance collapses under load.",
             "Thermal or power throttling",
             "Clean the fans, use a cooling pad, keep the charger plugged in",
             "high",
         ),
         "mem_low" => (
             "Running out of memory",
-            "RAM is filling up and the game keeps swapping files in and out — each swap is a stutter.",
+            "RAM is filling up and the game keeps swapping files in and out, and each swap is a stutter.",
             "Memory pressure",
             "Close background apps and increase the pagefile (or add more GameLoop RAM)",
             "high",
@@ -85,16 +85,16 @@ pub fn diagnosis_copy(
         ),
         "gpu_wake" => (
             "GPU waking from sleep",
-            "The graphics card drops to a power-saving state between scenes and needs a moment to wake up — that moment is a visible hitch.",
+            "The graphics card drops to a power-saving state between scenes and needs a moment to wake up, and that moment is a visible hitch.",
             "GPU power-state transition (memory clock)",
-            "In the GPU control panel, set power management to 'Prefer maximum performance' for every GameLoop process. If it still appears, the driver is trimming memory clocks in light scenes — common on laptops with hybrid graphics; the effect is usually a brief hitch between scenes, not a persistent problem.",
+            "In the GPU control panel, set power management to 'Prefer maximum performance' for every GameLoop process. If it still appears, the driver is trimming memory clocks in light scenes, common on laptops with hybrid graphics; the effect is usually a brief hitch between scenes, not a persistent problem.",
             "medium",
         ),
         "scene_hitch" => (
             "First-time scene loading",
-            "The first time a scene appears (lobby, new map) the system prepares its graphics — one hard hitch, then smooth. Revisiting the same scene is smooth because it is cached.",
+            "The first time a scene appears (lobby, new map) the system prepares its graphics, causing one hard hitch, then smooth. Revisiting the same scene is smooth because it is cached.",
             "Shader compile / first asset load (normal for GameLoop)",
-            "No permanent fix — it fades as scenes repeat and shrinks with GPU driver updates",
+            "No permanent fix: it fades as scenes repeat and shrinks with GPU driver updates",
             "low",
         ),
         "gpu_busy" => (

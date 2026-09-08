@@ -1,10 +1,10 @@
-# PUBG GameLoop Lag Hunter — Specification
+# PUBG GameLoop Lag Hunter, Specification
 
 ## What This Is
 
 A Windows desktop tool for PUBG Mobile players on GameLoop.
 
-It analyzes performance while they play, detects stutters, and uncovers what is causing them — answering the question that matters after a laggy match:
+It analyzes performance while they play, detects stutters, and uncovers what is causing them, answering the question that matters after a laggy match:
 
 > **What caused it?**
 
@@ -60,7 +60,7 @@ tasklist (GameLoop probe)       ─┘
 
 ### Diagnoser
 
-* Groups symptoms by root cause — one storm becomes one card.
+* Groups symptoms by root cause, one storm becomes one card.
 * Subordinates short CPU spikes riding disk storms.
 * Requires **≥3 seconds** of sustained evidence before a condition earns a card.
 
@@ -114,10 +114,10 @@ Every human-facing string lives in the locale files.
 
 ## Non-Goals
 
-* **No FPS overlay** — anti-cheat territory, and not our question.
-* **No system tweaking or repair** — diagnosis is the product; repair is the user's decision with our guidance.
-* **No multi-emulator support** — GameLoop only. Identity beats reach.
-* **No telemetry** — the only thing written is on the user's own disk.
+* **No FPS overlay**, anti-cheat territory, and not our question.
+* **No system tweaking or repair**, diagnosis is the product; repair is the user's decision with our guidance.
+* **No multi-emulator support**, GameLoop only. Identity beats reach.
+* **No telemetry**, the only thing written is on the user's own disk.
 
 ---
 

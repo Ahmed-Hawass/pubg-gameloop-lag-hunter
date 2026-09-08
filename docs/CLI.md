@@ -1,7 +1,7 @@
 # CLI (headless, no window)
 
 The engine runs without the interface. This is what we use to debug
-"the samples stopped flowing" reports — and what you can use to test the
+"the samples stopped flowing" reports, and what you can use to test the
 diagnosis engine on any machine.
 
 ## The engine probe
@@ -24,18 +24,18 @@ Reading the output:
 [1] starting session (no auto-stop)...
 [2] stopping...
 [3] final: samples=12 game_seen=true status=Finished
-== RESULT: ENGINE OK — samples flowed ==
+== RESULT: ENGINE OK, samples flowed ==
 == GAME DETECTION OK ==
 ```
 
 - `samples=0` → the sampling pipeline is broken on this machine
   (look at `logs/laghunter-<date>.log` for spawn errors).
-- `game_seen=false` → GameLoop detection failed — check that
+- `game_seen=false` → GameLoop detection failed, check that
   `aow_exe`/`TBS`/`TxGameAssistant`/`AndroidEmulatorEn` appear in
   `tasklist` output on that machine.
 
 Exit codes: `0` healthy, `2` engine broken, other non-zero = start failure
-(including `GAMELOOP_NOT_RUNNING` — the gate applies headless too).
+(including `GAMELOOP_NOT_RUNNING`, the gate applies headless too).
 
 ## The live pipeline test
 
