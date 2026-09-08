@@ -8,7 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "checksum": "powershell -NoProfile -File scripts/checksum.ps1"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.4",
