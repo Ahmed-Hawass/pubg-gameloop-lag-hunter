@@ -89,7 +89,7 @@ Download `pubg-gameloop-lag-hunter-<version>.exe` from the [Releases](https://gi
 For example:
 
 ```text
-pubg-gameloop-lag-hunter-1.4.0.exe
+pubg-gameloop-lag-hunter-1.5.0.exe
 ```
 
 **No installer. No setup.**
