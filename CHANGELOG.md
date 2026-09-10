@@ -7,6 +7,10 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- The Pagefile row's "Open setting" button did nothing since v1.2.0 (it
+  tried to open a requireAdministrator exe, which an unprivileged app can
+  never spawn). It now runs `control sysdm.cpl,,3`: the same Advanced tab,
+  verified working with no elevation.
 - Sidebar (and every other) tooltips no longer stick open: hiding used to
   rely on `mouseleave` alone, so a dialog mounting under a parked cursor,
   an Alt+Tab away, or a wheel-scroll detach left the bubble painted until

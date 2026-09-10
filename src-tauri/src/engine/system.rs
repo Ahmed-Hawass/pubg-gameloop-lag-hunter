@@ -654,23 +654,43 @@ fn pagefile_ok(mode: &str, mb: u64) -> bool {
 
 /// Open a Windows settings panel — strictly whitelisted, never a free string.
 pub fn open_windows_panel(panel: &str) -> Result<(), String> {
-    let applet = match panel {
-        "power" => "powercfg.cpl",
-        // SystemPropertiesAdvanced.exe opens the Advanced System Properties
-        // page DIRECTLY (the Performance/Virtual memory dialog is one click
-        // away) — sysdm.cpl would open the General tab instead.
-        "system" => "SystemPropertiesAdvanced.exe",
-        _ => return Err("unknown panel".into()),
-    };
+    // control.exe only opens .cpl APPLETS — a standalone exe handed to it
+    // fails silently (this exact bug: the Pagefile button launched
+    // control.exe with a non-applet and nothing appeared). Each arm
+    // therefore builds its OWN command: CPLs go through control.exe,
+    // real exes run directly (System32 is always on PATH).
     #[cfg(windows)]
     {
-        Command::new("control.exe")
-            .arg(applet)
-            .stdout(Stdio::null())
+        let mut cmd = match panel {
+            "power" => {
+                let mut c = Command::new("control.exe");
+                c.arg("powercfg.cpl");
+                c
+            }
+            // Advanced tab DIRECTLY (Performance/Virtual memory is one
+            // click away): control.exe only opens .cpl applets, and the
+            // SystemPropertiesAdvanced.exe shortcut is NOT one, it carries
+            // requireAdministrator, so spawning it from this unprivileged
+            // app always fails. `sysdm.cpl,,3` is the same dialog on the
+            // Advanced tab (verified by screenshot), no elevation needed.
+            // History: v1.0.0 used bare sysdm.cpl and worked; v1.2.0 broke
+            // the button reaching for the Advanced tab the wrong way.
+            "system" => {
+                let mut c = Command::new("control.exe");
+                c.arg("sysdm.cpl,,3");
+                c
+            }
+            _ => return Err("unknown panel".into()),
+        };
+        cmd.stdout(Stdio::null())
             .stderr(Stdio::null())
             .creation_flags(NO_WINDOW)
             .spawn()
             .map_err(|e| format!("cannot open panel: {e}"))?;
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = panel;
     }
     Ok(())
 }
@@ -688,8 +708,17 @@ mod tests {
     }
 
     #[test]
-    fn power_name_extracted() {
-        assert_eq!(
+    fn unknown_panel_refused_without_spawning() {
+        // the whitelist rejects before any process spawns — safe to assert
+        // in CI (no window ever opens). Case-sensitive: no fuzzy match.
+        assert!(open_windows_panel("nope").is_err());
+        assert!(open_windows_panel("").is_err());
+        assert!(open_windows_panel("System").is_err());
+        assert!(open_windows_panel("powercfg.cpl").is_err());
+    }
+
+    #[test]
+    fn power_name_extracted() {        assert_eq!(
             extract_power_name(
                 "Power Scheme GUID: e72c17b6-94d2-4509-adfc-8f2302229d1a  (High performance)"
             ),
