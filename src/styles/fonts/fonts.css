@@ -1,6 +1,8 @@
 ﻿/* Self-hosted, subset, base64-inlined fonts — zero network fetch, zero first-paint swap.
- * Google Sans (latin) + Cairo (arabic): both OFL-1.1 (see fonts/OFL-GoogleSans.txt,
- * fonts/OFL-Cairo.txt). The binary woff2 sources live in fonts/ for rebuilds.
+ * Google Sans (latin) + Cairo (arabic): both OFL-1.1 (see OFL-GoogleSans.txt,
+ * OFL-Cairo.txt). The woff2 binaries are inlined below; no source files are
+ * kept in-repo — rebuilds subset from the upstream families with a fresh
+ * subsetting pass (unicode-ranges below describe the current subsets).
  * Unicode-range split: the browser picks Cairo for Arabic codepoints and
  * Google Sans for latin — one font-family stack, two scripts, no JS. */
 

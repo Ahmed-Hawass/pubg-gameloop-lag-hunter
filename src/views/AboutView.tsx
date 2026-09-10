@@ -20,9 +20,17 @@ export function AboutView(props: {
   /** the startup check's result — dot + "download" affordance when set */
   updateInfo: UpdateInfo | null;
   onOpenUpdateModal: () => void;
+  /**
+   * Manual check found a newer version the startup check MISSED (e.g. the
+   * app booted offline and the network came back after). App stores it
+   * into its updateInfo state so the modal has something real to show —
+   * the old flow opened the modal conditioned on the STALE startup result
+   * (null) and a silent nothing happened despite a successful check.
+   */
+  onUpdateFound: (info: UpdateInfo) => void;
 }) {
   const { t } = useLang();
-  const { updateInfo, onOpenUpdateModal } = props;
+  const { updateInfo, onOpenUpdateModal, onUpdateFound } = props;
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<"latest" | "err" | null>(null);
   // version from the backend — the same string tauri.conf.json owns
@@ -42,14 +50,17 @@ export function AboutView(props: {
     }
   }, [updateInfo]);
 
-  // manual check: same engine command as startup; a found update opens the
-  // modal directly (manual checks ignore once-per-version by design)
+  // manual check: same engine command as startup; a found update is handed
+  // UP to App first (it may differ from / replace the stale startup result),
+  // then the modal opens on the fresh data (manual checks ignore
+  // once-per-version by design)
   const check = async () => {
     setChecking(true);
     setResult(null);
     try {
       const info = await api.checkUpdate();
       if (info) {
+        onUpdateFound(info);
         onOpenUpdateModal();
       } else {
         setResult("latest");
@@ -96,7 +107,7 @@ export function AboutView(props: {
         </h3>
         <div className="about-update">
           <Button
-            label={checking ? t.topProcessesRefreshing : t.aboutCheckUpdate}
+            label={checking ? t.checkingUpdate : t.aboutCheckUpdate}
             icon={<Download size={14} />}
             variant="ghost"
             disabled={checking}

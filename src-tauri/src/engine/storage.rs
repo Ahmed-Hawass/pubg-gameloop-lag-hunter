@@ -7,7 +7,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use super::types::{EngineEvent, Sample, Thresholds};
+use super::types::{iso_ms, EngineEvent, Sample, Thresholds};
 
 pub fn app_dir() -> PathBuf {
     let base = std::env::var("LOCALAPPDATA")
@@ -18,10 +18,6 @@ pub fn app_dir() -> PathBuf {
 
 pub fn sessions_root() -> PathBuf {
     app_dir().join("sessions")
-}
-
-pub fn settings_path() -> PathBuf {
-    app_dir().join("settings.json")
 }
 
 /// Create a new session directory named by local time: session-YYYY-MM-DD_HHMMSS
@@ -191,7 +187,11 @@ impl SessionStats {
             .iter()
             .filter_map(|s| s.cpu_total)
             .collect::<Vec<_>>();
-        cpus.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        // NaN-safe ordering: a "NaN" string CAN parse as f64 out of a typeperf
+        // CSV field, and partial_cmp on NaN is None — with panic="abort" that
+        // single bad line would kill the whole app and take the session with
+        // it. Equal-comparison on unorderable pairs keeps the sort total.
+        cpus.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         let p95 = |v: &mut Vec<f64>| {
             v.get((v.len() as f64 * 0.95) as usize % v.len().max(1))
                 .copied()
@@ -219,7 +219,7 @@ impl SessionStats {
             .first()
             .zip(samples.last())
             .and_then(|(a, b)| {
-                let (Some(x), Some(y)) = (iso_ms_local(&a.t), iso_ms_local(&b.t)) else {
+                let (Some(x), Some(y)) = (iso_ms(&a.t), iso_ms(&b.t)) else {
                     return None;
                 };
                 Some((y.saturating_sub(x) / 1000).max(0) as u64)
@@ -246,26 +246,6 @@ impl SessionStats {
             background_pct,
         }
     }
-}
-
-fn iso_ms_local(iso: &str) -> Option<i64> {
-    let b = iso.as_bytes();
-    if b.len() != 24 {
-        return None;
-    }
-    let num = |r: std::ops::Range<usize>| -> Option<i64> {
-        std::str::from_utf8(&b[r]).ok()?.parse().ok()
-    };
-    let (y, mo, d) = (num(0..4)?, num(5..7)?, num(8..10)?);
-    let (h, mi, s) = (num(11..13)?, num(14..16)?, num(17..19)?);
-    let ms = num(20..23)?;
-    let (y, mo) = if mo <= 2 { (y - 1, mo + 12) } else { (y, mo) };
-    let era = i64::div_euclid(y, 400);
-    let yoe = y - era * 400;
-    let doy = (153 * (mo - 3) + 2) / 5 + d - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    let days = era * 146_097 + doe - 719_468;
-    Some(((days * 86_400) + h * 3600 + mi * 60 + s) * 1000 + ms)
 }
 
 /// Markdown report, English, self-contained.
@@ -760,6 +740,9 @@ pub struct HighlightEntry {
 }
 
 /// Machine key for UI translation (mirrors the diagnoser dictionary keys).
+/// Unknown engine kinds map to "" like the live path (diagnoser ignores
+/// them; the report reader falls back to the English "Other event" copy
+/// below instead of mislabeling them as GPU strain).
 fn finding_key(kind: &str) -> &'static str {
     match kind {
         "disk_queue" | "disk_busy" | "hard_faults" => "disk_wait",
@@ -771,68 +754,26 @@ fn finding_key(kind: &str) -> &'static str {
         "gpu_activity_cliff" => "scene_hitch",
         "gpu_activity_cliff_loaded" => "gpu_busy",
         "gpu_clock_low" | "gpu_temp" => "gpu_busy",
-        _ => "gpu_busy",
+        _ => "",
     }
 }
 
-/// (key, title, simple, fix, severity) — mirrors diagnoser copy
+/// (key, title, simple, fix, severity) — SINGLE-SOURCED from the
+/// diagnoser's dictionary: the saved report and the live cards can never
+/// drift apart in wording again. Only the English fallback text flows
+/// from here (the UI translates by key); `cause` is dropped, reports
+/// don't carry it.
 fn finding_copy(kind: &str) -> (&'static str, &'static str, &'static str, &'static str) {
-    match kind {
-        "disk_queue" | "disk_busy" | "hard_faults" => (
-            "Game was waiting on disk",
-            "The game stalled while loading files from disk, causing heavy lag during hot drops and crowded fights.",
-            "Increase the pagefile size and give GameLoop more RAM in its settings.",
-            "high",
-        ),
-        "cpu_saturation" => (
-            "CPU maxed out",
-            "The processor was running at full capacity, so the game needed more cores than available.",
-            "Limit GameLoop cores to physical cores, close background apps before playing.",
-            "high",
-        ),
-        "cpu_throttle" | "spike" => (
-            "CPU slowing itself down",
-            "The processor got hot and protected itself by dropping its speed, so performance collapsed under load.",
-            "Clean the fans, use a cooling pad, keep the charger plugged in.",
-            "high",
-        ),
-        "mem_pressure" => (
-            "Running out of memory",
-            "RAM was filling up and the game kept swapping files in and out, and every transfer caused a stutter.",
-            "Close background apps and increase the pagefile.",
-            "high",
-        ),
-        "paging_churn" => (
-            "Background file shuffling",
-            "The system was moving game files between RAM and disk in the background, even though both were running normally. It's normal housekeeping, not a shortage, but each move can show up as a tiny hitch.",
-            "Give GameLoop more RAM in its settings. If it keeps happening, increase the pagefile size on an SSD.",
-            "medium",
-        ),
-        "gpu_mem_idle" => (
-            "GPU waking from sleep",
-            "The graphics card dropped to a power-saving state between scenes and needed a moment to wake up, and that moment was a visible hitch.",
-            "In the GPU control panel, set power management to 'Prefer maximum performance' for every GameLoop process. If it still appears, the driver is trimming memory clocks in light scenes, common on laptops with hybrid graphics; the effect is usually a brief hitch, not a persistent problem.",
-            "medium",
-        ),
-        "gpu_activity_cliff" => (
-            "Sudden GPU activity collapse",
-            "GPU activity dropped sharply while everything else looked healthy, a visible hitch (first-load or scene transition).",
-            "No permanent fix: it fades as scenes repeat and shrinks with GPU driver updates.",
-            "low",
-        ),
-        "gpu_clock_low" | "gpu_temp" => (
-            "GPU under strain",
-            "The graphics card was running at its limits, so frames dropped as a result.",
-            "Lower the game resolution or graphics quality by one step.",
-            "medium",
-        ),
-        _ => (
-            "Other event",
-            "Something unusual was captured in this session.",
-            "Check the raw report for details.",
-            "low",
-        ),
+    let key = finding_key(kind);
+    if let Some((title, simple, _cause, fix, sev)) = super::diagnoser::diagnosis_copy(key) {
+        return (title, simple, fix, sev);
     }
+    (
+        "Other event",
+        "Something unusual was captured in this session.",
+        "Check the raw report for details.",
+        "low",
+    )
 }
 
 #[cfg(test)]
@@ -847,9 +788,10 @@ mod tests {
 
     #[test]
     fn iso_ms_known_epoch() {
-        assert_eq!(iso_ms_local("1970-01-01T00:00:00.000Z"), Some(0));
+        // shared parser (types::iso_ms) keeps its epoch contract here
+        assert_eq!(iso_ms("1970-01-01T00:00:00.000Z"), Some(0));
         assert_eq!(
-            iso_ms_local("2026-08-31T00:00:00.000Z"),
+            iso_ms("2026-08-31T00:00:00.000Z"),
             Some(1_788_134_400_000)
         );
     }

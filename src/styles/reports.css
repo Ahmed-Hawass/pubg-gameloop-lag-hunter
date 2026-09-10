@@ -77,6 +77,11 @@
   background: var(--danger-dim);
   color: var(--danger);
 }
+/* the middle tone (issues / partial): warn, like the list badge below */
+.badge-mid {
+  background: var(--warn-dim);
+  color: var(--warn);
+}
 
 /* report sections */
 .report-section {
@@ -218,6 +223,7 @@
 .sl-icon-bad {
   color: var(--danger);
 }
+.sl-icon-mid { color: var(--warn); }
 .sl-main {
   display: flex;
   flex-direction: column;

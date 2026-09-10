@@ -13,7 +13,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { TitleBar } from "./components/TitleBar";
-import { Dialog, Tip } from "./components/components";
+import { Dialog, MODAL_OPEN_EVENT, Tip } from "./components/components";
 import { MonitorView } from "./views/MonitorView";
 import { ReportsView } from "./views/ReportsView";
 import { SystemView } from "./views/SystemView";
@@ -22,7 +22,7 @@ import { ChecksView } from "./views/ChecksView";
 import { AboutView } from "./views/AboutView";
 import { SettingsView } from "./views/SettingsView";
 import { WelcomeView } from "./views/WelcomeView";
-import { api, onEngineState, onGameloopChange, type StatusPayload, type UpdateInfo } from "./bridge";
+import { api, onEngineState, type StatusPayload, type UpdateInfo } from "./bridge";
 import { useLang } from "./i18n";
 import { errorDialog } from "./errors";
 import { shouldShowUpdateModal } from "./updateFlow";
@@ -41,7 +41,6 @@ export default function App() {
   const [toastBody, setToastBody] = useState<string | null>(null);
   const [view, setView] = useState<View>("monitor");
   const [reportOpenId, setReportOpenId] = useState<string | null>(null);
-  const [gameloopUp, setGameloopUp] = useState<boolean | null>(null);
   const [collapsed, setCollapsed] = useState<boolean | null>(null); // null = loading saved pref
   /** first-run welcome: null = still loading the setting */
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
@@ -72,8 +71,8 @@ export default function App() {
   const [deletedSessions, setDeletedSessions] = useState<string[]>([]);
   const markDeleted = (ids: string[]) =>
     setDeletedSessions((prev) => [...prev, ...ids.filter((id) => !prev.includes(id))]);
-  /** a newer version is available on GitHub (checked at startup, quietly) */
-  /** a newer version is available on GitHub (checked at startup, quietly) */
+  /** a newer version is available on GitHub (checked at startup, quietly;
+      replaced by the About tab's manual check when that finds one first) */
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   /** the update modal: shown at startup (once per version) or via manual check */
   const [updateModal, setUpdateModal] = useState(false);
@@ -82,10 +81,11 @@ export default function App() {
       while this dialog is on screen, and stop deferring the moment it is
       dismissed (a sticky boolean once deferred them for the whole launch) */
   const adviceUp = toast === "first_run_advice";
-  /** theme setting ("auto" follows the OS); the resolved value drives
+  /** theme setting ("auto" follows the OS — also the default for a fresh
+      install); the resolved value drives
       document.documentElement.dataset.theme — single source of truth,
       SettingsView only sends changes through onThemeChange below */
-  const [themeSetting, setThemeSetting] = useState<ThemeSetting>("dark");
+  const [themeSetting, setThemeSetting] = useState<ThemeSetting>("auto");
 
   // apply the resolved theme to <html> and follow OS changes while "auto"
   useEffect(() => {
@@ -153,7 +153,6 @@ export default function App() {
   const handleStateRef = useRef<(p: StatusPayload) => void>(() => {});
   const handleState = (payload: StatusPayload) => {
     setStatus(payload);
-    if (payload.status === "running") setGameloopUp(true);
     if (
       payload.status === "finished" &&
       payload.stop_reason === "gameloop_closed" &&
@@ -184,7 +183,9 @@ export default function App() {
         setGameAdviceDone(s.game_advice_done);
         setBackgroundAdviceDone(s.background_advice_done);
         const th = s.theme;
-        setThemeSetting(th === "light" || th === "auto" ? th : "dark");
+        // anything the backend doesn't recognize falls back to "auto"
+        // (follow the OS) — the same rule normalize_theme applies in Rust
+        setThemeSetting(th === "light" || th === "dark" ? th : "auto");
         // remember: was onboarding ALREADY done before this launch?
         if (s.onboarding_done) wasOnboardedRef.current = true;
       })
@@ -196,21 +197,19 @@ export default function App() {
         wasOnboardedRef.current = true;
       });
     api
-      .gameloopStatus()
-      .then(setGameloopUp)
-      .catch(() => setGameloopUp(false));
-    api
       .psAvailable()
       .then((ok) => setPsLimited(!ok))
       .catch(() => setPsLimited(false)); // probe failure ≠ limited claim
+    // start the engine's idle GameLoop watcher. Its `engine://gameloop`
+    // events have no UI consumer yet (the Start button stays pressable and
+    // the engine gate answers on press) — but the WATCHER itself must run:
+    // it keeps the session-start gate's emulator snapshot warm.
     void api.watchGameloop();
     const un = onEngineState((ev) => {
       handleStateRef.current(ev.payload);
     }).catch(() => null);
-    const un2 = onGameloopChange((up) => setGameloopUp(up)).catch(() => null);
     return () => {
       un.then((f) => f?.());
-      un2.then((f) => f?.());
     };
   }, []);
 
@@ -220,6 +219,7 @@ export default function App() {
   };
 
   const toggleSidebar = () => {
+    if (collapsed == null) return; // settings still loading — nothing to flip
     const next = !collapsed;
     setCollapsed(next);
     void api.setSidebarCollapsed(next).catch(() => {});
@@ -346,6 +346,17 @@ export default function App() {
       ? { status: "idle", ui: null }
       : status;
 
+  // tell every tooltip to hide the moment the modal surface opens: a dialog
+  // mounting under a parked cursor never fires mouseleave, which used to
+  // leave its bubble stuck above the modal (and after it closed) until the
+  // user hovered the trigger again. Click-opened dialogs need no signal —
+  // the hook already hides on pointerdown.
+  useEffect(() => {
+    if (toast || (updateModal && updateInfo)) {
+      window.dispatchEvent(new Event(MODAL_OPEN_EVENT));
+    }
+  }, [toast, updateModal, updateInfo]);
+
   const tabs: { id: View; icon: React.ReactNode; label: string }[] = [
     { id: "monitor", icon: <Crosshair size={17} />, label: t.monitor },
     { id: "system", icon: <Cpu size={17} />, label: t.system },
@@ -374,49 +385,55 @@ export default function App() {
           </main>
         ) : (
           <>
-            <nav className={`sidebar ${collapsed ? "is-collapsed" : ""}`}>
-              <div className="sb-label">{t.menu}</div>
-              {tabs.map((tab) => (
-                <Tip key={tab.id} text={collapsed ? tab.label : ""}>
+            {/* collapsed == null: settings still in flight — render nothing
+                decisive (same pattern as onboarding above), so a saved-
+                collapsed sidebar never flashes expanded on launch and vice
+                versa. The frames are too short to read as a layout jump. */}
+            {collapsed == null ? null : (
+              <nav className={`sidebar ${collapsed ? "is-collapsed" : ""}`}>
+                <div className="sb-label">{t.menu}</div>
+                {tabs.map((tab) => (
+                  <Tip key={tab.id} text={collapsed ? tab.label : ""}>
+                    <button
+                      className={`sb-item ${view === tab.id ? "is-active" : ""}`}
+                      onClick={() => {
+                        setReportOpenId(null);
+                        setView(tab.id);
+                      }}
+                    >
+                      {tab.icon}
+                      {!collapsed ? <span>{tab.label}</span> : null}
+                    </button>
+                  </Tip>
+                ))}
+
+                <Tip text={collapsed ? t.about : ""}>
                   <button
-                    className={`sb-item ${view === tab.id ? "is-active" : ""}`}
-                    onClick={() => {
-                      setReportOpenId(null);
-                      setView(tab.id);
-                    }}
+                    className={`sb-item ${view === "about" ? "is-active" : ""}`}
+                    onClick={() => setView("about")}
                   >
-                    {tab.icon}
-                    {!collapsed ? <span>{tab.label}</span> : null}
+                    <Info size={17} />
+                    {!collapsed ? <span>{t.about}</span> : null}
+                    {/* the update dot: not dismissible, present for the whole
+                        life of the newer version — the silent signal behind
+                        the once-per-version modal */}
+                    {updateInfo ? <span className="sb-dot" aria-label={t.updateAvailableTitle} /> : null}
                   </button>
                 </Tip>
-              ))}
 
-              <Tip text={collapsed ? t.about : ""}>
-                <button
-                  className={`sb-item ${view === "about" ? "is-active" : ""}`}
-                  onClick={() => setView("about")}
-                >
-                  <Info size={17} />
-                  {!collapsed ? <span>{t.about}</span> : null}
-                  {/* the update dot: not dismissible, present for the whole
-                      life of the newer version — the silent signal behind
-                      the once-per-version modal */}
-                  {updateInfo ? <span className="sb-dot" aria-label={t.updateAvailableTitle} /> : null}
-                </button>
-              </Tip>
+                {/* spacer pushes the collapse control to the sidebar's floor */}
+                <div className="sb-spacer" />
 
-              {/* spacer pushes the collapse control to the sidebar's floor */}
-              <div className="sb-spacer" />
-
-              {/* collapse control — pinned at the very bottom of the sidebar:
-                  flips direction when collapsed */}
-              <Tip text={collapsed ? t.expandMenu : t.collapseMenu}>
-                <button className="sb-collapse" onClick={toggleSidebar}>
-                  {collapsed ? <ChevronsRight size={15} /> : <ChevronsLeft size={15} />}
-                  {!collapsed ? <span>{t.collapseMenu}</span> : null}
-                </button>
-              </Tip>
-            </nav>
+                {/* collapse control — pinned at the very bottom of the sidebar:
+                    flips direction when collapsed */}
+                <Tip text={collapsed ? t.expandMenu : t.collapseMenu}>
+                  <button className="sb-collapse" onClick={toggleSidebar}>
+                    {collapsed ? <ChevronsRight size={15} /> : <ChevronsLeft size={15} />}
+                    {!collapsed ? <span>{t.collapseMenu}</span> : null}
+                  </button>
+                </Tip>
+              </nav>
+            )}
             <main className="content">
               {/* every view mounts ONCE and stays alive; switching only flips
                   CSS visibility. Data-carrying tabs (system/processes/checks)
@@ -430,7 +447,6 @@ export default function App() {
                   onDurationChange={chooseDuration}
                   onToggle={toggle}
                   onOpenReport={openLatestReport}
-                  gameloopUp={gameloopUp}
                   dismissedSession={dismissedSession}
                   onDismissSummary={dismissSummary}
                   psLimited={psLimited}
@@ -452,6 +468,7 @@ export default function App() {
                 <AboutView
                   updateInfo={updateInfo}
                   onOpenUpdateModal={() => setUpdateModal(true)}
+                  onUpdateFound={(info) => setUpdateInfo(info)}
                 />
               </div>
               <div className={view === "reports" ? "" : "is-hidden-view"}>
@@ -483,15 +500,11 @@ export default function App() {
           kind="notice"
           okLabel={t.dialog.ok}
           onClose={() => {
-            // one-forever advice dialogs: persist their dismissal
-            if (toast === "game_advice") {
-              setGameAdviceUp(false);
-              void api.finishGameAdvice().catch(() => {});
-            }
-            if (toast === "background_advice") {
-              setBackgroundAdviceUp(false);
-              void api.finishBackgroundAdvice().catch(() => {});
-            }
+            // the one-forever advice dialogs were already persisted AT SHOW
+            // (closing the app with the dialog open must not resurrect them
+            // next launch) — closing only clears the modal surface here
+            if (toast === "game_advice") setGameAdviceUp(false);
+            if (toast === "background_advice") setBackgroundAdviceUp(false);
             setToast(null);
             setToastTitle(null);
             setToastBody(null);

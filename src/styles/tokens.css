@@ -16,8 +16,8 @@
   --primary-dim: rgba(83, 252, 24, 0.1);
   --primary-dim-2: rgba(83, 252, 24, 0.2);
   --on-primary: #06210a;
-  /* status */
-  --ok: #53fc18;
+  /* status — tones consumed via var(): warn/danger only (ok states reuse
+     the signal --primary, so no --ok token exists by design) */
   --warn: #f5c518;
   --warn-dim: rgba(245, 197, 24, 0.12);
   --danger: #ff5a52;
@@ -26,6 +26,11 @@
   --hover-bg: #343a34;
   --hover-text: #edefec;
   --hover-border: #4a504a;
+  /* ring around the sidebar update dot — the base background (was --bg-1,
+     an undefined token: the dot's ring silently vanished) */
+  --bg-1: #141613;
+  /* inset panel background (update modal notes + progress track) */
+  --bg-2: #101210;
   /* text */
   --text-1: #edefec;
   --text-2: #8c948d;
@@ -61,7 +66,6 @@
   --primary-dim: rgba(27, 135, 55, 0.12);
   --primary-dim-2: rgba(27, 135, 55, 0.22);
   --on-primary: #ffffff;
-  --ok: #1b8737;
   --warn: #8a5f00;
   --warn-dim: rgba(138, 95, 0, 0.14);
   --danger: #d92d20;
@@ -69,6 +73,9 @@
   --hover-bg: #e4e9e2;
   --hover-text: #141815;
   --hover-border: #b9c2b7;
+  /* light-theme values for the same two surfaces (dot ring + inset panels) */
+  --bg-1: #eef1ec;
+  --bg-2: #e2e7e1;
   --text-1: #141815;
   --text-2: #4d554e;
   --text-3: #7a817b;

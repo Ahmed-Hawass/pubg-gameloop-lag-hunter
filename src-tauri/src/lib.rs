@@ -97,19 +97,6 @@ async fn system_checks() -> Result<engine::system::SystemChecks, String> {
 }
 
 #[tauri::command]
-async fn gameloop_status() -> Result<bool, String> {
-    let _t = engine::logging::timed("ipc: gameloop_status");
-    session::init_global();
-    // tasklist spawn (~1s, ~5MB transient) — blocking pool
-    let up = tauri::async_runtime::spawn_blocking(|| {
-        engine::sampler::detect_emulator().is_some()
-    })
-    .await
-    .map_err(|e| format!("gameloop status task failed: {e}"))?;
-    Ok(up)
-}
-
-#[tauri::command]
 async fn session_start(
     app: tauri::AppHandle,
     auto_stop_secs: Option<u64>,
@@ -118,7 +105,12 @@ async fn session_start(
     // start() runs PowerShell probes (RAM/disks on cache miss, visibility,
     // gpu clocks) + creates the session files — all blocking, all parked on
     // the blocking pool so the async runtime (and the UI) never stall
-    let bounded = auto_stop_secs.unwrap_or(1800).clamp(60, MAX_SESSION_SECS);
+    // No explicit duration (headless callers) falls back to the USER's own
+    // default from settings — never a second hardcoded number that can
+    // drift from the 5-minute default the UI offers.
+    let user_default = (engine::settings::load().auto_stop_minutes as u64 * 60)
+        .clamp(60, MAX_SESSION_SECS);
+    let bounded = auto_stop_secs.unwrap_or(user_default).clamp(60, MAX_SESSION_SECS);
     let eng = session::init_global();
     let gen = tauri::async_runtime::spawn_blocking(move || {
         // probe BEFORE starting: if the game is already open, the first
@@ -198,9 +190,16 @@ fn get_state() -> StatusPayload {
 #[tauri::command]
 async fn session_entries() -> Vec<engine::storage::SessionEntry> {
     let _t = engine::logging::timed("ipc: session_entries");
-    tauri::async_runtime::spawn_blocking(engine::storage::session_entries)
-        .await
-        .unwrap_or_default()
+    // a JoinError here means the blocking task itself panicked — THAT must
+    // never surface as a silent "no sessions" list; log it loudly and only
+    // then fall back to empty
+    match tauri::async_runtime::spawn_blocking(engine::storage::session_entries).await {
+        Ok(entries) => entries,
+        Err(e) => {
+            engine::logging::warn(&format!("session_entries task failed: {e}"));
+            Vec::new()
+        }
+    }
 }
 
 #[tauri::command]
@@ -220,13 +219,23 @@ async fn delete_session(id: String) -> Result<(), String> {
 }
 
 /// Delete every saved session except the live writer's directory (bulk
-/// cleanup). The frontend passes the running session's id when one exists
-/// and disables the button while running — both locks together.
+/// cleanup). The ENGINE excludes the live session itself — the UI's
+/// exclude_id is honored as an EXTRA, but the running session can never be
+/// deleted even if the frontend passes nothing or the wrong id (a second
+/// lock the frontend can't lose).
 #[tauri::command]
 async fn delete_all_sessions(exclude_id: Option<String>) -> Result<Vec<String>, String> {
     let _t = engine::logging::timed("ipc: delete_all_sessions");
+    let eng = session::init_global();
+    let live = eng.live_session_id();
+    let mut excluded = live;
+    // the UI's exclude (the session it believes is live) still applies —
+    // belt and suspenders, both can never be deleted
+    if excluded.is_none() {
+        excluded = exclude_id.filter(|id| !id.is_empty());
+    }
     tauri::async_runtime::spawn_blocking(move || {
-        engine::storage::delete_all_sessions(&engine::storage::sessions_root(), exclude_id.as_deref())
+        engine::storage::delete_all_sessions(&engine::storage::sessions_root(), excluded.as_deref())
     })
     .await
     .map_err(|e| format!("delete-all task failed: {e}"))?
@@ -518,7 +527,6 @@ pub fn run() {
             finish_onboarding,
             finish_game_advice,
             finish_background_advice,
-            gameloop_status,
             ps_available,
             watch_gameloop,
             system_info,
@@ -562,13 +570,29 @@ pub fn run() {
             engine::logging::info("app starting");
             engine::logging::info(&format!("app version: {}", engine::VERSION));
 
-            // fixed-size window: show once, centered — no resize flash possible
+            // fixed-size window: center it, but do NOT show it yet — the
+            // frontend reveals the window itself on first paint (see
+            // main.tsx). Showing here would put a dark empty window on
+            // screen while the bundle parses and the IPC gates resolve.
             if let Some(win) = _app.get_webview_window("main") {
                 let _ = win.center();
-                let _ = win.show();
                 let _ = win.set_focus();
             }
-            engine::logging::perf("window shown", boot.elapsed().as_millis());
+            engine::logging::perf("window centered (show is frontend-driven)", boot.elapsed().as_millis());
+
+            // Safety net for the frontend-driven show: if the UI never
+            // reports first paint (a crash before React mounts), the window
+            // would stay invisible forever — worse than the old dark void.
+            // show() is idempotent, so a late safety net never harms a
+            // window the frontend already revealed.
+            let guard = _app.handle().clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_secs(8));
+                use tauri::Manager;
+                if let Some(win) = guard.get_webview_window("main") {
+                    let _ = win.show();
+                }
+            });
 
             let handle = _app.handle().clone();
             spawn_state_pusher(handle);

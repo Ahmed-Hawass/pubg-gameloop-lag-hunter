@@ -7,6 +7,8 @@ import { Button, Dialog, EmptyState, Hint, NoteCard, Tip } from "../components/c
 import { api, type FriendlyReport, type SessionEntry } from "../bridge";
 import { useLang } from "../i18n";
 
+/** "Xm Ys" report-row duration — a deliberately different shape from the
+ *  live session's mm:ss clock (this one reads naturally in a list row). */
 function fmtDur(sec: number) {
   if (sec <= 0) return "--";
   const m = Math.floor(sec / 60);
@@ -62,20 +64,28 @@ export function ReportsView(props: {
   // deep-link: "Open full report" on the Monitor tab jumps here + opens the session
   useEffect(() => {
     if (openId && entries) {
-      const target = entries.find((e) => e.id === openId) ? openId : entries[0]?.id ?? null;
-      if (target) {
-        setLoadingId(target);
-        api
-          .loadReport(target)
-          .then(setReport)
-          .catch((e) => setError(String(e)))
-          .finally(() => {
-            setLoadingId(null);
-            onOpened();
-          });
-      } else {
+      if (!entries.some((e) => e.id === openId)) {
+        // the linked session is gone (deleted meanwhile): say so instead
+        // of silently opening somebody else's report. An empty list with
+        // the "latest" fallback link is not an error — just clear it.
+        // onOpened() must still fire: the App-level link is one-shot, and
+        // leaving it set would re-raise this error on every list refresh.
+        if (entries.length > 0) {
+          setError(t.reportNotFound);
+        }
         onOpened();
+        return;
       }
+      const target = openId;
+      setLoadingId(target);
+      api
+        .loadReport(target)
+        .then(setReport)
+        .catch((e) => setError(String(e)))
+        .finally(() => {
+          setLoadingId(null);
+          onOpened();
+        });
     }
   }, [openId, entries]);
 
@@ -157,7 +167,16 @@ export function ReportsView(props: {
             <h3>{t.whatWeFound}</h3>
             {report.findings.map((f, i) => {
               const copy = t.diagnoses[f.key] ?? { title: f.title, simple: f.simple, fix: f.fix };
-              return <NoteCard key={i} title={copy.title} simple={copy.simple} fix={copy.fix} severity={f.severity} />;
+              return (
+                <NoteCard
+                  key={i}
+                  title={copy.title}
+                  simple={copy.simple}
+                  fix={copy.fix}
+                  severity={f.severity}
+                  fixLabel={t.fixLabel}
+                />
+              );
             })}
           </section>
         ) : (

@@ -183,8 +183,14 @@
   height: 100%;
   border-radius: 3px;
   transition: width 0.4s var(--ease);
-  transform-origin: left;
+  /* logical origin: the bar grows from the reading side (right in Arabic) —
+     a physical `left` made RTL rows fill against their text direction */
+  transform-origin: var(--bar-origin, left);
   animation: bar-grow 0.5s var(--ease) both;
+}
+/* the reading direction decides where the bar grows from */
+[dir="rtl"] .proc-fill {
+  --bar-origin: right;
 }
 .proc-fill.ok {
   background: var(--primary);
@@ -358,6 +364,9 @@
   letter-spacing: 0.08em;
   color: var(--text-3);
   font-weight: 700;
+  /* the dot beside the Updates heading can sit on any .about-h — position
+     relative lets .about-dot anchor to it */
+  position: relative;
 }
 .about-impact {
   list-style: none;
@@ -391,12 +400,6 @@
 }
 /* the dot beside the Updates heading — mirrors the sidebar's About dot:
    warn-yellow like the "new version" copy, never green */
-.about-h {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
 .about-dot {
   width: 7px;
   height: 7px;
@@ -488,7 +491,10 @@
 }
 
 /* language: a segmented row — the same control as the duration pills.
-   Filled green on the active segment, the app's one selection language. */
+   Filled green on the active segment, the app's one selection language.
+   Full-width with equal segments: the language and theme rows (3 pills
+   each) render identical pills — fit-content sized each row to its own
+   labels ("English"/"العربية" vs "داكن"/"فاتح") and the rows mismatched. */
 .lang-segment {
   display: flex;
   gap: 3px;
@@ -496,9 +502,15 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 3px;
-  width: fit-content;
+  /* full row width would stretch the 3 pills across the whole page —
+     capped so the control stays a compact switch while both rows
+     (language + theme) keep identical pills */
+  width: 100%;
+  max-width: 460px;
 }
 .lang-seg {
+  flex: 1;
+  min-width: 0;
   border: none;
   background: transparent;
   color: var(--text-3);
@@ -508,6 +520,10 @@
   padding: 9px 18px;
   border-radius: 6px;
   cursor: pointer;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   transition: background 0.12s, color 0.12s;
 }
 .lang-seg:hover:not(.is-active) {
@@ -540,7 +556,7 @@
 .proc-row:nth-child(5) { animation-delay: 0.18s; }
 .proc-row:nth-child(6) { animation-delay: 0.22s; }
 .proc-fill {
-  transform-origin: left;
+  transform-origin: var(--bar-origin, left);
   animation: bar-grow 0.5s var(--ease) both;
 }
 

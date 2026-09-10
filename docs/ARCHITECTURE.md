@@ -17,6 +17,12 @@ They meet in exactly one place: a JSON state contract pushed over Tauri events.
 │               to the backend                       │
 │  version.ts   numeric release comparison           │
 │  errors.ts    error codes → dialog copy            │
+│  i18n.tsx     language resolution + provider       │
+│               (persisted > OS > English)            │
+│  theme.ts     auto/dark/light resolution           │
+│  updateFlow.ts  once-per-version modal rule        │
+│  webBehavior.ts  strips browser defaults           │
+│               (context menu, F5, drag-select)      │
 │                                                   │
 └──────────────────────┬────────────────────────────┘
                        │
@@ -26,6 +32,7 @@ They meet in exactly one place: a JSON state contract pushed over Tauri events.
 │ Engine (src-tauri/src/engine/)                    │
 │                                                   │
 │  sampler    typeperf (CPU/RAM/disk 1Hz)           │
+│             + PowerShell Get-Counter fallback      │
 │             nvidia-smi dmon (GPU 1Hz)             │
 │             tasklist (GameLoop probe)             │
 │                                                   │
@@ -36,9 +43,17 @@ They meet in exactly one place: a JSON state contract pushed over Tauri events.
 │             (grouping, subordination, ≥3s rule)    │
 │                                                   │
 │  session    lifecycle, rolling 300-tick RAM       │
-│             window                                 │
+│             window, per-session reader flags      │
 │                                                   │
 │  storage    %LOCALAPPDATA%\LagHunter              │
+│             (path-traversal-guarded ids)          │
+│                                                   │
+│  update     GitHub check → SHA-256-verified       │
+│             download, allowlisted hosts,          │
+│             dest-validated paths (v1.3+)          │
+│                                                   │
+│  version    the update-order comparison           │
+│             (shared with the UI's copy)           │
 │                                                   │
 │  settings   schema v3, atomic writes, migration   │
 │                                                   │

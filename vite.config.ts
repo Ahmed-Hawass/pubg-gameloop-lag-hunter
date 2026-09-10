@@ -10,10 +10,9 @@ export default defineConfig({
     strictPort: true,
     watch: {
       // cargo's target dir is huge — watching it crashes vite's watcher
-      ignored: ["**/src-tauri/**", "**/node_modules/**", "**/reference-js/**", "**/sessions/**"],
+      ignored: ["**/src-tauri/**", "**/node_modules/**"],
     },
   },
-  envPrefix: ["VITE_"],
   build: {
     target: "es2021",
     minify: true,

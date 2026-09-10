@@ -190,6 +190,36 @@ fn sha_from_sums(sums: &str, file_name: &str) -> Option<String> {
     None
 }
 
+/// Validate the download destination BEFORE anything is written. The path
+/// comes over IPC from the webview (the save dialog's result), so it gets
+/// the same distrust every other IPC path receives:
+///   * it must be an absolute path (a bare file name would land in the CWD)
+///   * the PARENT directory must already exist (the save dialog guarantees
+///     this on its own; a mismatched path is refused, not created)
+///   * the destination itself must NOT be a directory
+///
+/// Note: we do NOT require the destination to be inside any app-owned folder
+/// (the user explicitly chose it), but a pre-existing file is never deleted
+/// by us — cleanup only ever removes the `.part` sibling we created.
+fn validate_dest(dest: &std::path::Path) -> Result<(), String> {
+    if !dest.is_absolute() {
+        return Err("download path must be absolute".into());
+    }
+    let Some(parent) = dest.parent() else {
+        return Err("download path has no parent folder".into());
+    };
+    if !parent.is_dir() {
+        return Err(format!(
+            "download folder does not exist: {}",
+            parent.display()
+        ));
+    }
+    if dest.is_dir() {
+        return Err("download path is a folder, not a file".into());
+    }
+    Ok(())
+}
+
 /// Download + verify + write to `dest`. The whole body is held in memory
 /// (the cap keeps it bounded), hashed, compared to SHA256SUMS, and only
 /// then written to disk — a partial/failed file never touches the path
@@ -202,6 +232,12 @@ pub fn download_and_verify(
 ) -> Result<String, String> {
     if DOWNLOAD_RUNNING.swap(true, Ordering::SeqCst) {
         return Err("a download is already running".into());
+    }
+    // validate the destination while DOWNLOAD_RUNNING is held: a bad path
+    // can never even register a cleanup entry (validate_dest never writes)
+    if let Err(e) = validate_dest(&dest) {
+        DOWNLOAD_RUNNING.store(false, Ordering::SeqCst);
+        return Err(e);
     }
     let result = download_inner(info, dest, cancel, &on_event);
     DOWNLOAD_RUNNING.store(false, Ordering::SeqCst);
@@ -304,31 +340,42 @@ fn download_inner(
     Ok(path_str)
 }
 
-/// Remove any in-flight download file — called on cancel and app exit.
+/// Remove any in-flight download PARTIAL — called on cancel and app exit.
 /// Takes (not peeks) the path so a completed download can never be swept:
 /// by the time the file is Done, ACTIVE_DOWNLOAD was already cleared.
+/// The in-progress body writes to a `.part` sibling; the DEST itself is
+/// only ever created by the final verified rename — so cleanup removes
+/// ONLY the `.part`. A file the user already had at the same path is
+/// never touched by a cancelled or failed download.
 pub fn cleanup_active_download() {
     if let Some(p) = ACTIVE_DOWNLOAD
         .lock()
         .unwrap_or_else(|p| p.into_inner())
         .take()
     {
-        // the in-progress body writes to a .part sibling first; the dest
-        // itself is only created by the final rename — remove both paths
-        // defensively, ignore errors (already gone / locked by AV is fine)
-        let _ = std::fs::remove_file(&p);
         let part = p.with_extension("part");
         let _ = std::fs::remove_file(&part);
-        logging::info("update download cleaned up");
+        logging::info("update download partial cleaned up");
     }
 }
 
 /// Open Explorer with the downloaded file selected — the standard
 /// "/select," pattern every browser and installer uses. Read-only.
+/// The path must be a file we JUST verified and wrote (validate_dest ran
+/// before the download), and quote-unsafe characters are refused outright:
+/// explorer re-parses its raw command line, so an embedded quote could
+/// break out of the /select argument. `raw_arg` with a validated,
+/// quote-free path keeps the argument boundary intact.
 pub fn open_folder_selected(path: &str) -> Result<(), String> {
     let p = std::path::Path::new(path);
     if !p.is_file() {
         return Err("file not found".into());
+    }
+    if !p.is_absolute() {
+        return Err("path must be absolute".into());
+    }
+    if path.contains('"') || path.contains('\\') && path.split('\\').any(|s| s.contains('"')) {
+        return Err("path contains characters Explorer cannot select safely".into());
     }
     #[cfg(windows)]
     {
@@ -516,5 +563,45 @@ mod tests {
         assert!(!url_allowed("https://evil.com/pubg.exe"));
         assert!(!url_allowed("https://github.com.evil.com/x"));
         assert!(!url_allowed("not a url"));
+    }
+
+    #[test]
+    fn dest_validation_refuses_bad_paths() {
+        // relative path → refused (would land in the CWD)
+        assert!(validate_dest(std::path::Path::new("update.exe")).is_err());
+        // no parent → refused
+        assert!(validate_dest(std::path::Path::new("\\update.exe")).is_err());
+        // parent folder doesn't exist → refused
+        assert!(validate_dest(std::path::Path::new(
+            "Z:\\definitely-not-a-real-folder-9f3a\\update.exe"
+        ))
+        .is_err());
+        // a directory as destination → refused
+        assert!(validate_dest(std::path::Path::new("C:\\Windows")).is_err());
+        // a real folder + file name → accepted (existing FILE at the path is
+        // fine — cleanup only ever removes the .part sibling, never the dest)
+        let tmp = std::env::temp_dir().join("laghunter-dest-test.exe");
+        assert!(validate_dest(&tmp).is_ok());
+    }
+
+    #[test]
+    fn cleanup_removes_part_sibling_only() {
+        // simulate a registered download over a PRE-EXISTING user file:
+        // cleanup must remove the .part sibling and leave the file alone
+        let dir = std::env::temp_dir();
+        let dest = dir.join("laghunter-cleanup-test-existing.txt");
+        let part = dir.join("laghunter-cleanup-test-existing.part");
+        std::fs::write(&dest, "user's own file").unwrap();
+        std::fs::write(&part, "partial bytes").unwrap();
+        *ACTIVE_DOWNLOAD
+            .lock()
+            .unwrap_or_else(|p| p.into_inner()) = Some(dest.clone());
+        cleanup_active_download();
+        assert!(!part.exists(), ".part must be removed");
+        assert!(
+            dest.exists(),
+            "the pre-existing destination file must NOT be deleted"
+        );
+        let _ = std::fs::remove_file(&dest);
     }
 }

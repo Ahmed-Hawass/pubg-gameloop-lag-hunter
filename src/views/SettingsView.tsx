@@ -15,7 +15,9 @@ export function SettingsView(props: {
   const { theme, onThemeChange } = props;
 
   const options: { key: LangSetting; label: string }[] = [
-    { key: "auto", label: t.lang.code === "ar" ? "تلقائي" : "Automatic" },
+    // "Automatic" comes from the locale like every other label — no
+    // per-language conditional duplicated here
+    { key: "auto", label: t.themeAuto },
     { key: "en", label: "English" },
     { key: "ar", label: "العربية" },
   ];

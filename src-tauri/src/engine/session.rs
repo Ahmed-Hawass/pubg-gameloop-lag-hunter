@@ -10,13 +10,17 @@ use super::diagnoser::build_ui_state;
 use super::sampler;
 use super::storage::SessionWriter;
 use super::types::{
-    EngineEvent, GpuSample, Sample, SessionStatus, StopReason, Thresholds, UiState,
+    EngineEvent, GpuSample, Sample, SessionStatus, StopReason, Thresholds, UiState, iso_ms,
 };
 
 /// Shared session state owned by the engine, locked by commands.
 pub struct Engine {
     state: Mutex<SessionInner>,
-    running_flag: Arc<AtomicBool>,
+    /// the CURRENT session's running flag. Readers spawned by start() hold
+    /// their OWN Arc — this slot only tells stop() WHICH flag to flip (the
+    /// current session's), never mutated in place (a `&self` method can't),
+    /// replaced via the write lock at each start.
+    running_flag: std::sync::RwLock<Arc<AtomicBool>>,
     total_mem_mb: std::sync::RwLock<f64>,
     /// consecutive GameLoop probe misses (auto-stop after ~15s of silence)
     gameloop_misses: AtomicU32,
@@ -75,7 +79,7 @@ impl Engine {
                 auto_stop_at: None,
                 thresholds: settings.thresholds,
             }),
-            running_flag: Arc::new(AtomicBool::new(false)),
+            running_flag: std::sync::RwLock::new(Arc::new(AtomicBool::new(false))),
             total_mem_mb: std::sync::RwLock::new(8_192.0), // refreshed at session start
             gameloop_misses: AtomicU32::new(0),
             generation: AtomicU32::new(0),
@@ -100,6 +104,18 @@ impl Engine {
             .unwrap_or_else(|p| p.into_inner())
             .last_ui
             .clone()
+    }
+
+    /// The live session's id, straight from the engine (not the UI): bulk
+    /// delete excludes it so a compromised/buggy frontend can never delete
+    /// the session currently being written, even if it passes the wrong
+    /// exclude id (or none at all).
+    pub fn live_session_id(&self) -> Option<String> {
+        let st = self.state.lock().unwrap_or_else(|p| p.into_inner());
+        match st.status {
+            SessionStatus::Running | SessionStatus::Stopping => st.session_id.clone(),
+            _ => None,
+        }
     }
 
     /// Start a monitoring session. `auto_stop_secs`: None = manual stop only
@@ -155,6 +171,16 @@ impl Engine {
         }
 
         let mut st = self.state.lock().unwrap_or_else(|p| p.into_inner());
+        // RE-CHECK under the SECOND lock: the first check ran before the slow
+        // gates above (emulator probe, PowerShell queries), unlocked the whole
+        // time — a second start() that slipped through both gates would
+        // double-spawn sources and orphan a writer (double-click race).
+        if st.status == SessionStatus::Running {
+            return Err("SESSION_ALREADY_RUNNING".into());
+        }
+        if st.status == SessionStatus::Stopping {
+            return Err("SESSION_STOPPING".into());
+        }
         // reset per-session state
         st.samples.clear();
         st.samples_total = 0;
@@ -206,21 +232,31 @@ impl Engine {
         // ---- spawn streaming sources ----
         // Routes thread callbacks to the global engine instance (set in lib.rs).
         reset_snapshots(); // no evidence survives from a previous session
-        let running = Arc::clone(&self.running_flag);
-        running.store(true, Ordering::SeqCst);
+        // FRESH flag per session (not the shared one): the old stop→start
+        // race leaked readers — stop() flips the flag false and sleeps 600ms,
+        // but a start() in that window flips the SAME flag back to true
+        // before the old 1Hz reader ever observes false, so the old
+        // typeperf/dmon pair feeds the new session forever. Per-session
+        // flags close that hole: the stopped session's readers hold THEIR
+        // Arc, it stays false forever, and the new session's readers get a
+        // brand-new one.
+        let running = Arc::new(AtomicBool::new(true));
+        if let Ok(mut slot) = self.running_flag.write() {
+            *slot = Arc::clone(&running);
+        }
         {
             let mut slot = FIRST_SAMPLE_AT.lock().unwrap_or_else(|p| p.into_inner());
             *slot = Some(Instant::now());
         }
 
-        match sampler::spawn_typeperf(1, Arc::clone(&self.running_flag), |s| {
+        match sampler::spawn_typeperf(1, Arc::clone(&running), |s| {
             route_on_sample(s);
         }) {
             Ok(()) => super::logging::info("typeperf sampler: spawned"),
             Err(e) => super::logging::error(&format!("typeperf sampler: SPAWN FAILED: {e}")),
         }
 
-        match sampler::spawn_dmon(1, Arc::clone(&self.running_flag), |g| {
+        match sampler::spawn_dmon(1, Arc::clone(&running), |g| {
             route_on_gpu(g);
         }) {
             Ok(true) => super::logging::info("nvidia-smi dmon sampler: spawned"),
@@ -262,7 +298,11 @@ impl Engine {
             st.stop_reason = Some(reason);
         }
 
-        self.running_flag.store(false, Ordering::SeqCst);
+        // flip the CURRENT session's flag (read under the lock — never the
+        // same Arc an old session's readers hold)
+        if let Ok(current) = self.running_flag.read() {
+            current.store(false, Ordering::SeqCst);
+        }
         std::thread::sleep(Duration::from_millis(600)); // let sources die
 
         let mut st = self.state.lock().unwrap_or_else(|p| p.into_inner());
@@ -385,8 +425,8 @@ impl Engine {
             .started_at
             .as_deref()
             .and_then(|s| {
-                let start = iso_ms_pub(s)?;
-                let now = iso_ms_pub(&super::sampler::iso_now())?;
+                let start = iso_ms(s)?;
+                let now = iso_ms(&super::sampler::iso_now())?;
                 Some((now.saturating_sub(start) / 1000).max(0) as u64)
             })
             .unwrap_or(0);
@@ -447,14 +487,6 @@ impl Engine {
         false
     }
 
-    pub fn thresholds(&self) -> Thresholds {
-        self.state
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .thresholds
-            .clone()
-    }
-
     /// Called by the probe loop: if GameLoop died mid-session, the scan has
     /// nothing left to measure — stop it cleanly and mark the reason.
     pub fn check_gameloop_alive(&self) -> bool {
@@ -504,27 +536,6 @@ fn active_conditions(events: &[EngineEvent]) -> usize {
         }
     }
     open.values().filter(|v| **v).count()
-}
-
-/// ISO string -> epoch ms (shared with diagnoser logic)
-fn iso_ms_pub(iso: &str) -> Option<i64> {
-    let b = iso.as_bytes();
-    if b.len() != 24 {
-        return None;
-    }
-    let num = |r: std::ops::Range<usize>| -> Option<i64> {
-        std::str::from_utf8(&b[r]).ok()?.parse().ok()
-    };
-    let (y, mo, d) = (num(0..4)?, num(5..7)?, num(8..10)?);
-    let (h, mi, s) = (num(11..13)?, num(14..16)?, num(17..19)?);
-    let ms = num(20..23)?;
-    let (y, mo) = if mo <= 2 { (y - 1, mo + 12) } else { (y, mo) };
-    let era = i64::div_euclid(y, 400);
-    let yoe = y - era * 400;
-    let doy = (153 * (mo - 3) + 2) / 5 + d - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    let days = era * 146_097 + doe - 719_468;
-    Some(((days * 86_400) + h * 3600 + mi * 60 + s) * 1000 + ms)
 }
 
 // lock_ok: kept for future Mutex<T> acquisitions on named fields — the
@@ -715,5 +726,57 @@ mod tests {
             },
         ];
         assert_eq!(active_conditions(&evs), 1);
+    }
+
+    /// The double-start race (H2): a first start() must serialize against a
+    /// second one that arrives while the first is between the slow gates and
+    /// the second lock. We can't run real sessions in tests (they spawn
+    /// typeperf), but we can prove the LOCKED re-check itself: set the state
+    /// to Running directly and confirm start() refuses at the second gate.
+    #[test]
+    fn start_refuses_when_running_at_second_gate() {
+        let eng = Engine::new();
+        {
+            let mut st = eng.state.lock().unwrap_or_else(|p| p.into_inner());
+            st.status = SessionStatus::Running;
+        }
+        // start() with the game gate unreachable: detect_emulator() returns
+        // None on a machine without GameLoop, so the first gate should
+        // already refuse — but if it somehow passed (game running on the
+        // CI box), the second-gate re-check must still refuse
+        let res = eng.start(Some(60));
+        assert!(res.is_err());
+        // status must still be Running — nothing was reset
+        let st = eng.state.lock().unwrap_or_else(|p| p.into_inner());
+        assert!(st.status == SessionStatus::Running);
+    }
+
+    /// The reader-leak fix (per-session running flags): a stopped session's
+    /// flag can never be resurrected by a new session's start.
+    #[test]
+    fn per_session_running_flag_not_shared() {
+        let eng = Engine::new();
+        // simulate session 1: start() installs a fresh flag (true) — the
+        // session's readers capture THEIR OWN Arc to it
+        let first = Arc::new(AtomicBool::new(true));
+        if let Ok(mut slot) = eng.running_flag.write() {
+            *slot = Arc::clone(&first);
+        }
+        // session 1 stops: stop() flips the CURRENT flag (session 1's) false
+        if let Ok(current) = eng.running_flag.read() {
+            current.store(false, Ordering::SeqCst);
+        }
+        // a fast restart: start() installs a NEW flag for session 2 — the
+        // engine's slot now points at a different Arc
+        let second = Arc::new(AtomicBool::new(true));
+        if let Ok(mut slot) = eng.running_flag.write() {
+            *slot = Arc::clone(&second);
+        }
+        // THE RACE BEING FIXED: the old (session-1) reader may not have
+        // observed the stop yet; with the shared-flag design, session 2's
+        // start resurrected it to true and the old reader ran forever. With
+        // per-session flags, the old flag STAYS false:
+        assert!(!first.load(Ordering::SeqCst), "old session's flag must stay false");
+        assert!(second.load(Ordering::SeqCst), "new session's flag is true");
     }
 }

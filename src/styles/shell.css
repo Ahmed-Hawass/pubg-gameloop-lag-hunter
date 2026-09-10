@@ -13,7 +13,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 0 0 16px;
+  /* logical padding: 16px breathing room on the title side, controls flush
+     to the opposite edge. The old physical `0 0 0 16px` left a dead 16px
+     gap between X and the window edge in RTL (flex mirrors, padding didn't)
+     and crammed the icon against the edge on the other side. */
+  padding: 0;
+  padding-inline-start: 16px;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
 }
@@ -234,22 +239,11 @@
   padding: 16px 20px 20px;
 }
 
-/* every view page fills the fixed window; long pages (reports) scroll,
-   monitor manages its own internal layout */
-.content > .reports,
-.content > .sys,
-.content > .procs,
-.content > .checks,
-.content > .about,
-.content > .settings-page {
-  overflow-y: auto;
-  max-width: min(100%, 760px);
-  padding-inline-end: 4px;
-}
-
 /* ---- keep-alive view switching: all tabs stay mounted, only the active
-   one is displayed. Views render direct children inside wrapper divs, so
-   the page selectors above must reach through the wrapper. ---- */
+   one is displayed. Views render wrapped in divs, so every page selector
+   below reaches through the wrapper (`.content > div > ...`); every view
+   page fills the fixed window, long pages (reports) scroll, monitor
+   manages its own internal layout. ---- */
 .content > div {
   display: flex;
   flex-direction: column;
@@ -297,56 +291,19 @@
 }
 
 /* clean scrollbars: thin, theme-matched — About/Reports scroll without the
-   always-on gray bar */
-.content > .reports::-webkit-scrollbar,
-.content > .sys::-webkit-scrollbar,
-.content > .procs::-webkit-scrollbar,
-.content > .checks::-webkit-scrollbar,
-.content > .about::-webkit-scrollbar,
-.content > .settings-page::-webkit-scrollbar,
-.content > div > .reports::-webkit-scrollbar,
-.content > div > .sys::-webkit-scrollbar,
-.content > div > .procs::-webkit-scrollbar,
-.content > div > .checks::-webkit-scrollbar,
-.content > div > .about::-webkit-scrollbar,
-.content > div > .settings-page::-webkit-scrollbar,
-.content > div > .monitor::-webkit-scrollbar,
-.monitor::-webkit-scrollbar,
-.feed-list::-webkit-scrollbar {
+   always-on gray bar. One :is() list covers both layouts (the direct child
+   and the keep-alive wrapper div) — the old three 15-selector blocks were
+   copy-pasted per property. */
+:is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .about, .settings-page, .monitor)::webkit-scrollbar,
+:is(.monitor, .feed-list)::webkit-scrollbar {
   width: 8px;
 }
-.content > .reports::-webkit-scrollbar-thumb,
-.content > .sys::-webkit-scrollbar-thumb,
-.content > .procs::-webkit-scrollbar-thumb,
-.content > .checks::-webkit-scrollbar-thumb,
-.content > .about::-webkit-scrollbar-thumb,
-.content > .settings-page::-webkit-scrollbar-thumb,
-.content > div > .reports::-webkit-scrollbar-thumb,
-.content > div > .sys::-webkit-scrollbar-thumb,
-.content > div > .procs::-webkit-scrollbar-thumb,
-.content > div > .checks::-webkit-scrollbar-thumb,
-.content > div > .about::-webkit-scrollbar-thumb,
-.content > div > .settings-page::-webkit-scrollbar-thumb,
-.content > div > .monitor::-webkit-scrollbar-thumb,
-.monitor::-webkit-scrollbar-thumb,
-.feed-list::-webkit-scrollbar-thumb {
+:is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .about, .settings-page, .monitor)::webkit-scrollbar-thumb,
+:is(.monitor, .feed-list)::webkit-scrollbar-thumb {
   background: var(--border-2);
   border-radius: 4px;
 }
-.content > .reports::-webkit-scrollbar-track,
-.content > .sys::-webkit-scrollbar-track,
-.content > .procs::-webkit-scrollbar-track,
-.content > .checks::-webkit-scrollbar-track,
-.content > .about::-webkit-scrollbar-track,
-.content > .settings-page::-webkit-scrollbar-track,
-.content > div > .reports::-webkit-scrollbar-track,
-.content > div > .sys::-webkit-scrollbar-track,
-.content > div > .procs::-webkit-scrollbar-track,
-.content > div > .checks::-webkit-scrollbar-track,
-.content > div > .about::-webkit-scrollbar-track,
-.content > div > .settings-page::-webkit-scrollbar-track,
-.content > div > .monitor::-webkit-scrollbar-track,
-.monitor::-webkit-scrollbar-track,
-.feed-list::-webkit-scrollbar-track {
+:is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .about, .settings-page, .monitor)::webkit-scrollbar-track,
+:is(.monitor, .feed-list)::webkit-scrollbar-track {
   background: transparent;
 }

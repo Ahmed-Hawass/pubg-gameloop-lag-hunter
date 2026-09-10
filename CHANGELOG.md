@@ -4,6 +4,143 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- Sidebar (and every other) tooltips no longer stick open: hiding used to
+  rely on `mouseleave` alone, so a dialog mounting under a parked cursor,
+  an Alt+Tab away, or a wheel-scroll detach left the bubble painted until
+  the user hovered the trigger again. The shared tooltip hook now also
+  hides on window blur, captured scroll, captured pointer press, and an
+  `app:modal-open` signal the shell broadcasts whenever its modal surface
+  opens.
+- No more dark empty window on launch: the window stays hidden until the
+  UI reveals it on first paint (static branded splash in `index.html`
+  paints during parse, ahead of the JS bundle and IPC gates), with an 8s
+  Rust safety net so a broken frontend can never leave the app invisible.
+  Requires the new `core:window:allow-show` capability.
+- The app icon (titlebar, welcome, about) no longer pops in a second or
+  two after everything else: the source was a 1024px / 543KB PNG shown at
+  20-64px, now a pre-scaled 128px / ~9KB file (visually identical at
+  display sizes, exact at 200% DPI), preloaded before first paint so its
+  fetch and decode overlap the settings IPC gate instead of waiting
+  behind it.
+- Diagnosis wording can no longer drift between the live cards and saved
+  reports: the report reader now uses the diagnoser's own dictionary
+  (single source), and unknown engine kinds map to "" on both sides
+  instead of being mislabeled as GPU strain in reports.
+- A GPU collapse under RAM pressure could be recorded as `loaded` yet
+  displayed as a harmless scene hitch: the detector and the diagnoser now
+  share one `others_ok()` gate (disk, CPU, and RAM).
+- Report header badges and session-list icons for the middle tone
+  (`issues` / `partial`) were unstyled (missing `.badge-mid` /
+  `.sl-icon-mid`); they now render in warn like the list badge already did.
+- Loading lines no longer borrow the Top Processes copy: System and
+  Checks show a generic "Loading...", and the About update button shows
+  "Checking for updates..." while a check is in flight.
+- A deep link to a deleted session no longer silently opens the first
+  session in the list; it says the session is gone.
+- A failed update download whose message merely contains the word
+  "cancelled" no longer closes the modal as if the user had cancelled;
+  only the exact backend `"cancelled"` reason does.
+- Timeline spike markers and metric bars are clamped to their tracks.
+- A stored scan duration outside the four presets now renders localized
+  (`t.minutesShort`) instead of a bare English "Nm".
+- `session_start` without an explicit duration falls back to the user's
+  own auto-stop default from settings instead of a second hardcoded
+  30 minutes.
+
+### Changed
+- The default theme is now `auto` (follow the OS) instead of `dark`:
+  fresh installs open light on a light system and dark on a dark one from
+  the first frame. Unknown stored values also resolve to `auto` on both
+  sides (backend `normalize_theme` and frontend `resolveTheme` finally
+  agree). Explicit `dark`/`light` choices are untouched.
+- Dead code removed: `storage::settings_path`, `Engine::thresholds`,
+  the `gameloop_status` IPC command with its bridge wrapper and event
+  listener (the watcher thread itself still runs), the unused
+  `GpuSample`/`ProcInfo` bridge types, the `Button.style` and
+  `Hint.children` props, the `--ok` token, and an unreachable scrollbar
+  selector block.
+- The ISO-timestamp parser and the diagnosis-copy dictionary each exist
+  once now (`types::iso_ms`, `diagnoser::diagnosis_copy`) instead of
+  three and two copies respectively.
+
+### Fixed
+- Security: the update download path is now validated before anything is
+  written (absolute paths only, parent folder must exist, destination must
+  not be a directory), and a cancelled/failed download only ever removes
+  its own `.part` file: a file the user already had at the chosen path can
+  no longer be deleted by a cancelled update. `open_download_folder` also
+  refuses paths containing characters Explorer cannot select safely.
+- Race: a double-click on Start could slip two sessions past the engine's
+  start gate (the slow emulator/PowerShell gates ran unlocked), double-
+  spawning samplers and orphaning a writer. The status is now re-checked
+  under the second lock, so a second start is refused.
+- Race: a fast stop→start leaked the previous session's typeperf/dmon
+  readers (the shared running flag could be flipped back to true before
+  the old 1Hz reader ever saw false), doubling the sample rate for the
+  rest of the app's life. Each session's readers now own a per-session
+  stop flag that can never be resurrected.
+- Crash: a single "NaN" value from typeperf could panic the report builder
+  (`partial_cmp().unwrap()` with `panic="abort"` kills the whole app and
+  the session with it). Sorting is now NaN-safe.
+- The manual "Check for updates" in About could succeed silently and show
+  nothing when the startup check had failed (e.g. app booted offline,
+  network came back after), the fresh result is now handed to the shell
+  before the modal opens.
+- Timeline spike tooltips showed raw machine keys (`disk_queue`, `spike`)
+  to Arabic users; they now go through the same translation table as the
+  activity feed. The timeline head labels ("Auto-stop" / "Session
+  duration") and the diagnosis cards' "Fix" label are localized too.
+- CSS: the sidebar update dot lost its ring and the update modal lost its
+  inset panel backgrounds (`--bg-1`/`--bg-2` were referenced but never
+  defined). Both tokens are now defined for dark and light themes.
+- The process bars in Top Processes filled from the left in RTL, against
+  the reading direction, they now grow from the reading side.
+- The sidebar no longer flashes expanded-then-collapsed (or the reverse)
+  on launch: it renders only after the saved preference arrives, the same
+  defer-to-IPC pattern the welcome screen already used.
+- The stay-in-game / pre-scan advice dialogs were persisted twice (at
+  show and again at close), the close-time call was removed; the show-
+  time call is the contract.
+- UpdateModal could call `onClose` twice (Escape during download, then the
+  cancelled promise rejecting after unmount), closes are now idempotent.
+- ChecksView could stack system-check queries (30s interval vs a slow
+  PowerShell batch), it now has the same busy-guard as Top Processes.
+- The pre-scan advice copy was Egyptian colloquial while the rest of the
+  Arabic locale is Modern Standard, unified to MSA.
+
+### Changed
+- `delete_all_sessions` now excludes the LIVE session from the engine side:
+  the frontend's exclude-id is honored as a bonus, but the running
+  session's directory can never be bulk-deleted even if the UI passes
+  nothing or the wrong id.
+- Tooltip positioning logic (Tip / MetricHint / Hint) unified into one
+  `useAnchoredTooltip` hook: a positioning fix now lands everywhere at
+  once. Dialog gained a proper focus trap (Tab cycles inside the modal).
+- Dead code removed: `system_info_cached` (engine), the `gameloopUp`
+  prop/state chain with no consumer (the watcher thread itself still
+  runs), and the unused `dialog.confirm` locale key.
+- The mm:ss duration formatter is exported once from the design system
+  instead of being copy-pasted per view.
+- Scrollbar styling collapsed from three 15-selector blocks into one
+  `:is()` list.
+
+### Added
+- CI: dependency audits on both sides (`npm audit --audit-level=high`,
+  `cargo audit`), a version-sync gate (package.json, tauri.conf.json
+  version + mainBinaryName, Cargo.toml, and CHANGELOG.md must all agree),
+  least-privilege workflow permissions, and the release-build job now
+  generates SHA256SUMS.txt and uploads the exe + checksums as artifacts.
+- Dependabot watches npm, cargo, and GitHub Actions weekly.
+- Engine tests: start-gate double-start refusal, per-session running-flag
+  isolation, update destination validation, and cleanup-removes-only-the-
+  `.part`-sibling (a pre-existing destination file survives a cancelled
+  download).
+- `tsconfig.node.json`: `vite.config.ts` is now type-checked by the build
+  (it previously escaped `tsc` entirely).
+
 ## [1.4.0] - 2026-09-08
 
 ### Added

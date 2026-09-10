@@ -3,25 +3,20 @@
 
 import { listen } from "@tauri-apps/api/event";
 import { Channel } from "@tauri-apps/api/core";
-import type { EventCallback, UnlistenFn } from "@tauri-apps/api/event";
+import type { EventCallback } from "@tauri-apps/api/event";
 
 // ---- types mirroring Rust ------------------------------------------------
 
-export interface GpuSample {
-  pclk: number | null;
-  mclk: number | null;
-  sm_pct: number | null;
-  mem_pct: number | null;
-  temp: number | null;
-  pstate: string | null;
-}
+/** event severity — mirrors engine types.rs Severity (as_str) */
+export type Severity = "ok" | "warn" | "crit";
 
-export interface ProcInfo {
-  name: string;
-  pid: number | null;
-  ws_mb: number | null;
-  cpu_seconds: number | null;
-}
+/**
+ * diagnosis-card severity — mirrors the Diagnosis/FriendlyFinding severity
+ * in types.rs ("high" | "medium" | "low"). A DIFFERENT vocabulary from
+ * Severity on purpose: events say how bad a measurement is, cards say how
+ * much the user should care. Do not merge them.
+ */
+export type CardSeverity = "high" | "medium" | "low";
 
 export interface Diagnosis {
   key: string;
@@ -29,7 +24,7 @@ export interface Diagnosis {
   simple: string;
   cause: string;
   fix: string;
-  severity: string;
+  severity: CardSeverity;
   at: string;
 }
 
@@ -51,7 +46,7 @@ export interface FeedEntry {
   phase: "start" | "end" | "instant";
   /** machine event kind — the UI translates it (e.g. "disk_queue") */
   kind: string;
-  sev: string;
+  sev: Severity;
   /** clock time HH:MM:SS from the sample */
   clock: string;
 }
@@ -128,7 +123,6 @@ export const api = {
   sessionStart: (autoStopSecs: number) => invoke<StatusPayload>("session_start", { autoStopSecs }),
   sessionStop: () => invoke<StatusPayload>("session_stop"),
   getState: () => invoke<StatusPayload>("get_state"),
-  gameloopStatus: () => invoke<boolean>("gameloop_status"),
   psAvailable: () => invoke<boolean>("ps_available"),
   watchGameloop: () => invoke<void>("watch_gameloop"),
   sessionEntries: () => invoke<SessionEntry[]>("session_entries"),
@@ -209,18 +203,6 @@ export interface SystemChecks {
   on_ac: boolean;
 }
 
-// ---- gameloop watcher events ----------------------------------------------
-// The backend emits `engine://gameloop` (true/false) while idle, so the UI
-// knows the moment the user opens GameLoop (the Start button stays pressable
-// either way — pressing without the game shows an explaining dialog).
-// Note: static import — @tauri-apps/api/event is already in the main chunk
-// via TitleBar's window import, so a dynamic import split nothing (Vite
-// warned INEFFECTIVE_DYNAMIC_IMPORT).
-
-export async function onGameloopChange(cb: (up: boolean) => void): Promise<UnlistenFn> {
-  return listen<boolean>("engine://gameloop", (ev) => cb(ev.payload));
-}
-
 // ---- settings (persisted user preferences — schema v3) --------------------
 
 export interface Settings {
@@ -251,9 +233,11 @@ export interface SessionEntry {
   duration_sec: number;
   samples: number;
   lag_spikes: number;
-  /** "clean" | "issues" | "laggy" | "partial" */
-  outcome: string;
+  /** honest outcome — mirrors storage.rs honest_outcome() */
+  outcome: Outcome;
 }
+
+export type Outcome = "clean" | "issues" | "laggy" | "partial";
 
 export interface FriendlyFinding {
   /** machine key for UI translation (e.g. "disk_wait") */
@@ -262,7 +246,7 @@ export interface FriendlyFinding {
   title: string;
   simple: string;
   fix: string;
-  severity: string;
+  severity: CardSeverity;
 }
 
 export interface HighlightEntry {
@@ -277,8 +261,8 @@ export interface FriendlyReport {
   duration_sec: number;
   samples: number;
   lag_spikes: number;
-  /** "clean" | "issues" | "laggy" | "partial" */
-  outcome: string;
+  /** honest outcome — mirrors storage.rs honest_outcome() */
+  outcome: Outcome;
   highlights: HighlightEntry[];
   metrics_summary: string[];
   findings: FriendlyFinding[];

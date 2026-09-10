@@ -1,4 +1,4 @@
-# CI — the verification chain this project is built on.
+# CI, the verification chain this project is built on.
 # Windows-only by design: the engine speaks typeperf / nvidia-smi / tasklist.
 
 name: CI
@@ -8,6 +8,10 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+
+# least privilege: nothing here needs write access to the repo
+permissions:
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -29,12 +33,18 @@ jobs:
       - name: Unit tests (vitest)
         run: npm test
 
-      # tsc runs as part of the build script — this is also the locale
+      # tsc runs as part of the build script, this is also the locale
       # type bond check (ar.ts must match en.ts key-for-key)
       - run: npm run build
 
+      - name: Dependency audit (npm)
+        # surface known-vulnerable frontend deps without failing the build on
+        # low-severity advisories, high+ breaks CI
+        run: npm audit --audit-level=high
+        continue-on-error: false
+
   engine:
-    name: Engine (tests + clippy)
+    name: Engine (tests + clippy + audit)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -53,9 +63,48 @@ jobs:
       - name: Clippy (zero warnings)
         run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 
+      - name: Dependency audit (Rust)
+        # RustSec advisories for the engine's dependency tree (ureq, sha2,
+        # tauri plugins...). Mirrors npm audit on the frontend job.
+        # (prebuilt binary install, ~2s, no cargo install compile wait)
+        run: |
+          curl -LsSf https://github.com/rustsec/rustsec/releases/latest/download/cargo-audit-installer.sh | sh
+          cargo audit --manifest-path src-tauri/Cargo.toml
+
+  version-sync:
+    name: Version sync (package / tauri / cargo / changelog)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The version lives in FOUR places (package.json, tauri.conf.json —
+      # twice: version + mainBinaryName, Cargo.toml, CHANGELOG.md) and the
+      # release exe's file NAME carries it too. A drifted bump publishes an
+      # updater that can never find its own asset. This gate fails the PR
+      # the moment any two disagree.
+      - name: All version sources agree
+        shell: bash
+        run: |
+          set -eu
+          pkg=$(node -p "require('./package.json').version")
+          conf=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          mainbin=$(node -p "require('./src-tauri/tauri.conf.json').mainBinaryName")
+          cargo=$(grep -m1 '^version' src-tauri/Cargo.toml | sed 's/version *= *"\(.*\)"/\1/')
+          changelog=$(grep -m1 -oP '^\[\K[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md)
+          echo "package=$pkg tauri=$conf cargo=$cargo changelog=$changelog mainBinaryName=$mainbin"
+          [ "$pkg" = "$conf" ] || { echo "::error::package.json ($pkg) != tauri.conf.json ($conf)"; exit 1; }
+          [ "$pkg" = "$cargo" ] || { echo "::error::package.json ($pkg) != Cargo.toml ($cargo)"; exit 1; }
+          [ "$pkg" = "$changelog" ] || { echo "::error::package.json ($pkg) != CHANGELOG.md ($changelog)"; exit 1; }
+          [ "$mainbin" = "pubg-gameloop-lag-hunter-$pkg" ] \
+            || { echo "::error::mainBinaryName ($mainbin) must be pubg-gameloop-lag-hunter-$pkg, the updater matches this exact asset name"; exit 1; }
+
   release-build:
     name: Release build (full LTO profile)
-    # the profile unit tests never touch — built on demand until proven stable
+    # the profile unit tests never touch, built on demand until proven stable
     if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     steps:
@@ -76,3 +125,20 @@ jobs:
 
       - name: Build release exe
         run: npx tauri build --no-bundle
+
+      # SHA256SUMS.txt is part of the update contract (the engine verifies
+      # downloads against it), generate it in the same job that builds the
+      # exe, so every manually-triggered release run produces a pair that
+      # has actually been built together
+      - name: Generate SHA256SUMS.txt
+        shell: pwsh
+        run: ./scripts/checksum.ps1
+
+      - name: Upload release exe + checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: lag-hunter-release
+          path: |
+            src-tauri/target/release/*.exe
+            src-tauri/target/release/SHA256SUMS.txt
+          if-no-files-found: error

@@ -5,6 +5,9 @@
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Version](https://img.shields.io/github/package-json/v/Ahmed-Hawass/pubg-gameloop-lag-hunter)
+![CI](https://github.com/Ahmed-Hawass/pubg-gameloop-lag-hunter/actions/workflows/ci.yml/badge.svg)
+![Release](https://img.shields.io/github/v/release/Ahmed-Hawass/pubg-gameloop-lag-hunter)
+![Rust](https://img.shields.io/badge/engine-Rust-orange?logo=rust)
 
 ---
 
@@ -140,7 +143,7 @@ npx tauri dev
 
 ### Prerequisites
 
-* [Node.js 18+](https://nodejs.org/)
+* [Node.js 22+](https://nodejs.org/) (the version CI builds and tests with)
 * [Rust 1.77+](https://rustup.rs/) with the MSVC toolchain
 
 ### Release Build

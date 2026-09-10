@@ -26,9 +26,16 @@ export function TitleBar() {
   return (
     <div className="titlebar">
       <div className="titlebar-left" data-tauri-drag-region>
-        <img className="titlebar-icon" src={appIcon} alt="PUBG GameLoop Lag Hunter" width={20} height={20} draggable={false} />
+        <img
+          className="titlebar-icon"
+          src={appIcon}
+          alt={t.aboutTitle}
+          width={20}
+          height={20}
+          draggable={false}
+        />
         <span className="titlebar-title" data-tauri-drag-region>
-          PUBG GameLoop Lag Hunter
+          {t.aboutTitle}
         </span>
         {version ? (
           <span className="titlebar-version num" data-tauri-drag-region>

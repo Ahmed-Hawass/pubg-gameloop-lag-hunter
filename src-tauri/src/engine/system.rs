@@ -187,30 +187,6 @@ pub async fn system_info_async() -> Result<SystemInfo, String> {
     Ok(info)
 }
 
-/// Synchronous cached read — the memory/disk caches ONLY. Never spawns the
-/// live query (a sync call site would block its thread for the hardware
-/// inventory). Falls back to an empty-but-usable profile when no cache
-/// exists yet; the async path fills the caches shortly after.
-pub fn system_info_cached() -> Result<SystemInfo, String> {
-    if let Some(cached) = SYSTEM_CACHE.get() {
-        return Ok(cached.clone());
-    }
-    if let Some(disk) = load_system_cache() {
-        let _ = SYSTEM_CACHE.set(disk.clone());
-        return Ok(disk);
-    }
-    // no cache yet and no blocking allowed: an honest placeholder. The rig
-    // tab will show it for a moment, then the async warm-up replaces it.
-    Ok(SystemInfo {
-        cpu: "Loading…".into(),
-        gpus: Vec::new(),
-        ram_gb: 0.0,
-        disks: Vec::new(),
-        gpu_counters: super::sampler::query_gpu_max_clocks().is_some(),
-        powershell_available: powershell_available(),
-    })
-}
-
 /// Machine facts the session needs (RAM MB + physical disk count) straight
 /// from the rig cache — no PowerShell round-trip, no hardware inventory.
 /// `None` when the cache isn't filled yet (first machine run before the

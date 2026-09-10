@@ -13,7 +13,6 @@ export const en = {
   dialog: {
     ok: "OK",
     cancel: "Cancel",
-    confirm: "Confirm",
     delete: "Delete",
     deleteTitle: "Delete this session?",
     deleteBody: "Its samples and report will be permanently removed from your PC.",
@@ -114,6 +113,10 @@ export const en = {
   topProcessesEmpty: "Nothing significant is running",
   topProcessesRefreshing: "Checking what's running...",
   refresh: "Refresh",
+  /** generic loading line for tabs that are not Top Processes */
+  loading: "Loading...",
+  /** About tab: the manual update check is in flight */
+  checkingUpdate: "Checking for updates...",
 
   // ---- system checks tab ----
   checksHint:
@@ -173,8 +176,13 @@ export const en = {
   min10: "10 min",
   min30: "30 min",
   min60: "60 min",
+  /** fallback for a stored duration outside the four presets */
+  minutesShort: (n: number) => `${n} min`,
   time: "Time",
   timelineHint: "Every red dot is a lag spike we captured. The bar fills toward your auto-stop time.",
+  timelineAutoStop: "Auto-stop",
+  timelineDuration: "Session duration",
+  fixLabel: "Fix:",
 
   // ---- monitor: hero states ----
   spikesCaptured: (n: number) => `${n} lag spike${n === 1 ? "" : "s"} captured`,
@@ -276,6 +284,8 @@ export const en = {
   noSessions: "No sessions yet",
   noSessionsHint: "Run a scan from the Monitor tab. Finished sessions show up here with their reports.",
   loadingSessions: "Loading sessions...",
+  /** deep link to a session id that is no longer saved (deleted meanwhile) */
+  reportNotFound: "That session is no longer saved on this PC.",
   allSessions: "All sessions",
   sessionReport: "Session report",
   whatWeFound: "What we found",

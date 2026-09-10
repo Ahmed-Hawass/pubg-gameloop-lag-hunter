@@ -2,7 +2,7 @@
 // Gently live: power plan / pagefile / battery state can change while the
 // user is on this tab (unplugging the charger is the classic case).
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, ShieldAlert, XCircle } from "lucide-react";
 import { EmptyState } from "../components/components";
 import { api, type SystemChecks } from "../bridge";
@@ -15,13 +15,20 @@ export function ChecksView(props: { active: boolean }) {
   const { t } = useLang();
   const [checks, setChecks] = useState<SystemChecks | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // never stack queries: a 30s tick that fires while a slow PowerShell batch
+  // is still in flight is skipped, not queued (same guard as ProcessesView)
+  const busyRef = useRef(false);
 
   const load = async (silent: boolean) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
     try {
       setChecks(await api.systemChecks());
       setError(null);
     } catch (e) {
       if (!silent) setError(String(e));
+    } finally {
+      busyRef.current = false;
     }
   };
 
@@ -45,7 +52,7 @@ export function ChecksView(props: { active: boolean }) {
   if (!checks) {
     return (
       <div className="checks">
-        <EmptyState icon={<ShieldAlert size={18} />} title={t.topProcessesRefreshing} hint="" />
+        <EmptyState icon={<ShieldAlert size={18} />} title={t.loading} hint="" />
       </div>
     );
   }

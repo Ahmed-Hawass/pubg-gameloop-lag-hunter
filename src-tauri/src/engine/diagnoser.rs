@@ -1,7 +1,7 @@
 // diagnoser.rs — engine events → user-facing diagnoses (English, plain language)
 // The UI never shows engine jargon; it shows these.
 
-use super::types::{Diagnosis, EngineEvent, Overall, Phase, Sample, Severity, UiState};
+use super::types::{iso_ms, others_ok, Diagnosis, EngineEvent, Overall, Phase, Sample, Severity, UiState};
 
 /// How recent an event must be to count as live evidence for a card.
 /// Was a bare inline `5 * 60 * 1000` — now named, and every window reads it.
@@ -21,10 +21,11 @@ fn key_for(ev: &EngineEvent, latest: &Sample) -> &'static str {
         "paging_churn" => "paging_churn",
         "gpu_mem_idle" => "gpu_wake",
         "gpu_activity_cliff" => {
-            // healthy elsewhere → scene hitch; loaded → gpu busy
-            let others_ok = latest.disk_queue.map(|q| q < 0.5).unwrap_or(true)
-                && latest.cpu_total.map(|c| c < 85.0).unwrap_or(true);
-            if others_ok {
+            // healthy elsewhere → scene hitch; loaded → gpu busy. Same
+            // shared gate the detector used at emit time (RAM included) —
+            // a collapse under memory pressure must never read as a
+            // harmless first-load hitch.
+            if others_ok(latest.disk_queue, latest.cpu_total, latest.avail_mb) {
                 "scene_hitch"
             } else {
                 "gpu_busy"
@@ -436,27 +437,6 @@ pub fn build_ui_state(inp: UiStateInput) -> UiState {
         samples_count: samples_total,
         emulator: emulator.map(String::from),
     }
-}
-
-fn iso_ms(iso: &str) -> Option<i64> {
-    let b = iso.as_bytes();
-    if b.len() != 24 {
-        return None;
-    }
-    let num = |r: std::ops::Range<usize>| -> Option<i64> {
-        std::str::from_utf8(&b[r]).ok()?.parse().ok()
-    };
-    let (y, mo, d) = (num(0..4)?, num(5..7)?, num(8..10)?);
-    let (h, mi, s) = (num(11..13)?, num(14..16)?, num(17..19)?);
-    let ms = num(20..23)?;
-    // days from civil (inverse of the algorithm in sampler)
-    let (y, mo) = if mo <= 2 { (y - 1, mo + 12) } else { (y, mo) };
-    let era = i64::div_euclid(y, 400);
-    let yoe = y - era * 400;
-    let doy = (153 * (mo - 3) + 2) / 5 + d - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    let days = era * 146_097 + doe - 719_468;
-    Some(((days * 86_400) + h * 3600 + mi * 60 + s) * 1000 + ms)
 }
 
 #[cfg(test)]

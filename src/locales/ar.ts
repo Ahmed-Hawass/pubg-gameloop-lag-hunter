@@ -17,7 +17,6 @@ export const ar: Locale = {
   dialog: {
     ok: "حسنًا",
     cancel: "إلغاء",
-    confirm: "تأكيد",
     delete: "حذف",
     deleteTitle: "هل تريد حذف هذه الجلسة؟",
     deleteBody: "ستُحذف عيناتها وتقريرها نهائيًا من جهازك.",
@@ -105,11 +104,10 @@ export const ar: Locale = {
   seeGame: "اكتشاف تشغيل PUBG Mobile داخل GameLoop",
   gpuCountersOff: "غير متاح على هذا الجهاز، لذا سيظهر كرت الشاشة كـ \"--\" أثناء الفحص.",
   seePs: "الضبط الدقيق للجهاز (PowerShell)",
-  seePsOff: "غير متاح. الفحص يعمل، لكن ضبط الجهاز وتصحيح الساعة بيتجاوزوا.",
-  psLimitedTitle: "الأداة شغالة في وضع محدود",
+  seePsOff: "غير متاح. الفحص يعمل، لكن ضبط الجهاز وتصحيح الساعة سيتم تجاوزهما.",
+  psLimitedTitle: "الأداة تعمل في وضع محدود",
   psLimitedBody:
-    "PowerShell مش متاح على جهازك، فبعض الفحوصات بتشتغل على إعدادات افتراضية آمنة: ضبط الجهاز على مقاسه بيتعملش، والأوقات ممكن تظهر بتوقيت UTC، وكشف توقف كرت الشاشة متوقف. الفحص نفسه شغال عادي والعدادات الأساسية بتتقرأ من ويندوز مباشرة.",
-
+    "PowerShell غير متاح على جهازك، لذا ستعمل بعض الفحوصات على إعدادات افتراضية آمنة: لن يتم ضبط الجهاز على مقاسه، وقد تظهر الأوقات بتوقيت UTC، ويبقى كشف توقف كرت الشاشة معطلًا. الفحص نفسه يعمل بشكل طبيعي، وتُقرأ العدادات الأساسية من ويندوز مباشرة.",
 
   // ---- top processes tab ----
   topProcessesHint:
@@ -117,6 +115,10 @@ export const ar: Locale = {
   topProcessesEmpty: "لا يوجد شيء ملحوظ يعمل حاليًا",
   topProcessesRefreshing: "جارٍ فحص ما يعمل الآن...",
   refresh: "تحديث",
+  /** generic loading line for tabs that are not Top Processes */
+  loading: "جارٍ التحميل...",
+  /** About tab: the manual update check is in flight */
+  checkingUpdate: "جارٍ التحقق من وجود تحديث...",
 
   // ---- system checks tab ----
   checksHint:
@@ -175,8 +177,13 @@ export const ar: Locale = {
   min10: "10 دقائق",
   min30: "30 دقيقة",
   min60: "60 دقيقة",
+  /** fallback for a stored duration outside the four presets */
+  minutesShort: (n: number) => `${n} دقيقة`,
   time: "الوقت",
   timelineHint: "كل نقطة حمراء تمثل تقطيعة تم رصدها. يمتلئ الشريط كلما اقترب موعد الإيقاف التلقائي.",
+  timelineAutoStop: "الإيقاف التلقائي",
+  timelineDuration: "مدة الجلسة",
+  fixLabel: "الحل:",
 
   // ---- monitor: hero states ----
   spikesCaptured: (n: number) => `تم رصد ${n} ${n === 1 ? "تقطيعة واحدة" : "تقطيعات"}`,
@@ -277,6 +284,8 @@ export const ar: Locale = {
   noSessions: "لا توجد جلسات بعد",
   noSessionsHint: "شغّل فحصًا من تبويب المراقبة. ستظهر الجلسات المكتملة هنا مع تقاريرها.",
   loadingSessions: "جارٍ تحميل الجلسات...",
+  /** deep link to a session id that is no longer saved (deleted meanwhile) */
+  reportNotFound: "هذه الجلسة لم تعد محفوظة على هذا الجهاز.",
   allSessions: "كل الجلسات",
   sessionReport: "تقرير الجلسة",
   whatWeFound: "ما وجدناه",

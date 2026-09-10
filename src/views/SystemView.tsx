@@ -28,7 +28,7 @@ export function SystemView() {
   if (!info) {
     return (
       <div className="sys">
-        <EmptyState icon={<Cpu size={18} />} title={t.topProcessesRefreshing} hint="" />
+        <EmptyState icon={<Cpu size={18} />} title={t.loading} hint="" />
       </div>
     );
   }
@@ -60,7 +60,7 @@ export function SystemView() {
             <div key={i} className="sys-kv">
               <HardDrive size={15} />
               <span className="sys-k">
-                {d.name} · {d.size_gb} GB · {d.media === "SSD" ? "SSD" : d.media}/{d.bus}
+                {d.name} · {d.size_gb} GB · {d.media}/{d.bus}
               </span>
             </div>
           ))}

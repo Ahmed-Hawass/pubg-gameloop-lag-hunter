@@ -99,6 +99,50 @@ impl Severity {
     }
 }
 
+/// Shared "everything else looks healthy" gate for GPU-cliff
+/// classification. ONE definition: the detector (emit-time event kind)
+/// and the diagnoser (display-time card) must agree — with two copies the
+/// detector checked disk+CPU+RAM while the diagnoser checked disk+CPU
+/// only, so a collapse under RAM pressure was recorded `loaded` yet
+/// displayed as a harmless scene hitch.
+/// Missing counters abstain as healthy: without evidence we never blame
+/// load (a missing counter is a blind sensor, not a loaded machine —
+/// GPU-less and localized-Windows machines would otherwise manufacture
+/// `gpu_busy` cards out of thin air).
+pub fn others_ok(
+    disk_queue: Option<f64>,
+    cpu_total: Option<f64>,
+    avail_mb: Option<f64>,
+) -> bool {
+    disk_queue.map(|q| q < 0.5).unwrap_or(true)
+        && cpu_total.map(|c| c < 85.0).unwrap_or(true)
+        && avail_mb.map(|a| a > 2048.0).unwrap_or(true)
+}
+
+/// ISO string ("2026-08-31T00:19:52.123Z", always 24 chars) -> epoch ms.
+/// ONE copy: session, storage and diagnoser each carried this function
+/// verbatim (even the comments referenced each other).
+pub(crate) fn iso_ms(iso: &str) -> Option<i64> {
+    let b = iso.as_bytes();
+    if b.len() != 24 {
+        return None;
+    }
+    let num = |r: std::ops::Range<usize>| -> Option<i64> {
+        std::str::from_utf8(&b[r]).ok()?.parse().ok()
+    };
+    let (y, mo, d) = (num(0..4)?, num(5..7)?, num(8..10)?);
+    let (h, mi, s) = (num(11..13)?, num(14..16)?, num(17..19)?);
+    let ms = num(20..23)?;
+    // days from civil (inverse of the algorithm in sampler)
+    let (y, mo) = if mo <= 2 { (y - 1, mo + 12) } else { (y, mo) };
+    let era = i64::div_euclid(y, 400);
+    let yoe = y - era * 400;
+    let doy = (153 * (mo - 3) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days = era * 146_097 + doe - 719_468;
+    Some(((days * 86_400) + h * 3600 + mi * 60 + s) * 1000 + ms)
+}
+
 // ---------------------------------------------------------------------------
 // Diagnosis — the simplified, user-facing layer (translated from EngineEvents)
 // ---------------------------------------------------------------------------

@@ -31,6 +31,8 @@ The causes are usually one of a handful of well-known patterns:
 | **Thermal throttling**    | Sustained load pushes the processor into throttling |
 | **GPU power-state hitch** | GPU changes power state between scenes              |
 | **First-load freeze**     | Shader compilation on a fresh scene                 |
+| **Paging churn**          | Background file shuffling between RAM and disk while both are healthy (v1.4) |
+| **GPU activity cliff**    | Sharp GPU activity drop, bimodal-aware and load-gated (v1.4) |
 
 Each has a distinct measurable fingerprint.
 
@@ -69,6 +71,8 @@ tasklist (GameLoop probe)       ─┘
 * Every sample is written to disk immediately.
 * The RAM window is bounded at **300 ticks**.
 * Reports are generated from the file, never from memory.
+* Per-source evidence (GPU / emulator / window visibility) carries a **TTL**, a stale snapshot is dropped, never worn as fresh.
+* Each session's sampling readers own a **per-session stop flag**: a fast stop→start can never resurrect the old readers (no double sampling).
 
 ---
 

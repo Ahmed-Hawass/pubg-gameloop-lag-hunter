@@ -3,7 +3,7 @@
 // Scope contract (engine/update.rs): no self-replace, no restart — the most
 // this modal does is put a VERIFIED file next to the user and open its folder.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FolderOpen, ShieldCheck, TriangleAlert } from "lucide-react";
 import { api, type UpdateInfo } from "../bridge";
 import { useLang } from "../i18n";
@@ -26,6 +26,15 @@ export function UpdateModal(props: {
   const { info, onClose } = props;
   const { t } = useLang();
   const [phase, setPhase] = useState<Phase>({ kind: "offer" });
+  // closes exactly once: Escape-during-download closes the modal, then the
+  // cancelled download's promise rejects LATER and would call onClose again
+  // (on an unmounted component) — the ref keeps the second call a no-op
+  const closedRef = useRef(false);
+  const close = () => {
+    if (closedRef.current) return;
+    closedRef.current = true;
+    onClose();
+  };
 
   // Escape closes the offer; while downloading it CANCELS (closing the modal
   // mid-download must never leave an orphaned stream — cancel kills it)
@@ -35,7 +44,7 @@ export function UpdateModal(props: {
         if (phase.kind === "downloading") {
           void api.cancelUpdateDownload();
         }
-        onClose();
+        close();
       }
     };
     document.addEventListener("keydown", onKey);
@@ -68,17 +77,22 @@ export function UpdateModal(props: {
       setPhase({ kind: "done", path: finalPath });
     } catch (e) {
       const reason = typeof e === "string" ? e : String(e);
-      if (reason.includes("cancelled")) {
-        onClose(); // user cancelled — treat as a clean close, no error card
+      // exact match, not a substring: the backend rejects a cancelled
+      // download with precisely "cancelled" — a real failure message that
+      // merely CONTAINS the word must still land on the error card
+      if (reason === "cancelled") {
+        close(); // user cancelled — treat as a clean close, no error card
         return;
       }
-      setPhase({ kind: "failed", reason });
+      if (!closedRef.current) {
+        setPhase({ kind: "failed", reason });
+      }
     }
   };
 
   const cancel = () => {
     void api.cancelUpdateDownload();
-    onClose();
+    close();
   };
 
   // ---- render per phase -----------------------------------------------
@@ -100,7 +114,7 @@ export function UpdateModal(props: {
     );
     actions = (
       <>
-        <button className="btn btn-md btn-ghost" onClick={onClose}>
+        <button className="btn btn-md btn-ghost" onClick={close}>
           {t.updateClose}
         </button>
         <button
@@ -120,7 +134,7 @@ export function UpdateModal(props: {
           <div className="um-progress-fill" style={{ width: `${phase.pct}%` }} />
         </div>
         <div className="um-progress-text num">
-          {phase.pct}%{phase.mb ? ` · ${phase.mb} MB` : ""}
+          {phase.pct}% · {phase.mb} MB
         </div>
       </div>
     );
@@ -144,7 +158,7 @@ export function UpdateModal(props: {
     );
     actions = (
       <>
-        <button className="btn btn-md btn-ghost" onClick={onClose}>
+        <button className="btn btn-md btn-ghost" onClick={close}>
           {t.updateOk}
         </button>
         <button
@@ -168,7 +182,7 @@ export function UpdateModal(props: {
     );
     actions = (
       <>
-        <button className="btn btn-md btn-ghost" onClick={onClose}>
+        <button className="btn btn-md btn-ghost" onClick={close}>
           {t.updateClose}
         </button>
         <button className="btn btn-md btn-primary" onClick={() => void startDownload()}>

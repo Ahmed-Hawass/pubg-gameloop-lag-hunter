@@ -4,15 +4,9 @@
 
 import { useEffect } from "react";
 import { Activity, Cpu, Gauge, HardDrive, Play, Square } from "lucide-react";
-import { Hint, Button, MetricCard, NoteCard, SummaryCard, Timeline } from "../components/components";
+import { Hint, Button, MetricCard, NoteCard, SummaryCard, Timeline, fmtDur } from "../components/components";
 import type { StatusPayload } from "../bridge";
 import { useLang } from "../i18n";
-
-function fmtDur(sec: number) {
-  const m = String(Math.floor(sec / 60)).padStart(2, "0");
-  const s = String(sec % 60).padStart(2, "0");
-  return `${m}:${s}`;
-}
 
 export function MonitorView(props: {
   status: StatusPayload;
@@ -21,8 +15,6 @@ export function MonitorView(props: {
   onDurationChange: (v: number) => void;
   onToggle: () => void;
   onOpenReport: () => void;
-  /** null = still checking; false = game not running (engine will gate on press) */
-  gameloopUp: boolean | null;
   /** the session whose summary the user dismissed (never show it again) */
   dismissedSession: string | null;
   onDismissSummary: (session: string) => void;
@@ -41,7 +33,9 @@ export function MonitorView(props: {
     if (secs === 600) return t.min10;
     if (secs === 1800) return t.min30;
     if (secs === 3600) return t.min60;
-    return `${Math.round(secs / 60)}m`;
+    // a stored duration outside the presets (e.g. migrated settings) —
+    // localized like every other duration, never a bare English suffix
+    return t.minutesShort(Math.round(secs / 60));
   };
 
   // the summary shows only while its session wasn't dismissed; auto-fades
@@ -132,13 +126,22 @@ export function MonitorView(props: {
             autoStopSec={ui!.auto_stop_sec}
             spikes={ui!.spikes.map((s) => ({ offsetMs: s.offset_ms, kind: s.kind }))}
             hasData={ui!.samples_count > 0}
+            kindLabel={(k) => t.feed[k] ?? k}
+            headLabel={ui!.auto_stop_sec ? t.timelineAutoStop : t.timelineDuration}
           />
           <div className="timeline-hint">
             <Hint text={t.timelineHint} />
           </div>
         </>
       ) : (
-        <Timeline elapsedSec={0} autoStopSec={null} spikes={[]} hasData={false} />
+        <Timeline
+          elapsedSec={0}
+          autoStopSec={null}
+          spikes={[]}
+          hasData={false}
+          kindLabel={(k) => t.feed[k] ?? k}
+          headLabel={t.timelineDuration}
+        />
       )}
 
       {/* limited-mode note: PowerShell unavailable — scans still work, some
@@ -158,7 +161,9 @@ export function MonitorView(props: {
         {live && ui!.feed.length > 0 ? (
           <ul className="feed-list">
             {ui!.feed.map((f, i) => (
-              <li key={i} className={`feed-item feed-${f.sev}`}>
+              // stable composite key: the feed re-renders every live tick and
+              // index keys would make React reuse the wrong rows after a shift
+              <li key={`${f.clock}-${f.kind}-${i}`} className={`feed-item feed-${f.sev}`}>
                 <span className="feed-clock num">{f.clock}</span>
                 <span className="feed-text">{t.feed[f.kind] ?? f.kind}</span>
               </li>
@@ -176,7 +181,16 @@ export function MonitorView(props: {
         <div className="notes">
           {ui!.diagnoses.map((d) => {
             const copy = t.diagnoses[d.key] ?? { title: d.title, simple: d.simple, fix: d.fix };
-            return <NoteCard key={d.key} title={copy.title} simple={copy.simple} fix={copy.fix} severity={d.severity} />;
+            return (
+              <NoteCard
+                key={d.key}
+                title={copy.title}
+                simple={copy.simple}
+                fix={copy.fix}
+                severity={d.severity}
+                fixLabel={t.fixLabel}
+              />
+            );
           })}
         </div>
       ) : null}

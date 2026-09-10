@@ -22,8 +22,9 @@ pub struct Settings {
     pub auto_stop_minutes: u32,
     /// "auto" (follow the OS at launch) | "en" | "ar" (user toggle)
     pub language: String,
-    /// "dark" | "light" | "auto" (follow the OS theme); dark preserves the
-    /// look every existing install already has
+    /// "dark" | "light" | "auto" (follow the OS theme). "auto" is the
+    /// default: a fresh install follows the system until the user picks
+    /// one explicitly in Settings.
     #[serde(default = "default_theme")]
     pub theme: String,
     /// sidebar collapsed (icons-only rail)
@@ -153,19 +154,19 @@ pub fn normalize_language(lang: &str) -> String {
     }
 }
 
-/// Theme values the UI can send. Default is "dark" (not "auto") on purpose:
-/// existing installs must keep the exact look they already have; "auto"
-/// would flip light-OS users without consent. New users opt in explicitly.
+/// Theme values the UI can send. Unknown values mean "auto" (follow the
+/// OS) — the same rule the frontend's resolveTheme applies, so the two
+/// sides can never disagree on a stored value.
 pub fn normalize_theme(theme: &str) -> String {
     match theme {
         "light" => "light".into(),
-        "auto" => "auto".into(),
-        _ => "dark".into(),
+        "dark" => "dark".into(),
+        _ => "auto".into(),
     }
 }
 
 pub fn default_theme() -> String {
-    "dark".into()
+    "auto".into()
 }
 
 #[cfg(test)]
@@ -228,9 +229,9 @@ mod tests {
     }
 
     #[test]
-    fn old_settings_file_defaults_theme_to_dark() {
+    fn old_settings_file_defaults_theme_to_auto() {
         // settings.json written before the theme existed has no theme key —
-        // serde default keeps "dark" so existing installs never change look
+        // serde default follows the OS until the user picks one explicitly
         let old = serde_json::json!({
             "version": 3,
             "sensitivity": "standard",
@@ -241,7 +242,7 @@ mod tests {
         });
         let text = serde_json::to_string(&old).unwrap();
         let back: Settings = serde_json::from_str(&text).unwrap();
-        assert_eq!(back.theme, "dark");
+        assert_eq!(back.theme, "auto");
     }
 
     #[test]
@@ -249,8 +250,8 @@ mod tests {
         assert_eq!(normalize_theme("light"), "light");
         assert_eq!(normalize_theme("auto"), "auto");
         assert_eq!(normalize_theme("dark"), "dark");
-        assert_eq!(normalize_theme("blue"), "dark");
-        assert_eq!(normalize_theme(""), "dark");
+        assert_eq!(normalize_theme("blue"), "auto");
+        assert_eq!(normalize_theme(""), "auto");
     }
 
     #[test]

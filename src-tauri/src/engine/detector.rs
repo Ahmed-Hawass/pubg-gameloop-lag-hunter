@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use super::types::{EngineEvent, Phase, Sample, Severity, Thresholds};
+use super::types::{others_ok, EngineEvent, Phase, Sample, Severity, Thresholds};
 
 /// Stateful detector: feed samples, get events. Hysteresis per condition key.
 pub struct Detector {
@@ -483,9 +483,9 @@ impl Detector {
             // ONE event per collapse: the first qualifying tick emits, later
             // ticks of the same crater are continuation, not new events
             if !self.cliff_fired {
-                let others_ok = s.disk_queue.map(|q| q < 0.5).unwrap_or(true)
-                    && s.cpu_total.map(|c| c < 85.0).unwrap_or(true)
-                    && s.avail_mb.map(|a| a > 2048.0).unwrap_or(true);
+                // shared gate (types::others_ok) — the diagnoser classifies
+                // the same collapse with the same rule, RAM included
+                let others_ok = others_ok(s.disk_queue, s.cpu_total, s.avail_mb);
                 let (kind, detail) = if others_ok {
                     (
                         "gpu_activity_cliff",
@@ -551,6 +551,18 @@ fn now_ms() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn others_ok_gate_agrees_on_ram_pressure() {
+        // the shared gate (types::others_ok): detector and diagnoser must
+        // classify the same collapse the same way — RAM pressure included
+        assert!(others_ok(Some(0.1), Some(50.0), Some(4096.0)));
+        assert!(!others_ok(Some(0.1), Some(50.0), Some(1024.0))); // RAM pressure
+        assert!(!others_ok(Some(2.0), Some(50.0), Some(4096.0))); // disk load
+        assert!(!others_ok(Some(0.1), Some(95.0), Some(4096.0))); // cpu load
+        // missing counters abstain as healthy — never blame load blind
+        assert!(others_ok(None, None, None));
+    }
 
     fn sample(cpu: f64, perf: f64, avail: f64, q: f64, sm: Option<f64>) -> Sample {
         Sample {
