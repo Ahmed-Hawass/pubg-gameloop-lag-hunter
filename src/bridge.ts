@@ -144,7 +144,8 @@ export const api = {
   getVersion: () => invoke<string>("get_version"),
   systemInfo: () => invoke<SystemInfo>("system_info"),
   topProcesses: (force?: boolean) => invoke<TopProcess[]>("top_processes", { force: force ?? false }),
-  systemChecks: () => invoke<SystemChecks>("system_checks"),
+  systemChecks: (force?: boolean) =>
+    invoke<SystemChecks>("system_checks", { force: force ?? false }),
   openWindowsPanel: (panel: string) => invoke<void>("open_windows_panel", { panel }),
   // update flow
   checkUpdate: () => invoke<UpdateInfo | null>("check_update"),
@@ -201,6 +202,17 @@ export interface SystemChecks {
   pagefile_ok: boolean;
   laptop: boolean;
   on_ac: boolean;
+  /** true when CPU virtualization (VT) is enabled in firmware */
+  vt_enabled: boolean;
+  /** true when Game DVR / background recording is on */
+  game_dvr_enabled: boolean;
+  /** system-drive letter, e.g. "C:" */
+  disk_id: string;
+  /** free space on the system drive */
+  disk_free_gb: number;
+  disk_free_pct: number;
+  /** "ok" | "low" | "critical" */
+  disk_level: string;
 }
 
 // ---- settings (persisted user preferences — schema v3) --------------------

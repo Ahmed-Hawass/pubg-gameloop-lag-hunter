@@ -6,7 +6,8 @@ export const en = {
 
   // ---- shell / title bar ----
   minimize: "Minimize",
-  maximize: "Maximize (window size is fixed)",
+  maximize: "Maximize",
+  restore: "Restore",
   close: "Close",
 
   // ---- dialog (unified, replaces toasts) ----
@@ -71,7 +72,7 @@ export const en = {
   monitor: "Monitor",
   system: "System",
   topProcesses: "Top processes",
-  systemChecks: "System checks",
+  systemHealth: "System health",
   reports: "Reports",
   settings: "Settings",
   about: "About",
@@ -122,8 +123,34 @@ export const en = {
   checksHint:
     "Read-only checks of settings that silently cause lag. Nothing is changed for you; each fix opens the relevant Windows settings page so you can change it yourself.",
   checkPower: "Power plan",
+  checkPowerDesc:
+    "Controls whether the processor runs at full speed. Saver plans lower the CPU and cause stutters in fights.",
   checkPagefile: "Pagefile",
+  checkPagefileDesc:
+    "Backup memory on disk when RAM fills up. Too small or disabled causes hitches while the map loads.",
   checkCharger: "Power source",
+  checkChargerDesc:
+    "Laptops slow down on battery. A scan on battery throttles and gives unreliable results.",
+  checkVt: "CPU virtualization (VT)",
+  checkVtDesc:
+    "GameLoop needs hardware virtualization. Disabled means slow software emulation and constant CPU stutters.",
+  vtOk: "Enabled: good",
+  vtWarn: "Disabled: enable it in BIOS for smooth emulation",
+  checkDvr: "Background recording",
+  checkDvrDesc:
+    "Background recording captures your play continuously. It steals GPU and disk mid-match and drops frames in fights.",
+  dvrOk: "Off: good",
+  dvrWarn: "On: turn off Record what happened in Captures",
+  checkDisk: "Disk space",
+  checkDiskDesc:
+    "Free space on the system drive. When it runs out, Windows chokes the pagefile and every map load becomes a stutter.",
+  diskOk: (drive: string, pct: number, gb: number) => `${drive}: ${gb} GB free (${pct}%)`,
+  diskLow: (drive: string, pct: number, gb: number) =>
+    `${drive} is filling up (${pct}% free, ${gb} GB left). Free some space before it chokes the pagefile`,
+  diskCritical: (drive: string, pct: number, gb: number) =>
+    `${drive} is almost full (${pct}% free, ${gb} GB left). This alone can cause heavy lag`,
+  checkOkBadge: "Good",
+  checkWarnBadge: "Needs attention",
   powerOk: (name: string) => `${name}: good`,
   powerWarn: (name: string) => `${name}: switch to High performance for stable FPS`,
   pagefileAuto: "Managed by Windows: good",

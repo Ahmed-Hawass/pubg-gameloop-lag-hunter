@@ -89,11 +89,20 @@ async fn top_processes(force: bool) -> Result<Vec<engine::system::TopProcess>, S
 }
 
 #[tauri::command]
-async fn system_checks() -> Result<engine::system::SystemChecks, String> {
+async fn system_checks(force: bool) -> Result<engine::system::SystemChecks, String> {
     let _t = engine::logging::timed("ipc: system_checks");
-    tauri::async_runtime::spawn_blocking(engine::system::system_checks_cached)
-        .await
-        .map_err(|e| format!("system checks task failed: {e}"))?
+    // same contract as top_processes: force=true (manual refresh button)
+    // pays a fresh PowerShell spawn and warms the cache; the silent poll
+    // keeps using the cached path.
+    if force {
+        tauri::async_runtime::spawn_blocking(engine::system::system_checks_fresh)
+            .await
+            .map_err(|e| format!("system checks task failed: {e}"))?
+    } else {
+        tauri::async_runtime::spawn_blocking(engine::system::system_checks_cached)
+            .await
+            .map_err(|e| format!("system checks task failed: {e}"))?
+    }
 }
 
 #[tauri::command]

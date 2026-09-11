@@ -302,6 +302,14 @@ pub fn system_checks_cached() -> Result<SystemChecks, String> {
     Ok(fresh)
 }
 
+/// System checks, bypassing the cache: a synchronous fresh read for the
+/// manual refresh button (same contract as top_processes_fresh).
+pub fn system_checks_fresh() -> Result<SystemChecks, String> {
+    let fresh = query_system_checks()?;
+    SYSTEM_CHECKS_CACHE.set(fresh.clone());
+    Ok(fresh)
+}
+
 /// Boot-time warm-up for every engine cache, called ONCE from setup() on a
 /// background async task. The OLD code spawned raw threads that ran the
 /// PowerShell scripts WITHOUT a blocking pool — the 20s Get-PhysicalDisk
@@ -536,6 +544,21 @@ pub struct SystemChecks {
     pub laptop: bool,
     /// true when plugged in (always true on desktops)
     pub on_ac: bool,
+    /// true when CPU virtualization (VT) is enabled in firmware.
+    /// GameLoop needs it; disabled = software emulation and CPU saturation.
+    /// Unknown reads as enabled (no false alarm on probe failure).
+    pub vt_enabled: bool,
+    /// true when Game DVR / background recording is on (steals GPU + disk
+    /// mid-match). Unknown reads as off (no false alarm on probe failure).
+    pub game_dvr_enabled: bool,
+    /// system-drive letter, e.g. "C:"
+    pub disk_id: String,
+    /// free space on the system drive (GB and percent)
+    pub disk_free_gb: f64,
+    pub disk_free_pct: f64,
+    /// "ok" | "low" | "critical" — graduated copy, warn badge for non-ok.
+    /// Unknown reads as "ok" (no false alarm on probe failure).
+    pub disk_level: String,
 }
 
 pub fn query_system_checks() -> Result<SystemChecks, String> {
@@ -549,6 +572,15 @@ elseif ($pf) { "pagefile|manual|$($pf.AllocatedBaseSize)" }
 else { "pagefile|off|0" }
 $bat = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue
 if ($bat) { "battery|$($bat.BatteryStatus)" } else { "battery|none" }
+$vt = (Get-CimInstance Win32_Processor | Select-Object -First 1).VirtualizationFirmwareEnabled
+"vt|$vt"
+$dvr1 = (Get-ItemProperty -Path "HKCU:\System\GameConfigStore" -Name "GameDVR_Enabled" -ErrorAction SilentlyContinue).GameDVR_Enabled
+$dvr2 = (Get-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR" -Name "AppCaptureEnabled" -ErrorAction SilentlyContinue).AppCaptureEnabled
+$dvrpol = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR" -Name "AllowGameDVR" -ErrorAction SilentlyContinue).AllowGameDVR
+$dvrhist = (Get-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR" -Name "HistoricalCaptureEnabled" -ErrorAction SilentlyContinue).HistoricalCaptureEnabled
+"gamedvr|$dvr1|$dvr2|$dvrpol|$dvrhist"
+$sys = Get-CimInstance Win32_LogicalDisk -Filter ("DeviceID='" + $env:SystemDrive + "'")
+"diskfree|$($sys.DeviceID)|$($sys.FreeSpace)|$($sys.Size)"
 "#)?;
     let mut c = SystemChecks {
         power_name: "Unknown".into(),
@@ -558,6 +590,12 @@ if ($bat) { "battery|$($bat.BatteryStatus)" } else { "battery|none" }
         pagefile_ok: false,
         laptop: false,
         on_ac: true,
+        vt_enabled: true,
+        game_dvr_enabled: false,
+        disk_id: "C:".into(),
+        disk_free_gb: 0.0,
+        disk_free_pct: 100.0,
+        disk_level: "ok".into(),
     };
     for line in text.lines().map(|l| l.trim()).filter(|l| !l.is_empty()) {
         let mut parts = line.split('|');
@@ -580,6 +618,40 @@ if ($bat) { "battery|$($bat.BatteryStatus)" } else { "battery|none" }
                 c.laptop = b != "none";
                 // BatteryStatus 2 = on AC; 1 = discharging
                 c.on_ac = !c.laptop || b == "2";
+            }
+            Some("vt") => {
+                // PowerShell prints True/False; empty = probe failed, keep the safe default
+                let v = parts.next().unwrap_or("True").trim().to_ascii_lowercase();
+                c.vt_enabled = v != "false" && v != "0";
+            }
+            Some("gamedvr") => {
+                // master | capture | machine policy | background toggle
+                // (any may be empty = missing)
+                let master = parts.next().unwrap_or("").trim();
+                let capture = parts.next().unwrap_or("").trim();
+                let policy = parts.next().unwrap_or("").trim();
+                let historical = parts.next().unwrap_or("").trim();
+                c.game_dvr_enabled = gamedvr_armed(historical, policy);
+                if c.game_dvr_enabled {
+                    super::logging::info(&format!(
+                        "dvr armed: master={master} capture={capture} policy={policy} historical={historical}"
+                    ));
+                }
+            }
+            Some("diskfree") => {
+                // system-drive free space: id | bytes free | bytes total.
+                // Unparsable = probe failed, keep the safe "ok" default.
+                let id = parts.next().unwrap_or("").trim();
+                let free: Option<f64> = parts.next().and_then(|v| v.trim().parse().ok());
+                let total: Option<f64> = parts.next().and_then(|v| v.trim().parse().ok());
+                if let (Some(f), Some(t)) = (free, total) {
+                    if t > 0.0 && f >= 0.0 {
+                        c.disk_id = if id.is_empty() { "C:".into() } else { id.into() };
+                        c.disk_free_gb = f / 1_073_741_824.0;
+                        c.disk_free_pct = f / t * 100.0;
+                        c.disk_level = disk_level(c.disk_free_pct, c.disk_free_gb).into();
+                    }
+                }
             }
             _ => {}
         }
@@ -652,6 +724,39 @@ fn pagefile_ok(mode: &str, mb: u64) -> bool {
     }
 }
 
+/// Registry DWORD truth: 1/true = on. Anything else (0, empty, missing) = off.
+fn is_truthy_dword(v: &str) -> bool {
+    let t = v.trim().to_ascii_lowercase();
+    t == "1" || t == "true"
+}
+
+/// Is background recording actually armed? Warn ONLY when the background
+/// toggle itself ("Record what happened", HistoricalCaptureEnabled) is on.
+/// Rationale, verified on a real Win11 machine: the Captures UI toggle does
+/// NOT flip the master keys (GameDVR_Enabled stays 1 = factory default,
+/// AppCaptureEnabled stays 1 once created), so warning on those false-alarms
+/// on machines the user already fixed via Settings. The machine policy
+/// (AllowGameDVR=0) forces everything off.
+fn gamedvr_armed(historical: &str, policy: &str) -> bool {
+    if policy.trim() == "0" {
+        return false;
+    }
+    is_truthy_dword(historical)
+}
+
+/// System-drive free-space level: "ok" | "low" | "critical".
+/// Either axis can hurt alone: a tiny percent starves Windows services and
+/// updates, a tiny absolute number starves pagefile growth.
+fn disk_level(free_pct: f64, free_gb: f64) -> &'static str {
+    if free_pct < 10.0 || free_gb < 10.0 {
+        "critical"
+    } else if free_pct < 15.0 || free_gb < 20.0 {
+        "low"
+    } else {
+        "ok"
+    }
+}
+
 /// Open a Windows settings panel — strictly whitelisted, never a free string.
 pub fn open_windows_panel(panel: &str) -> Result<(), String> {
     // control.exe only opens .cpl APPLETS — a standalone exe handed to it
@@ -678,6 +783,20 @@ pub fn open_windows_panel(panel: &str) -> Result<(), String> {
             "system" => {
                 let mut c = Command::new("control.exe");
                 c.arg("sysdm.cpl,,3");
+                c
+            }
+            // ms-settings: pages open via explorer (no elevation, read-only
+            // destination). The documented Game DVR page (Win10 Game DVR,
+            // Win11 Captures): ms-settings:gaming-gamedvr.
+            "gaming-captures" => {
+                let mut c = Command::new("explorer.exe");
+                c.arg("ms-settings:gaming-gamedvr");
+                c
+            }
+            // documented Storage page (Win10 + Win11): ms-settings:storagesense
+            "storage" => {
+                let mut c = Command::new("explorer.exe");
+                c.arg("ms-settings:storagesense");
                 c
             }
             _ => return Err("unknown panel".into()),
@@ -779,5 +898,35 @@ mod tests {
         assert!(pagefile_ok("manual", 16384));
         assert!(!pagefile_ok("manual", 4096)); // the original real-world bug
         assert!(!pagefile_ok("off", 0));
+    }
+
+    #[test]
+    fn gamedvr_dword_truth() {
+        assert!(is_truthy_dword("1"));
+        assert!(!is_truthy_dword("0"));
+        assert!(!is_truthy_dword(""));
+        assert!(!is_truthy_dword("none"));
+    }
+
+    #[test]
+    fn gamedvr_armed_only_on_background_toggle() {
+        // factory default (toggle missing) = quiet
+        assert!(!gamedvr_armed("", ""));
+        // toggle explicitly off = quiet
+        assert!(!gamedvr_armed("0", ""));
+        // background toggle explicitly on = armed (the real background cost)
+        assert!(gamedvr_armed("1", ""));
+        assert!(gamedvr_armed("true", ""));
+        // machine policy forces off over everything
+        assert!(!gamedvr_armed("1", "0"));
+    }
+
+    #[test]
+    fn disk_level_thresholds() {
+        assert_eq!(disk_level(20.0, 30.0), "ok");
+        assert_eq!(disk_level(12.0, 50.0), "low");
+        assert_eq!(disk_level(20.0, 15.0), "low");
+        assert_eq!(disk_level(5.0, 100.0), "critical");
+        assert_eq!(disk_level(50.0, 5.0), "critical");
     }
 }

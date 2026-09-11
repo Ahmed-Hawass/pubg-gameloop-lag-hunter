@@ -82,7 +82,7 @@ tasklist (GameLoop probe)       ─┘
 
 No settings are ever modified.
 
-System checks open the relevant Windows page; **the user flips the switch**.
+System health shows read-only statuses and opens the relevant Windows page; **the user flips the switch**.
 
 ### 📏 No fabricated numbers
 

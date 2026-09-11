@@ -1,10 +1,11 @@
 // TitleBar.tsx — window chrome: icon + drag + window controls.
 // The sidebar collapse lives in the sidebar's bottom. Drag via
-// data-tauri-drag-region. Fixed-size window: maximize visible but disabled.
+// data-tauri-drag-region. Resizable window: maximize toggles and tracks
+// the maximized state for its tooltip and icon.
 // ALL tooltips are the app's own (Tip component) — never the OS one.
 
 import { useEffect, useState } from "react";
-import { Copy, Minus, X } from "lucide-react";
+import { Copy, Minus, Square, X } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Tip } from "./components";
 import { api } from "../bridge";
@@ -14,6 +15,7 @@ import appIcon from "../assets/app-icon.png";
 export function TitleBar() {
   const { t } = useLang();
   const [version, setVersion] = useState<string>("");
+  const [maximized, setMaximized] = useState(false);
 
   // the version comes from the backend (tauri.conf.json) — one source of truth
   useEffect(() => {
@@ -21,6 +23,24 @@ export function TitleBar() {
       .getVersion()
       .then(setVersion)
       .catch(() => setVersion(""));
+  }, []);
+
+  // track the maximized state for the toggle's tooltip and icon
+  useEffect(() => {
+    const win = getCurrentWindow();
+    win
+      .isMaximized()
+      .then(setMaximized)
+      .catch(() => {});
+    const unlisten = win.onResized(() => {
+      win
+        .isMaximized()
+        .then(setMaximized)
+        .catch(() => {});
+    });
+    return () => {
+      unlisten.then((f) => f()).catch(() => {});
+    };
   }, []);
 
   return (
@@ -53,10 +73,13 @@ export function TitleBar() {
             <Minus size={13} />
           </button>
         </Tip>
-        {/* fixed-size window: the affordance stays, just disabled */}
-        <Tip text={t.maximize}>
-          <button className="is-disabled" disabled>
-            <Copy size={11} />
+        <Tip text={maximized ? t.restore : t.maximize}>
+          <button
+            onClick={() => {
+              void getCurrentWindow().toggleMaximize();
+            }}
+          >
+            {maximized ? <Copy size={11} /> : <Square size={11} />}
           </button>
         </Tip>
         <Tip text={t.close}>

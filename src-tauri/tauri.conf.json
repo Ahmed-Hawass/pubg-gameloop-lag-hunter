@@ -14,13 +14,11 @@
     "windows": [
       {
         "title": "PUBG GameLoop Lag Hunter",
-        "width": 940,
-        "height": 600,
-        "minWidth": 940,
-        "minHeight": 600,
-        "maxWidth": 940,
-        "maxHeight": 600,
-        "resizable": false,
+        "width": 1024,
+        "height": 680,
+        "minWidth": 1024,
+        "minHeight": 680,
+        "resizable": true,
         "fullscreen": false,
         "center": true,
         "decorations": false,

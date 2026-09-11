@@ -10,7 +10,8 @@ export const ar: Locale = {
 
   // ---- shell / title bar ----
   minimize: "تصغير",
-  maximize: "تكبير (حجم النافذة ثابت)",
+  maximize: "تكبير",
+  restore: "استعادة",
   close: "إغلاق",
 
   // ---- dialog (unified, replaces toasts) ----
@@ -75,7 +76,7 @@ export const ar: Locale = {
   monitor: "المراقبة",
   system: "النظام",
   topProcesses: "أكثر العمليات استهلاكًا",
-  systemChecks: "فحص إعدادات الجهاز",
+  systemHealth: "صحة النظام",
   reports: "التقارير",
   settings: "الإعدادات",
   about: "عن الأداة",
@@ -124,8 +125,34 @@ export const ar: Locale = {
   checksHint:
     "فحوصات قراءة فقط لإعدادات قد تسبب التقطيع دون أن تلاحظ. لا يُغيَّر شيء في جهازك تلقائيًا. كل إصلاح يفتح صفحة إعدادات ويندوز المناسبة لتعديلها بنفسك.",
   checkPower: "خطة الطاقة",
+  checkPowerDesc:
+    "تتحكم في عمل المعالج بكامل سرعته أم لا، فخطط التوفير تخفض سرعته وتسبب تقطيعا أثناء المواجهات.",
   checkPagefile: "ملف الترحيل (Pagefile)",
+  checkPagefileDesc:
+    "ذاكرة احتياطية على القرص تعمل عند امتلاء الذاكرة، فإذا كانت صغيرة أو معطلة يحدث تقطيع عند تحميل الخريطة.",
   checkCharger: "مصدر الطاقة",
+  checkChargerDesc:
+    "تخفض الأجهزة المحمولة أداءها عند العمل على البطارية، فيصبح القياس غير دقيق والنتائج غير موثوقة.",
+  checkVt: "المحاكاة الافتراضية للمعالج (VT)",
+  checkVtDesc:
+    "يحتاج GameLoop إلى المحاكاة الافتراضية للعتاد، فإذا كانت معطلة يعمل بمحاكاة برمجية بطيئة وتقطيع مستمر في المعالج.",
+  vtOk: "مفعّلة: جيد",
+  vtWarn: "معطلة: فعّلها من BIOS لتشغيل سلس للمحاكي",
+  checkDvr: "التسجيل في الخلفية",
+  checkDvrDesc:
+    "التسجيل الخلفي يلتقط لعبك باستمرار، فيسرق كرت الشاشة والقرص أثناء المباراة ويخفض الإطارات في المواجهات.",
+  dvrOk: "مغلق: جيد",
+  dvrWarn: "يعمل: أغلق تسجيل ما حدث في Captures",
+  checkDisk: "مساحة القرص",
+  checkDiskDesc:
+    "المساحة الفارغة على قرص النظام. عند نفادها يختنق ملف الترحيل ويتحول كل تحميل للخريطة إلى تقطيع.",
+  diskOk: (drive: string, pct: number, gb: number) => `${drive}: ${gb} جيجابايت فارغة (${pct}%)`,
+  diskLow: (drive: string, pct: number, gb: number) =>
+    `يمتلئ ${drive} (المتبقي ${pct}% أي ${gb} جيجابايت). أخلِ بعض المساحة قبل أن يختنق ملف الترحيل`,
+  diskCritical: (drive: string, pct: number, gb: number) =>
+    `أوشك ${drive} على الامتلاء (المتبقي ${pct}% أي ${gb} جيجابايت). هذا وحده قد يسبب تقطيعا شديدا`,
+  checkOkBadge: "جيد",
+  checkWarnBadge: "يحتاج إلى انتباه",
   powerOk: (name: string) => `${name}: جيد`,
   powerWarn: (name: string) => `${name}: بدّلها إلى الأداء العالي لضمان ثبات الإطارات`,
   pagefileAuto: "يديره ويندوز تلقائيًا: جيد",

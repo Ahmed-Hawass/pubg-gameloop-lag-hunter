@@ -117,16 +117,6 @@
   color: var(--text-1);
 }
 
-.win-controls button.is-disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-.win-controls button.is-disabled:hover {
-  background: transparent;
-  color: var(--text-2);
-}
-
 .win-controls button.close:hover {
   background: #e81123;
   color: #fff;
@@ -259,12 +249,25 @@
 .content > div > .settings-page,
 .content > div > .monitor {
   overflow-y: auto;
+  /* container pattern for free window sizes: readable measure on wide
+     screens, full width down to the 1024px minimum — centered, not stuck
+     to the reading-start edge */
+  width: 100%;
   max-width: min(100%, 760px);
+  margin-inline: auto;
   padding-inline-end: 4px;
 }
 
 .content > div > .monitor {
   max-width: none;
+}
+
+/* wide viewport: let the checks container grow into the two-column reflow
+   (pages.css) instead of capping it at the single-column measure */
+@media (min-width: 1500px) {
+  .content > div > .checks {
+    max-width: min(100%, 1100px);
+  }
 }
 
 /* HIDDEN beats the flex layout above — same specificity class + element

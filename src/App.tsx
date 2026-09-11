@@ -361,7 +361,7 @@ export default function App() {
     { id: "monitor", icon: <Crosshair size={17} />, label: t.monitor },
     { id: "system", icon: <Cpu size={17} />, label: t.system },
     { id: "processes", icon: <Activity size={17} />, label: t.topProcesses },
-    { id: "checks", icon: <ShieldCheck size={17} />, label: t.systemChecks },
+    { id: "checks", icon: <ShieldCheck size={17} />, label: t.systemHealth },
     { id: "reports", icon: <FolderOpen size={17} />, label: t.reports },
     { id: "settings", icon: <Settings size={17} />, label: t.settings },
   ];
