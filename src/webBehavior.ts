@@ -2,21 +2,30 @@
 // Official Tauri practice: the WebView is a browser; these guards make it feel native.
 // Registered once at startup (main.tsx).
 
+/** Pure decision: should this keydown be swallowed as a browser habit?
+ *  Exposed for tests — the DOM listener below only wires it up. */
+export function isBrowserShortcut(e: {
+  key: string;
+  ctrlKey: boolean;
+  shiftKey: boolean;
+}): boolean {
+  const key = e.key.toLowerCase();
+  // F5 / Ctrl+R reload, F12 / Ctrl+Shift+I devtools
+  if (key === "f5" || key === "f12") return true;
+  if (key === "r" && e.ctrlKey) return true;
+  if (key === "i" && e.ctrlKey && e.shiftKey) return true;
+  // browser shortcuts that leak through: Ctrl+F find, Ctrl+P print, Ctrl+S save
+  if (e.ctrlKey && ["f", "p", "s", "u"].includes(key)) return true;
+  return false;
+}
+
 export function installNativeBehavior() {
   // 1) no right-click context menu
   document.addEventListener("contextmenu", (e) => e.preventDefault());
 
-  // 2) no F5 / Ctrl+R reload, no F12/Ctrl+Shift+I devtools shortcuts
+  // 2) no reload / devtools / find / print / save shortcuts
   document.addEventListener("keydown", (e) => {
-    const key = e.key.toLowerCase();
-    if (key === "f5" || (key === "r" && e.ctrlKey)) {
-      e.preventDefault();
-    }
-    if (key === "f12" || (key === "i" && e.ctrlKey && e.shiftKey)) {
-      e.preventDefault();
-    }
-    // block browser shortcuts that leak through: Ctrl+F find, Ctrl+P print, Ctrl+S save
-    if (e.ctrlKey && ["f", "p", "s", "u"].includes(key)) {
+    if (isBrowserShortcut(e)) {
       e.preventDefault();
     }
   });

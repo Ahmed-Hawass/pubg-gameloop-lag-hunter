@@ -171,12 +171,11 @@ async fn session_stop(app: tauri::AppHandle) -> Result<StatusPayload, String> {
     // disk — genuinely blocking work, parked on the blocking pool so the
     // async runtime never stalls (the UI keeps breathing meanwhile)
     let eng = session::init_global();
-    let report = tauri::async_runtime::spawn_blocking(move || eng.stop())
+    let _report = tauri::async_runtime::spawn_blocking(move || eng.stop())
         .await
         .map_err(|e| format!("stop task failed: {e}"))??;
-    if let Some(_path) = report {
-        // report path available via last session query if needed
-    }
+    // the report path is intentionally unread here: the UI loads the
+    // finished session's report via load_report when the user opens it
     let _ = push_state(&app);
     Ok(current_status(session::init_global()))
 }

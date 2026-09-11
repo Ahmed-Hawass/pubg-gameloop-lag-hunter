@@ -209,16 +209,19 @@ impl Detector {
                 });
             }
             (false, true) => {
-                let (since, _) = self.active.remove(key).unwrap();
-                let dur = (now_ms() - since) as f64 / 1000.0;
-                evs.push(EngineEvent {
-                    kind: key.to_string(),
-                    phase: Phase::End,
-                    severity: Severity::Ok,
-                    t: t.to_string(),
-                    duration_sec: Some(dur.max(0.0)),
-                    detail,
-                });
+                // same shape as finish() — remove returns the map entry, and
+                // a missing key here would be a logic bug, not a panic case
+                if let Some((since, _)) = self.active.remove(key) {
+                    let dur = (now_ms() - since) as f64 / 1000.0;
+                    evs.push(EngineEvent {
+                        kind: key.to_string(),
+                        phase: Phase::End,
+                        severity: Severity::Ok,
+                        t: t.to_string(),
+                        duration_sec: Some(dur.max(0.0)),
+                        detail,
+                    });
+                }
             }
             _ => {}
         }
