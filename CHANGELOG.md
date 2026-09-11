@@ -4,6 +4,28 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.6.0] - 2026-09-11
+
+### Added
+- System health checks: CPU virtualization (VT firmware flag), background
+  recording (warns only on the real background toggle,
+  HistoricalCaptureEnabled, verified against a false positive on factory
+  defaults), and system-drive free space with ok/low/critical levels.
+  Each card carries a description, its live measurement, and a deep link to
+  the relevant Windows page. The tab is renamed from System checks to
+  System health.
+- Manual refresh button on System health (same ghost button with spinner as
+  Top processes, queued so one press always lands) plus an automatic refresh
+  when the window regains focus. The silent 30s poll is unchanged.
+
+### Changed
+- The window is resizable (1024x680 minimum, opens at the familiar size)
+  with a working maximize/restore control in the custom title bar.
+  Content pages use centered containers and the health list reflows to two
+  columns on wide screens.
+- Health cards use the filled design-system language (filled status chips
+  and badges, function icon per card) with no outlines.
+
 ## [1.5.0] - 2026-09-10
 
 ### Fixed
