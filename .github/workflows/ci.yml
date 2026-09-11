@@ -135,7 +135,7 @@ jobs:
         run: ./scripts/checksum.ps1
 
       - name: Upload release exe + checksums
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lag-hunter-release
           path: |
