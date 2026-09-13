@@ -123,7 +123,10 @@ export function ToolsView(props: { active: boolean }) {
   type TweakId = keyof typeof TWEAKS;
 
   /** generic flip: optimistic move, explicit write both directions,
-      verified live truth settles the final position */
+      verified live truth settles the final position. A verified result IS
+      the fresh truth (the engine re-read the registry to confirm it), so
+      no full reload after a click — the heavy batch refresh stays at its
+      real entry points: opening the view and window focus. */
   const flipTweak = async (id: TweakId, on: boolean) => {
     const tweak = TWEAKS[id];
     if (tweakBusy) return;
@@ -138,7 +141,8 @@ export function ToolsView(props: { active: boolean }) {
         setNotice(t.tweakFailed);
         return;
       }
-      await reload(); // settle on the verified live state
+      // verified: the switch stays where the optimistic move put it —
+      // the engine confirmed the registry holds exactly this state now
     } catch (e) {
       tweak.set(before);
       setNotice(typeof e === "string" ? e : String(e));

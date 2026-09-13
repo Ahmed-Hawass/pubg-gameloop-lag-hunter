@@ -312,6 +312,34 @@ pub fn system_checks_fresh() -> Result<SystemChecks, String> {
     Ok(fresh)
 }
 
+/// Windows build identity for the boot log, read straight from the registry
+/// (no PowerShell spawn, no elevation): `ProductName` + `CurrentBuildNumber`.
+/// This is what makes any user-sent log readable on the 10/11 axis — the
+/// compatibility story of every feature decision starts at this one line.
+pub fn os_identity() -> String {
+    let hklm = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE);
+    let read = |name: &str| {
+        hklm.open_subkey(r"SOFTWARE\Microsoft\Windows NT\CurrentVersion")
+            .ok()
+            .and_then(|k| k.get_value::<String, _>(name).ok())
+            .unwrap_or_default()
+    };
+    let build = read("CurrentBuildNumber");
+    let name = read("ProductName");
+    // "Windows 10 Pro" / "Windows 11 Pro" + build. Missing reads degrade to
+    // just the build (never an empty string: "os=?" is worse than "os=build")
+    let label = if name.is_empty() {
+        format!("build={build}")
+    } else {
+        format!("{name} build={build}")
+    };
+    if build.is_empty() {
+        "unknown".into()
+    } else {
+        label
+    }
+}
+
 /// Boot-time warm-up for every engine cache, called ONCE from setup() on a
 /// background async task. The OLD code spawned raw threads that ran the
 /// PowerShell scripts WITHOUT a blocking pool — the 20s Get-PhysicalDisk
@@ -321,14 +349,15 @@ pub fn system_checks_fresh() -> Result<SystemChecks, String> {
 ///   * top processes — refreshed off-thread
 ///
 /// The one-line rig log it produces answers most support questions:
-/// `rig: ram=8192MB disks=2 gpu_counters=true powershell=true`
+/// `rig: ram=8192MB disks=2 gpu_counters=true powershell=true os=Windows 11 Pro build=26200`
 pub async fn warm_system_caches() {
     let _t = super::logging::timed("startup warm-up");
+    let os = os_identity();
     // rig (fills memory + disk cache on first machine run)
     match system_info_async().await {
         Ok(info) => {
             super::logging::info(&format!(
-                "rig: ram={:.0}MB disks={} gpu_counters={} powershell={}",
+                "rig: ram={:.0}MB disks={} gpu_counters={} powershell={} os={os}",
                 info.ram_gb * 1024.0,
                 info.disks.len(),
                 info.gpu_counters,
@@ -668,12 +697,19 @@ if (Test-Path $ssPath) { $ss = (Get-ItemProperty -Path $ssPath -Name "01" -Error
             Some("storagesense") => {
                 // "1"/"0" = the toggle's live value; "missing" = the policy
                 // key does not exist on this Windows build (feature
-                // unavailable) -> None: the row hides, never a dead switch
+                // unavailable) -> None: the row hides, never a dead switch.
+                // Logged once per query so a user report from any build
+                // carries the compatibility story in its own log.
                 let v = parts.next().unwrap_or("missing").trim().to_ascii_lowercase();
                 c.storage_sense = match v.as_str() {
                     "1" | "true" => Some(true),
                     "0" | "false" => Some(false),
-                    _ => None,
+                    _ => {
+                        super::logging::warn(
+                            "feature storagesense hidden: policy key missing on this build",
+                        );
+                        None
+                    }
                 };
             }
             _ => {}
