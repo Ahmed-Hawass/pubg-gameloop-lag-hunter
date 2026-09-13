@@ -596,7 +596,64 @@ pub struct SystemChecks {
     pub storage_sense: Option<bool>,
 }
 
+/// Live DWORD read from a registry subkey under a given root, as bool-ish
+/// tri-state: Some(value) / None (value missing) — key-open errors also read
+/// as None for CHECKS (a probe failure must never fire a false warning;
+/// `tweaks.rs` keeps the stricter Err contract for writes).
+/// Architecture rule: registry access is winreg, in-process — never a
+/// PowerShell script line.
+fn reg_dword(root: winreg::HKEY, subkey: &str, name: &str) -> Option<u32> {
+    let hk = winreg::RegKey::predef(root);
+    let key = hk.open_subkey(subkey).ok()?;
+    key.get_value::<u32, _>(name).ok()
+}
+
+/// Is the Storage Sense policy KEY present on this build? (Availability is
+/// the KEY existing, not the value: Windows never deletes this key when
+/// the user turns Storage Sense off — it zeroes `01`, verified live.)
+fn ss_policy_key_exists() -> bool {
+    winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
+        .open_subkey(r"SOFTWARE\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy")
+        .is_ok()
+}
+
 pub fn query_system_checks() -> Result<SystemChecks, String> {
+    // ---- registry-sourced checks FIRST, in-process (winreg): the batch
+    // below keeps only what genuinely needs a command (powercfg, CIM,
+    // disks) — every registry line moved here is one spawn-line less that
+    // can break on quoting or locale.
+    let dvr_master = reg_dword(
+        winreg::enums::HKEY_CURRENT_USER,
+        r"System\GameConfigStore",
+        "GameDVR_Enabled",
+    );
+    let dvr_capture = reg_dword(
+        winreg::enums::HKEY_CURRENT_USER,
+        r"SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR",
+        "AppCaptureEnabled",
+    );
+    let dvr_policy = reg_dword(
+        winreg::enums::HKEY_LOCAL_MACHINE,
+        r"SOFTWARE\Policies\Microsoft\Windows\GameDVR",
+        "AllowGameDVR",
+    );
+    let dvr_historical = reg_dword(
+        winreg::enums::HKEY_CURRENT_USER,
+        r"SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR",
+        "HistoricalCaptureEnabled",
+    );
+    let ss_exists = ss_policy_key_exists();
+    let ss_value = if ss_exists {
+        reg_dword(
+            winreg::enums::HKEY_CURRENT_USER,
+            r"SOFTWARE\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy",
+            "01",
+        )
+    } else {
+        None
+    };
+
+    // ---- command-sourced checks: ONE PowerShell batch for the rest
     let text = ps(r#"
 $scheme = (powercfg /getactivescheme) -join ' '
 "power|$scheme"
@@ -609,18 +666,8 @@ $bat = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue
 if ($bat) { "battery|$($bat.BatteryStatus)" } else { "battery|none" }
 $vt = (Get-CimInstance Win32_Processor | Select-Object -First 1).VirtualizationFirmwareEnabled
 "vt|$vt"
-$dvr1 = (Get-ItemProperty -Path "HKCU:\System\GameConfigStore" -Name "GameDVR_Enabled" -ErrorAction SilentlyContinue).GameDVR_Enabled
-$dvr2 = (Get-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR" -Name "AppCaptureEnabled" -ErrorAction SilentlyContinue).AppCaptureEnabled
-$dvrpol = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR" -Name "AllowGameDVR" -ErrorAction SilentlyContinue).AllowGameDVR
-$dvrhist = (Get-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR" -Name "HistoricalCaptureEnabled" -ErrorAction SilentlyContinue).HistoricalCaptureEnabled
-"gamedvr|$dvr1|$dvr2|$dvrpol|$dvrhist"
 $sys = Get-CimInstance Win32_LogicalDisk -Filter ("DeviceID='" + $env:SystemDrive + "'")
 "diskfree|$($sys.DeviceID)|$($sys.FreeSpace)|$($sys.Size)"
-# availability = the policy KEY existing (Test-Path, a real binary answer).
-# Windows never deletes this key when the user turns Storage Sense off —
-# it zeroes `01` (verified live) — so value 0 is a live OFF, not "missing"
-$ssPath = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy"
-if (Test-Path $ssPath) { $ss = (Get-ItemProperty -Path $ssPath -Name "01" -ErrorAction SilentlyContinue).'01'; "storagesense|$ss" } else { "storagesense|missing" }
 "#)?;
     let mut c = SystemChecks {
         power_name: "Unknown".into(),
@@ -665,20 +712,6 @@ if (Test-Path $ssPath) { $ss = (Get-ItemProperty -Path $ssPath -Name "01" -Error
                 let v = parts.next().unwrap_or("True").trim().to_ascii_lowercase();
                 c.vt_enabled = v != "false" && v != "0";
             }
-            Some("gamedvr") => {
-                // master | capture | machine policy | background toggle
-                // (any may be empty = missing)
-                let master = parts.next().unwrap_or("").trim();
-                let capture = parts.next().unwrap_or("").trim();
-                let policy = parts.next().unwrap_or("").trim();
-                let historical = parts.next().unwrap_or("").trim();
-                c.game_dvr_enabled = gamedvr_armed(historical, policy);
-                if c.game_dvr_enabled {
-                    super::logging::info(&format!(
-                        "dvr armed: master={master} capture={capture} policy={policy} historical={historical}"
-                    ));
-                }
-            }
             Some("diskfree") => {
                 // system-drive free space: id | bytes free | bytes total.
                 // Unparsable = probe failed, keep the safe "ok" default.
@@ -694,27 +727,29 @@ if (Test-Path $ssPath) { $ss = (Get-ItemProperty -Path $ssPath -Name "01" -Error
                     }
                 }
             }
-            Some("storagesense") => {
-                // "1"/"0" = the toggle's live value; "missing" = the policy
-                // key does not exist on this Windows build (feature
-                // unavailable) -> None: the row hides, never a dead switch.
-                // Logged once per query so a user report from any build
-                // carries the compatibility story in its own log.
-                let v = parts.next().unwrap_or("missing").trim().to_ascii_lowercase();
-                c.storage_sense = match v.as_str() {
-                    "1" | "true" => Some(true),
-                    "0" | "false" => Some(false),
-                    _ => {
-                        super::logging::warn(
-                            "feature storagesense hidden: policy key missing on this build",
-                        );
-                        None
-                    }
-                };
-            }
             _ => {}
         }
     }
+
+    // ---- registry-sourced fields (winreg, read before the batch above) ----
+    // GameDVR armed = the background toggle is live, unless the machine
+    // policy forces it off (same rule the old batch line enforced)
+    c.game_dvr_enabled = gamedvr_armed_winreg(dvr_historical, dvr_policy);
+    if c.game_dvr_enabled {
+        super::logging::info(&format!(
+            "dvr armed: master={:?} capture={:?} policy={:?} historical={dvr_historical:?}",
+            dvr_master, dvr_capture, dvr_policy
+        ));
+    }
+    // Storage Sense: key missing on this build = feature unavailable -> None:
+    // the row hides, never a dead switch. Logged so a user report from any
+    // build carries the compatibility story in its own log.
+    c.storage_sense = if !ss_exists {
+        super::logging::warn("feature storagesense hidden: policy key missing on this build");
+        None
+    } else {
+        Some(ss_value == Some(1))
+    };
     Ok(c)
 }
 
@@ -783,24 +818,18 @@ fn pagefile_ok(mode: &str, mb: u64) -> bool {
     }
 }
 
-/// Registry DWORD truth: 1/true = on. Anything else (0, empty, missing) = off.
-fn is_truthy_dword(v: &str) -> bool {
-    let t = v.trim().to_ascii_lowercase();
-    t == "1" || t == "true"
-}
-
 /// Is background recording actually armed? Warn ONLY when the background
 /// toggle itself ("Record what happened", HistoricalCaptureEnabled) is on.
 /// Rationale, verified on a real Win11 machine: the Captures UI toggle does
 /// NOT flip the master keys (GameDVR_Enabled stays 1 = factory default,
 /// AppCaptureEnabled stays 1 once created), so warning on those false-alarms
 /// on machines the user already fixed via Settings. The machine policy
-/// (AllowGameDVR=0) forces everything off.
-fn gamedvr_armed(historical: &str, policy: &str) -> bool {
-    if policy.trim() == "0" {
+/// (AllowGameDVR=Some(0)) forces everything off.
+fn gamedvr_armed_winreg(historical: Option<u32>, policy: Option<u32>) -> bool {
+    if policy == Some(0) {
         return false;
     }
-    is_truthy_dword(historical)
+    historical == Some(1)
 }
 
 /// System-drive free-space level: "ok" | "low" | "critical".
@@ -960,24 +989,18 @@ mod tests {
     }
 
     #[test]
-    fn gamedvr_dword_truth() {
-        assert!(is_truthy_dword("1"));
-        assert!(!is_truthy_dword("0"));
-        assert!(!is_truthy_dword(""));
-        assert!(!is_truthy_dword("none"));
-    }
-
-    #[test]
     fn gamedvr_armed_only_on_background_toggle() {
+        // the winreg contract: Option<u32> straight from the registry API
         // factory default (toggle missing) = quiet
-        assert!(!gamedvr_armed("", ""));
+        assert!(!gamedvr_armed_winreg(None, None));
         // toggle explicitly off = quiet
-        assert!(!gamedvr_armed("0", ""));
+        assert!(!gamedvr_armed_winreg(Some(0), None));
         // background toggle explicitly on = armed (the real background cost)
-        assert!(gamedvr_armed("1", ""));
-        assert!(gamedvr_armed("true", ""));
+        assert!(gamedvr_armed_winreg(Some(1), None));
         // machine policy forces off over everything
-        assert!(!gamedvr_armed("1", "0"));
+        assert!(!gamedvr_armed_winreg(Some(1), Some(0)));
+        // policy present and permissive = armed stays
+        assert!(gamedvr_armed_winreg(Some(1), Some(1)));
     }
 
     #[test]
@@ -990,42 +1013,26 @@ mod tests {
     }
 
     #[test]
-    fn storagesense_parse() {
-        // the probe's line-level contract: live value or missing feature
-        let mut c = SystemChecks {
-            power_name: String::new(),
-            power_ok: false,
-            pagefile_mode: String::new(),
-            pagefile_mb: 0,
-            pagefile_ok: false,
-            laptop: false,
-            on_ac: true,
-            vt_enabled: true,
-            game_dvr_enabled: false,
-            disk_id: String::new(),
-            disk_free_gb: 0.0,
-            disk_free_pct: 0.0,
-            disk_level: String::new(),
-            storage_sense: None,
-        };
-        for line in ["storagesense|1", "storagesense|0", "storagesense|missing"] {
-            let mut parts = line.split('|');
-            let tag = parts.next();
-            assert_eq!(tag, Some("storagesense"));
-            let v = parts.next().unwrap_or("missing").trim().to_ascii_lowercase();
-            let parsed = match v.as_str() {
-                "1" | "true" => Some(true),
-                "0" | "false" => Some(false),
-                _ => None,
-            };
-            match line {
-                "storagesense|1" => assert_eq!(parsed, Some(true)),
-                "storagesense|0" => assert_eq!(parsed, Some(false)),
-                _ => assert_eq!(parsed, None),
+    fn storagesense_field_contract() {
+        // the winreg-era contract: key-exists decides visibility, the
+        // DWORD value decides the state, and they are never conflated
+        // (a key at 0 is a live OFF, a missing key hides the row)
+        let field = |exists: bool, value: Option<u32>| {
+            if !exists {
+                None
+            } else {
+                Some(value == Some(1))
             }
-            c.storage_sense = parsed;
-        }
-        // final state = missing (row hides)
-        assert!(c.storage_sense.is_none());
+        };
+        // key present, value 1 = ON
+        assert_eq!(field(true, Some(1)), Some(true));
+        // key present, value 0 = OFF (Settings zeroes the value, never
+        // deletes the key — verified live)
+        assert_eq!(field(true, Some(0)), Some(false));
+        // key present, value missing (never touched) = OFF
+        assert_eq!(field(true, None), Some(false));
+        // key absent on this build = row hides
+        assert_eq!(field(false, None), None);
+        assert_eq!(field(false, Some(1)), None);
     }
 }

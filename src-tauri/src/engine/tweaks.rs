@@ -12,31 +12,35 @@
 // (e.g. a power plan, where "off" must mean "the previous plan") and will be
 // built with the tweak that needs it — never before.
 //
+// Architecture rule (applies repo-wide): ANY registry access goes through
+// winreg, in-process — never a PowerShell spawn, never string-built scripts.
+// A flip is now milliseconds: open key, read/write DWORD, re-read to verify.
+// No shell means no quoting traps (the `.'01'` bug class is structurally
+// impossible now) and access errors come back as typed Results instead of
+// silently empty output lines.
+//
 // Scope deliberately narrow: HKCU (current user) DWORDs only — no elevation,
 // no reboot, no service or policy writes. Anything needing admin or BIOS
 // stays a read-only check with a deep link, never a button here.
-//
-// Spawn budget: every PowerShell process costs seconds on real machines and
-// this path runs on every click, so each flip is TWO spawns maximum — a
-// combined probe (availability + current value) then a combined
-// write-then-verify that prints what the registry actually holds now.
 
 use serde::Serialize;
+use winreg::enums::HKEY_CURRENT_USER;
+use winreg::RegKey;
 
 /// Registry home of the background-recording toggle ("Record what
 /// happened"): HKCU needs no elevation, takes effect immediately.
-const DVR_PATH: &str = r"HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR";
+const DVR_SUBKEY: &str = r"SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR";
 const DVR_NAME: &str = "HistoricalCaptureEnabled";
 
 /// Registry home of the Storage Sense on/off toggle ("01" under the
 /// StoragePolicy key, the documented value behind the Settings switch).
 /// Present on Windows 10 (1709+) and 11; verified live on a real machine.
-const SS_PATH: &str =
-    r"HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy";
+const SS_SUBKEY: &str =
+    r"SOFTWARE\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy";
 const SS_NAME: &str = "01";
 
 /// The tweak ids this module knows. Unknown ids are refused before any
-/// process spawns (same whitelist discipline as open_windows_panel).
+/// registry access (same whitelist discipline as open_windows_panel).
 const DVR_ID: &str = "dvr";
 const SS_ID: &str = "storagesense";
 
@@ -53,38 +57,45 @@ pub struct TweakResult {
     pub verified: bool,
 }
 
-/// Raw toggle text: "1"/"0", or "" when the value does not exist.
-fn read_dvr_raw() -> Result<String, String> {
-    super::system::ps(&format!(
-        "(Get-ItemProperty -Path \"{DVR_PATH}\" -Name \"{DVR_NAME}\" -ErrorAction SilentlyContinue).{DVR_NAME}"
-    ))
-    .map(|t| t.trim().to_string())
+/// Live DWORD read from an HKCU subkey. Ok(None) = value does not exist.
+/// Errors (missing KEY, access denied) travel as Err — a probe failure is
+/// never silently conflated with "value missing" (that conflation is what
+/// the old empty-output PowerShell read got wrong).
+fn read_dword(subkey: &str, name: &str) -> Result<Option<u32>, String> {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let key = hkcu
+        .open_subkey(subkey)
+        .map_err(|e| format!("cannot open {subkey}: {e}"))?;
+    match key.get_value::<u32, _>(name) {
+        Ok(v) => Ok(Some(v)),
+        // NotFound on the VALUE: the key exists, the value never was set
+        Err(ref e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("cannot read {subkey}\\{name}: {e}")),
+    }
 }
 
-/// Parse a raw on/off toggle read ("1"/"0"/""). Generic for every DWORD
-/// toggle in this module — DVR and Storage Sense read the same shape.
-/// Pure (unit-tested); the live write path is verified by hand on a real
-/// machine instead of mutating CI registries.
-fn parse_toggle_raw(raw: &str) -> Option<u32> {
-    raw.trim().parse().ok()
+/// Write a DWORD to an HKCU subkey, creating the VALUE if absent (same
+/// semantics as the Settings toggle itself). The value is always our own
+/// validated constant — never user input.
+fn write_dword(subkey: &str, name: &str, value: u32) -> Result<(), String> {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let (key, _) = hkcu
+        .create_subkey(subkey)
+        .map_err(|e| format!("cannot open/create {subkey}: {e}"))?;
+    key.set_value(name, &value)
+        .map_err(|e| format!("cannot write {subkey}\\{name}: {e}"))
 }
 
 /// Set background recording to `value` (0 = off, 1 = on) and verify by
 /// re-reading. Anything but 0/1 is refused before anything runs.
-/// TWO spawns total per flip: the initial read, then a combined
-/// write-then-verify script that prints what the registry ACTUALLY holds
-/// now — the printed line is the verification.
+/// In-process winreg: milliseconds per flip.
 pub fn set_dvr(value: u32) -> Result<TweakResult, String> {
     if value > 1 {
         return Err("dvr value must be 0 or 1".into());
     }
-    let current = parse_toggle_raw(&read_dvr_raw()?);
-    let fresh = super::system::ps(&format!(
-        "New-ItemProperty -Path \"{DVR_PATH}\" -Name \"{DVR_NAME}\" -Value {value} -PropertyType DWORD -Force | Out-Null; \
-         (Get-ItemProperty -Path \"{DVR_PATH}\" -Name \"{DVR_NAME}\" -ErrorAction SilentlyContinue).{DVR_NAME}"
-    ))
-    .map_err(|e| format!("dvr write failed: {e}"))?;
-    let verified = fresh.trim() == value.to_string();
+    let current = read_dword(DVR_SUBKEY, DVR_NAME)?;
+    write_dword(DVR_SUBKEY, DVR_NAME, value)?;
+    let verified = read_dword(DVR_SUBKEY, DVR_NAME)? == Some(value);
     super::logging::info(&format!(
         "tweak dvr set: from={} to={value} verified={verified}",
         current.map_or("missing".into(), |v| v.to_string())
@@ -97,55 +108,43 @@ pub fn set_dvr(value: u32) -> Result<TweakResult, String> {
     })
 }
 
-/// Parse the combined Storage Sense probe line ("exists|<value>" or
-/// "missing|"). Pure (unit-tested): availability and the live value travel
-/// together in one spawn — the numeric property name MUST stay quoted
-/// (`.'01'`): bare `.01` parses as a float and reads empty forever (the
-/// from=missing/verified=false bug was exactly this).
-fn parse_ss_probe(probe: &str) -> (bool, &str) {
-    match probe.trim().split_once('|') {
-        Some(("exists", v)) => (true, v),
-        // unknown shape = probe failure: treat as unavailable, refuse the
-        // write, never guess
-        _ => (false, ""),
-    }
-}
-
 /// Set Storage Sense to `value` (1 = on, 0 = off) and verify by re-reading.
-/// Writing is allowed whenever the policy key EXISTS — even at value 0
+/// Writing is allowed whenever the policy KEY EXISTS — even at value 0
 /// (off), because Windows itself represents "off" as 0, never as a deleted
 /// key (verified live: Settings zeroes `01`, it never deletes the key).
 /// Only a truly missing key (feature not on this build) refuses, and that
 /// case hides the row in the UI anyway; the check stays as a race guard.
-/// TWO spawns total per flip (combined probe, then combined write+verify),
-/// down from four.
 pub fn set_storage_sense(value: u32) -> Result<TweakResult, String> {
     if value > 1 {
         return Err("storagesense value must be 0 or 1".into());
     }
-    // combined probe in ONE spawn: Test-Path (a real binary answer, immune
-    // to the silent-empty-output trap) + the live value when the key exists
-    let probe = super::system::ps(&format!(
-        "$k = Test-Path \"{SS_PATH}\"; \
-         if ($k) {{ $v = (Get-ItemProperty -Path \"{SS_PATH}\" -Name \"{SS_NAME}\" -ErrorAction SilentlyContinue).'{SS_NAME}'; \"exists|$v\" }} \
-         else {{ \"missing|\" }}"
-    ))
-    .map_err(|e| format!("storagesense probe failed: {e}"))?;
-    let (available, raw) = parse_ss_probe(&probe);
-    if !available {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    // availability = the KEY existing (a binary answer from the API, immune
+    // to the silent-empty-output trap of the old spawn-based probe).
+    // open_subkey is KEY_READ: enough for the availability gate and the
+    // current-value read; the WRITE below opens its own handle with
+    // write access (os error 5 "Access is denied" is what writing through
+    // the read-only handle produced — verified live on Win11).
+    let key = hkcu.open_subkey(SS_SUBKEY).map_err(|_| {
         // key truly missing: Storage Sense is not on this build — do not
         // create a policy key a Windows build never had
         super::logging::warn("tweak storagesense refused: policy key missing on this build");
-        return Err("Storage Sense is not available on this system".into());
-    }
-    let current = parse_toggle_raw(raw);
-    // combined write + verify: writes, then prints what the registry holds
-    let fresh = super::system::ps(&format!(
-        "Set-ItemProperty -Path \"{SS_PATH}\" -Name \"{SS_NAME}\" -Value {value} -Type DWord; \
-         (Get-ItemProperty -Path \"{SS_PATH}\" -Name \"{SS_NAME}\" -ErrorAction SilentlyContinue).'{SS_NAME}'"
-    ))
-    .map_err(|e| format!("storagesense write failed: {e}"))?;
-    let verified = fresh.trim() == value.to_string();
+        "Storage Sense is not available on this system".to_string()
+    })?;
+    let current: Option<u32> = match key.get_value(SS_NAME) {
+        Ok(v) => Some(v),
+        Err(ref e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return Err(format!("cannot read {SS_SUBKEY}\\{SS_NAME}: {e}")),
+    };
+    // write handle: open with KEY_SET_VALUE (the KEY exists — create_subkey
+    // would also work, but this is the precise least privilege for the job)
+    let write_key = hkcu
+        .open_subkey_with_flags(SS_SUBKEY, winreg::enums::KEY_SET_VALUE)
+        .map_err(|e| format!("cannot open {SS_SUBKEY} for writing: {e}"))?;
+    write_key
+        .set_value(SS_NAME, &value)
+        .map_err(|e| format!("storagesense write failed: {e}"))?;
+    let verified = read_dword(SS_SUBKEY, SS_NAME)? == Some(value);
     super::logging::info(&format!(
         "tweak storagesense set: from={} to={value} verified={verified}",
         current.map_or("missing".into(), |v| v.to_string())
@@ -172,31 +171,14 @@ pub fn set_tweak(id: &str, value: u32) -> Result<TweakResult, String> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn toggle_raw_parsed() {
-        assert_eq!(parse_toggle_raw("1"), Some(1));
-        assert_eq!(parse_toggle_raw("0"), Some(0));
-        assert_eq!(parse_toggle_raw(" 1 "), Some(1));
-        assert_eq!(parse_toggle_raw(""), None);
-        assert_eq!(parse_toggle_raw("missing"), None);
-    }
-
-    #[test]
-    fn ss_probe_parsed() {
-        // the combined probe's line contract
-        assert_eq!(parse_ss_probe("exists|1"), (true, "1"));
-        assert_eq!(parse_ss_probe("exists|0"), (true, "0"));
-        assert_eq!(parse_ss_probe("exists|"), (true, "")); // key exists, unreadable value
-        assert_eq!(parse_ss_probe("missing|"), (false, ""));
-        // unknown shape = probe failure = refuse, never guess
-        assert_eq!(parse_ss_probe(""), (false, ""));
-        assert_eq!(parse_ss_probe("garbage"), (false, ""));
-        assert_eq!(parse_ss_probe("exists"), (false, "")); // no separator
-    }
+    // NOTE: read/write paths are REAL registry access (HKCU), so unit tests
+    // do not touch them (CI registries stay clean); the write path is
+    // verified live on a real machine. What IS unit-testable: the refusal
+    // contract — validation must fire before any registry access.
 
     #[test]
     fn dvr_set_rejects_bad_values_without_side_effects() {
-        // validation runs before any read or write: no registry touched
+        // validation runs before any registry access: nothing touched
         assert!(set_tweak("dvr", 2).is_err());
         assert!(set_tweak("dvr", 99).is_err());
         assert!(set_tweak("storagesense", 2).is_err());
@@ -207,5 +189,6 @@ mod tests {
         assert!(set_tweak("nope", 0).is_err());
         assert!(set_tweak("", 1).is_err());
         assert!(set_tweak("DVR", 1).is_err()); // case-sensitive, no fuzzy match
+        assert!(set_tweak("StorageSense", 0).is_err());
     }
 }
