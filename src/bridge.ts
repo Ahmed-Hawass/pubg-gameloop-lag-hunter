@@ -160,6 +160,8 @@ export const api = {
     }),
   cancelUpdateDownload: () => invoke<void>("cancel_update_download"),
   openDownloadFolder: (path: string) => invoke<void>("open_download_folder", { path }),
+  // tweaks (Tools tab writes): the switch mirrors the live Windows state
+  setTweak: (id: string, value: number) => invoke<TweakResult>("set_tweak", { id, value }),
 };
 
 // ---- system tabs -----------------------------------------------------------
@@ -213,6 +215,9 @@ export interface SystemChecks {
   disk_free_pct: number;
   /** "ok" | "low" | "critical" */
   disk_level: string;
+  /** Storage Sense on/off; null = feature unavailable on this Windows
+      build (the row hides, never a dead switch) */
+  storage_sense: boolean | null;
 }
 
 // ---- settings (persisted user preferences — schema v3) --------------------
@@ -297,6 +302,17 @@ export type DownloadEvent =
   | { event: "progress"; downloaded: number; total: number }
   | { event: "done"; path: string }
   | { event: "failed"; reason: string };
+
+// ---- tweaks (backend engine/tweaks.rs) ------------------------------
+
+/** result of a write: what was there, what was written, and whether
+    a fresh re-read confirms it — verified == false is a failure, never ok */
+export interface TweakResult {
+  id: string;
+  previous: number | null;
+  value: number;
+  verified: boolean;
+}
 
 // ---- event helpers --------------------------------------------------------
 

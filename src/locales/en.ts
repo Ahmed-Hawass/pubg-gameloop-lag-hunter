@@ -140,7 +140,7 @@ export const en = {
   checkDvrDesc:
     "Background recording captures your play continuously. It steals GPU and disk mid-match and drops frames in fights.",
   dvrOk: "Off: good",
-  dvrWarn: "On: turn off Record what happened in Captures",
+  dvrWarn: "On: turn off Record what happened in Gaming settings",
   checkDisk: "Disk space",
   checkDiskDesc:
     "Free space on the system drive. When it runs out, Windows chokes the pagefile and every map load becomes a stutter.",
@@ -159,6 +159,24 @@ export const en = {
   chargerOk: "Plugged in",
   chargerWarn: "On battery: the machine throttles and results become unreliable",
   openSettings: "Open setting",
+
+  // ---- tools tab ----
+  tools: "Tools",
+  toolsHint: "All performance switches in one place, grouped by area.",
+  toolsBack: "Tools",
+  toolGaming: "Gaming",
+  toolStorage: "Storage",
+  toolSystemTweaks: "System tweaks",
+  toolSystemTweaksDesc: "Every performance switch in one place, grouped by area.",
+
+  // ---- tweaks (Tools tab writes — switch mirrors live state) ----
+  tweakDvrTitle: "Turn off background recording",
+  tweakDvrDesc:
+    "Keeps background recording off so it never steals GPU and disk mid-match.",
+  tweakSsTitle: "Turn on automatic cleanup",
+  tweakSsDesc:
+    "Automatically frees drive space by removing unneeded temporary files when the drive runs low.",
+  tweakFailed: "The change could not be verified and was not applied.",
 
   // ---- about tab ----
   aboutTitle: "PUBG GameLoop Lag Hunter",

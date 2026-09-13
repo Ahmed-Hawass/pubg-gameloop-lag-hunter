@@ -142,7 +142,7 @@ export const ar: Locale = {
   checkDvrDesc:
     "التسجيل الخلفي يلتقط لعبك باستمرار، فيسرق كرت الشاشة والقرص أثناء المباراة ويخفض الإطارات في المواجهات.",
   dvrOk: "مغلق: جيد",
-  dvrWarn: "يعمل: أغلق تسجيل ما حدث في Captures",
+  dvrWarn: "يعمل: أغلق تسجيل ما حدث من إعدادات الألعاب",
   checkDisk: "مساحة القرص",
   checkDiskDesc:
     "المساحة الفارغة على قرص النظام. عند نفادها يختنق ملف الترحيل ويتحول كل تحميل للخريطة إلى تقطيع.",
@@ -161,6 +161,24 @@ export const ar: Locale = {
   chargerOk: "موصول بالشاحن",
   chargerWarn: "يعمل على البطارية، فيخفّض الجهاز أداءه وقد لا تكون النتائج دقيقة",
   openSettings: "افتح الإعداد",
+
+  // ---- tools tab ----
+  tools: "الأدوات",
+  toolsHint: "كل مفاتيح الأداء في مكان واحد، مقسمة حسب المجال.",
+  toolsBack: "الأدوات",
+  toolGaming: "الألعاب",
+  toolStorage: "التخزين",
+  toolSystemTweaks: "تعديلات النظام",
+  toolSystemTweaksDesc: "كل مفاتيح الأداء في مكان واحد، مقسمة حسب المجال.",
+
+  // ---- tweaks (Tools tab writes — switch mirrors live state) ----
+  tweakDvrTitle: "إيقاف التسجيل الخلفي",
+  tweakDvrDesc:
+    "يُبقي التسجيل الخلفي مطفأ حتى لا يسرق كرت الشاشة والقرص أثناء المباراة.",
+  tweakSsTitle: "تشغيل التنظيف التلقائي",
+  tweakSsDesc:
+    "يحرر مساحة القرص تلقائيا بإزالة الملفات المؤقتة غير اللازمة عند اقتراب الامتلاء.",
+  tweakFailed: "تعذّر التحقق من التغيير ولم يُطبَّق.",
 
   // ---- about tab ----
   aboutTitle: "PUBG GameLoop Lag Hunter",

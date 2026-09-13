@@ -9,7 +9,9 @@ use std::os::windows::process::CommandExt;
 #[cfg(windows)]
 const NO_WINDOW: u32 = 0x0800_0000;
 
-fn ps(script: &str) -> Result<String, String> {
+/// PowerShell runner shared with the tweaks writer (crate-visible so the
+/// write path reuses the exact same spawn flags, never its own variant).
+pub(crate) fn ps(script: &str) -> Result<String, String> {
     #[cfg(windows)]
     let out = Command::new("powershell.exe")
         .args(["-NoProfile", "-NonInteractive", "-Command", script])
@@ -559,6 +561,10 @@ pub struct SystemChecks {
     /// "ok" | "low" | "critical" — graduated copy, warn badge for non-ok.
     /// Unknown reads as "ok" (no false alarm on probe failure).
     pub disk_level: String,
+    /// true when Storage Sense is on. `None` = the policy key does not
+    /// exist on this Windows build (feature unavailable): the row hides,
+    /// never shows a dead switch. Documented on Windows 10 (1709+) and 11.
+    pub storage_sense: Option<bool>,
 }
 
 pub fn query_system_checks() -> Result<SystemChecks, String> {
@@ -581,6 +587,11 @@ $dvrhist = (Get-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVers
 "gamedvr|$dvr1|$dvr2|$dvrpol|$dvrhist"
 $sys = Get-CimInstance Win32_LogicalDisk -Filter ("DeviceID='" + $env:SystemDrive + "'")
 "diskfree|$($sys.DeviceID)|$($sys.FreeSpace)|$($sys.Size)"
+# availability = the policy KEY existing (Test-Path, a real binary answer).
+# Windows never deletes this key when the user turns Storage Sense off —
+# it zeroes `01` (verified live) — so value 0 is a live OFF, not "missing"
+$ssPath = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy"
+if (Test-Path $ssPath) { $ss = (Get-ItemProperty -Path $ssPath -Name "01" -ErrorAction SilentlyContinue).'01'; "storagesense|$ss" } else { "storagesense|missing" }
 "#)?;
     let mut c = SystemChecks {
         power_name: "Unknown".into(),
@@ -596,6 +607,7 @@ $sys = Get-CimInstance Win32_LogicalDisk -Filter ("DeviceID='" + $env:SystemDriv
         disk_free_gb: 0.0,
         disk_free_pct: 100.0,
         disk_level: "ok".into(),
+        storage_sense: None,
     };
     for line in text.lines().map(|l| l.trim()).filter(|l| !l.is_empty()) {
         let mut parts = line.split('|');
@@ -652,6 +664,17 @@ $sys = Get-CimInstance Win32_LogicalDisk -Filter ("DeviceID='" + $env:SystemDriv
                         c.disk_level = disk_level(c.disk_free_pct, c.disk_free_gb).into();
                     }
                 }
+            }
+            Some("storagesense") => {
+                // "1"/"0" = the toggle's live value; "missing" = the policy
+                // key does not exist on this Windows build (feature
+                // unavailable) -> None: the row hides, never a dead switch
+                let v = parts.next().unwrap_or("missing").trim().to_ascii_lowercase();
+                c.storage_sense = match v.as_str() {
+                    "1" | "true" => Some(true),
+                    "0" | "false" => Some(false),
+                    _ => None,
+                };
             }
             _ => {}
         }
@@ -928,5 +951,45 @@ mod tests {
         assert_eq!(disk_level(20.0, 15.0), "low");
         assert_eq!(disk_level(5.0, 100.0), "critical");
         assert_eq!(disk_level(50.0, 5.0), "critical");
+    }
+
+    #[test]
+    fn storagesense_parse() {
+        // the probe's line-level contract: live value or missing feature
+        let mut c = SystemChecks {
+            power_name: String::new(),
+            power_ok: false,
+            pagefile_mode: String::new(),
+            pagefile_mb: 0,
+            pagefile_ok: false,
+            laptop: false,
+            on_ac: true,
+            vt_enabled: true,
+            game_dvr_enabled: false,
+            disk_id: String::new(),
+            disk_free_gb: 0.0,
+            disk_free_pct: 0.0,
+            disk_level: String::new(),
+            storage_sense: None,
+        };
+        for line in ["storagesense|1", "storagesense|0", "storagesense|missing"] {
+            let mut parts = line.split('|');
+            let tag = parts.next();
+            assert_eq!(tag, Some("storagesense"));
+            let v = parts.next().unwrap_or("missing").trim().to_ascii_lowercase();
+            let parsed = match v.as_str() {
+                "1" | "true" => Some(true),
+                "0" | "false" => Some(false),
+                _ => None,
+            };
+            match line {
+                "storagesense|1" => assert_eq!(parsed, Some(true)),
+                "storagesense|0" => assert_eq!(parsed, Some(false)),
+                _ => assert_eq!(parsed, None),
+            }
+            c.storage_sense = parsed;
+        }
+        // final state = missing (row hides)
+        assert!(c.storage_sense.is_none());
     }
 }

@@ -11,6 +11,7 @@ import {
   Info,
   Settings,
   ShieldCheck,
+  Wrench,
 } from "lucide-react";
 import { TitleBar } from "./components/TitleBar";
 import { Dialog, MODAL_OPEN_EVENT, Tip } from "./components/components";
@@ -19,6 +20,7 @@ import { ReportsView } from "./views/ReportsView";
 import { SystemView } from "./views/SystemView";
 import { ProcessesView } from "./views/ProcessesView";
 import { ChecksView } from "./views/ChecksView";
+import { ToolsView } from "./views/ToolsView";
 import { AboutView } from "./views/AboutView";
 import { SettingsView } from "./views/SettingsView";
 import { WelcomeView } from "./views/WelcomeView";
@@ -29,7 +31,7 @@ import { shouldShowUpdateModal } from "./updateFlow";
 import { resolveTheme, type ThemeSetting } from "./theme";
 import { UpdateModal } from "./components/UpdateModal";
 
-type View = "monitor" | "system" | "processes" | "checks" | "reports" | "settings" | "about";
+type View = "monitor" | "system" | "processes" | "checks" | "tools" | "reports" | "settings" | "about";
 
 export default function App() {
   const { t } = useLang();
@@ -362,6 +364,7 @@ export default function App() {
     { id: "system", icon: <Cpu size={17} />, label: t.system },
     { id: "processes", icon: <Activity size={17} />, label: t.topProcesses },
     { id: "checks", icon: <ShieldCheck size={17} />, label: t.systemHealth },
+    { id: "tools", icon: <Wrench size={17} />, label: t.tools },
     { id: "reports", icon: <FolderOpen size={17} />, label: t.reports },
     { id: "settings", icon: <Settings size={17} />, label: t.settings },
   ];
@@ -460,6 +463,9 @@ export default function App() {
               </div>
               <div className={view === "checks" ? "" : "is-hidden-view"}>
                 <ChecksView active={view === "checks"} />
+              </div>
+              <div className={view === "tools" ? "" : "is-hidden-view"}>
+                <ToolsView active={view === "tools"} />
               </div>
               <div className={view === "settings" ? "" : "is-hidden-view"}>
                 <SettingsView theme={themeSetting} onThemeChange={onThemeChange} />

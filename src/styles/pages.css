@@ -249,12 +249,14 @@
   gap: 8px;
 }
 /* wide windows show MORE data, not just air (reflow): two columns once the
-   viewport comfortably fits them — grid flow follows reading direction */
+   viewport comfortably fits them. Scoped to System health's list ONLY:
+   the Tools tweaks list shares the class but must stay a single column
+   (its group headers would break across columns). */
 @media (min-width: 1500px) {
   .checks {
     max-width: min(100%, 1100px);
   }
-  .check-list {
+  .checks .check-list {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: start;
@@ -361,6 +363,187 @@
   border-color: var(--hover-border);
 }
 
+/* ---- tools tab: area landing grid + read-only section details ---- */
+.tools {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: min(100%, 680px);
+}
+.tools-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+/* reference card proportions: a fixed comfortable size (not a stretched
+   full-width tile), so the illustration reads as a scene with the copy
+   under it. Sibling cards stack vertically at this width; the grid widens
+   only on truly large windows. */
+@media (min-width: 1500px) {
+  .tools {
+    max-width: min(100%, 1100px);
+  }
+  .tools-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.tool-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  background: var(--elev-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  cursor: pointer;
+  font: inherit;
+  text-align: start;
+  color: var(--text-1);
+  transition: border-color 0.12s, background 0.12s, transform 0.12s;
+}
+.tool-card:hover {
+  background: var(--hover-bg);
+  border-color: var(--hover-border);
+  transform: translateY(-1px);
+}
+.tool-card:focus-visible {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-dim);
+}
+/* spot illustration: theme-picked SVG asset, one comfortable reading size */
+.tool-spot {
+  width: 168px;
+  height: 168px;
+  flex: none;
+  margin-block-end: 8px;
+}
+.tool-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+.tool-desc {
+  font-size: 12.5px;
+  color: var(--text-2);
+  line-height: 1.55;
+}
+.tools-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 0;
+}
+.tools-back:hover {
+  color: var(--hover-text);
+}
+
+/* ---- switch rows (Tools details): icon + title + desc + badge + switch.
+    Same verdict language as health cards (accent edge + badge, driven by
+    the optimistic switch state). Knob travels via flex alignment so it
+    follows reading direction with no physical properties. */
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--elev-1);
+  border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+}
+.switch-row.on {
+  border-inline-start-color: var(--primary);
+}
+.switch-row.off {
+  border-inline-start-color: var(--warn);
+}
+/* icon tile, scoped to tools rows only (System health keeps the bare glyph) */
+.switch-row .check-func {
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--elev-3);
+  color: var(--text-2);
+}
+.switch-row.on .check-func {
+  background: var(--primary-dim);
+  color: var(--primary);
+}
+/* area divider inside the tweaks list (no letter-spacing: Arabic-safe) */
+.check-list > .tweak-group {
+  margin-top: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-3);
+}
+.check-list > .tweak-group:first-child {
+  margin-top: 2px;
+}
+.switch-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.switch-name {
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.switch-desc {
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.55;
+}
+.switch {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex: none;
+  width: 48px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--elev-3);
+  border: 1px solid var(--border);
+  padding: 2px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.switch[aria-checked="true"] {
+  justify-content: flex-end;
+  background: var(--primary-dim);
+  border-color: var(--primary);
+}
+.switch:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.switch:focus-visible {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-dim);
+}
+.switch-knob {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--text-3);
+  flex: none;
+  transition: background 0.15s;
+}
+.switch[aria-checked="true"] .switch-knob {
+  background: var(--primary);
+}
 
 /* ---- about tab: three consistent cards + a quiet footer, one rhythm ---- */
 .about {

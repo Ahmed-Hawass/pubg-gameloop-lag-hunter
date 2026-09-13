@@ -106,6 +106,15 @@ async fn system_checks(force: bool) -> Result<engine::system::SystemChecks, Stri
 }
 
 #[tauri::command]
+async fn set_tweak(id: String, value: u32) -> Result<engine::tweaks::TweakResult, String> {
+    let _t = engine::logging::timed("ipc: set_tweak");
+    // a registry write must never stall the UI: blocking pool like the rest
+    tauri::async_runtime::spawn_blocking(move || engine::tweaks::set_tweak(&id, value))
+        .await
+        .map_err(|e| format!("set tweak task failed: {e}"))?
+}
+
+#[tauri::command]
 async fn session_start(
     app: tauri::AppHandle,
     auto_stop_secs: Option<u64>,
@@ -540,6 +549,7 @@ pub fn run() {
             system_info,
             top_processes,
             system_checks,
+            set_tweak,
             open_windows_panel,
             set_auto_stop,
             open_path,
