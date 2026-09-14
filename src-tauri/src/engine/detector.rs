@@ -119,9 +119,41 @@ impl Detector {
         self.check_throttle(s, &mut evs);
         self.check_memory(s, &mut evs);
         self.check_disk(s, &mut evs);
+        self.check_cpu_perf_cliff(s, &mut evs);
         self.check_gpu(s, &mut evs, playing);
         self.check_gpu_activity_cliff(s, &mut evs, playing);
         evs
+    }
+
+    /// Sustained processor-performance cliff (the "spike" fingerprint): a
+    /// loaded CPU (>= proc_perf_load_gate) running well under its nominal
+    /// speed for several consecutive seconds. Pure CPU-side evidence —
+    /// runs on EVERY machine, GPU or not: it used to live at the bottom
+    /// of the GPU cliff path, so AMD/Intel machines (no dmon feed, no GPU
+    /// sample) could never reach it and the fingerprint was dead for them.
+    /// Its own load gate keeps it quiet at idle (power saving legitimately
+    /// drops perf when nothing runs).
+    fn check_cpu_perf_cliff(&mut self, s: &Sample, evs: &mut Vec<EngineEvent>) {
+        if let (Some(perf), Some(cpu)) = (s.proc_perf, s.cpu_total) {
+            if cpu >= self.th.proc_perf_load_gate && perf < (100.0 - self.th.spike_cpu_drop_pct) {
+                self.spike_acc += 1;
+                if self.spike_acc == self.th.spike_sustained_sec {
+                    evs.push(EngineEvent {
+                        kind: "spike".into(),
+                        phase: Phase::Instant,
+                        severity: Severity::Crit,
+                        t: s.t.clone(),
+                        duration_sec: None,
+                        detail: format!(
+                            "Sustained perf cliff: {:.0}% for {}s",
+                            perf, self.spike_acc
+                        ),
+                    });
+                }
+            } else {
+                self.spike_acc = 0;
+            }
+        }
     }
 
     /// Is the user actually PLAYING? Two gates, both required:
@@ -519,28 +551,6 @@ impl Detector {
         } else {
             self.cliff_fired = false;
         }
-
-        // sustained proc-perf drop accumulator (CPU perf cliff)
-        if let (Some(perf), Some(cpu)) = (s.proc_perf, s.cpu_total) {
-            if cpu >= self.th.proc_perf_load_gate && perf < (100.0 - self.th.spike_cpu_drop_pct) {
-                self.spike_acc += 1;
-                if self.spike_acc == self.th.spike_sustained_sec {
-                    evs.push(EngineEvent {
-                        kind: "spike".into(),
-                        phase: Phase::Instant,
-                        severity: Severity::Crit,
-                        t: s.t.clone(),
-                        duration_sec: None,
-                        detail: format!(
-                            "Sustained perf cliff: {:.0}% for {}s",
-                            perf, self.spike_acc
-                        ),
-                    });
-                }
-            } else {
-                self.spike_acc = 0;
-            }
-        }
     }
 }
 
@@ -644,6 +654,45 @@ mod tests {
         assert!(e
             .iter()
             .any(|e| e.kind == "cpu_throttle" && e.severity == Severity::Crit));
+    }
+
+    // ---- spike: the sustained CPU perf cliff, with and without a GPU ----
+
+    #[test]
+    fn spike_fires_without_any_gpu_sample() {
+        // the AMD/Intel machine: no dmon feed, s.gpu is None. The spike
+        // fingerprint is pure CPU evidence and MUST still fire — it used to
+        // sit behind the GPU early-return and was dead for these machines.
+        let mut d = Detector::new(Thresholds::default());
+        for i in 0..(d.th.spike_sustained_sec - 1) {
+            let e = d.feed(&sample(80.0, 80.0, 20000.0, 0.1, None)); // sm=None
+            assert!(
+                !e.iter().any(|e| e.kind == "spike"),
+                "tick {i}: not sustained yet"
+            );
+        }
+        let e = d.feed(&sample(80.0, 80.0, 20000.0, 0.1, None));
+        assert!(e
+            .iter()
+            .any(|e| e.kind == "spike" && e.severity == Severity::Crit));
+    }
+
+    #[test]
+    fn spike_resets_when_load_drops() {
+        // the load gate is part of the fingerprint: a perf dip at idle is
+        // normal power saving, only a LOADED CPU slowing down counts
+        let mut d = Detector::new(Thresholds::default());
+        for _ in 0..2 {
+            d.feed(&sample(80.0, 80.0, 20000.0, 0.1, None));
+        }
+        let e = d.feed(&sample(20.0, 80.0, 20000.0, 0.1, None)); // idle tick
+        assert!(!e.iter().any(|e| e.kind == "spike"));
+        let e = d.feed(&sample(80.0, 80.0, 20000.0, 0.1, None));
+        assert!(!e.iter().any(|e| e.kind == "spike")); // accumulator restarted
+        let e = d.feed(&sample(80.0, 80.0, 20000.0, 0.1, None));
+        assert!(!e.iter().any(|e| e.kind == "spike"));
+        let e = d.feed(&sample(80.0, 80.0, 20000.0, 0.1, None));
+        assert!(e.iter().any(|e| e.kind == "spike")); // 3 loaded ticks again
     }
 
     // ---- paging churn: the healthy-RAM background paging fingerprint -------
