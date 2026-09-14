@@ -135,7 +135,19 @@ fn diagnoses_from(events: &[EngineEvent], latest: &Sample, now_iso: &str) -> Vec
             continue;
         }
         let ev_ms = iso_ms(&ev.t).unwrap_or(0);
-        if now_ms.saturating_sub(ev_ms) > LIVE_WINDOW_MS {
+        // OUTSIDE the live window — but a condition that is STILL OPEN is
+        // never stale: its Start keeps earning its card until the problem
+        // actually ends. Skipping open Starts made long conditions
+        // (mem_pressure open for 20 min) emit ONE Start, age it out of the
+        // window after 5 min, and the card VANISHED while the problem was
+        // ongoing — Overall stayed "lag" with no explanatory card at all.
+        // The open/closed pairing below resolves this Start when its End
+        // arrives (Ends are never skipped, whatever their age).
+        let still_open = ev.phase == Phase::Start
+            && !events.iter().any(|later| {
+                later.kind == ev.kind && later.phase == Phase::End && later.t > ev.t
+            });
+        if now_ms.saturating_sub(ev_ms) > LIVE_WINDOW_MS && !still_open {
             continue; // outside the live window
         }
         let key = key_for(ev, latest);
@@ -557,6 +569,59 @@ mod tests {
         let d = diagnoses_from(&events, &latest, now);
         assert_eq!(d.len(), 1);
         assert_eq!(d[0].key, "cpu_throttle");
+    }
+
+    #[test]
+    fn open_condition_keeps_its_card_beyond_the_window() {
+        // the vanishing-card bug: a condition that STAYS open emits one
+        // Start and nothing else. Six minutes in, the Start is older than
+        // the 5-minute live window — but the problem is ONGOING. The card
+        // must stay; skipping open Starts made it vanish with Overall still
+        // red and nothing explaining why.
+        let events = vec![ev(
+            "mem_pressure",
+            Phase::Start,
+            Severity::Warn,
+            "2026-08-31T04:54:00.000Z", // 6 minutes before now
+            None,
+        )];
+        let latest = Sample::default();
+        let now = "2026-08-31T05:00:00.000Z";
+        let d = diagnoses_from(&events, &latest, now);
+        assert!(
+            d.iter().any(|x| x.key == "mem_low"),
+            "a still-open condition keeps its card no matter how old the Start is"
+        );
+    }
+
+    #[test]
+    fn closed_old_condition_still_expires() {
+        // the flip side: an ENDED condition from before the window is
+        // really over — the still-open rescue must not resurrect history.
+        // Start 10 min ago, End 9 min ago, nothing open now.
+        let events = vec![
+            ev(
+                "cpu_saturation",
+                Phase::Start,
+                Severity::Warn,
+                "2026-08-31T04:50:00.000Z",
+                None,
+            ),
+            ev(
+                "cpu_saturation",
+                Phase::End,
+                Severity::Ok,
+                "2026-08-31T04:51:00.000Z",
+                Some(60.0),
+            ),
+        ];
+        let latest = Sample::default();
+        let now = "2026-08-31T05:00:00.000Z";
+        let d = diagnoses_from(&events, &latest, now);
+        assert!(
+            !d.iter().any(|x| x.key == "cpu_busy"),
+            "an ended condition outside the window stays expired"
+        );
     }
 
     #[test]
