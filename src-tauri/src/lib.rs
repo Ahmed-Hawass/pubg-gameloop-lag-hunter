@@ -30,32 +30,37 @@ fn ps_available() -> bool {
 /// Idle watcher: polls for GameLoop so the UI's Start button reflects reality.
 /// NEVER exits on its own — after a session stops it keeps watching, so the
 /// button state can never go stale (the old version died after the first
-/// session and left the gate stuck).
+/// session and left the gate stuck). Spawned ONCE per process: a second
+/// invocation (StrictMode double-mount, any re-call) would stack a second
+/// never-exiting thread next to the first.
 #[tauri::command]
 fn watch_gameloop(app: tauri::AppHandle) {
-    std::thread::spawn(move || {
-        use tauri::Emitter;
-        let mut last: Option<bool> = None;
-        loop {
-            let Some(eng) = session::global() else {
-                std::thread::sleep(Duration::from_secs(2));
-                continue;
-            };
-            // while a session runs, its own probe is the source of truth —
-            // skip here, but remember "up" so the next idle check diffs cleanly
-            if eng.status() == SessionStatus::Running {
-                last = Some(true);
-                std::thread::sleep(Duration::from_secs(5));
-                continue;
+    static SPAWNED: std::sync::Once = std::sync::Once::new();
+    SPAWNED.call_once(|| {
+        std::thread::spawn(move || {
+            use tauri::Emitter;
+            let mut last: Option<bool> = None;
+            loop {
+                let Some(eng) = session::global() else {
+                    std::thread::sleep(Duration::from_secs(2));
+                    continue;
+                };
+                // while a session runs, its own probe is the source of truth —
+                // skip here, but remember "up" so the next idle check diffs cleanly
+                if eng.status() == SessionStatus::Running {
+                    last = Some(true);
+                    std::thread::sleep(Duration::from_secs(5));
+                    continue;
+                }
+                let up = engine::sampler::detect_emulator().is_some();
+                // emit on CHANGE only (and on the very first check)
+                if last.is_none() || last != Some(up) {
+                    let _ = app.emit("engine://gameloop", up);
+                    last = Some(up);
+                }
+                std::thread::sleep(Duration::from_secs(3));
             }
-            let up = engine::sampler::detect_emulator().is_some();
-            // emit on CHANGE only (and on the very first check)
-            if last.is_none() || last != Some(up) {
-                let _ = app.emit("engine://gameloop", up);
-                last = Some(up);
-            }
-            std::thread::sleep(Duration::from_secs(3));
-        }
+        });
     });
 }
 
@@ -207,10 +212,18 @@ fn get_state() -> StatusPayload {
 #[tauri::command]
 async fn session_entries() -> Vec<engine::storage::SessionEntry> {
     let _t = engine::logging::timed("ipc: session_entries");
+    // hide the live session by the ENGINE's own id — it is the writer,
+    // it knows what is being written right now (belt and suspenders over
+    // the old file-age heuristic that broke at the first autosave)
+    let live = session::init_global().live_session_id();
     // a JoinError here means the blocking task itself panicked — THAT must
     // never surface as a silent "no sessions" list; log it loudly and only
     // then fall back to empty
-    match tauri::async_runtime::spawn_blocking(engine::storage::session_entries).await {
+    match tauri::async_runtime::spawn_blocking(move || {
+        engine::storage::session_entries(live.as_deref())
+    })
+    .await
+    {
         Ok(entries) => entries,
         Err(e) => {
             engine::logging::warn(&format!("session_entries task failed: {e}"));
@@ -281,33 +294,35 @@ fn get_settings() -> engine::settings::Settings {
 
 #[tauri::command]
 fn set_language(lang: String) -> Result<String, String> {
-    let mut s = engine::settings::load();
-    s.language = engine::settings::normalize_language(&lang);
-    engine::settings::save(&s)?;
-    Ok(s.language)
+    // update() serializes the read-modify-write: concurrent set_* commands
+    // used to race on load→mutate→save and lose each other's changes
+    engine::settings::update(|s| {
+        s.language = engine::settings::normalize_language(&lang);
+        s.language.clone()
+    })
 }
 
 #[tauri::command]
 fn set_theme(theme: String) -> Result<String, String> {
-    let mut s = engine::settings::load();
-    s.theme = engine::settings::normalize_theme(&theme);
-    engine::settings::save(&s)?;
-    Ok(s.theme)
+    engine::settings::update(|s| {
+        s.theme = engine::settings::normalize_theme(&theme);
+        s.theme.clone()
+    })
 }
 
 #[tauri::command]
 fn set_sidebar_collapsed(collapsed: bool) -> Result<bool, String> {
-    let mut s = engine::settings::load();
-    s.sidebar_collapsed = collapsed;
-    engine::settings::save(&s)?;
-    Ok(s.sidebar_collapsed)
+    engine::settings::update(|s| {
+        s.sidebar_collapsed = collapsed;
+        s.sidebar_collapsed
+    })
 }
 
 #[tauri::command]
 fn finish_onboarding() -> Result<(), String> {
-    let mut s = engine::settings::load();
-    s.onboarding_done = true;
-    engine::settings::save(&s)
+    engine::settings::update(|s| {
+        s.onboarding_done = true;
+    })
 }
 
 /// Mark the pre-scan advice ("close background apps") as seen — it shows once
@@ -315,26 +330,26 @@ fn finish_onboarding() -> Result<(), String> {
 /// itself is the user's click; this only records it.
 #[tauri::command]
 fn finish_game_advice() -> Result<(), String> {
-    let mut s = engine::settings::load();
-    s.game_advice_done = true;
-    engine::settings::save(&s)
+    engine::settings::update(|s| {
+        s.game_advice_done = true;
+    })
 }
 
 /// Mark the stay-in-game advice as seen — it shows once EVER, the first time
 /// a running session measures the game window in the background.
 #[tauri::command]
 fn finish_background_advice() -> Result<(), String> {
-    let mut s = engine::settings::load();
-    s.background_advice_done = true;
-    engine::settings::save(&s)
+    engine::settings::update(|s| {
+        s.background_advice_done = true;
+    })
 }
 
 #[tauri::command]
 fn set_auto_stop(minutes: u32) -> Result<u32, String> {
-    let mut s = engine::settings::load();
-    s.auto_stop_minutes = engine::settings::clamp_auto_stop(minutes);
-    engine::settings::save(&s)?;
-    Ok(s.auto_stop_minutes)
+    engine::settings::update(|s| {
+        s.auto_stop_minutes = engine::settings::clamp_auto_stop(minutes);
+        s.auto_stop_minutes
+    })
 }
 
 // ---- update flow (see engine/update.rs for the scope contract) ----------
@@ -366,9 +381,9 @@ fn update_already_announced(version: String) -> bool {
 /// Mark a version as announced (called when the modal is SHOWN).
 #[tauri::command]
 fn announce_update(version: String) -> Result<(), String> {
-    let mut s = engine::settings::load();
-    s.announced_update_version = Some(version);
-    engine::settings::save(&s)
+    engine::settings::update(|s| {
+        s.announced_update_version = Some(version);
+    })
 }
 
 /// Download the update to `dest`, streaming progress over `on_event`.
@@ -383,8 +398,9 @@ async fn download_update(
 ) -> Result<String, String> {
     let _t = engine::logging::timed_with("ipc: download_update", 10_000);
     let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    // register the global cancel handle so app-exit / user-cancel can kill it
-    engine::update::register_cancel(cancel.clone());
+    // register the global cancel handle so app-exit / user-cancel can kill
+    // it — refused while another download is live (engine-side single-flight)
+    engine::update::register_cancel(cancel.clone())?;
     let info = std::sync::Arc::new(info);
     let res = tauri::async_runtime::spawn_blocking(move || {
         engine::update::download_and_verify(&info, std::path::PathBuf::from(dest), &cancel, {

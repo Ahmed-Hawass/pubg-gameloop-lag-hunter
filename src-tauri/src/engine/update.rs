@@ -141,10 +141,20 @@ static ACTIVE_DOWNLOAD: Mutex<Option<std::path::PathBuf>> = Mutex::new(None);
 static ACTIVE_CANCEL: Mutex<Option<std::sync::Arc<AtomicBool>>> = Mutex::new(None);
 
 /// Wire the cancel handle of a starting download (called by the command).
-pub fn register_cancel(cancel: std::sync::Arc<AtomicBool>) {
-    *ACTIVE_CANCEL
+/// Refused while a download is already running: registering over a live
+/// download would DROP the first one's Arc (the only cancel path it has),
+/// leaving it running but uncancellable — app exit could no longer stop
+/// it. The command layer's "one modal" rule is UI convention; THIS is the
+/// engine's own enforcement.
+pub fn register_cancel(cancel: std::sync::Arc<AtomicBool>) -> Result<(), String> {
+    let mut slot = ACTIVE_CANCEL
         .lock()
-        .unwrap_or_else(|p| p.into_inner()) = Some(cancel);
+        .unwrap_or_else(|p| p.into_inner());
+    if slot.is_some() {
+        return Err("a download is already registered".into());
+    }
+    *slot = Some(cancel);
+    Ok(())
 }
 
 /// Flip the cancel flag of any running download + remove its partial file.

@@ -140,6 +140,24 @@ pub fn save(s: &Settings) -> Result<(), String> {
     Ok(())
 }
 
+/// Serialize every read-modify-write against the same lock: concurrent
+/// set_* commands each used to load→mutate→save independently, so two
+/// overlapping writes raced on the fixed .tmp name and the loser's
+/// change silently vanished (the winner's save never saw it). One mutex
+/// per process makes each update atomic end-to-end; the plain `load()`
+/// readers stay lock-free (they only ever see committed files).
+static SETTINGS_WRITE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+pub fn update<R>(mutate: impl FnOnce(&mut Settings) -> R) -> Result<R, String> {
+    let _guard = SETTINGS_WRITE_LOCK
+        .lock()
+        .unwrap_or_else(|p| p.into_inner());
+    let mut s = load();
+    let ret = mutate(&mut s);
+    save(&s)?;
+    Ok(ret)
+}
+
 /// Validate + clamp an auto-stop choice coming from the UI.
 pub fn clamp_auto_stop(minutes: u32) -> u32 {
     minutes.clamp(5, 60)

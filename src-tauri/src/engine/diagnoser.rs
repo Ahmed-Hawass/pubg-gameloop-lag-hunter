@@ -191,18 +191,29 @@ fn diagnoses_from(events: &[EngineEvent], now_iso: &str) -> Vec<Diagnosis> {
 
     // pass 2: a bucket earns a card only with ≥3s of confirmed evidence
     let mut out: Vec<Diagnosis> = Vec::new();
-    // CORRELATION EVIDENCE: did a real activity collapse happen in the live
-    // window, and did it happen DURING or AFTER the wake it explains? A
-    // cliff from BEFORE the wake started is not evidence for it — the old
-    // 15-minute window used to let a stall from 12 minutes prior "confirm"
-    // a wake card (false correlation).
-    // First: the EARLIEST wake start in the evidence stream (open or closed),
-    // so a cliff that precedes every wake cannot ride on any of them.
-    let wake_first_start_ms = events
+    // CORRELATION EVIDENCE: did a real activity collapse happen, and did it
+    // happen DURING a wake it could explain? A cliff from BEFORE a wake
+    // started is not evidence for it — the old 15-minute window used to
+    // let a stall from 12 minutes prior "confirm" a wake card (false
+    // correlation). Pairing is PER WINDOW: a cliff confirms a wake only if
+    // it falls inside THAT wake's [start, end] envelope (an open wake
+    // extends to now). The old earliest-wake check let a cliff ride on an
+    // ancient wake that ended long before it.
+    let wake_windows: Vec<(i64, Option<i64>)> = events
         .iter()
         .filter(|e| e.kind == "gpu_mem_idle" && e.phase == Phase::Start)
-        .filter_map(|e| iso_ms(&e.t))
-        .min();
+        .filter_map(|e| {
+            let start = iso_ms(&e.t)?;
+            // the End of THIS wake: the first End at/after its start
+            let end = events
+                .iter()
+                .filter(|e2| e2.kind == "gpu_mem_idle" && e2.phase == Phase::End)
+                .filter_map(|e2| iso_ms(&e2.t))
+                .filter(|t2| *t2 >= start)
+                .min();
+            Some((start, end))
+        })
+        .collect();
     let stall_evidence = events.iter().any(|e| {
         if !e.kind.starts_with("gpu_activity_cliff") {
             return false;
@@ -213,27 +224,32 @@ fn diagnoses_from(events: &[EngineEvent], now_iso: &str) -> Vec<Diagnosis> {
         if now_ms.saturating_sub(ev_ms) > CORRELATION_WINDOW_MS {
             return false; // too old to matter
         }
-        // the cliff must fall inside (or after) a wake window: an earlier
-        // collapse explains nothing about a later wake
-        match wake_first_start_ms {
-            Some(wake_start_ms) => ev_ms >= wake_start_ms,
-            None => false, // no wake at all — nothing for a cliff to confirm
-        }
+        // the cliff must fall inside a wake window: an earlier collapse
+        // explains nothing about a later wake (open wake runs to now)
+        wake_windows
+            .iter()
+            .any(|&(start, end)| ev_ms >= start && end.map(|t| ev_ms <= t).unwrap_or(true))
     });
     // PAGING CORRELATION: a churn card must be backed by a cliff that fell
     // INSIDE a churn window (same direction as the wake rule: the evidence
-    // must occur during the condition it explains). A churn with zero
-    // correlated stutters is background behavior — feed-only observation.
-    let churn_first_start_ms = events
+    // must occur during the condition it explains). PER WINDOW, like the
+    // wake rule — the old first-start/last-end ENVELOPE counted a cliff in
+    // the GAP between two churn windows as inside the churn. A churn with
+    // zero correlated stutters is background behavior — feed-only.
+    let churn_windows: Vec<(i64, Option<i64>)> = events
         .iter()
         .filter(|e| e.kind == "paging_churn" && e.phase == Phase::Start)
-        .filter_map(|e| iso_ms(&e.t))
-        .min();
-    let churn_last_end_ms = events
-        .iter()
-        .filter(|e| e.kind == "paging_churn" && e.phase == Phase::End)
-        .filter_map(|e| iso_ms(&e.t))
-        .max();
+        .filter_map(|e| {
+            let start = iso_ms(&e.t)?;
+            let end = events
+                .iter()
+                .filter(|e2| e2.kind == "paging_churn" && e2.phase == Phase::End)
+                .filter_map(|e2| iso_ms(&e2.t))
+                .filter(|t2| *t2 >= start)
+                .min();
+            Some((start, end))
+        })
+        .collect();
     let churn_evidence = events.iter().any(|e| {
         if !e.kind.starts_with("gpu_activity_cliff") {
             return false;
@@ -242,15 +258,12 @@ fn diagnoses_from(events: &[EngineEvent], now_iso: &str) -> Vec<Diagnosis> {
             return false;
         };
         if now_ms.saturating_sub(ev_ms) > CORRELATION_WINDOW_MS {
-            return false;
+            return false; // too old to matter
         }
-        match (churn_first_start_ms, churn_last_end_ms) {
-            (Some(start), Some(end)) => ev_ms >= start && ev_ms <= end,
-            (Some(start), None) => ev_ms >= start,
-            _ => false,
-        }
-    });
-    for (key, (sustained_ms, _last, raw_sev)) in &buckets {
+        churn_windows
+            .iter()
+            .any(|&(start, end)| ev_ms >= start && end.map(|t| ev_ms <= t).unwrap_or(true))
+    });    for (key, (sustained_ms, _last, raw_sev)) in &buckets {
         if *sustained_ms < 3000 {
             continue; // blip — feed-worthy, not card-worthy
         }
@@ -763,6 +776,108 @@ mod tests {
         assert!(
             !d.iter().any(|x| x.key == "gpu_wake"),
             "evidence must fall inside the window it explains, not before it"
+        );
+    }
+
+    #[test]
+    fn cliff_after_an_older_wake_ended_is_not_evidence_for_a_newer_one() {
+        // the envelope bug: wake #1 ended at 05:00:20, a NEW wake starts at
+        // 05:04, and a cliff lands at 05:05 — after the new wake began.
+        // The old earliest-wake check compared against wake #1's start
+        // only, so this cliff confirmed... whichever wake the card was
+        // for. The cliff IS inside wake #2's window, so the card stands —
+        // but the mirror case below (cliff in the GAP between wakes)
+        // must not.
+        let events = vec![
+            ev(
+                "gpu_mem_idle",
+                Phase::Start,
+                Severity::Warn,
+                "2026-08-31T05:00:00.000Z",
+                None,
+            ),
+            ev(
+                "gpu_mem_idle",
+                Phase::End,
+                Severity::Ok,
+                "2026-08-31T05:00:20.000Z",
+                Some(20.0),
+            ),
+            ev(
+                "gpu_mem_idle",
+                Phase::Start,
+                Severity::Warn,
+                "2026-08-31T05:04:00.000Z",
+                None,
+            ),
+            ev(
+                "gpu_activity_cliff",
+                Phase::Instant,
+                Severity::Crit,
+                "2026-08-31T05:05:00.000Z", // inside wake #2 (still open)
+                None,
+            ),
+        ];
+        let latest = Sample::default();
+        let now = "2026-08-31T05:05:10.000Z";
+        let d = diagnoses_from(&events, now);
+        assert!(
+            d.iter().any(|x| x.key == "gpu_wake"),
+            "a cliff inside the CURRENT wake window confirms it"
+        );
+    }
+
+    #[test]
+    fn cliff_in_the_gap_between_churn_windows_is_not_evidence() {
+        // the churn envelope bug: churn #1 (05:00:00-05:00:30), a quiet
+        // gap, churn #2 opens at 05:04, and a cliff lands at 05:02 — in
+        // the GAP, before churn #2 even started. The old first-start/
+        // last-end envelope spanned 05:00:00..(churn#2's end) and counted
+        // this gap cliff as inside the churn. It explains nothing: no
+        // churn was running when it happened.
+        let events = vec![
+            ev(
+                "paging_churn",
+                Phase::Start,
+                Severity::Warn,
+                "2026-08-31T05:00:00.000Z",
+                None,
+            ),
+            ev(
+                "paging_churn",
+                Phase::End,
+                Severity::Ok,
+                "2026-08-31T05:00:30.000Z",
+                Some(30.0),
+            ),
+            ev(
+                "gpu_activity_cliff",
+                Phase::Instant,
+                Severity::Crit,
+                "2026-08-31T05:02:00.000Z", // the GAP
+                None,
+            ),
+            ev(
+                "paging_churn",
+                Phase::Start,
+                Severity::Warn,
+                "2026-08-31T05:04:00.000Z",
+                None,
+            ),
+            ev(
+                "paging_churn",
+                Phase::End,
+                Severity::Ok,
+                "2026-08-31T05:04:30.000Z",
+                Some(30.0),
+            ),
+        ];
+        let latest = Sample::default();
+        let now = "2026-08-31T05:04:31.000Z";
+        let d = diagnoses_from(&events, now);
+        assert!(
+            !d.iter().any(|x| x.key == "paging_churn"),
+            "a cliff between churn windows confirms neither"
         );
     }
 

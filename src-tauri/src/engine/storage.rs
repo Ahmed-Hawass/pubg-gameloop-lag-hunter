@@ -22,9 +22,23 @@ pub fn sessions_root() -> PathBuf {
 
 /// Create a new session directory named by local time: session-YYYY-MM-DD_HHMMSS
 /// (local = wall-clock time on the user's machine, DST-aware).
+/// Second-resolution ids collide when a stop+start lands inside the same
+/// wall-clock second — the id must stay SORTABLE (it is the list ordering
+/// AND carries the date), so a collision takes a monotonic -2, -3, ...
+/// suffix instead of waiting for the next second (which could land the new
+/// session BEFORE its true start time).
 pub fn new_session_dir() -> Result<(String, PathBuf), String> {
-    let id = session_id_from(&super::sampler::iso_now());
-    let dir = sessions_root().join(&id);
+    let base_id = session_id_from(&super::sampler::iso_now());
+    let root = sessions_root();
+    let mut id = base_id.clone();
+    let mut n = 2;
+    // File::create below TRUNCATES — writing into an existing dir would
+    // silently destroy the previous session's samples. Never reuse a dir.
+    while root.join(&id).exists() {
+        id = format!("{base_id}-{n}");
+        n += 1;
+    }
+    let dir = root.join(&id);
     fs::create_dir_all(&dir).map_err(|e| format!("cannot create session dir: {e}"))?;
     Ok((id, dir))
 }
@@ -345,20 +359,30 @@ pub struct SessionEntry {
 }
 
 /// Session list with the numbers users care about. Newest first.
-pub fn session_entries() -> Vec<SessionEntry> {
+/// `live_id`: the session being written RIGHT NOW (from the engine, not
+/// the filesystem) — hidden from the list whatever state its files are
+/// in. The old heuristic (hide only when summary.json is missing) broke
+/// at the first autosave (~50s in, summary.json appears with
+/// partial:true) and the half-written session showed up as a
+/// half-finished report.
+pub fn session_entries(live_id: Option<&str>) -> Vec<SessionEntry> {
     let ids = list_sessions();
     let mut out: Vec<SessionEntry> = Vec::new();
     for id in ids {
+        if Some(id.as_str()) == live_id {
+            continue; // live session — not a report yet
+        }
         let dir = sessions_root().join(&id);
-        // a session with no summary and a samples file touched within the
-        // last minute is being written RIGHT NOW — hide it until it's real
+        // legacy safety net for crashed runs: a session with no summary
+        // whose samples were touched within the last minute is a run that
+        // died mid-write — hide it until it is a minute old
         let summary_exists = dir.join("summary.json").is_file();
         if !summary_exists {
             if let Ok(meta) = fs::metadata(dir.join("samples.jsonl")) {
                 if let Ok(modified) = meta.modified() {
                     if let Ok(age) = modified.elapsed() {
                         if age.as_secs() < 60 {
-                            continue; // live session — not a report yet
+                            continue; // fresh corpse of a crashed run — not a report yet
                         }
                     }
                 }

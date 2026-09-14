@@ -240,6 +240,28 @@ impl Detector {
                     detail,
                 });
             }
+            (true, true) => {
+                // ESCALATION: the condition is still open and got WORSE
+                // (warn crossed into crit). The card must not stay frozen
+                // at the severity it happened to open with — a saturation
+                // that opened at 86% then pegged 99% is a high card, not
+                // medium. The diagnoser keeps the WORST event severity.
+                if let Some((_since, open_sev)) = self.active.get_mut(key) {
+                    if *open_sev != Severity::Crit && sev == Severity::Crit {
+                        *open_sev = Severity::Crit;
+                        evs.push(EngineEvent {
+                            kind: key.to_string(),
+                            // Instant: not a new condition, an upgrade of
+                            // the open one — no Start/End pair to close
+                            phase: Phase::Instant,
+                            severity: Severity::Crit,
+                            t: t.to_string(),
+                            duration_sec: None,
+                            detail,
+                        });
+                    }
+                }
+            }
             (false, true) => {
                 // same shape as finish() — remove returns the map entry, and
                 // a missing key here would be a logic bug, not a panic case
@@ -676,6 +698,35 @@ mod tests {
             .any(|e| e.kind == "cpu_saturation" && e.phase == Phase::Start));
         let e2 = d.feed(&sample(40.0, 120.0, 20000.0, 0.1, None));
         assert!(e2
+            .iter()
+            .any(|e| e.kind == "cpu_saturation" && e.phase == Phase::End));
+    }
+
+    #[test]
+    fn severity_escalates_while_open() {
+        // opened at 90 (warn), deepened to 99 (crit line) while STILL OPEN:
+        // an escalation event must raise the card, and the diagnoser keeps
+        // the worst severity (crit -> high card)
+        let mut d = Detector::new(Thresholds::default());
+        let e1 = d.feed(&sample(90.0, 120.0, 20000.0, 0.1, None));
+        assert!(e1
+            .iter()
+            .any(|e| e.kind == "cpu_saturation" && e.severity == Severity::Warn));
+        let e2 = d.feed(&sample(99.0, 120.0, 20000.0, 0.1, None));
+        assert!(
+            e2.iter().any(|e| e.kind == "cpu_saturation"
+                && e.severity == Severity::Crit
+                && e.phase == Phase::Instant),
+            "the crit crossing while open must emit an escalation event"
+        );
+        // and only ONE escalation, not one per crit tick
+        let e3 = d.feed(&sample(99.0, 120.0, 20000.0, 0.1, None));
+        assert!(!e3
+            .iter()
+            .any(|e| e.kind == "cpu_saturation" && e.phase == Phase::Instant));
+        // the end still pairs with the (single) open condition
+        let e4 = d.feed(&sample(40.0, 120.0, 20000.0, 0.1, None));
+        assert!(e4
             .iter()
             .any(|e| e.kind == "cpu_saturation" && e.phase == Phase::End));
     }

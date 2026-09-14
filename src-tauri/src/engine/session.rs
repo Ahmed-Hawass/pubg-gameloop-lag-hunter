@@ -217,6 +217,22 @@ impl Engine {
 
         st.emulator = sampler::detect_emulator();
 
+        // ---- spawn streaming sources ----
+        // Routes thread callbacks to the global engine instance (set in lib.rs).
+        // Drop every cross-session snapshot FIRST: a previous session's
+        // evidence must never feed this one. The order matters — the probes
+        // below run AFTER the wipe so their fresh results survive (the old
+        // order stored the visibility probe and then wiped it in the same
+        // critical section, discarding the probe's work every time).
+        reset_snapshots();
+        // the emulator is known-live (the gate above confirmed it) — seed
+        // the snapshot so tick zero already knows what it is measuring
+        if let Ok(procs) = sampler::query_emulator_procs() {
+            if !procs.is_empty() {
+                *LATEST_EMU.lock().unwrap_or_else(|p| p.into_inner()) =
+                    Some(Timestamped::fresh(procs, SNAPSHOT_TTLS.emu));
+            }
+        }
         // first visibility probe BEFORE the first sample lands, so the very
         // first ticks already know whether the window is up (minimized users
         // opening the tool get correct muting from tick zero)
@@ -228,10 +244,6 @@ impl Engine {
             }
             None => super::logging::info("game window visibility unknown at start (probe returned None)"),
         }
-
-        // ---- spawn streaming sources ----
-        // Routes thread callbacks to the global engine instance (set in lib.rs).
-        reset_snapshots(); // no evidence survives from a previous session
         // FRESH flag per session (not the shared one): the old stop→start
         // race leaked readers — stop() flips the flag false and sleeps 600ms,
         // but a start() in that window flips the SAME flag back to true
