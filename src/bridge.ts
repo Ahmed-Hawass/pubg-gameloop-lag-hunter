@@ -272,6 +272,12 @@ export interface HighlightEntry {
   dur_sec: number | null;
 }
 
+/** One metrics-summary fact: machine key + measured number. */
+export interface MetricEntry {
+  key: string;
+  value: number;
+}
+
 export interface FriendlyReport {
   id: string;
   date: string;
@@ -281,7 +287,9 @@ export interface FriendlyReport {
   /** honest outcome — mirrors storage.rs honest_outcome() */
   outcome: Outcome;
   highlights: HighlightEntry[];
-  metrics_summary: string[];
+  /** metric facts: machine keys + raw numbers, the UI composes the
+      sentence per language */
+  metrics_summary: MetricEntry[];
   findings: FriendlyFinding[];
   raw_path: string;
 }

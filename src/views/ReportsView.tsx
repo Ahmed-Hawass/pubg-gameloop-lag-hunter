@@ -203,14 +203,19 @@ export function ReportsView(props: {
           </ul>
         </section>
 
-        {/* metrics in plain language */}
+        {/* metrics in plain language — composed from machine keys + numbers */}
         {report.metrics_summary.length > 0 ? (
           <section className="report-section">
             <h3>{t.theNumbers}</h3>
             <ul className="report-metrics">
-              {report.metrics_summary.map((m, i) => (
-                <li key={i}>{m}</li>
-              ))}
+              {report.metrics_summary.map((m, i) => {
+                const fmt = t.metrics[m.key];
+                return (
+                  <li key={i}>
+                    {fmt ? fmt(Math.round(m.value)) : `${m.key}: ${m.value}`}
+                  </li>
+                );
+              })}
             </ul>
           </section>
         ) : null}

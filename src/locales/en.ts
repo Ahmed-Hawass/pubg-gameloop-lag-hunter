@@ -66,6 +66,15 @@ export const en = {
     mostly_background: "Most of this session was spent outside the game, so the results may not reflect a real match.",
   } as Record<string, string>,
 
+  // ---- report metrics (composed in the UI from machine keys + numbers) ----
+  metrics: {
+    cpuPeak: (v: number) => `CPU peaked around ${v}% under load.`,
+    cpuPerfMin: (v: number) => `CPU dropped to ${v}% of its speed at some point.`,
+    ramFreeMin: (v: number) => `At least ${v} MB of RAM stayed free.`,
+    gpuTempMax: (v: number) => `GPU reached ${v}\u00B0C at its hottest.`,
+    gpuUsageAvg: (v: number) => `GPU averaged around ${v}% usage while rendering.`,
+  } as Record<string, (v: number) => string>,
+
   menu: "Menu",
   collapseMenu: "Collapse menu",
   expandMenu: "Expand menu",

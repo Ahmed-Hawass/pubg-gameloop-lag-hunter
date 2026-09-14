@@ -568,12 +568,22 @@ pub struct FriendlyReport {
     pub outcome: String,
     /// user-facing lines: key moments in plain language
     pub highlights: Vec<HighlightEntry>,
-    /// metric summary lines like "CPU stayed under 61% the whole session"
-    pub metrics_summary: Vec<String>,
+    /// metric summary facts: machine keys + raw numbers, the UI composes
+    /// the sentence per language (same contract as highlights)
+    pub metrics_summary: Vec<MetricEntry>,
     /// plain-language findings (one per distinct issue)
     pub findings: Vec<FriendlyFinding>,
     /// raw markdown file path (for "open externally")
     pub raw_path: String,
+}
+
+/// One metrics-summary fact: a machine key plus the measured number.
+/// The UI owns the sentence (per language); the engine owns the fact.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct MetricEntry {
+    /// e.g. "cpuPeak" | "cpuPerfMin" | "ramFreeMin" | "gpuTempMax" | "gpuUsageAvg"
+    pub key: String,
+    pub value: f64,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -708,34 +718,46 @@ pub fn friendly_report(id: &str) -> Result<FriendlyReport, String> {
         }
     }
 
-    // metrics summary from summary.json stats
+    // metrics summary from summary.json stats — machine keys + raw numbers,
+    // the UI composes the sentence per language (the old English sentences
+    // shipped verbatim into Arabic reports; keys follow the highlights
+    // contract now)
     let stats = summary
         .get("stats")
         .cloned()
         .unwrap_or(serde_json::json!({}));
     let mut metrics_summary = Vec::new();
     if let Some(v) = stats.get("cpuP95").and_then(|v| v.as_f64()) {
-        metrics_summary.push(format!("CPU peaked around {:.0}% under load.", v));
+        metrics_summary.push(MetricEntry {
+            key: "cpuPeak".into(),
+            value: v,
+        });
     }
     if let Some(v) = stats.get("procPerfMin").and_then(|v| v.as_f64()) {
         if v < 90.0 {
-            metrics_summary.push(format!(
-                "CPU dropped to {:.0}% of its speed at some point.",
-                v
-            ));
+            metrics_summary.push(MetricEntry {
+                key: "cpuPerfMin".into(),
+                value: v,
+            });
         }
     }
     if let Some(v) = stats.get("availMin").and_then(|v| v.as_f64()) {
-        metrics_summary.push(format!("At least {:.0} MB of RAM stayed free.", v));
+        metrics_summary.push(MetricEntry {
+            key: "ramFreeMin".into(),
+            value: v,
+        });
     }
     if let Some(v) = stats.get("gpuTempMax").and_then(|v| v.as_f64()) {
-        metrics_summary.push(format!("GPU reached {:.0}°C at its hottest.", v));
+        metrics_summary.push(MetricEntry {
+            key: "gpuTempMax".into(),
+            value: v,
+        });
     }
     if let Some(v) = stats.get("gpuSmAvg").and_then(|v| v.as_f64()) {
-        metrics_summary.push(format!(
-            "GPU averaged around {:.0}% usage while rendering.",
-            v
-        ));
+        metrics_summary.push(MetricEntry {
+            key: "gpuUsageAvg".into(),
+            value: v,
+        });
     }
 
     let raw_path = dir.join("report.md").to_string_lossy().to_string();

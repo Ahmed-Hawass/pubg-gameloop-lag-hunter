@@ -70,6 +70,15 @@ export const ar: Locale = {
     mostly_background: "قُضي معظم وقت هذه الجلسة خارج اللعبة، لذا قد لا تعكس النتائج مباراة حقيقية.",
   } as Record<string, string>,
 
+  // ---- report metrics (composed in the UI from machine keys + numbers) ----
+  metrics: {
+    cpuPeak: (v: number) => `بلغ المعالج ذروته عند ${v}٪ تقريبًا تحت الحمل.`,
+    cpuPerfMin: (v: number) => `انخفض المعالج إلى ${v}٪ من سرعته في بعض اللحظات.`,
+    ramFreeMin: (v: number) => `بقي ${v} ميغابايت من الذاكرة متاحة على الأقل.`,
+    gpuTempMax: (v: number) => `بلغت حرارة كرت الشاشة ${v}\u00B0C في أشد لحظاتها.`,
+    gpuUsageAvg: (v: number) => `كان متوسط استخدام كرت الشاشة ${v}٪ تقريبًا أثناء الرسم.`,
+  } as Record<string, (v: number) => string>,
+
   menu: "القائمة",
   collapseMenu: "طيّ القائمة",
   expandMenu: "توسيع القائمة",
