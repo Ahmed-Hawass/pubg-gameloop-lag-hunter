@@ -89,6 +89,9 @@ export function ReportsView(props: {
           onOpened();
         });
     }
+    // deliberate: the deep-link runs once per openId/entries change; the
+    // copy deps would re-run a finished deep-link on a language switch
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openId, entries]);
 
   const openReport = (id: string) => {

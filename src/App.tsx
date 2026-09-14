@@ -274,6 +274,10 @@ export default function App() {
       setToastBody(t.dialog.firstRunAdviceBody);
       setToast("first_run_advice");
     }
+    // deliberate fire-once: adviceShown guards the second run in state,
+    // wasOnboardedRef guards it within the same render cycle; adding the
+    // copy deps would re-arm the dialog on a mid-session language switch
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onboardingDone]);
 
   // the PRE-SCAN advice: the first time EVER a session actually STARTS
@@ -309,6 +313,9 @@ export default function App() {
     setToastTitle(t.dialog.gameAdviceTitle);
     setToastBody(t.dialog.gameAdviceBody);
     setToast("game_advice");
+    // deliberate: the transition flags live in refs, and the copy deps
+    // would re-fire the (already persisted) advice on language switches
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, onboardingDone, gameAdviceDone, adviceUp, backgroundAdviceUp]);
 
   // the STAY-IN-GAME advice: the first time EVER a RUNNING session measures
@@ -344,6 +351,8 @@ export default function App() {
     setToastTitle(t.dialog.backgroundAdviceTitle);
     setToastBody(t.dialog.backgroundAdviceBody);
     setToast("background_advice");
+    // deliberate: same fire-once discipline as the game-advice effect
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, onboardingDone, backgroundAdviceDone, adviceUp, gameAdviceUp]);
 
   // a session deleted from Reports must not linger as a "finished" state

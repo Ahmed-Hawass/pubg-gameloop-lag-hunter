@@ -49,6 +49,9 @@ export function UpdateModal(props: {
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
+    // close is a stable-once wrapper (closedRef guards the double call);
+    // re-running the effect on its identity would re-arm a fired Escape
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onClose, phase.kind]);
 
   const startDownload = async () => {
@@ -102,8 +105,10 @@ export function UpdateModal(props: {
   // ---- render per phase -----------------------------------------------
 
   let title = t.updateAvailableTitle;
-  let actions: React.ReactNode = null;
-  let body: React.ReactNode = null;
+  // declared with a definite null and reassigned in every branch below —
+  // the initializers exist for type widening, not as values anyone reads
+  let actions: React.ReactNode;
+  let body: React.ReactNode;
 
   if (phase.kind === "offer") {
     body = (

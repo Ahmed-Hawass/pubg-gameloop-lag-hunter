@@ -37,7 +37,6 @@ export function SystemView() {
     void load();
     // mount-time fetch only: the retry button and focus handler below
     // own every later attempt
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -45,7 +44,6 @@ export function SystemView() {
     const onFocus = () => void load();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [errorNow]);
 
   if (error) {

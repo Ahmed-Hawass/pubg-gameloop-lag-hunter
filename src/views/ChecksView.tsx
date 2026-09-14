@@ -63,6 +63,9 @@ export function ChecksView(props: { active: boolean }) {
 
   useEffect(() => {
     void load(false);
+    // mount-time fetch only: the retry button and focus handler below
+    // own every later attempt
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -76,6 +79,9 @@ export function ChecksView(props: { active: boolean }) {
       window.clearInterval(timer);
       window.removeEventListener("focus", onFocus);
     };
+    // load reads busyRef/pendingManualRef (refs) and queues itself; its
+    // identity is not part of the subscription contract
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
   // the error renders INSIDE the page, below the header: the early-return

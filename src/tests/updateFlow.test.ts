@@ -36,6 +36,12 @@ describe("shouldShowUpdateModal", () => {
   });
 
   it("matches announced versions case-insensitively", () => {
-    expect(shouldShowUpdateModal(info, false, "1.3.0")).toBe(false);
+    // the comparison is case-insensitive on the WHOLE version string
+    // ("V1.3.0" vs a stored "v1.3.0") — a case-only difference must not
+    // re-announce. The old test compared two identical strings and
+    // proved nothing about the comparison itself.
+    expect(
+      shouldShowUpdateModal({ ...info, version: "V1.3.0" }, false, "v1.3.0"),
+    ).toBe(false);
   });
 });

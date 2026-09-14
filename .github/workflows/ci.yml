@@ -30,6 +30,11 @@ jobs:
 
       - run: npm ci
 
+      # hooks correctness (stale closures, missing deps) — the class of
+      # bug the summary-timer shipped with; tsc cannot see it
+      - name: Lint (eslint + react-hooks)
+        run: npm run lint
+
       - name: Unit tests (vitest)
         run: npm test
 
