@@ -325,16 +325,24 @@ while ($true) {{
             if line.is_empty() {
                 continue;
             }
-            // line: "\\host\path=v,\\host\path2=v2,..."
+            // line: "\\host\path=v,\\host\path2=v2,..." — the value may
+            // itself carry a comma (comma-decimal cultures: "\\...\available
+            // mbytes=12,5"), so pairs are split on ",\\" (every pair starts
+            // with a backslash path); a bare ',' split would cut the value
+            // in two and silently misread it.
             let mut s = Sample {
                 t: iso_now(),
                 ..Default::default()
             };
-            for pair in line.split(',') {
+            for pair in line.split(",\\") {
+                // the first pair keeps its leading backslash, later ones
+                // lost theirs to the split — normalize before key_of
+                let pair = pair.strip_prefix('\\').unwrap_or(pair);
                 let Some(eq) = pair.find('=') else { continue };
-                let path = pair[..eq].trim();
-                let val = pair[eq + 1..].trim();
-                let (Some(key), Ok(v)) = (key_of(path), val.parse::<f64>()) else {
+                let path = format!("\\{}", pair[..eq].trim());
+                let val = &pair[eq + 1..];
+                let (Some(key), Some(v)) = (key_of(&path), parse_counter_value_logged(val))
+                else {
                     continue;
                 };
                 match key {
@@ -358,6 +366,50 @@ while ($true) {{
         // _keep drops here: powershell killed after the stream ends
     });
     Ok(())
+}
+
+/// Parse one counter value the way Windows may have printed it.
+/// typeperf PDH-CSV is always dot-decimal (culture-independent), but the
+/// PowerShell Get-Counter emitter formats with the CURRENT culture: on a
+/// comma-decimal Windows (de-DE, fr-FR, es-ES, ...) a value arrives as
+/// "12,5" — which fails `parse::<f64>()` in the typeperf-shaped readers
+/// and would be silently MISREAD as "12" by any bare-comma split. ONE
+/// parser for both paths: dot first (every locale we support today),
+/// then a strict digits,digits comma-decimal fallback. Anything else is
+/// None — a value we cannot confidently read is dropped, never guessed
+/// (dropping is honest; misreading is a manufactured diagnosis).
+fn parse_counter_value(raw: &str) -> Option<f64> {
+    let t = raw.trim().trim_matches('"');
+    if let Ok(v) = t.parse::<f64>() {
+        return Some(v);
+    }
+    // comma-decimal shape: exactly digits ',' digits, nothing else.
+    // Grouping shapes ("1,234,567") never match — no culture groups with
+    // the same char it uses as its decimal separator.
+    let (whole, frac) = t.split_once(',')?;
+    if !whole.is_empty()
+        && !frac.is_empty()
+        && whole.bytes().all(|b| b.is_ascii_digit())
+        && frac.bytes().all(|b| b.is_ascii_digit())
+    {
+        return format!("{whole}.{frac}").parse::<f64>().ok();
+    }
+    None
+}
+
+/// One-shot trace for the comma-decimal culture path: it fires at most once
+/// per process, so a user log from such a machine explains its own numbers
+/// without one log line per tick.
+static COMMA_CULTURE_SEEN: AtomicBool = AtomicBool::new(false);
+
+fn parse_counter_value_logged(raw: &str) -> Option<f64> {
+    let v = parse_counter_value(raw)?;
+    if !raw.trim().trim_matches('"').parse::<f64>().is_ok()
+        && !COMMA_CULTURE_SEEN.swap(true, Ordering::Relaxed)
+    {
+        super::logging::info("counter values arrive in comma-decimal culture (converted per value)");
+    }
+    Some(v)
 }
 
 fn spawn_typeperf_native<F>(
@@ -456,8 +508,8 @@ where
                 ..Default::default()
             };
             for (i, key) in header.iter().enumerate() {
-                let raw = values.get(i).unwrap_or(&"").trim_matches('"');
-                let Ok(v) = raw.parse::<f64>() else { continue };
+                let raw = values.get(i).unwrap_or(&"");
+                let Some(v) = parse_counter_value_logged(raw) else { continue };
                 match *key {
                     "cpu" => s.cpu_total = Some(v),
                     // % Processor Performance is a ratio: physically it cannot
@@ -820,6 +872,25 @@ mod tests {
         );
         assert_eq!(map_counter_key("memory\\available mbytes"), Some("avail"));
         assert_eq!(map_counter_key("unknown counter"), None);
+    }
+
+    #[test]
+    fn counter_values_parse_in_both_cultures() {
+        // dot-decimal (typeperf CSV + every locale we support today)
+        assert_eq!(parse_counter_value("12.5"), Some(12.5));
+        assert_eq!(parse_counter_value("\"99\""), Some(99.0));
+        // comma-decimal cultures (PowerShell Get-Counter formats with the
+        // current culture): "12,5" is 12.5, NOT silently misread as 12
+        assert_eq!(parse_counter_value("12,5"), Some(12.5));
+        assert_eq!(parse_counter_value("\"4096,0\""), Some(4096.0));
+        // grouping shapes are NOT comma decimals — refuse rather than guess
+        assert_eq!(parse_counter_value("1,234,567"), None);
+        assert_eq!(parse_counter_value("1 234"), None);
+        assert_eq!(parse_counter_value("x1,2"), None);
+        assert_eq!(parse_counter_value("1,"), None);
+        assert_eq!(parse_counter_value(",5"), None);
+        // sentinel noise stays a non-value
+        assert_eq!(parse_counter_value(""), None);
     }
 
     #[test]

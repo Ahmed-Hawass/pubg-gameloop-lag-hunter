@@ -44,16 +44,25 @@ fn main() {
 }
 
 /// Is the WebView2 runtime installed? Filesystem probe: the Evergreen runtime
-/// always installs under "Microsoft\EdgeWebView\Application" (both Program
-/// Files views), with a versioned subfolder. No registry, no Win32 linking.
+/// installs under "Microsoft\EdgeWebView\Application" — both Program Files
+/// views for machine-wide installs, and the user's LOCALAPPDATA for
+/// per-user installs (common on non-admin accounts; the runtime setup
+/// falls back to per-user when elevation is unavailable). Each carries a
+/// versioned subfolder. No registry, no Win32 linking.
 #[cfg(windows)]
 fn webview2_installed() -> bool {
-    const BASES: [&str; 2] = [
-        r"C:\Program Files (x86)\Microsoft\EdgeWebView\Application",
-        r"C:\Program Files\Microsoft\EdgeWebView\Application",
+    let mut bases: Vec<std::path::PathBuf> = vec![
+        r"C:\Program Files (x86)\Microsoft\EdgeWebView\Application".into(),
+        r"C:\Program Files\Microsoft\EdgeWebView\Application".into(),
     ];
-    for base in BASES {
-        let dir = std::path::Path::new(base);
+    // per-user install: %LOCALAPPDATA%\Microsoft\EdgeWebView\Application
+    if let Some(local) = std::env::var_os("LOCALAPPDATA") {
+        bases.push(
+            std::path::Path::new(&local).join(r"Microsoft\EdgeWebView\Application"),
+        );
+    }
+    for base in bases {
+        let dir = std::path::Path::new(&base);
         if let Ok(entries) = std::fs::read_dir(dir) {
             // any versioned subfolder (e.g. "151.0.4129.107") = runtime present
             for entry in entries.flatten() {

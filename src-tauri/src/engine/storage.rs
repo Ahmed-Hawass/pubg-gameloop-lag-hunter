@@ -308,7 +308,9 @@ fn build_report(stats: &SessionStats, events: &[EngineEvent], n: u64) -> String 
         for e in events.iter().take(200) {
             md.push_str(&format!(
                 "| {} | {} | {} | {:?} | {} | {} |\n",
-                &e.t[11..19.min(e.t.len())],
+                // .get, not slicing: a malformed timestamp from a future
+                // producer must never panic the app (panic = abort here)
+                e.t.get(11..19).unwrap_or(&e.t),
                 e.kind,
                 e.severity.as_str(),
                 e.phase,
