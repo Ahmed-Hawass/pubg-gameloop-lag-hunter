@@ -524,8 +524,7 @@ mod tests {
                 Some(12.0),
             ),
         ];
-        let latest = Sample::default();
-        let now = "2026-08-31T05:00:13.000Z";
+                let now = "2026-08-31T05:00:13.000Z";
         let d = diagnoses_from(&events, now);
         assert_eq!(d.len(), 1, "one storm must produce exactly one card");
         assert_eq!(d[0].key, "disk_wait");
@@ -551,8 +550,7 @@ mod tests {
                 Some(1.0),
             ),
         ];
-        let latest = Sample::default();
-        let now = "2026-08-31T05:00:02.000Z";
+                let now = "2026-08-31T05:00:02.000Z";
         let d = diagnoses_from(&events, now);
         assert!(d.is_empty(), "1s blip must not earn a card");
     }
@@ -571,12 +569,17 @@ mod tests {
             "2026-08-31T05:00:05.000Z",
             None,
         )];
-        // latest sample: disk queued, CPU pegged, RAM tight — the OLD
-        // logic would call this cliff "gpu_busy" from this data
-        let mut latest = Sample::default();
-        latest.disk_queue = Some(5.0);
-        latest.cpu_total = Some(96.0);
-        latest.avail_mb = Some(1024.0);
+        // the machine NOW: disk queued, CPU pegged, RAM tight. The OLD
+        // logic re-derived the classification from this data and called
+        // the cliff "gpu_busy"; the kind is frozen at emit time, so this
+        // sample shapes nothing. (Kept as documentation of the shape the
+        // old bug fed in — the assert proves it no longer matters.)
+        let _loaded_now = Sample {
+            disk_queue: Some(5.0),
+            cpu_total: Some(96.0),
+            avail_mb: Some(1024.0),
+            ..Default::default()
+        };
         let now = "2026-08-31T05:02:00.000Z";
         let d = diagnoses_from(&events, now);
         assert!(
@@ -591,7 +594,6 @@ mod tests {
             "2026-08-31T05:00:05.000Z",
             None,
         )];
-        let healed = Sample::default();
         let d2 = diagnoses_from(&events2, now);
         assert!(
             d2.iter().all(|x| x.key != "scene_hitch"),
@@ -617,8 +619,7 @@ mod tests {
                 Some(8.0),
             ),
         ];
-        let latest = Sample::default();
-        let now = "2026-08-31T05:00:09.000Z";
+                let now = "2026-08-31T05:00:09.000Z";
         let d = diagnoses_from(&events, now);
         assert_eq!(d.len(), 1);
         assert_eq!(d[0].key, "cpu_throttle");
@@ -638,8 +639,7 @@ mod tests {
             "2026-08-31T04:54:00.000Z", // 6 minutes before now
             None,
         )];
-        let latest = Sample::default();
-        let now = "2026-08-31T05:00:00.000Z";
+                let now = "2026-08-31T05:00:00.000Z";
         let d = diagnoses_from(&events, now);
         assert!(
             d.iter().any(|x| x.key == "mem_low"),
@@ -668,8 +668,7 @@ mod tests {
                 Some(60.0),
             ),
         ];
-        let latest = Sample::default();
-        let now = "2026-08-31T05:00:00.000Z";
+                let now = "2026-08-31T05:00:00.000Z";
         let d = diagnoses_from(&events, now);
         assert!(
             !d.iter().any(|x| x.key == "cpu_busy"),
@@ -697,8 +696,7 @@ mod tests {
                 Some(20.0),
             ),
         ];
-        let latest = Sample::default();
-        let now = "2026-08-31T05:00:21.000Z";
+                let now = "2026-08-31T05:00:21.000Z";
         let d = diagnoses_from(&events, now);
         assert!(
             !d.iter().any(|x| x.key == "gpu_wake"),
@@ -733,8 +731,7 @@ mod tests {
                 Some(20.0),
             ),
         ];
-        let latest = Sample::default();
-        let now = "2026-08-31T05:00:21.000Z";
+                let now = "2026-08-31T05:00:21.000Z";
         let d = diagnoses_from(&events, now);
         assert!(
             d.iter().any(|x| x.key == "gpu_wake"),
@@ -770,8 +767,7 @@ mod tests {
                 Some(19.0),
             ),
         ];
-        let latest = Sample::default();
-        let now = "2026-08-31T05:00:21.000Z";
+                let now = "2026-08-31T05:00:21.000Z";
         let d = diagnoses_from(&events, now);
         assert!(
             !d.iter().any(|x| x.key == "gpu_wake"),
@@ -818,8 +814,7 @@ mod tests {
                 None,
             ),
         ];
-        let latest = Sample::default();
-        let now = "2026-08-31T05:05:10.000Z";
+                let now = "2026-08-31T05:05:10.000Z";
         let d = diagnoses_from(&events, now);
         assert!(
             d.iter().any(|x| x.key == "gpu_wake"),
@@ -872,8 +867,7 @@ mod tests {
                 Some(30.0),
             ),
         ];
-        let latest = Sample::default();
-        let now = "2026-08-31T05:04:31.000Z";
+                let now = "2026-08-31T05:04:31.000Z";
         let d = diagnoses_from(&events, now);
         assert!(
             !d.iter().any(|x| x.key == "paging_churn"),
@@ -904,8 +898,7 @@ mod tests {
                 Some(40.0),
             ),
         ];
-        let latest = Sample::default();
-        let now = "2026-08-31T05:00:41.000Z";
+                let now = "2026-08-31T05:00:41.000Z";
         let d = diagnoses_from(&events, now);
         assert!(
             !d.iter().any(|x| x.key == "paging_churn"),
@@ -940,8 +933,7 @@ mod tests {
                 Some(40.0),
             ),
         ];
-        let latest = Sample::default();
-        let now = "2026-08-31T05:00:41.000Z";
+                let now = "2026-08-31T05:00:41.000Z";
         let d = diagnoses_from(&events, now);
         assert!(
             d.iter().any(|x| x.key == "paging_churn"),
@@ -976,8 +968,7 @@ mod tests {
                 None,
             ),
         ];
-        let latest = Sample::default();
-        let now = "2026-08-31T05:00:51.000Z";
+                let now = "2026-08-31T05:00:51.000Z";
         let d = diagnoses_from(&events, now);
         assert!(
             !d.iter().any(|x| x.key == "paging_churn"),

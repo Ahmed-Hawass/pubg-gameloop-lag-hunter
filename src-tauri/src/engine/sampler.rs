@@ -297,7 +297,13 @@ while ($true) {{
         let _keep = SpawnedProcess { child };
         super::logging::info("pdh emitter reader thread started");
         let reader = BufReader::new(stdout);
-        // path suffix → our key (robust to the \\HOST prefix Get-Counter adds)
+        // path suffix → our key (robust to the \\HOST prefix Get-Counter
+        // adds). Deliberately NOT shared with map_counter_key: that one
+        // matches FULL paths (typeperf CSV headers carry them verbatim),
+        // this one matches SUFFIXES (Get-Counter lines carry \\HOST\path
+        // prefixes of varying length). Same key vocabulary, different
+        // matching contract — merging them would silently change which
+        // strings each reader accepts.
         let key_of = |path: &str| -> Option<&'static str> {
             let p = path.to_ascii_lowercase();
             if p.ends_with("% processor performance") {
@@ -613,7 +619,6 @@ where
                 sm_pct: g("sm"),
                 mem_pct: g("mem"),
                 temp: g("gtemp"),
-                pstate: None, // dmon doesn't carry pstate; full pstate from periodic probe
             };
             if sample.sm_pct.is_some() || sample.pclk.is_some() {
                 emit(sample);
@@ -682,10 +687,14 @@ pub fn query_emulator_procs() -> Result<Vec<ProcInfo>, String> {
 /// aow_exe = the game runtime, TBS = GameLoop's UI engine, TxGameAssistant = launcher,
 /// AndroidEmulatorEn = GameLoop's engine host. Public: system.rs uses it to
 /// keep all GameLoop processes off the "top processes" suspects list.
+/// ONE list, TWO consumers: this matcher AND the visibility probe's process
+/// name filter below — the names can never drift apart.
+pub const GAMELOOP_PROC_NAMES: [&str; 4] =
+    ["aow_exe", "TBS", "TxGameAssistant", "AndroidEmulatorEn"];
+
 pub fn is_gameloop_process(name: &str) -> bool {
-    const GAMELOOP_PROCS: [&str; 4] = ["aow_exe", "TBS", "TxGameAssistant", "AndroidEmulatorEn"];
     let base = name.trim_end_matches(".exe");
-    GAMELOOP_PROCS.iter().any(|p| {
+    GAMELOOP_PROC_NAMES.iter().any(|p| {
         p.eq_ignore_ascii_case(base)
             || base
                 .to_ascii_lowercase()
@@ -728,19 +737,27 @@ pub fn detect_emulator() -> Option<String> {
 #[cfg(windows)]
 pub fn query_game_visible() -> Option<bool> {
     use std::os::windows::process::CommandExt;
-    const SCRIPT: &str = concat!(
-        "$sig = '[DllImport(\"user32.dll\")] public static extern bool IsIconic(IntPtr h);';\n",
-        "$t = Add-Type -MemberDefinition $sig -Name Win -Namespace P -PassThru;\n",
-        "$vis = $false;\n",
-        "foreach ($n in @('aow_exe','TBS','TxGameAssistant','AndroidEmulatorEn')) {\n",
-        "  Get-Process -Name \"$n*\" -ErrorAction SilentlyContinue | ForEach-Object {\n",
-        "    if ($_.MainWindowHandle -ne 0 -and -not $t::IsIconic([IntPtr]$_.MainWindowHandle)) { $vis = $true }\n",
-        "  }\n",
-        "}\n",
-        "\"visible|$vis\"\n"
+    // the process list comes from the SAME const is_gameloop_process uses —
+    // the two copies used to drift (a name added to one silently missed
+    // by the other)
+    let names = GAMELOOP_PROC_NAMES
+        .iter()
+        .map(|n| format!("'{n}'"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let script = format!(
+        "$sig = '[DllImport(\"user32.dll\")] public static extern bool IsIconic(IntPtr h);';\n\
+         $t = Add-Type -MemberDefinition $sig -Name Win -Namespace P -PassThru;\n\
+         $vis = $false;\n\
+         foreach ($n in @({names})) {{\n\
+           Get-Process -Name \"$n*\" -ErrorAction SilentlyContinue | ForEach-Object {{\n\
+             if ($_.MainWindowHandle -ne 0 -and -not $t::IsIconic([IntPtr]$_.MainWindowHandle)) {{ $vis = $true }}\n\
+           }}\n\
+         }}\n\
+         \"visible|$vis\"\n"
     );
     let out = Command::new("powershell.exe")
-        .args(["-NoProfile", "-NonInteractive", "-Command", SCRIPT])
+        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .creation_flags(NO_WINDOW)

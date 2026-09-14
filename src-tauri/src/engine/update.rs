@@ -384,7 +384,9 @@ pub fn open_folder_selected(path: &str) -> Result<(), String> {
     if !p.is_absolute() {
         return Err("path must be absolute".into());
     }
-    if path.contains('"') || path.contains('\\') && path.split('\\').any(|s| s.contains('"')) {
+    // one quote check: the old second condition (any backslash segment
+    // containing a quote) was subsumed by the first and never added anything
+    if path.contains('"') {
         return Err("path contains characters Explorer cannot select safely".into());
     }
     #[cfg(windows)]

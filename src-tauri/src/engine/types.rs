@@ -43,8 +43,6 @@ pub struct GpuSample {
     pub mem_pct: Option<f64>,
     /// GPU temperature C
     pub temp: Option<f64>,
-    /// Performance state, e.g. "P0", "P8"
-    pub pstate: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

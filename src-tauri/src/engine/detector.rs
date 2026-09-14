@@ -8,8 +8,13 @@ use super::types::{EngineEvent, Phase, Sample, Severity, Thresholds};
 /// Stateful detector: feed samples, get events. Hysteresis per condition key.
 pub struct Detector {
     th: Thresholds,
+    /// theoretical max core clock (nvidia-smi) — the gpu_clock_low ratio
+    /// compares against it. The theoretical max MEMORY clock is
+    /// deliberately absent: gpu_mem_idle compares against the highest
+    /// mclk OBSERVED this session (some drivers never reach the
+    /// theoretical max; comparing against it fired 12 phantom cards per
+    /// session on a Quadro), so the queried value was dead on arrival.
     gpu_max_gr: Option<f64>,
-    gpu_max_mem: Option<f64>,
     /// highest mclk actually observed this session — gpu_mem_idle compares
     /// against THIS, not the theoretical max (which some drivers never reach;
     /// comparing against it fired 12 phantom cards per session on a Quadro)
@@ -70,7 +75,6 @@ impl Detector {
         Self {
             th,
             gpu_max_gr: None,
-            gpu_max_mem: None,
             gpu_observed_max_mclk: None,
             active: HashMap::new(),
             prev_sm: None,
@@ -81,9 +85,11 @@ impl Detector {
         }
     }
 
-    pub fn set_gpu_max(&mut self, gr: f64, mem: f64) {
+    pub fn set_gpu_max(&mut self, gr: f64, _mem: f64) {
+        // mem stays in the signature: the caller reads BOTH clocks from
+        // nvidia-smi in one query; the observed-max rule (above) ignores
+        // the theoretical mem max
         self.gpu_max_gr = Some(gr);
-        self.gpu_max_mem = Some(mem);
     }
 
     /// Feed one sample; returns events emitted by this tick.

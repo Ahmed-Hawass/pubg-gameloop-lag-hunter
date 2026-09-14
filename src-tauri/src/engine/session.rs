@@ -552,9 +552,6 @@ fn active_conditions(events: &[EngineEvent]) -> usize {
     open.values().filter(|v| **v).count()
 }
 
-// lock_ok: kept for future Mutex<T> acquisitions on named fields — the
-// pattern used throughout this file is inline unwrap_or_else (same behavior).
-
 /// When the CURRENT session's samplers were spawned — the first-sample log
 /// measures pipeline latency from here (spawn → first tick). Reset at every
 /// start(): the old OnceLock version was set once per process, so session #2
