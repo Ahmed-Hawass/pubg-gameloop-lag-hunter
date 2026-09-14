@@ -1,4 +1,4 @@
-// ReportsView.tsx — saved sessions list + in-app friendly report reader.
+// ReportsView.tsx â€” saved sessions list + in-app friendly report reader.
 // Content comes from the engine (keys + English fallbacks); the UI translates.
 
 import { useEffect, useState } from "react";
@@ -7,13 +7,15 @@ import { Button, Dialog, EmptyState, Hint, NoteCard, Tip } from "../components/c
 import { api, type FriendlyReport, type SessionEntry } from "../bridge";
 import { useLang } from "../i18n";
 
-/** "Xm Ys" report-row duration — a deliberately different shape from the
- *  live session's mm:ss clock (this one reads naturally in a list row). */
-function fmtDur(sec: number) {
+/** "Xm Ys" report-row duration â€” a deliberately different shape from the
+ *  live session's mm:ss clock (this one reads naturally in a list row).
+ *  Units come from the locale (Latin m/s read as English inside Arabic
+ *  rows). */
+function fmtDur(sec: number, units: { m: string; s: string }) {
   if (sec <= 0) return "--";
   const m = Math.floor(sec / 60);
   const s = sec % 60;
-  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+  return m > 0 ? `${m}${units.m} ${s}${units.s}` : `${s}${units.s}`;
 }
 
 export function ReportsView(props: {
@@ -55,7 +57,7 @@ export function ReportsView(props: {
 
   // The view stays MOUNTED (tab switch = CSS visibility only), so a session
   // that just finished would never appear without this: re-read the list
-  // every time the tab becomes visible — the report of the session the user
+  // every time the tab becomes visible â€” the report of the session the user
   // just ran is there the moment they switch to it.
   useEffect(() => {
     if (active) refresh();
@@ -67,7 +69,7 @@ export function ReportsView(props: {
       if (!entries.some((e) => e.id === openId)) {
         // the linked session is gone (deleted meanwhile): say so instead
         // of silently opening somebody else's report. An empty list with
-        // the "latest" fallback link is not an error — just clear it.
+        // the "latest" fallback link is not an error â€” just clear it.
         // onOpened() must still fire: the App-level link is one-shot, and
         // leaving it set would re-raise this error on every list refresh.
         if (entries.length > 0) {
@@ -129,7 +131,7 @@ export function ReportsView(props: {
       if (!any) return;
       const p = await api.sessionFolder(any.id);
       const idx = p.lastIndexOf("\\");
-      if (idx <= 0) return; // no parent separator — never open a bogus path
+      if (idx <= 0) return; // no parent separator â€” never open a bogus path
       const root = p.substring(0, idx);
       if (!root) return;
       await api.openPath(root);
@@ -141,7 +143,7 @@ export function ReportsView(props: {
   // ---- report reader ------------------------------------------------
   if (report) {
     const meta = outcomeMeta[report.outcome] ?? outcomeMeta.partial;
-    // findings carry keys — translate; fall back to the backend's English text
+    // findings carry keys â€” translate; fall back to the backend's English text
     return (
       <div className="reports">
         <button className="reports-back" onClick={() => setReport(null)}>
@@ -153,7 +155,7 @@ export function ReportsView(props: {
           <div className="report-head-title">
             <h2>{t.sessionReport}</h2>
             <p>
-              {report.date} · {fmtDur(report.duration_sec)} · {report.samples} {t.samples}
+              {report.date} · {fmtDur(report.duration_sec, { m: t.minUnit, s: t.secUnit })} · {report.samples} {t.samples}
             </p>
           </div>
           <div className={`report-badge badge-${meta.tone}`}>
@@ -161,7 +163,7 @@ export function ReportsView(props: {
           </div>
         </div>
 
-        {/* findings — translated from engine keys */}
+        {/* findings â€” translated from engine keys */}
         {report.findings.length > 0 ? (
           <section className="report-section">
             <h3>{t.whatWeFound}</h3>
@@ -190,20 +192,20 @@ export function ReportsView(props: {
           </section>
         )}
 
-        {/* key moments — composed in the user's language from raw facts */}
+        {/* key moments â€” composed in the user's language from raw facts */}
         <section className="report-section">
           <h3>{t.keyMoments}</h3>
           <ul className="report-moments">
             {report.highlights.map((h, i) => {
               const base = t.highlights[h.kind] ?? h.kind;
               const clock = h.clock ? ` (${h.clock})` : "";
-              const dur = h.dur_sec ? ` — ${Math.round(h.dur_sec)}s` : "";
+              const dur = h.dur_sec ? ` â€” ${Math.round(h.dur_sec)}s` : "";
               return <li key={i}>{`${base}${dur}${clock}`}</li>;
             })}
           </ul>
         </section>
 
-        {/* metrics in plain language — composed from machine keys + numbers */}
+        {/* metrics in plain language â€” composed from machine keys + numbers */}
         {report.metrics_summary.length > 0 ? (
           <section className="report-section">
             <h3>{t.theNumbers}</h3>
@@ -258,7 +260,20 @@ export function ReportsView(props: {
               <li
                 key={e.id}
                 className={loadingId === e.id ? "is-loading" : ""}
+                // keyboard users could never open a report: a clickable li
+                // is invisible to tab order and screen readers. The row
+                // is a listitem button now — Enter/Space open it, and the
+                // announceable name is the report's own summary line.
+                role="button"
+                tabIndex={0}
+                aria-label={`${e.date}, ${meta.label}`}
                 onClick={() => openReport(e.id)}
+                onKeyDown={(ev) => {
+                  if (ev.key === "Enter" || ev.key === " ") {
+                    ev.preventDefault();
+                    openReport(e.id);
+                  }
+                }}
               >
                 <span className={`sl-icon sl-icon-${meta.tone}`}>
                   {meta.tone === "ok" ? (
@@ -272,7 +287,7 @@ export function ReportsView(props: {
                 <span className="sl-main">
                   <span className="sl-date">{e.date}</span>
                   <span className="sl-sub">
-                    {fmtDur(e.duration_sec)} · {e.samples} {t.samples}
+                    {fmtDur(e.duration_sec, { m: t.minUnit, s: t.secUnit })} · {e.samples} {t.samples}
                   </span>
                 </span>
                 <span className={`sl-badge sl-badge-${meta.tone}`}>
@@ -317,7 +332,7 @@ export function ReportsView(props: {
         </div>
       ) : null}
 
-      {/* delete confirmation — the unified Dialog component */}
+      {/* delete confirmation â€” the unified Dialog component */}
       {confirmDelete ? (
         <Dialog
           title={t.dialog.deleteTitle}
@@ -334,7 +349,7 @@ export function ReportsView(props: {
         />
       ) : null}
 
-      {/* delete-all confirmation — same Dialog, dynamic count in the body */}
+      {/* delete-all confirmation â€” same Dialog, dynamic count in the body */}
       {confirmDeleteAll ? (
         <Dialog
           title={t.dialog.deleteAllTitle}

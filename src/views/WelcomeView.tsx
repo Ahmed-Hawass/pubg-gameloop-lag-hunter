@@ -18,11 +18,13 @@ export function WelcomeView(props: { onDone: () => void }) {
           control is used once in the app's lifetime, so it stays out of the
           CTA flow; the full segmented picker lives in Settings. */}
       <div className="welcome-lang">
-        <Tip text={lang === "ar" ? "English" : "العربية"}>
+        {/* the label names the OTHER language (the one a click switches
+            to) — from the locale files like every other string */}
+        <Tip text={lang === "ar" ? t.langEn : t.langAr}>
           <button
             className="welcome-lang-btn"
             onClick={() => setLanguage(lang === "ar" ? "en" : "ar")}
-            aria-label={lang === "ar" ? "English" : "العربية"}
+            aria-label={lang === "ar" ? t.langEn : t.langAr}
           >
             <Globe size={15} />
           </button>

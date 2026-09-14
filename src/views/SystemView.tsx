@@ -1,8 +1,8 @@
 // SystemView.tsx — the gamer's rig page: what you have + what we can see.
 
-import { useEffect, useState } from "react";
-import { Cpu, Gauge, HardDrive, MemoryStick } from "lucide-react";
-import { EmptyState, Hint } from "../components/components";
+import { useEffect, useRef, useState } from "react";
+import { Cpu, Gauge, HardDrive, MemoryStick, RefreshCw } from "lucide-react";
+import { Button, EmptyState, Hint } from "../components/components";
 import { api, type SystemInfo } from "../bridge";
 import { useLang } from "../i18n";
 
@@ -10,18 +10,57 @@ export function SystemView() {
   const { t } = useLang();
   const [info, setInfo] = useState<SystemInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
+
+  const load = async () => {
+    if (busyRef.current) return; // never stack queries
+    busyRef.current = true;
+    setBusy(true);
+    try {
+      setInfo(await api.systemInfo());
+      setError(null);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  };
+
+  // first data. A transient PowerShell failure used to leave this tab
+  // dead until app restart (single mount-time fetch, keep-alive tab, no
+  // retry path) — now the error state carries a retry button and a
+  // window-focus re-read.
+  const errorNow = error;
+  useEffect(() => {
+    void load();
+    // mount-time fetch only: the retry button and focus handler below
+    // own every later attempt
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
-    api
-      .systemInfo()
-      .then(setInfo)
-      .catch((e) => setError(String(e)));
-  }, []);
+    if (!errorNow) return;
+    const onFocus = () => void load();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [errorNow]);
 
   if (error) {
     return (
       <div className="sys">
         <EmptyState icon={<Cpu size={18} />} title={t.dialog.somethingWrong} hint={error} />
+        <div className="sys-retry">
+          <Button
+            label={t.updateRetry}
+            icon={<RefreshCw size={15} />}
+            variant="ghost"
+            disabled={busy}
+            onClick={() => void load()}
+          />
+        </div>
       </div>
     );
   }
@@ -48,19 +87,21 @@ export function SystemView() {
               <Gauge size={15} />
               <span className="sys-k">
                 {g.name}
-                {g.vram_gb ? ` · ${g.vram_gb} GB` : ""}
+                {g.vram_gb ? ` · ${g.vram_gb} ${t.gbUnit}` : ""}
               </span>
             </div>
           ))}
           <div className="sys-kv">
             <MemoryStick size={15} />
-            <span className="sys-k">{info.ram_gb} GB RAM</span>
+            <span className="sys-k">
+              {info.ram_gb} {t.gbUnit} {t.ramUnit}
+            </span>
           </div>
           {info.disks.map((d, i) => (
             <div key={i} className="sys-kv">
               <HardDrive size={15} />
               <span className="sys-k">
-                {d.name} · {d.size_gb} GB · {d.media}/{d.bus}
+                {d.name} · {d.size_gb} {t.gbUnit} · {d.media}/{d.bus}
               </span>
             </div>
           ))}

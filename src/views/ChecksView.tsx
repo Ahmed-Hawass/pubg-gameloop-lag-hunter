@@ -78,16 +78,43 @@ export function ChecksView(props: { active: boolean }) {
     };
   }, [active]);
 
+  // the error renders INSIDE the page, below the header: the early-return
+  // version hid the Refresh button too, leaving the user stuck with a dead
+  // tab until the silent 30s poll or a window focus rescued it
   if (error) {
     return (
       <div className="checks">
-        <EmptyState icon={<ShieldAlert size={18} />} title={t.dialog.somethingWrong} hint={error} />
+        <div className="checks-head">
+          <p className="checks-hint">{t.checksHint}</p>
+          <Button
+            label={busy ? t.loading : t.refresh}
+            icon={<RefreshCw size={14} className={busy ? "spin" : ""} />}
+            variant="ghost"
+            disabled={busy}
+            onClick={() => void load(false, true)}
+          />
+        </div>
+        <EmptyState
+          icon={<ShieldAlert size={18} />}
+          title={t.dialog.somethingWrong}
+          hint={error}
+        />
       </div>
     );
   }
   if (!checks) {
     return (
       <div className="checks">
+        <div className="checks-head">
+          <p className="checks-hint">{t.checksHint}</p>
+          <Button
+            label={busy ? t.loading : t.refresh}
+            icon={<RefreshCw size={14} className={busy ? "spin" : ""} />}
+            variant="ghost"
+            disabled={busy}
+            onClick={() => void load(false, true)}
+          />
+        </div>
         <EmptyState icon={<ShieldAlert size={18} />} title={t.loading} hint="" />
       </div>
     );
@@ -247,9 +274,9 @@ export function ChecksView(props: { active: boolean }) {
                 {chargerBad ? <XCircle size={17} /> : <CheckCircle2 size={17} />}
               </span>
               <span className="check-func">
-              <Plug size={15} />
-            </span>
-            <span className="check-name">{t.checkCharger}</span>
+                <Plug size={15} />
+              </span>
+              <span className="check-name">{t.checkCharger}</span>
               <span className={`check-badge ${chargerBad ? "warn" : "ok"}`}>
                 {chargerBad ? t.checkWarnBadge : t.checkOkBadge}
               </span>

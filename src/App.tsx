@@ -1,6 +1,6 @@
 // App.tsx — shell: custom title bar + collapsible sidebar + all views.
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Activity,
   ChevronsLeft,
@@ -255,9 +255,13 @@ export default function App() {
     setView("reports");
   };
 
-  const dismissSummary = (session: string) => {
+  // useCallback: a new function identity per render (passed into
+  // MonitorView's effect deps) restarted the summary's 12s auto-dismiss
+  // timer on every App re-render — switching tabs kept the summary alive
+  // forever. The identity must stay stable for the whole session.
+  const dismissSummary = useCallback((session: string) => {
     setDismissedSession(session);
-  };
+  }, []);
 
   // the FIRST-RUN advice: appears exactly once — in the same launch where
   // the user completed the welcome flow. Users who onboarded in a previous
@@ -399,6 +403,9 @@ export default function App() {
                   <Tip key={tab.id} text={collapsed ? tab.label : ""}>
                     <button
                       className={`sb-item ${view === tab.id ? "is-active" : ""}`}
+                      // the active tab is announced as current (visual
+                      // is-active styling is invisible to screen readers)
+                      aria-current={view === tab.id ? "page" : undefined}
                       onClick={() => {
                         setReportOpenId(null);
                         setView(tab.id);
@@ -420,7 +427,15 @@ export default function App() {
                     {/* the update dot: not dismissible, present for the whole
                         life of the newer version — the silent signal behind
                         the once-per-version modal */}
-                    {updateInfo ? <span className="sb-dot" aria-label={t.updateAvailableTitle} /> : null}
+                    {updateInfo ? (
+          <span
+            className="sb-dot"
+            // role+label: an aria-label on a plain span is invisible to
+            // assistive tech — status announces it politely
+            role="status"
+            aria-label={t.updateAvailableTitle}
+          />
+        ) : null}
                   </button>
                 </Tip>
 
@@ -508,9 +523,14 @@ export default function App() {
           onClose={() => {
             // the one-forever advice dialogs were already persisted AT SHOW
             // (closing the app with the dialog open must not resurrect them
-            // next launch) — closing only clears the modal surface here
-            if (toast === "game_advice") setGameAdviceUp(false);
-            if (toast === "background_advice") setBackgroundAdviceUp(false);
+            // next launch) — closing only clears the modal surface here.
+            // Reset by the FLAG, not by the current toast value: a
+            // gameloop_closed push can overwrite the toast while an advice
+            // dialog is up, and a value-matched reset would leave the flag
+            // stuck high for the whole launch, silently suppressing the
+            // update modal (the deferral feeds on these flags).
+            if (gameAdviceUp) setGameAdviceUp(false);
+            if (backgroundAdviceUp) setBackgroundAdviceUp(false);
             setToast(null);
             setToastTitle(null);
             setToastBody(null);

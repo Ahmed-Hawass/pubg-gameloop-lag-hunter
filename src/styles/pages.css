@@ -55,6 +55,13 @@
   flex-direction: column;
   gap: 10px;
 }
+/* the retry row under a failed rig load: centered, quiet, same ghost
+   button language as every other inline action */
+.sys-retry {
+  display: flex;
+  justify-content: center;
+  margin-top: 4px;
+}
 .sys-title {
   display: flex;
   align-items: center;

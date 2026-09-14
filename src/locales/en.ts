@@ -90,6 +90,16 @@ export const en = {
   themeAuto: "Automatic",
   themeDark: "Dark",
   themeLight: "Light",
+  // language names in the picker: every user-facing string lives here,
+  // including the names of the languages themselves (the hardcoded copies
+  // in the views drifted from the dead lang.label key)
+  langEn: "English",
+  langAr: "العربية",
+  // small measurement units (translated, not hardcoded Latin)
+  gbUnit: "GB",
+  ramUnit: "RAM",
+  minUnit: "m",
+  secUnit: "s",
 
   // ---- first-run welcome (two pages, once ever) ----
   welcomeTitle: "PUBG GameLoop Lag Hunter",

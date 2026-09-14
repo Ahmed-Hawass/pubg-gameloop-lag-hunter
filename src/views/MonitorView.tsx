@@ -72,6 +72,8 @@ export function MonitorView(props: {
             <button
               key={v}
               className={`scan-dur-btn ${durationSecs === v ? "is-active" : ""}`}
+              role="radio"
+              aria-checked={durationSecs === v}
               disabled={running}
               onClick={() => onDurationChange(v)}
             >

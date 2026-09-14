@@ -15,11 +15,12 @@ export function SettingsView(props: {
   const { theme, onThemeChange } = props;
 
   const options: { key: LangSetting; label: string }[] = [
-    // "Automatic" comes from the locale like every other label — no
-    // per-language conditional duplicated here
+    // every label comes from the locale like the rest of the UI — the
+    // old hardcoded "English"/"العربية" literals duplicated the dead
+    // lang.label key and skipped translation entirely
     { key: "auto", label: t.themeAuto },
-    { key: "en", label: "English" },
-    { key: "ar", label: "العربية" },
+    { key: "en", label: t.langEn },
+    { key: "ar", label: t.langAr },
   ];
 
   const themeOptions: { key: ThemeSetting; label: string }[] = [
@@ -40,6 +41,10 @@ export function SettingsView(props: {
             <button
               key={o.key}
               className={`lang-seg ${setting === o.key ? "is-active" : ""}`}
+              // radio semantics for screen readers: without role/checked
+              // the group announces no selectable state at all
+              role="radio"
+              aria-checked={setting === o.key}
               onClick={() => setLanguage(o.key)}
             >
               {o.label}
@@ -57,6 +62,8 @@ export function SettingsView(props: {
             <button
               key={o.key}
               className={`lang-seg ${theme === o.key ? "is-active" : ""}`}
+              role="radio"
+              aria-checked={theme === o.key}
               onClick={() => onThemeChange(o.key)}
             >
               {o.label}

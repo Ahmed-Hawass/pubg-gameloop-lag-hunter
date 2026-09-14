@@ -295,7 +295,11 @@ export function Dialog(props: {
         <div className="dialog-actions">
           {kind === "confirm" ? (
             <>
-              <button className="btn btn-md btn-ghost" onClick={onClose}>
+              {/* focus STARTS on the destructive choice's CANCEL: with no
+                  autofocus, focus stayed on the trigger BEHIND the modal
+                  (a WAI-ARIA violation) and Enter re-fired the delete
+                  button through the overlay. Safe side + keyboard-first. */}
+              <button className="btn btn-md btn-ghost" onClick={onClose} autoFocus>
                 {cancelLabel ?? "Cancel"}
               </button>
               <button
@@ -425,7 +429,11 @@ function MetricHint(props: { text: string }) {
     <span
       ref={ref}
       className="metric-hint-dot"
+      // a focusable span with an icon needs a name: the tooltip text
+      // paints on hover only, screen readers would announce nothing
+      role="button"
       tabIndex={0}
+      aria-label={text}
       onMouseEnter={show}
       onFocus={show}
       onMouseLeave={hide}

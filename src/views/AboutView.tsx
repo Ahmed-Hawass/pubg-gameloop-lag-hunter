@@ -103,7 +103,13 @@ export function AboutView(props: {
         <h3 className="about-h">
           <Download size={13} />
           {t.aboutUpdate}
-          {updateInfo ? <span className="about-dot" aria-label={t.updateAvailableTitle} /> : null}
+          {updateInfo ? (
+            <span
+              className="about-dot"
+              role="status"
+              aria-label={t.updateAvailableTitle}
+            />
+          ) : null}
         </h3>
         <div className="about-update">
           <Button

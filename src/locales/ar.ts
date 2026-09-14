@@ -94,6 +94,15 @@ export const ar: Locale = {
   themeAuto: "تلقائي",
   themeDark: "داكن",
   themeLight: "فاتح",
+  // language names in the picker: every user-facing string lives here,
+  // including the names of the languages themselves
+  langEn: "English",
+  langAr: "العربية",
+  // small measurement units (translated, not hardcoded Latin)
+  gbUnit: "جيجابايت",
+  ramUnit: "رام",
+  minUnit: "د",
+  secUnit: "ث",
 
   // ---- first-run welcome (two pages, once ever) ----
   welcomeTitle: "PUBG GameLoop Lag Hunter",

@@ -64,8 +64,12 @@ export function TitleBar() {
         ) : null}
       </div>
       <div className="win-controls">
+        {/* icon-only buttons carry their accessible name: the tooltip
+            paints on hover only, so without aria-labels the window
+            controls are unnamed for screen readers and keyboard users */}
         <Tip text={t.minimize}>
           <button
+            aria-label={t.minimize}
             onClick={() => {
               void getCurrentWindow().minimize();
             }}
@@ -75,6 +79,7 @@ export function TitleBar() {
         </Tip>
         <Tip text={maximized ? t.restore : t.maximize}>
           <button
+            aria-label={maximized ? t.restore : t.maximize}
             onClick={() => {
               void getCurrentWindow().toggleMaximize();
             }}
@@ -85,6 +90,7 @@ export function TitleBar() {
         <Tip text={t.close}>
           <button
             className="close"
+            aria-label={t.close}
             onClick={() => {
               void getCurrentWindow().close();
             }}

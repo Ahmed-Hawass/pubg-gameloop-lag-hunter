@@ -18,9 +18,20 @@ export function ProcessesView(props: { active: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
+  // one pending slot for a manual press that lands mid-query (the Checks
+  // tab's pattern): instead of swallowing the click silently while a
+  // silent poll is in flight, the button spins immediately and the press
+  // runs right after the in-flight query finishes
+  const pendingManualRef = useRef(false);
 
   const load = async (silent: boolean, force = false) => {
-    if (busyRef.current) return; // never stack queries
+    if (busyRef.current) {
+      if (!silent) {
+        pendingManualRef.current = true;
+        setBusy(true);
+      }
+      return;
+    }
     busyRef.current = true;
     if (!silent) setBusy(true);
     try {
@@ -30,7 +41,12 @@ export function ProcessesView(props: { active: boolean }) {
       if (!silent) setError(String(e)); // polling failures stay quiet
     } finally {
       busyRef.current = false;
-      if (!silent) setBusy(false);
+      if (pendingManualRef.current) {
+        pendingManualRef.current = false;
+        void load(false, true);
+      } else if (!silent) {
+        setBusy(false);
+      }
     }
   };
 

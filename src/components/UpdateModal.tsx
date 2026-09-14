@@ -52,17 +52,21 @@ export function UpdateModal(props: {
   }, [onClose, phase.kind]);
 
   const startDownload = async () => {
-    // the Windows save dialog (official plugin): the user picks the location,
-    // the official asset name comes pre-filled
-    const { save } = await import("@tauri-apps/plugin-dialog");
-    const dest = await save({
-      defaultPath: info.asset_name,
-      filters: [{ name: "Application", extensions: ["exe"] }],
-    });
-    if (!dest) return; // save dialog cancelled — back to the offer state
-
-    setPhase({ kind: "downloading", pct: 0, mb: "0.0" });
     try {
+      // the Windows save dialog (official plugin): the user picks the
+      // location, the official asset name comes pre-filled
+      const { save } = await import("@tauri-apps/plugin-dialog");
+      const dest = await save({
+        defaultPath: info.asset_name,
+        filters: [{ name: "Application", extensions: ["exe"] }],
+      });
+      if (!dest) return; // save dialog cancelled — back to the offer state
+      // the modal may have been closed (Escape) while the OS dialog was
+      // up: starting a download with no attached UI would orphan the
+      // stream — same guard the failure branch uses
+      if (closedRef.current) return;
+
+      setPhase({ kind: "downloading", pct: 0, mb: "0.0" });
       const finalPath = await api.downloadUpdate(info, dest, (ev) => {
         if (ev.event === "progress") {
           const pct = ev.total > 0 ? Math.round((ev.downloaded / ev.total) * 100) : 0;
