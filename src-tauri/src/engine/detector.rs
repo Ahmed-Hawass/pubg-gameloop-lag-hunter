@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use super::types::{others_ok, EngineEvent, Phase, Sample, Severity, Thresholds};
+use super::types::{EngineEvent, Phase, Sample, Severity, Thresholds};
 
 /// Stateful detector: feed samples, get events. Hysteresis per condition key.
 pub struct Detector {
@@ -518,9 +518,14 @@ impl Detector {
             // ONE event per collapse: the first qualifying tick emits, later
             // ticks of the same crater are continuation, not new events
             if !self.cliff_fired {
-                // shared gate (types::others_ok) — the diagnoser classifies
-                // the same collapse with the same rule, RAM included
-                let others_ok = others_ok(s.disk_queue, s.cpu_total, s.avail_mb);
+                // shared gate (Thresholds::others_ok) — the machine-tuned
+                // rule the diagnoser agrees with, applied to THIS sample:
+                // the classification is decided HERE, at emit time, and the
+                // event kind carries it. Nothing downstream re-derives it
+                // from later machine state.
+                let others_ok = self
+                    .th
+                    .others_ok(s.disk_queue, s.cpu_total, s.avail_mb);
                 let (kind, detail) = if others_ok {
                     (
                         "gpu_activity_cliff",
@@ -567,14 +572,42 @@ mod tests {
 
     #[test]
     fn others_ok_gate_agrees_on_ram_pressure() {
-        // the shared gate (types::others_ok): detector and diagnoser must
-        // classify the same collapse the same way — RAM pressure included
-        assert!(others_ok(Some(0.1), Some(50.0), Some(4096.0)));
-        assert!(!others_ok(Some(0.1), Some(50.0), Some(1024.0))); // RAM pressure
-        assert!(!others_ok(Some(2.0), Some(50.0), Some(4096.0))); // disk load
-        assert!(!others_ok(Some(0.1), Some(95.0), Some(4096.0))); // cpu load
+        // the shared gate (Thresholds::others_ok), machine-tuned: the bars
+        // are the session's own thresholds, not static numbers — detector
+        // and diagnoser must classify the same collapse the same way.
+        // Default thresholds: queue < 2.0, cpu < 85, avail > 2048.
+        let th = Thresholds::default();
+        assert!(th.others_ok(Some(0.1), Some(50.0), Some(4096.0)));
+        assert!(!th.others_ok(Some(0.1), Some(50.0), Some(1024.0))); // RAM pressure
+        assert!(!th.others_ok(Some(2.0), Some(50.0), Some(4096.0))); // disk load
+        assert!(!th.others_ok(Some(0.1), Some(95.0), Some(4096.0))); // cpu load
         // missing counters abstain as healthy — never blame load blind
-        assert!(others_ok(None, None, None));
+        assert!(th.others_ok(None, None, None));
+    }
+
+    #[test]
+    fn others_ok_gate_is_machine_tuned() {
+        // a multi-disk machine (queue bar 2.0) and a big-RAM machine
+        // (floor 4096): the gate must use THEIR bars. A static 0.5 queue
+        // bar called this healthy 2-disk machine "loaded"; a static 2048
+        // RAM bar read a mem_pressure machine (3 GB free of 64) healthy.
+        let multi_disk = Thresholds::for_machine(super::super::types::MachineProfile {
+            total_mem_mb: 16_384.0,
+            disk_count: 4,
+        });
+        assert!(
+            multi_disk.others_ok(Some(1.5), Some(50.0), Some(6000.0)),
+            "queue 1.5 is under a 4-spindle machine's own bar (4.0), not loaded"
+        );
+        let big_ram = Thresholds::for_machine(super::super::types::MachineProfile {
+            total_mem_mb: 65_536.0,
+            disk_count: 1,
+        });
+        // 6 GB free on a 64 GB machine: above its own floor (~4 GB) — healthy
+        assert!(big_ram.others_ok(Some(0.1), Some(50.0), Some(6000.0)));
+        // 3 GB free on the same machine: UNDER its floor — loaded, even
+        // though a static 2048 bar would have read it healthy
+        assert!(!big_ram.others_ok(Some(0.1), Some(50.0), Some(3000.0)));
     }
 
     fn sample(cpu: f64, perf: f64, avail: f64, q: f64, sm: Option<f64>) -> Sample {

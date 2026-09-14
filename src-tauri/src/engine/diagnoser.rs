@@ -1,7 +1,9 @@
 // diagnoser.rs — engine events → user-facing diagnoses (English, plain language)
 // The UI never shows engine jargon; it shows these.
 
-use super::types::{iso_ms, others_ok, Diagnosis, EngineEvent, Overall, Phase, Sample, Severity, UiState};
+use super::types::{
+    iso_ms, Diagnosis, EngineEvent, Overall, Phase, Sample, Severity, UiState,
+};
 
 /// How recent an event must be to count as live evidence for a card.
 /// Was a bare inline `5 * 60 * 1000` — now named, and every window reads it.
@@ -11,8 +13,14 @@ const LIVE_WINDOW_MS: i64 = 5 * 60 * 1000;
 /// while the wake it confirmed is still open — the pairing survives here).
 const CORRELATION_WINDOW_MS: i64 = 15 * 60 * 1000;
 
-/// Map an engine event to a diagnosis key.
-fn key_for(ev: &EngineEvent, latest: &Sample) -> &'static str {
+/// Map an engine event to a diagnosis key. The classification was decided
+/// by the DETECTOR at emit time and is already encoded in the event kind
+/// (`gpu_activity_cliff` vs `gpu_activity_cliff_loaded`): re-deriving it
+/// here from the LATEST sample re-classified the same collapse with
+/// machine state from minutes later (a cliff that fired while healthy
+/// retroactively read as gpu_busy once the machine dipped, and vice
+/// versa). The kind carries the answer; we read it, we don't re-decide.
+pub(crate) fn key_for(ev: &EngineEvent) -> &'static str {
     match ev.kind.as_str() {
         "disk_queue" | "disk_busy" | "hard_faults" => "disk_wait",
         "cpu_saturation" => "cpu_busy",
@@ -20,17 +28,7 @@ fn key_for(ev: &EngineEvent, latest: &Sample) -> &'static str {
         "mem_pressure" => "mem_low",
         "paging_churn" => "paging_churn",
         "gpu_mem_idle" => "gpu_wake",
-        "gpu_activity_cliff" => {
-            // healthy elsewhere → scene hitch; loaded → gpu busy. Same
-            // shared gate the detector used at emit time (RAM included) —
-            // a collapse under memory pressure must never read as a
-            // harmless first-load hitch.
-            if others_ok(latest.disk_queue, latest.cpu_total, latest.avail_mb) {
-                "scene_hitch"
-            } else {
-                "gpu_busy"
-            }
-        }
+        "gpu_activity_cliff" => "scene_hitch",
         "gpu_activity_cliff_loaded" => "gpu_busy",
         "gpu_clock_low" | "gpu_temp" => "gpu_busy",
         _ => "",
@@ -120,7 +118,7 @@ pub fn diagnosis_copy(
 ///    blips live in the Activity feed only — cards mean "confirmed problem".
 /// 3. ACTIVE-ONLY: once a condition truly ends and stayed ended, its card
 ///    goes away (the UI keeps history in the feed and the report).
-fn diagnoses_from(events: &[EngineEvent], latest: &Sample, now_iso: &str) -> Vec<Diagnosis> {
+fn diagnoses_from(events: &[EngineEvent], now_iso: &str) -> Vec<Diagnosis> {
     let now_ms = iso_ms(now_iso).unwrap_or(0);
 
     // pass 1: group events into root-cause buckets with duration evidence
@@ -150,7 +148,7 @@ fn diagnoses_from(events: &[EngineEvent], latest: &Sample, now_iso: &str) -> Vec
         if now_ms.saturating_sub(ev_ms) > LIVE_WINDOW_MS && !still_open {
             continue; // outside the live window
         }
-        let key = key_for(ev, latest);
+        let key = key_for(ev);
         if key.is_empty() {
             continue;
         }
@@ -336,7 +334,7 @@ pub fn build_ui_state(inp: UiStateInput) -> UiState {
     } = inp;
     let latest = samples.last().cloned().unwrap_or_default();
     let now_iso = super::sampler::iso_now();
-    let diagnoses = diagnoses_from(events, &latest, &now_iso);
+    let diagnoses = diagnoses_from(events, &now_iso);
     let lag_count = events
         .iter()
         .filter(|e| e.kind.starts_with("gpu_activity_cliff") || e.kind == "spike")
@@ -515,7 +513,7 @@ mod tests {
         ];
         let latest = Sample::default();
         let now = "2026-08-31T05:00:13.000Z";
-        let d = diagnoses_from(&events, &latest, now);
+        let d = diagnoses_from(&events, now);
         assert_eq!(d.len(), 1, "one storm must produce exactly one card");
         assert_eq!(d[0].key, "disk_wait");
         assert_eq!(d[0].severity, "high");
@@ -542,8 +540,50 @@ mod tests {
         ];
         let latest = Sample::default();
         let now = "2026-08-31T05:00:02.000Z";
-        let d = diagnoses_from(&events, &latest, now);
+        let d = diagnoses_from(&events, now);
         assert!(d.is_empty(), "1s blip must not earn a card");
+    }
+
+    #[test]
+    fn cliff_classification_is_frozen_at_emit_time() {
+        // the drift bug: a plain gpu_activity_cliff (fired while the rest
+        // of the machine was HEALTHY — the detector checked at emit time)
+        // must stay a scene_hitch even when the machine dips under load
+        // MINUTES LATER. The old code re-derived the classification from
+        // the latest sample and retroactively relabeled the event.
+        let events = vec![ev(
+            "gpu_activity_cliff",
+            Phase::Instant,
+            Severity::Crit,
+            "2026-08-31T05:00:05.000Z",
+            None,
+        )];
+        // latest sample: disk queued, CPU pegged, RAM tight — the OLD
+        // logic would call this cliff "gpu_busy" from this data
+        let mut latest = Sample::default();
+        latest.disk_queue = Some(5.0);
+        latest.cpu_total = Some(96.0);
+        latest.avail_mb = Some(1024.0);
+        let now = "2026-08-31T05:02:00.000Z";
+        let d = diagnoses_from(&events, now);
+        assert!(
+            d.iter().all(|x| x.key != "gpu_busy"),
+            "a healthy-elsewhere cliff keeps its emit-time classification"
+        );
+        // and the loaded variant stays loaded even after the machine heals
+        let events2 = vec![ev(
+            "gpu_activity_cliff_loaded",
+            Phase::Instant,
+            Severity::Crit,
+            "2026-08-31T05:00:05.000Z",
+            None,
+        )];
+        let healed = Sample::default();
+        let d2 = diagnoses_from(&events2, now);
+        assert!(
+            d2.iter().all(|x| x.key != "scene_hitch"),
+            "a loaded cliff keeps its emit-time classification too"
+        );
     }
 
     #[test]
@@ -566,7 +606,7 @@ mod tests {
         ];
         let latest = Sample::default();
         let now = "2026-08-31T05:00:09.000Z";
-        let d = diagnoses_from(&events, &latest, now);
+        let d = diagnoses_from(&events, now);
         assert_eq!(d.len(), 1);
         assert_eq!(d[0].key, "cpu_throttle");
     }
@@ -587,7 +627,7 @@ mod tests {
         )];
         let latest = Sample::default();
         let now = "2026-08-31T05:00:00.000Z";
-        let d = diagnoses_from(&events, &latest, now);
+        let d = diagnoses_from(&events, now);
         assert!(
             d.iter().any(|x| x.key == "mem_low"),
             "a still-open condition keeps its card no matter how old the Start is"
@@ -617,7 +657,7 @@ mod tests {
         ];
         let latest = Sample::default();
         let now = "2026-08-31T05:00:00.000Z";
-        let d = diagnoses_from(&events, &latest, now);
+        let d = diagnoses_from(&events, now);
         assert!(
             !d.iter().any(|x| x.key == "cpu_busy"),
             "an ended condition outside the window stays expired"
@@ -646,7 +686,7 @@ mod tests {
         ];
         let latest = Sample::default();
         let now = "2026-08-31T05:00:21.000Z";
-        let d = diagnoses_from(&events, &latest, now);
+        let d = diagnoses_from(&events, now);
         assert!(
             !d.iter().any(|x| x.key == "gpu_wake"),
             "a wake story without a measured freeze is not a confirmed problem"
@@ -682,7 +722,7 @@ mod tests {
         ];
         let latest = Sample::default();
         let now = "2026-08-31T05:00:21.000Z";
-        let d = diagnoses_from(&events, &latest, now);
+        let d = diagnoses_from(&events, now);
         assert!(
             d.iter().any(|x| x.key == "gpu_wake"),
             "a wake followed by a measured activity cliff is a confirmed hitch"
@@ -719,7 +759,7 @@ mod tests {
         ];
         let latest = Sample::default();
         let now = "2026-08-31T05:00:21.000Z";
-        let d = diagnoses_from(&events, &latest, now);
+        let d = diagnoses_from(&events, now);
         assert!(
             !d.iter().any(|x| x.key == "gpu_wake"),
             "evidence must fall inside the window it explains, not before it"
@@ -751,7 +791,7 @@ mod tests {
         ];
         let latest = Sample::default();
         let now = "2026-08-31T05:00:41.000Z";
-        let d = diagnoses_from(&events, &latest, now);
+        let d = diagnoses_from(&events, now);
         assert!(
             !d.iter().any(|x| x.key == "paging_churn"),
             "churn without a correlated stutter is an observation, not a card"
@@ -787,7 +827,7 @@ mod tests {
         ];
         let latest = Sample::default();
         let now = "2026-08-31T05:00:41.000Z";
-        let d = diagnoses_from(&events, &latest, now);
+        let d = diagnoses_from(&events, now);
         assert!(
             d.iter().any(|x| x.key == "paging_churn"),
             "churn with a stutter inside it is a confirmed, explained problem"
@@ -823,7 +863,7 @@ mod tests {
         ];
         let latest = Sample::default();
         let now = "2026-08-31T05:00:51.000Z";
-        let d = diagnoses_from(&events, &latest, now);
+        let d = diagnoses_from(&events, now);
         assert!(
             !d.iter().any(|x| x.key == "paging_churn"),
             "a stutter after the churn ended does not explain the churn"

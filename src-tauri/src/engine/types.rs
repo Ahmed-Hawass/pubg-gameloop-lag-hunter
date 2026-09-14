@@ -99,24 +99,32 @@ impl Severity {
     }
 }
 
-/// Shared "everything else looks healthy" gate for GPU-cliff
-/// classification. ONE definition: the detector (emit-time event kind)
-/// and the diagnoser (display-time card) must agree — with two copies the
-/// detector checked disk+CPU+RAM while the diagnoser checked disk+CPU
-/// only, so a collapse under RAM pressure was recorded `loaded` yet
-/// displayed as a harmless scene hitch.
-/// Missing counters abstain as healthy: without evidence we never blame
-/// load (a missing counter is a blind sensor, not a loaded machine —
-/// GPU-less and localized-Windows machines would otherwise manufacture
-/// `gpu_busy` cards out of thin air).
-pub fn others_ok(
-    disk_queue: Option<f64>,
-    cpu_total: Option<f64>,
-    avail_mb: Option<f64>,
-) -> bool {
-    disk_queue.map(|q| q < 0.5).unwrap_or(true)
-        && cpu_total.map(|c| c < 85.0).unwrap_or(true)
-        && avail_mb.map(|a| a > 2048.0).unwrap_or(true)
+impl Thresholds {
+    /// Shared "everything else looks healthy" gate for GPU-cliff
+    /// classification. ONE definition: the detector (emit-time event kind)
+    /// and the diagnoser (display-time card) must agree — with two copies the
+    /// detector checked disk+CPU+RAM while the diagnoser checked disk+CPU
+    /// only, so a collapse under RAM pressure was recorded `loaded` yet
+    /// displayed as a harmless scene hitch.
+    /// Machine-tuned, not static: the queue bar is this machine's
+    /// disk_queue_len (spindles serve ~1 request each; a flat 0.5 called
+    /// a healthy 2-disk machine "loaded"), and the RAM bar is this
+    /// machine's avail_mem_floor_mb (a 64GB machine's floor is 4096MB, so
+    /// a static 2048MB read "healthy" while mem_pressure was open).
+    /// Missing counters abstain as healthy: without evidence we never blame
+    /// load (a missing counter is a blind sensor, not a loaded machine —
+    /// GPU-less and localized-Windows machines would otherwise manufacture
+    /// `gpu_busy` cards out of thin air).
+    pub fn others_ok(
+        &self,
+        disk_queue: Option<f64>,
+        cpu_total: Option<f64>,
+        avail_mb: Option<f64>,
+    ) -> bool {
+        disk_queue.map(|q| q < self.disk_queue_len).unwrap_or(true)
+            && cpu_total.map(|c| c < self.cpu_saturation_pct).unwrap_or(true)
+            && avail_mb.map(|a| a > self.avail_mem_floor_mb).unwrap_or(true)
+    }
 }
 
 /// ISO string ("2026-08-31T00:19:52.123Z", always 24 chars) -> epoch ms.

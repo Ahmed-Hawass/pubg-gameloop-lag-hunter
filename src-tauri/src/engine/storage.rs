@@ -902,4 +902,48 @@ mod tests {
         // a well-formed id that simply doesn't exist = clean error, no panic
         assert!(delete_session("session-2026-08-31_000000").is_err());
     }
+
+    #[test]
+    fn report_dictionary_matches_the_live_one() {
+        // the report reader and the live cards must classify every engine
+        // kind identically: with two separate dictionaries the same event
+        // could show as gpu_busy live and scene_hitch in the report. This
+        // pins finding_key to the diagnoser's key_for for every kind both
+        // know (finding_key sees a bare kind string; key_for an event).
+        let mk_ev = |kind: &str| super::super::types::EngineEvent {
+            kind: kind.into(),
+            phase: super::super::types::Phase::Instant,
+            severity: super::super::types::Severity::Crit,
+            t: "2026-08-31T05:00:00.000Z".into(),
+            duration_sec: None,
+            detail: String::new(),
+        };
+        for kind in [
+            "disk_queue",
+            "disk_busy",
+            "hard_faults",
+            "cpu_saturation",
+            "cpu_throttle",
+            "spike",
+            "mem_pressure",
+            "paging_churn",
+            "gpu_mem_idle",
+            "gpu_activity_cliff",
+            "gpu_activity_cliff_loaded",
+            "gpu_clock_low",
+            "gpu_temp",
+        ] {
+            assert_eq!(
+                finding_key(kind),
+                super::super::diagnoser::key_for(&mk_ev(kind)),
+                "the live cards and the saved report must agree on '{kind}'"
+            );
+        }
+        // unknown kinds map to "" on BOTH sides (never mislabeled)
+        assert_eq!(finding_key("mystery_kind"), "");
+        assert_eq!(
+            super::super::diagnoser::key_for(&mk_ev("mystery_kind")),
+            ""
+        );
+    }
 }

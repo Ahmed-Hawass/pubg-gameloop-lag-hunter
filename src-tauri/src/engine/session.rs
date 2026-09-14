@@ -495,13 +495,15 @@ impl Engine {
             return true; // nothing to guard
         }
         // freshness matters: a stale "alive" snapshot would keep the session
-        // running on ghost evidence after the probe thread itself died
+        // running on ghost evidence after the probe thread itself died —
+        // the same TTL gate on_sample applies. A snapshot past its TTL
+        // reads as a miss, never as alive.
         let alive = LATEST_EMU
             .lock()
             .unwrap_or_else(|p| p.into_inner())
             .as_ref()
-            .map(|t| !t.value.is_empty())
-            .unwrap_or(false);
+            .and_then(|t| t.get())
+            .is_some_and(|emu| !emu.is_empty());
         if !alive {
             // first miss → arm the counter; 3 consecutive misses (~15s) → stop
             self.gameloop_misses.fetch_add(1, Ordering::SeqCst)
