@@ -20,6 +20,15 @@ pub fn sessions_root() -> PathBuf {
     app_dir().join("sessions")
 }
 
+/// Ensure the sessions root exists at boot. It is born with the first
+/// session otherwise, so a fresh user who somehow reaches an "open the
+/// sessions folder" affordance before any scan (or a user who deleted
+/// the folder by hand while old reports are still listed) hits a
+/// missing-path error instead of an empty folder. One cheap mkdir.
+pub fn ensure_sessions_root() {
+    let _ = fs::create_dir_all(sessions_root());
+}
+
 /// Create a new session directory named by local time: session-YYYY-MM-DD_HHMMSS
 /// (local = wall-clock time on the user's machine, DST-aware).
 /// Second-resolution ids collide when a stop+start lands inside the same
@@ -206,9 +215,15 @@ impl SessionStats {
         // single bad line would kill the whole app and take the session with
         // it. Equal-comparison on unorderable pairs keeps the sort total.
         cpus.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        // p95 by nearest-rank: ceil(0.95·n) − 1 clamped to the data. The
+        // old floor-index form returned the MAXIMUM for any n ≤ 20 (index
+        // (n·0.95) % n = n−1) and overstated "CPU p95" in short sessions.
         let p95 = |v: &mut Vec<f64>| {
-            v.get((v.len() as f64 * 0.95) as usize % v.len().max(1))
-                .copied()
+            if v.is_empty() {
+                return None;
+            }
+            let rank = ((v.len() as f64 * 0.95).ceil() as usize).clamp(1, v.len());
+            v.get(rank - 1).copied()
         };
         let avg = |v: &[f64]| {
             if v.is_empty() {
@@ -331,6 +346,33 @@ fn build_report(stats: &SessionStats, events: &[EngineEvent], n: u64) -> String 
     md
 }
 
+/// Stream-count the samples file: `read_to_string` pulled the WHOLE file
+/// into memory (tens of MB on long sessions) just to count lines, on
+/// every Reports-list refresh. A buffered newline walk reads in chunks
+/// and never holds the file.
+fn count_lines(path: &Path) -> u64 {
+    use std::io::{BufRead, BufReader};
+    let Ok(f) = fs::File::open(path) else {
+        return 0;
+    };
+    let mut reader = BufReader::new(f);
+    let mut count = 0u64;
+    let mut line = String::new();
+    loop {
+        line.clear();
+        match reader.read_line(&mut line) {
+            Ok(0) => break,
+            Ok(_) => {
+                if !line.trim().is_empty() {
+                    count += 1;
+                }
+            }
+            Err(_) => break,
+        }
+    }
+    count
+}
+
 /// All session dirs sorted by name (= chronological, newest last).
 pub fn list_sessions() -> Vec<String> {
     let Ok(rd) = fs::read_dir(sessions_root()) else {
@@ -401,15 +443,8 @@ pub fn session_entries(live_id: Option<&str>) -> Vec<SessionEntry> {
                 format!("{d} {hh}:{mm}")
             })
             .unwrap_or_else(|| id.clone());
-        // samples count from jsonl (cheap line count, no full parse)
-        let samples = fs::read_dir(&dir)
-            .ok()
-            .and_then(|_| {
-                fs::read_to_string(dir.join("samples.jsonl"))
-                    .ok()
-                    .map(|t| t.lines().filter(|l| !l.trim().is_empty()).count() as u64)
-            })
-            .unwrap_or(0);
+        // samples count from jsonl (streamed line count, no full parse)
+        let samples = count_lines(&dir.join("samples.jsonl"));
         // summary numbers when finalized
         let (duration, spikes, outcome) = match fs::read_to_string(dir.join("summary.json")) {
             Ok(text) => match serde_json::from_str::<serde_json::Value>(&text) {
@@ -612,10 +647,7 @@ pub fn friendly_report(id: &str) -> Result<FriendlyReport, String> {
         .ok()
         .and_then(|t| serde_json::from_str(&t).ok())
         .unwrap_or_default();
-    let samples = fs::read_to_string(dir.join("samples.jsonl"))
-        .ok()
-        .map(|t| t.lines().filter(|l| !l.trim().is_empty()).count() as u64)
-        .unwrap_or(0);
+    let samples = count_lines(&dir.join("samples.jsonl"));
 
     let duration = summary
         .get("durationSec")
@@ -842,6 +874,25 @@ mod tests {
             iso_ms("2026-08-31T00:00:00.000Z"),
             Some(1_788_134_400_000)
         );
+    }
+
+    #[test]
+    fn p95_is_nearest_rank_not_max_for_small_samples() {
+        // 20 sorted values 1..20: nearest-rank p95 = ceil(0.95·20) − 1 =
+        // index 18 → 19.0. The old form returned index 19 → 20.0 (the
+        // MAX) — every short session overstated its CPU p95.
+        let vals: Vec<Sample> = (1..=20)
+            .map(|i| Sample {
+                t: "2026-08-31T05:00:00.000Z".into(),
+                cpu_total: Some(i as f64),
+                ..Default::default()
+            })
+            .collect();
+        let stats = SessionStats::from(&vals);
+        assert_eq!(stats.cpu_p95, Some(19.0));
+        // n=1: the only value is the p95
+        let one = vec![vals[0].clone()];
+        assert_eq!(SessionStats::from(&one).cpu_p95, Some(1.0));
     }
 
     #[test]

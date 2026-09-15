@@ -334,9 +334,19 @@ impl Detector {
         };
         self.condition("mem_pressure", sev, active, detail, &s.t, evs);
 
-        // Hard faults: instant events when spiking
+        // Hard faults: instant events when spiking — but NOT while the
+        // churn or disk-queue condition is already open describing the
+        // same storm. A 10-minute sustained storm used to emit ~600
+        // near-identical instants (one per tick), polluting events.json,
+        // evicting other kinds from the capped feed, and double-counting
+        // evidence in the disk_wait bucket. The condition's Start/End
+        // already tells the story; the instant is for the FIRST ticks,
+        // before any condition owns the narrative.
         if let Some(pi) = s.pages_in {
-            if pi > self.th.hard_faults_per_sec {
+            if pi > self.th.hard_faults_per_sec
+                && !self.active.contains_key("paging_churn")
+                && !self.active.contains_key("disk_queue")
+            {
                 evs.push(EngineEvent {
                     kind: "hard_faults".into(),
                     phase: Phase::Instant,

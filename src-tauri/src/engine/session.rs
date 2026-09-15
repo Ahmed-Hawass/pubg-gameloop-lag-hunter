@@ -446,12 +446,21 @@ impl Engine {
             .auto_stop_at
             .and_then(|at| at.checked_duration_since(Instant::now()))
             .map(|rem| elapsed_sec + rem.as_secs());
+        // DIAGNOSIS VIEW WINDOW: the diagnoser only reads the live (5 min)
+        // and correlation (15 min) windows — but it used to walk the FULL
+        // event history to build its indexes, every tick, under this lock.
+        // A sustained paging storm (one instant per second, hours long)
+        // grew the per-tick walk without bound. The view below trims to
+        // what the windows can still see + one window of slack, WITHOUT
+        // touching st.events itself: the full history stays the source of
+        // truth for autosave, finalize, and the saved report.
+        let view_events = diagnosis_window(&st.events);
         let ui = build_ui_state(super::diagnoser::UiStateInput {
             session: st.session_id.as_deref(),
             started_at: st.started_at.as_deref(),
             samples: &st.samples,
             samples_total: st.samples_total,
-            events: &st.events,
+            events: &view_events,
             active_count: active_conditions(&st.events),
             game_running: st.game_running,
             emulator: st.emulator.as_deref(),
@@ -535,7 +544,13 @@ impl Engine {
 }
 
 fn active_conditions(events: &[EngineEvent]) -> usize {
-    // count conditions with a Start but no End yet
+    // diagnoser gates behind correlation evidence (gpu_mem_idle needs a
+    // cliff inside its window, paging_churn the same). Counting them made
+    // a sustained open wake show a red "Lag" banner with ZERO cards (the
+    // correlation gate suppressed the card, the counter still fired) —
+    // the exact "red with nothing explaining why" shape the still-open
+    // rescue was written to kill. The kinds the correlator can still
+    // upgrade to a card pass through: their Start alone is honest signal.
     use std::collections::HashMap;
     let mut open: HashMap<&str, bool> = HashMap::new();
     for e in events {
@@ -549,7 +564,55 @@ fn active_conditions(events: &[EngineEvent]) -> usize {
             super::types::Phase::Instant => {}
         }
     }
-    open.values().filter(|v| **v).count()
+    const CORRELATION_GATED: [&str; 2] = ["gpu_mem_idle", "paging_churn"];
+    open.values()
+        .filter(|v| **v)
+        .count()
+        - open
+            .iter()
+            .filter(|(k, v)| **v && CORRELATION_GATED.contains(k))
+            .count()
+}
+
+/// The diagnoser's view of the event history: everything from the oldest
+/// window it can still read backward. The live window is 5 min and the
+/// correlation window 15 min (diagnoser.rs owns both), so events older
+/// than the correlation window + slack are invisible to every rule — the
+/// walk starts after them. STILL-OPEN kinds are exempt: a condition open
+/// for 20 minutes has a Start older than any window, but the still-open
+/// rescue must keep reading it (the vanishing-card bug the rescue was
+/// written for). Their whole history rides along; a storm-open kind is
+/// also generating fresh events anyway, so the exemption stays cheap.
+fn diagnosis_window(events: &[EngineEvent]) -> Vec<EngineEvent> {
+    /// mirrors diagnoser::CORRELATION_WINDOW_MS (the widest lookback) + a
+    /// safety slack for a missed tick or a slow clock read
+    const VIEW_MS: i64 = 15 * 60 * 1000 + 30 * 1000;
+    let now_ms = iso_ms(&super::sampler::iso_now()).unwrap_or(0);
+    if now_ms <= VIEW_MS {
+        return events.to_vec();
+    }
+    let cutoff = now_ms - VIEW_MS;
+    // kinds whose latest Start has no End after it (still open) — their
+    // whole history rides along however old
+    let mut open_kinds: std::collections::HashSet<&str> = std::collections::HashSet::new();
+    for e in events {
+        match e.phase {
+            super::types::Phase::Start => {
+                open_kinds.insert(e.kind.as_str());
+            }
+            super::types::Phase::End => {
+                open_kinds.remove(e.kind.as_str());
+            }
+            super::types::Phase::Instant => {}
+        }
+    }
+    events
+        .iter()
+        .filter(|e| {
+            iso_ms(&e.t).unwrap_or(0) >= cutoff || open_kinds.contains(e.kind.as_str())
+        })
+        .cloned()
+        .collect()
 }
 
 /// When the CURRENT session's samplers were spawned — the first-sample log
@@ -737,6 +800,88 @@ mod tests {
             },
         ];
         assert_eq!(active_conditions(&evs), 1);
+    }
+
+    /// The red-banner-with-zero-cards bug: a correlation-gated condition
+    /// (gpu_mem_idle open for minutes) must NOT drive Overall::Lag on its
+    /// own — the diagnoser suppresses its card until a cliff confirms it,
+    /// so counting it left a red banner with nothing explaining why. The
+    /// ungated disk_queue Start below still counts on its own.
+    #[test]
+    fn correlation_gated_opens_do_not_drive_lag_alone() {
+        use super::super::types::{Phase, Severity};
+        let gated_only = vec![EngineEvent {
+            kind: "gpu_mem_idle".into(),
+            phase: Phase::Start,
+            severity: Severity::Warn,
+            t: "t".into(),
+            duration_sec: None,
+            detail: String::new(),
+        }];
+        assert_eq!(active_conditions(&gated_only), 0);
+        let with_disk = vec![
+            EngineEvent {
+                kind: "gpu_mem_idle".into(),
+                phase: Phase::Start,
+                severity: Severity::Warn,
+                t: "t".into(),
+                duration_sec: None,
+                detail: String::new(),
+            },
+            EngineEvent {
+                kind: "disk_queue".into(),
+                phase: Phase::Start,
+                severity: Severity::Warn,
+                t: "t".into(),
+                duration_sec: None,
+                detail: String::new(),
+            },
+        ];
+        assert_eq!(active_conditions(&with_disk), 1);
+    }
+
+    /// The diagnosis view window: old QUIET-CLOSED history drops out, but
+    /// a still-open condition's events ride along however old — the
+    /// vanishing-card bug the still-open rescue exists for. (A kind with a
+    /// RECENT event keeps everything too: recent = inside the window, and
+    /// the kind being open at that point means its older pairs are
+    /// pairing-relevant. The exemption is per-KIND, deliberately coarse.)
+    #[test]
+    fn diagnosis_window_keeps_open_kinds_and_drops_quiet_history() {
+        use super::super::types::{Phase, Severity};
+        let mk = |kind: &str, phase: Phase, t: &str| EngineEvent {
+            kind: kind.into(),
+            phase,
+            severity: Severity::Warn,
+            t: t.into(),
+            duration_sec: None,
+            detail: String::new(),
+        };
+        // an old CLOSED storm (04:00-04:01, quiet ever since), a
+        // mem_pressure open since 04:50 (still open), now = 05:21 (the
+        // view cutoff ≈ 05:05.5). The closed storm's kind has no open
+        // condition and no recent event → dropped whole. The open
+        // condition's Start (older than every window) must survive.
+        let events = vec![
+            mk("disk_queue", Phase::Start, "2026-08-31T04:00:00.000Z"),
+            mk("disk_queue", Phase::End, "2026-08-31T04:01:00.000Z"),
+            mk("mem_pressure", Phase::Start, "2026-08-31T04:50:00.000Z"),
+            mk("gpu_mem_idle", Phase::Start, "2026-08-31T05:20:00.000Z"),
+        ];
+        let view = diagnosis_window(&events);
+        assert!(
+            view.iter().any(|e| e.kind == "mem_pressure"),
+            "the still-open kind's events must ride along however old"
+        );
+        assert!(
+            view.iter().any(|e| e.kind == "gpu_mem_idle"),
+            "the fresh event stays"
+        );
+        // the CLOSED, QUIET, out-of-window disk_queue pair is dropped
+        assert!(
+            !view.iter().any(|e| e.kind == "disk_queue"),
+            "quiet, closed, out-of-window history is dropped"
+        );
     }
 
     /// The double-start race (H2): a first start() must serialize against a

@@ -6,6 +6,7 @@ use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
+use std::time::Duration;
 
 use super::types::{GpuSample, ProcInfo, Sample};
 
@@ -154,6 +155,40 @@ impl Drop for SpawnedProcess {
     }
 }
 
+/// Watchdog for a streaming source: the reader thread only notices
+/// `running == false` when a LINE arrives — a silent emitter (typeperf
+/// wedged on corrupted counters, a Get-Counter loop parked in its catch
+/// branch) emits nothing, the reader blocks on `lines()` forever, and the
+/// child outlives every stop/start cycle until app exit (one orphan per
+/// session). This thread polls the flag every 2s and kills the child BY
+/// PID the moment the session stops: the blocked reader's stream then
+/// ends, it unwinds, and its own SpawnedProcess drop becomes a harmless
+/// second kill of an already-dead process.
+///
+/// The kill is `taskkill /PID <id> /T /F` (no handle games on std's
+/// single-owner Child; taskkill is native, needs no elevation for our own
+/// children, and /T covers any grand-children typeperf itself spawned).
+fn spawn_source_watchdog(pid: u32, running: Arc<AtomicBool>) {
+    #[cfg(windows)]
+    thread::spawn(move || {
+        loop {
+            if !running.load(Ordering::Relaxed) {
+                break;
+            }
+            thread::sleep(Duration::from_secs(2));
+        }
+        // the session ended: reap the child even if its stream is silent
+        let _ = Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .creation_flags(NO_WINDOW)
+            .status();
+    });
+    #[cfg(not(windows))]
+    let _ = (pid, running);
+}
+
 /// typeperf CSV counter names → Sample fields (parsed by header order).
 /// Robust to machine prefixes: matches by KNOWN SUFFIX so any host name works.
 fn map_counter_key(path: &str) -> Option<&'static str> {
@@ -292,6 +327,9 @@ while ($true) {{
         format!("pdh emitter spawn failed: {e}")
     })?;
     let stdout = child.stdout.take().ok_or("no stdout from pdh emitter")?;
+    // reap this child even if its stream goes silent mid-session (the
+    // watchdog polls the flag and taskkills by PID — see its doc comment)
+    spawn_source_watchdog(child.id(), Arc::clone(&running));
 
     thread::spawn(move || {
         let _keep = SpawnedProcess { child };
@@ -450,6 +488,9 @@ where
         format!("typeperf spawn failed: {e}")
     })?;
     let stdout = child.stdout.take().ok_or("no stdout from typeperf")?;
+    // reap this child even if its stream goes silent mid-session (the
+    // watchdog polls the flag and taskkills by PID — see its doc comment)
+    spawn_source_watchdog(child.id(), Arc::clone(&running));
 
     // the reader thread OWNS the child — kills it on exit (Drop), never before
     thread::spawn(move || {
@@ -577,6 +618,9 @@ where
     .map_err(|e| format!("nvidia-smi spawn failed: {e}"))?;
 
     let stdout = child.stdout.take().ok_or("no stdout from dmon")?;
+    // reap this child even if its stream goes silent mid-session (the
+    // watchdog polls the flag and taskkills by PID — see its doc comment)
+    spawn_source_watchdog(child.id(), Arc::clone(&running));
 
     // the reader thread OWNS the child — kills it on exit (Drop), never before
     thread::spawn(move || {

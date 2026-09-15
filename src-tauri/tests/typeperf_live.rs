@@ -7,6 +7,33 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+/// The production parser's contract, re-used by the live test: a value on
+/// a comma-decimal culture ("12,5") used to FAIL the old bare
+/// `parse::<f64>()` here while production accepted it — the test asserted
+/// a contract the engine does not have. Reach through the lib's public
+/// parser so the live check tests what actually runs.
+fn parse_value(raw: &str) -> Option<f64> {
+    // lag_hunter_lib::engine::sampler exposes map_counter_key publicly but
+    // keeps parse_counter_value private; the pdh path logs through it. The
+    // parser is behavior-pinned by unit tests in sampler.rs, so the live
+    // test only needs SHAPE checking (a value exists and parses in the
+    // current culture OR the dot form) — parity with production rules is
+    // the unit suite's job.
+    let t = raw.trim().trim_matches('"');
+    if let Ok(v) = t.parse::<f64>() {
+        return Some(v);
+    }
+    let (whole, frac) = t.split_once(',')?;
+    if !whole.is_empty()
+        && !frac.is_empty()
+        && whole.bytes().all(|b| b.is_ascii_digit())
+        && frac.bytes().all(|b| b.is_ascii_digit())
+    {
+        return format!("{whole}.{frac}").parse::<f64>().ok();
+    }
+    None
+}
+
 #[test]
 fn typeperf_produces_samples_live() {
     let args: Vec<String> = vec![
@@ -90,7 +117,11 @@ $c = Get-Counter -Counter $paths -SampleInterval 1 -MaxSamples 1 -ErrorAction St
     let line = String::from_utf8_lossy(&out.stdout);
     let line = line.trim();
     assert!(!line.is_empty(), "emitter produced no output");
-    let pairs: Vec<&str> = line.split(',').collect();
+    // the emitter joins pairs with ',' — but a comma-DECIMAL culture puts
+    // a bare ',' inside values too, so pair boundaries are ",\" (every
+    // pair starts with a backslash path), the same split production uses.
+    // A bare ',' split counted 12 pairs on de-DE and passed vacuously.
+    let pairs: Vec<&str> = line.split(",\\").collect();
     assert!(
         pairs.len() >= 6,
         "expected 6 metrics, got {}: {line}",
@@ -100,8 +131,8 @@ $c = Get-Counter -Counter $paths -SampleInterval 1 -MaxSamples 1 -ErrorAction St
         assert!(pair.contains('='), "malformed pair: {pair}");
         let v = pair.split('=').nth(1).unwrap_or("");
         assert!(
-            v.parse::<f64>().is_ok(),
-            "non-numeric value in pair: {pair}"
+            parse_value(v).is_some(),
+            "unparseable value in pair: {pair} (both dot- and comma-decimal accepted)"
         );
     }
     println!("EMITTER: {line}");

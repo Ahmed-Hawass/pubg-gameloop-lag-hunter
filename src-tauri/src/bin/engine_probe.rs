@@ -2,7 +2,6 @@
 // cargo run --bin engine_probe
 
 use lag_hunter_lib::engine::session;
-use lag_hunter_lib::engine::types::SessionStatus;
 use std::time::{Duration, Instant};
 
 fn main() {
@@ -69,5 +68,4 @@ fn main() {
         println!("== RESULT: ENGINE BROKEN — zero samples flowed ==");
         std::process::exit(2);
     }
-    let _ = SessionStatus::Idle;
 }
