@@ -6,11 +6,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-Branch work (the `tools` branch): not a release entry; version files stay
-at 1.6.0 until the branch ships. Covers the committed work below plus the
-in-flight session on top of it.
-
-### Added (committed)
+### Added
 - Tools tab: a System tweaks card (theme-aware spot illustration) opening
   a list grouped by area. Switches mirror the live Windows result (ON =
   the named action holds right now, whoever flipped it): optimistic
@@ -36,7 +32,7 @@ in-flight session on top of it.
   anywhere, the exact gap the summary-timer bug slipped through. The
   deliberate fire-once effects carry documented suppress comments.
 
-### Fixed (committed)
+### Fixed
 - The sustained CPU perf cliff (the spike rule) fires on AMD/Intel too:
   it used to live behind two early returns inside the GPU cliff path, so
   machines without an nvidia-smi feed could never reach it (pure CPU
@@ -127,7 +123,22 @@ in-flight session on top of it.
   existed. The GameLoop process-name list is ONE const now (the matcher
   and the visibility probe built their own copies).
 
-### Fixed (in-flight session, uncommitted)
+- Logging unit tests no longer touch the production logs directory: they
+  aim the same code at throwaway temp dirs, so `cargo test` can neither
+  write into nor prune (7-day retention) the real flight-recorder logs.
+- Session events/summary (and the rig cache) are written atomically
+  (temp file + rename, the settings pattern): the Reports list reads
+  those files while autosave rewrites them, and a reader must only ever
+  see the previous complete file or the new complete file, never a
+  truncated half-write.
+- Bulk delete is serialized against session start at the engine level:
+  the live-id snapshot used to be taken before the background deletion
+  task ran, so a session born in that window could slip into the walk
+  unexcluded. Both sides now share one guard, taken in the same order.
+- Settings migration persists through the same serialized update path
+  as every set_* command: a first-boot toggle landing in the same moment
+  as the upgrade write can no longer be overwritten by it (the legacy
+  prefs file is retired only after the upgraded file commits).
 - An in-flight update download is cancelled when its modal is swapped out
   mid-flight (a GameLoop-closed push or a one-shot advice used to unmount
   the UpdateModal silently and orphan the engine-side stream; only the
@@ -182,7 +193,14 @@ in-flight session on top of it.
   once and shared by the title bar and About (it used to be two IPC
   calls).
 
-### Changed (in-flight session, uncommitted)
+### Changed
+- The Tools tab's details page reads only the two switches it displays,
+  live from the registry in microseconds (a new tweak_states command):
+  every visit used to pay a full system_checks PowerShell batch
+  (powercfg + CIM queries, 0.5-2s) for rows the page never shows, on tab
+  open and on every window focus. The freshness guarantee is unchanged
+  (still a live read on details open and on focus return), and the
+  focus re-read no longer fires while the landing card shows.
 - The diagnoser correlator builds its indexes in ONE pass per tick
   instead of nested full scans (events × starts) while holding the
   session lock, and the live view reads a bounded 15-minute window

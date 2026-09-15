@@ -143,11 +143,12 @@ fn load_system_cache() -> Option<SystemInfo> {
 }
 
 /// Persist the rig profile. Best effort — a failed write only means the next
-/// launch pays the query cost again.
+/// launch pays the query cost again. Atomic like the settings store: a
+/// crash mid-write must not leave a half-written cache behind.
 fn save_system_cache(info: &SystemInfo) {
     let _ = fs::create_dir_all(super::storage::app_dir());
     if let Ok(body) = serde_json::to_string(info) {
-        let _ = fs::write(system_cache_path(), body);
+        let _ = super::storage::write_file_atomic(&system_cache_path(), body.as_bytes());
     }
 }
 
@@ -596,6 +597,20 @@ pub struct SystemChecks {
     pub storage_sense: Option<bool>,
 }
 
+/// The Tools tab's two switches and nothing else: Game DVR background
+/// recording + Storage Sense, live from the registry. The full
+/// system_checks batch costs a PowerShell spawn the Tools page never
+/// needs (it displays none of those rows); the tweak_states command
+/// serves this struct instead — microseconds, in-process.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct TweakStates {
+    /// true when background recording is armed (same rule as SystemChecks)
+    pub game_dvr_enabled: bool,
+    /// true when Storage Sense is on; None = policy key missing on this
+    /// build (feature unavailable, the row hides)
+    pub storage_sense: Option<bool>,
+}
+
 /// Live DWORD read from a registry subkey under a given root, as bool-ish
 /// tri-state: Some(value) / None (value missing) — key-open errors also read
 /// as None for CHECKS (a probe failure must never fire a false warning;
@@ -622,6 +637,11 @@ pub fn query_system_checks() -> Result<SystemChecks, String> {
     // below keeps only what genuinely needs a command (powercfg, CIM,
     // disks) — every registry line moved here is one spawn-line less that
     // can break on quoting or locale.
+    // The two verdicts below come from query_tweak_states (the SAME
+    // derivation the Tools tab's lightweight read uses — one rule, two
+    // consumers). The raw reads here exist only for the diagnostic log
+    // line naming the exact values behind an armed verdict.
+    let states = query_tweak_states();
     let dvr_master = reg_dword(
         winreg::enums::HKEY_CURRENT_USER,
         r"System\GameConfigStore",
@@ -642,16 +662,6 @@ pub fn query_system_checks() -> Result<SystemChecks, String> {
         r"SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR",
         "HistoricalCaptureEnabled",
     );
-    let ss_exists = ss_policy_key_exists();
-    let ss_value = if ss_exists {
-        reg_dword(
-            winreg::enums::HKEY_CURRENT_USER,
-            r"SOFTWARE\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy",
-            "01",
-        )
-    } else {
-        None
-    };
 
     // ---- command-sourced checks: ONE PowerShell batch for the rest
     let text = ps(r#"
@@ -734,7 +744,7 @@ $sys = Get-CimInstance Win32_LogicalDisk -Filter ("DeviceID='" + $env:SystemDriv
     // ---- registry-sourced fields (winreg, read before the batch above) ----
     // GameDVR armed = the background toggle is live, unless the machine
     // policy forces it off (same rule the old batch line enforced)
-    c.game_dvr_enabled = gamedvr_armed_winreg(dvr_historical, dvr_policy);
+    c.game_dvr_enabled = states.game_dvr_enabled;
     if c.game_dvr_enabled {
         super::logging::info(&format!(
             "dvr armed: master={:?} capture={:?} policy={:?} historical={dvr_historical:?}",
@@ -744,12 +754,10 @@ $sys = Get-CimInstance Win32_LogicalDisk -Filter ("DeviceID='" + $env:SystemDriv
     // Storage Sense: key missing on this build = feature unavailable -> None:
     // the row hides, never a dead switch. Logged so a user report from any
     // build carries the compatibility story in its own log.
-    c.storage_sense = if !ss_exists {
+    c.storage_sense = states.storage_sense;
+    if c.storage_sense.is_none() {
         super::logging::warn("feature storagesense hidden: policy key missing on this build");
-        None
-    } else {
-        Some(ss_value == Some(1))
-    };
+    }
     Ok(c)
 }
 
@@ -830,6 +838,51 @@ fn gamedvr_armed_winreg(historical: Option<u32>, policy: Option<u32>) -> bool {
         return false;
     }
     historical == Some(1)
+}
+
+/// Storage Sense tri-state from (key-exists, value): a missing policy KEY
+/// means the feature is not on this build (None — the row hides, never a
+/// dead switch); a present key is on iff its value is 1 (Windows zeroes
+/// it for off, never deletes the key — verified live). ONE definition
+/// shared by the full batch and the lightweight tweak read, so the two
+/// paths can never disagree on what "on" means.
+fn storage_sense_state(exists: bool, value: Option<u32>) -> Option<bool> {
+    if !exists {
+        None
+    } else {
+        Some(value == Some(1))
+    }
+}
+
+/// The Tools tab's two switches, live from the registry — and ONLY that.
+/// Same derivation as the full batch (shared helpers above), so the two
+/// paths agree by construction. Silent by design: the diagnostic log
+/// lines live on the full-batch path, not on every tab open.
+pub fn query_tweak_states() -> TweakStates {
+    let dvr_historical = reg_dword(
+        winreg::enums::HKEY_CURRENT_USER,
+        r"SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR",
+        "HistoricalCaptureEnabled",
+    );
+    let dvr_policy = reg_dword(
+        winreg::enums::HKEY_LOCAL_MACHINE,
+        r"SOFTWARE\Policies\Microsoft\Windows\GameDVR",
+        "AllowGameDVR",
+    );
+    let ss_exists = ss_policy_key_exists();
+    let ss_value = if ss_exists {
+        reg_dword(
+            winreg::enums::HKEY_CURRENT_USER,
+            r"SOFTWARE\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy",
+            "01",
+        )
+    } else {
+        None
+    };
+    TweakStates {
+        game_dvr_enabled: gamedvr_armed_winreg(dvr_historical, dvr_policy),
+        storage_sense: storage_sense_state(ss_exists, ss_value),
+    }
 }
 
 /// System-drive free-space level: "ok" | "low" | "critical".
@@ -1014,25 +1067,19 @@ mod tests {
 
     #[test]
     fn storagesense_field_contract() {
-        // the winreg-era contract: key-exists decides visibility, the
-        // DWORD value decides the state, and they are never conflated
+        // the winreg-era contract, now a real shared function (not a
+        // test-local closure): key-exists decides visibility, the DWORD
+        // value decides the state, and they are never conflated
         // (a key at 0 is a live OFF, a missing key hides the row)
-        let field = |exists: bool, value: Option<u32>| {
-            if !exists {
-                None
-            } else {
-                Some(value == Some(1))
-            }
-        };
         // key present, value 1 = ON
-        assert_eq!(field(true, Some(1)), Some(true));
+        assert_eq!(storage_sense_state(true, Some(1)), Some(true));
         // key present, value 0 = OFF (Settings zeroes the value, never
         // deletes the key — verified live)
-        assert_eq!(field(true, Some(0)), Some(false));
+        assert_eq!(storage_sense_state(true, Some(0)), Some(false));
         // key present, value missing (never touched) = OFF
-        assert_eq!(field(true, None), Some(false));
+        assert_eq!(storage_sense_state(true, None), Some(false));
         // key absent on this build = row hides
-        assert_eq!(field(false, None), None);
-        assert_eq!(field(false, Some(1)), None);
+        assert_eq!(storage_sense_state(false, None), None);
+        assert_eq!(storage_sense_state(false, Some(1)), None);
     }
 }

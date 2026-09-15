@@ -22,6 +22,13 @@ pub struct Engine {
     /// replaced via the write lock at each start.
     running_flag: std::sync::RwLock<Arc<AtomicBool>>,
     total_mem_mb: std::sync::RwLock<f64>,
+    /// Serializes session-directory creation (start) with bulk deletion:
+    /// deletion snapshots the live id BEFORE its background task runs, so
+    /// a session starting in that window could otherwise land inside the
+    /// deletion walk. Both sides take this guard around the
+    /// create-or-delete critical section — in the same order (fs guard,
+    /// then state) so the two can never deadlock against each other.
+    fs_guard: std::sync::Mutex<()>,
     /// consecutive GameLoop probe misses (auto-stop after ~15s of silence)
     gameloop_misses: AtomicU32,
     /// bumped on every start(): guard/timer threads capture it and die as
@@ -81,6 +88,7 @@ impl Engine {
             }),
             running_flag: std::sync::RwLock::new(Arc::new(AtomicBool::new(false))),
             total_mem_mb: std::sync::RwLock::new(8_192.0), // refreshed at session start
+            fs_guard: std::sync::Mutex::new(()),
             gameloop_misses: AtomicU32::new(0),
             generation: AtomicU32::new(0),
         }
@@ -116,6 +124,31 @@ impl Engine {
             SessionStatus::Running | SessionStatus::Stopping => st.session_id.clone(),
             _ => None,
         }
+    }
+
+    /// Bulk-delete every saved session except the live writer's directory.
+    /// Runs under the fs guard so a session starting concurrently can
+    /// neither slip into the deletion walk unexcluded nor reuse an id the
+    /// walk already snapshotted: start() takes the same guard before it
+    /// creates its directory. The UI's exclude_id is honored as an EXTRA,
+    /// but the running session can never be deleted even if the frontend
+    /// passes nothing or the wrong id.
+    pub fn delete_all_sessions_guarded(
+        &self,
+        exclude_id: Option<&str>,
+    ) -> Result<Vec<String>, String> {
+        let _fs = self.fs_guard.lock().unwrap_or_else(|p| p.into_inner());
+        let live = self.live_session_id();
+        let mut excluded = live;
+        if excluded.is_none() {
+            excluded = exclude_id
+                .filter(|id| !id.is_empty())
+                .map(str::to_string);
+        }
+        super::storage::delete_all_sessions(
+            &super::storage::sessions_root(),
+            excluded.as_deref(),
+        )
     }
 
     /// Start a monitoring session. `auto_stop_secs`: None = manual stop only
@@ -170,11 +203,16 @@ impl Engine {
             *t = total_mem;
         }
 
-        let mut st = self.state.lock().unwrap_or_else(|p| p.into_inner());
         // RE-CHECK under the SECOND lock: the first check ran before the slow
         // gates above (emulator probe, PowerShell queries), unlocked the whole
         // time — a second start() that slipped through both gates would
         // double-spawn sources and orphan a writer (double-click race).
+        //
+        // The fs guard is taken BEFORE the state lock (same order as the
+        // bulk-delete path): the session directory is born inside this
+        // critical section, so no bulk delete can enumerate it mid-birth.
+        let _fs_guard = self.fs_guard.lock().unwrap_or_else(|p| p.into_inner());
+        let mut st = self.state.lock().unwrap_or_else(|p| p.into_inner());
         if st.status == SessionStatus::Running {
             return Err("SESSION_ALREADY_RUNNING".into());
         }

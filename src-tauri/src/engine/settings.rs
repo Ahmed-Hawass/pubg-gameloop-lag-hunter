@@ -77,53 +77,85 @@ pub fn settings_path() -> PathBuf {
 ///   v1 layout (bare Thresholds + prefs file) → merged into one v3 file.
 /// A bare-thresholds file parses as Settings via serde defaults — so detect the
 /// legacy layout by CONTENT (missing `sensitivity` key) before deciding.
+/// The migration write itself goes through `update()` below, so a user
+/// toggle landing in the same moment cannot be overwritten by our upgrade.
 pub fn load() -> Settings {
-    let path = settings_path();
-    let Ok(text) = fs::read_to_string(&path) else {
+    let Ok(text) = fs::read_to_string(settings_path()) else {
         return Settings::default();
     };
+    if migration_kind(&text) == MigrationKind::Current {
+        return parse_settings_text(&text);
+    }
+    update(|s| s.clone()).unwrap_or_else(|_| upgrade_text(&text).0)
+}
 
-    // v3/v2 file: has both "version" and "sensitivity" keys
-    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
+/// What on-disk shape was found: modern files need nothing, v2 files need
+/// a field upgrade, legacy/garbage files need a full merge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MigrationKind {
+    Current,
+    BumpV2,
+    Legacy,
+}
+
+fn migration_kind(text: &str) -> MigrationKind {
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(text) {
         let has_sens = v.get("sensitivity").is_some();
         let version = v.get("version").and_then(|x| x.as_u64()).unwrap_or(0);
         if has_sens && version >= 2 {
-            if let Ok(s) = serde_json::from_str::<Settings>(&text) {
-                // migrate v2 → v3 in place if needed (gains language, clamps)
-                let mut s = s;
-                if s.version < SETTINGS_VERSION {
-                    s.version = SETTINGS_VERSION;
-                    s.language = normalize_language(&s.language);
-                    s.auto_stop_minutes = clamp_auto_stop(s.auto_stop_minutes);
-                    let _ = save(&s);
+            if version < SETTINGS_VERSION as u64 {
+                return MigrationKind::BumpV2;
+            }
+            return MigrationKind::Current;
+        }
+    }
+    MigrationKind::Legacy
+}
+
+fn prefs_path() -> PathBuf {
+    super::storage::app_dir().join("settings.prefs.json")
+}
+
+fn parse_settings_text(text: &str) -> Settings {
+    serde_json::from_str::<Settings>(text).unwrap_or_default()
+}
+
+/// Upgrade on-disk text to the current schema in memory. Pure derivation
+/// (no writes, no removals): the single place both `load()` and
+/// `update()` compute their starting state from, so a concurrent set_*
+/// and a first-boot migration can never act on two different pictures of
+/// the file. The bool says whether the legacy prefs file may be retired
+/// — but only AFTER the upgraded file has been successfully saved.
+fn upgrade_text(text: &str) -> (Settings, bool) {
+    match migration_kind(text) {
+        MigrationKind::Current => (parse_settings_text(text), false),
+        MigrationKind::BumpV2 => {
+            let mut s = parse_settings_text(text);
+            s.version = SETTINGS_VERSION;
+            s.language = normalize_language(&s.language);
+            s.auto_stop_minutes = clamp_auto_stop(s.auto_stop_minutes);
+            (s, false)
+        }
+        MigrationKind::Legacy => {
+            let mut migrated = Settings::default();
+            // 1) thresholds from the old bare file
+            if let Ok(th) = serde_json::from_str::<Thresholds>(text) {
+                migrated.thresholds = th;
+            }
+            // 2) sensitivity from prefs, if present — kept as a mute legacy value
+            let mut retire = false;
+            if let Ok(prefs_text) = fs::read_to_string(prefs_path()) {
+                retire = true;
+                if let Ok(p) = serde_json::from_str::<serde_json::Value>(&prefs_text) {
+                    if let Some(s) = p.get("sensitivity").and_then(|x| x.as_str()) {
+                        migrated.sensitivity = s.to_string();
+                    }
                 }
-                return s;
             }
+            migrated.version = SETTINGS_VERSION;
+            (migrated, retire)
         }
     }
-
-    // ---- legacy migration (v1: thresholds file + prefs file) ----
-    let mut migrated = Settings::default();
-
-    // 1) thresholds from the old bare file
-    if let Ok(th) = serde_json::from_str::<Thresholds>(&text) {
-        migrated.thresholds = th;
-    }
-    // 2) sensitivity from prefs, if present — kept as a mute legacy value
-    let prefs_path = super::storage::app_dir().join("settings.prefs.json");
-    if let Ok(prefs_text) = fs::read_to_string(&prefs_path) {
-        if let Ok(p) = serde_json::from_str::<serde_json::Value>(&prefs_text) {
-            if let Some(s) = p.get("sensitivity").and_then(|x| x.as_str()) {
-                migrated.sensitivity = s.to_string();
-            }
-        }
-    }
-
-    // persist the migrated result and retire the legacy files
-    let _ = save(&migrated);
-    let _ = fs::remove_file(&prefs_path);
-
-    migrated
 }
 
 /// Atomic save: write to a temp file, then rename over the target.
@@ -144,17 +176,23 @@ pub fn save(s: &Settings) -> Result<(), String> {
 /// set_* commands each used to load→mutate→save independently, so two
 /// overlapping writes raced on the fixed .tmp name and the loser's
 /// change silently vanished (the winner's save never saw it). One mutex
-/// per process makes each update atomic end-to-end; the plain `load()`
-/// readers stay lock-free (they only ever see committed files).
+/// per process makes each update atomic end-to-end. Modern `load()`
+/// readers stay lock-free (they only ever see committed files); a load
+/// that finds an upgrade pending runs through this same serialized path
+/// instead of saving around it.
 static SETTINGS_WRITE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 pub fn update<R>(mutate: impl FnOnce(&mut Settings) -> R) -> Result<R, String> {
     let _guard = SETTINGS_WRITE_LOCK
         .lock()
         .unwrap_or_else(|p| p.into_inner());
-    let mut s = load();
+    let text = fs::read_to_string(settings_path()).unwrap_or_default();
+    let (mut s, retire_prefs) = upgrade_text(&text);
     let ret = mutate(&mut s);
     save(&s)?;
+    if retire_prefs {
+        let _ = fs::remove_file(prefs_path());
+    }
     Ok(ret)
 }
 
@@ -190,6 +228,32 @@ pub fn default_theme() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn migration_kind_detects_layouts() {
+        // modern v3: no upgrade, no writes
+        assert_eq!(
+            migration_kind(r#"{"version":3,"sensitivity":"standard"}"#),
+            MigrationKind::Current
+        );
+        // future versions are never downgraded
+        assert_eq!(
+            migration_kind(r#"{"version":9,"sensitivity":"standard"}"#),
+            MigrationKind::Current
+        );
+        // v2: field upgrade only
+        assert_eq!(
+            migration_kind(r#"{"version":2,"sensitivity":"high"}"#),
+            MigrationKind::BumpV2
+        );
+        // bare thresholds and garbage: full legacy merge
+        assert_eq!(
+            migration_kind(r#"{"cpu_saturation_pct":90.0}"#),
+            MigrationKind::Legacy
+        );
+        assert_eq!(migration_kind("{ this is not json !!!"), MigrationKind::Legacy);
+        assert_eq!(migration_kind(""), MigrationKind::Legacy);
+    }
 
     #[test]
     fn corrupted_file_falls_back_to_defaults() {

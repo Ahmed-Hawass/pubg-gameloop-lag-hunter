@@ -194,6 +194,10 @@ export const api = {
   topProcesses: (force?: boolean) => invoke<TopProcess[]>("top_processes", { force: force ?? false }),
   systemChecks: (force?: boolean) =>
     invoke<SystemChecks>("system_checks", { force: force ?? false }),
+  /** the Tools tab's two switches only (microseconds, in-process) — the
+      full systemChecks batch is never paid for a page that displays none
+      of its rows */
+  tweakStates: () => invoke<TweakStates>("tweak_states"),
   openWindowsPanel: (panel: string) => invoke<void>("open_windows_panel", { panel }),
   // update flow
   checkUpdate: () => invoke<UpdateInfo | null>("check_update"),
@@ -265,6 +269,13 @@ export interface SystemChecks {
   disk_level: string;
   /** Storage Sense on/off; null = feature unavailable on this Windows
       build (the row hides, never a dead switch) */
+  storage_sense: boolean | null;
+}
+
+/** the Tools tab's two switches, nothing else — mirrors TweakStates in
+    engine/system.rs (game_dvr_enabled + storage_sense only) */
+export interface TweakStates {
+  game_dvr_enabled: boolean;
   storage_sense: boolean | null;
 }
 

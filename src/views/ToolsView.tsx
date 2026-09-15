@@ -1,12 +1,14 @@
 // ToolsView.tsx — one "System tweaks" list holding every toggle, grouped
 // by area. A switch MIRRORS THE LIVE RESULT of its named action (ON = the
 // action holds right now, whoever made it hold), so manual changes outside
-// the app appear on the next fresh read: opening the view and regaining
-// window focus both read fresh, bypassing the cache.
+// the app appear on the next fresh read: opening the details page and
+// regaining window focus both re-read live. The read is the lightweight
+// tweak_states command (two registry DWORDs, microseconds) — never the
+// full system_checks batch, whose rows this page does not display.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, Recycle, SlidersHorizontal, Video } from "lucide-react";
 import { Dialog, EmptyState, MODAL_OPEN_EVENT, APP_DIALOG_OPEN_EVENT } from "../components/components";
-import { api, type SystemChecks } from "../bridge";
+import { api } from "../bridge";
 import { useLang } from "../i18n";
 import spotTweaksDark from "../assets/spot-system-tweaks-dark.svg?url";
 import spotTweaksLight from "../assets/spot-system-tweaks-light.svg?url";
@@ -56,7 +58,6 @@ export function ToolsView(props: { active: boolean }) {
   const { t } = useLang();
   /** details page open (the landing card was pressed) */
   const [open, setOpen] = useState(false);
-  const [checks, setChecks] = useState<SystemChecks | null>(null);
   /** optimistic switch positions: flip instantly on click; restored to the
       verified live truth after the write settles (and on every fresh read) */
   const [dvrOn, setDvrOn] = useState<boolean | null>(null);
@@ -79,15 +80,17 @@ export function ToolsView(props: { active: boolean }) {
       retry stays the rescue) */
   const [loadFailed, setLoadFailed] = useState(false);
 
-  /** fresh statuses, bypassing the cache: Windows is the single source of
-      truth, so every entry point (open the view / window focus) re-reads
-      live — manual changes outside the app must be picked up here */
+  /** fresh switch positions, live from the registry: Windows is the
+      single source of truth, so every entry point (open the details page
+      / window focus) re-reads live — manual changes outside the app must
+      be picked up here. The read is tweak_states (two DWORDs,
+      microseconds), never the full system_checks batch whose rows this
+      page does not display. */
   const reload = async () => {
     try {
-      const c = await api.systemChecks(true);
-      setChecks(c);
-      setDvrOn(!c.game_dvr_enabled);
-      setSsOn(c.storage_sense);
+      const s = await api.tweakStates();
+      setDvrOn(!s.game_dvr_enabled);
+      setSsOn(s.storage_sense);
       setLoaded(true);
       setLoadFailed(false);
       setNoticeBody(null);
@@ -103,23 +106,24 @@ export function ToolsView(props: { active: boolean }) {
   };
 
   useEffect(() => {
-    if (!active) return;
+    if (!active || !open) return;
     void reload();
-    // reload reads the live state through its closure; the visibility
-    // contract is about `active` alone
+    // the read contract is about the DETAILS page being visible, not the
+    // tab alone: the landing card needs no data, so no read fires for it
+    // (and none fires on window focus while it shows, either)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active]);
+  }, [active, open]);
 
   // returning from Windows Settings (after flipping something by hand)
   // re-reads live: the switch must mirror what Windows says now
   useEffect(() => {
-    if (!active) return;
+    if (!active || !open) return;
     const onFocus = () => void reload();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
     // same as above: reload's identity is not part of the subscription
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active]);
+  }, [active, open]);
 
   // a dialog mounting under a parked cursor never fires mouseleave — tell
   // every tooltip to hide the moment ours opens (same signal as the shell)
@@ -192,7 +196,7 @@ export function ToolsView(props: { active: boolean }) {
   };
 
   if (open) {
-    if (!checks || !loaded) {
+    if (!loaded) {
       // details wait for a real read: a dead shell must never show, and a
       // FAILED read surfaces as an honest error instead of a "Loading..."
       // that spins forever (the window-focus retry is the rescue)
@@ -232,7 +236,7 @@ export function ToolsView(props: { active: boolean }) {
           ) : null}
           <div className="tweak-group">{t.toolStorage}</div>
           {/* hidden when the Windows build has no Storage Sense policy
-              key (checks.storage_sense === null): never a dead switch */}
+              key (storage_sense === null): never a dead switch */}
           {ssOn !== null ? (
             <SwitchRow
               on={ssOn}

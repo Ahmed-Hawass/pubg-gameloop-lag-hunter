@@ -16,7 +16,7 @@
 
 use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Instant;
 
@@ -28,25 +28,33 @@ fn logs_dir() -> PathBuf {
     super::storage::app_dir().join("logs")
 }
 
-fn log_path() -> PathBuf {
+fn log_path_in(dir: &Path) -> PathBuf {
     // one file per day: laghunter-2026-08-31.log
     let iso = sampler::iso_now(); // 2026-08-31T...
     let date = &iso[0..10];
-    logs_dir().join(format!("laghunter-{date}.log"))
+    dir.join(format!("laghunter-{date}.log"))
 }
 
-fn write_line(level: &str, msg: &str) {
+fn log_path() -> PathBuf {
+    log_path_in(&logs_dir())
+}
+
+fn write_line_to(dir: &Path, level: &str, msg: &str) {
     let _guard = LOG_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-    let _ = fs::create_dir_all(logs_dir());
+    let _ = fs::create_dir_all(dir);
     let iso = sampler::iso_now();
     let clock = &iso[11..23];
     if let Ok(mut f) = fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(log_path())
+        .open(log_path_in(dir))
     {
         let _ = writeln!(f, "{clock} [{level}] {msg}");
     }
+}
+
+fn write_line(level: &str, msg: &str) {
+    write_line_to(&logs_dir(), level, msg);
 }
 
 pub fn info(msg: &str) {
@@ -92,14 +100,18 @@ impl TimerGuard {
     }
 }
 
+fn log_op_duration_to(dir: &Path, op: &str, elapsed_ms: u128, warn_above_ms: u128) {
+    if elapsed_ms >= warn_above_ms {
+        write_line_to(dir, "WARN", &format!("{op}: {elapsed_ms}ms (slow)"));
+    } else {
+        write_line_to(dir, "INFO", &format!("{op}: {elapsed_ms}ms"));
+    }
+}
+
 impl Drop for TimerGuard {
     fn drop(&mut self) {
         let ms = self.started.elapsed().as_millis();
-        if ms >= self.warn_above_ms {
-            warn(&format!("{}: {ms}ms (slow)", self.op));
-        } else {
-            perf(self.op, ms);
-        }
+        log_op_duration_to(&logs_dir(), self.op, ms, self.warn_above_ms);
     }
 }
 
@@ -146,8 +158,12 @@ pub fn init_panic_hook() {
 
 /// Delete log files older than 7 days — called once at app start.
 pub fn cleanup_old_logs() {
-    let _ = fs::create_dir_all(logs_dir());
-    let Ok(rd) = fs::read_dir(logs_dir()) else {
+    cleanup_old_logs_in(&logs_dir());
+}
+
+fn cleanup_old_logs_in(dir: &Path) {
+    let _ = fs::create_dir_all(dir);
+    let Ok(rd) = fs::read_dir(dir) else {
         return;
     };
     let cutoff = std::time::SystemTime::now()
@@ -172,34 +188,69 @@ pub fn cleanup_old_logs() {
 mod tests {
     use super::*;
 
+    /// Unit tests must never touch the production logs directory: the
+    /// production helpers write into `%LOCALAPPDATA%\LagHunter\logs`, and
+    /// the retention cleanup deletes files there. Every test below aims
+    /// the same code at a throwaway temp dir instead.
+    fn temp_logs_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "laghunter-log-test-{}-{name}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        let _ = fs::create_dir_all(&dir);
+        dir
+    }
+
+    fn only_log_file(dir: &Path) -> PathBuf {
+        let mut logs: Vec<PathBuf> = fs::read_dir(dir)
+            .expect("temp logs dir must be readable")
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("log"))
+            .collect();
+        assert_eq!(logs.len(), 1, "expected exactly one test log file");
+        logs.pop().expect("test log file must exist")
+    }
+
     #[test]
     fn log_line_format() {
-        // the path under test writes to the real logs dir (app dir), which is
-        // fine — cleanup keeps it bounded. We only assert no panic here.
-        info("test message");
-        error("test error");
-        warn("test warn");
+        let dir = temp_logs_dir("lines");
+        write_line_to(&dir, "INFO", "test message");
+        write_line_to(&dir, "ERROR", "test error");
+        write_line_to(&dir, "WARN", "test warn");
+        let body = fs::read_to_string(only_log_file(&dir)).expect("test log must be readable");
+        assert!(body.contains("[INFO] test message"));
+        assert!(body.contains("[ERROR] test error"));
+        assert!(body.contains("[WARN] test warn"));
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn timed_guard_logs_on_drop() {
-        {
-            let _t = timed("unit test op");
-            std::thread::sleep(std::time::Duration::from_millis(1));
-        } // drop → line written; assert only that it never panics
-        perf("unit perf op", 42);
+        let dir = temp_logs_dir("timed");
+        log_op_duration_to(&dir, "unit test op", 1, 2_000);
+        log_op_duration_to(&dir, "unit slow op", 2_500, 100);
+        let body = fs::read_to_string(only_log_file(&dir)).expect("test log must be readable");
+        assert!(body.contains("unit test op: 1ms"));
+        assert!(body.contains("unit slow op: 2500ms (slow)"));
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn timed_guard_is_must_use() {
-        // compiling this test at all proves the type is usable; the must_use
-        // attribute is enforced at the call sites (warnings, not errors)
+        // Compiling proves the guard type is usable from a binding. Forget
+        // (rather than drop) so this test never writes to production logs.
         let _t = timed_with("unit custom op", 100);
-        drop(_t);
+        std::mem::forget(_t);
     }
 
     #[test]
     fn cleanup_never_panics() {
-        cleanup_old_logs();
+        let dir = temp_logs_dir("cleanup");
+        fs::write(dir.join("laghunter-2099-01-01.log"), "recent").expect("temp log must be writable");
+        cleanup_old_logs_in(&dir);
+        assert!(dir.join("laghunter-2099-01-01.log").is_file());
+        let _ = fs::remove_dir_all(&dir);
     }
 }

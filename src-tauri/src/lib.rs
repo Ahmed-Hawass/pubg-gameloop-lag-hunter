@@ -110,6 +110,16 @@ async fn system_checks(force: bool) -> Result<engine::system::SystemChecks, Stri
     }
 }
 
+/// The Tools tab's two switches, live from the registry (microseconds,
+/// in-process — no PowerShell spawn). SYNC by the codebase's own rule:
+/// only commands slower than a few milliseconds go async. The full
+/// system_checks batch costs 0.5–2s and the Tools page displays none of
+/// its rows; this command reads only what the switches mirror.
+#[tauri::command]
+fn tweak_states() -> engine::system::TweakStates {
+    engine::system::query_tweak_states()
+}
+
 #[tauri::command]
 async fn set_tweak(id: String, value: u32) -> Result<engine::tweaks::TweakResult, String> {
     let _t = engine::logging::timed("ipc: set_tweak");
@@ -258,20 +268,13 @@ async fn delete_session(id: String) -> Result<(), String> {
 /// cleanup). The ENGINE excludes the live session itself — the UI's
 /// exclude_id is honored as an EXTRA, but the running session can never be
 /// deleted even if the frontend passes nothing or the wrong id (a second
-/// lock the frontend can't lose).
+/// lock the frontend can't lose). The engine serializes this against
+/// session start, so a session born mid-delete cannot slip into the walk.
 #[tauri::command]
 async fn delete_all_sessions(exclude_id: Option<String>) -> Result<Vec<String>, String> {
     let _t = engine::logging::timed("ipc: delete_all_sessions");
-    let eng = session::init_global();
-    let live = eng.live_session_id();
-    let mut excluded = live;
-    // the UI's exclude (the session it believes is live) still applies —
-    // belt and suspenders, both can never be deleted
-    if excluded.is_none() {
-        excluded = exclude_id.filter(|id| !id.is_empty());
-    }
     let res = tauri::async_runtime::spawn_blocking(move || {
-        engine::storage::delete_all_sessions(&engine::storage::sessions_root(), excluded.as_deref())
+        session::init_global().delete_all_sessions_guarded(exclude_id.as_deref())
     })
     .await
     .map_err(|e| format!("delete-all task failed: {e}"));
@@ -627,6 +630,7 @@ pub fn run() {
             system_info,
             top_processes,
             system_checks,
+            tweak_states,
             set_tweak,
             open_windows_panel,
             set_auto_stop,

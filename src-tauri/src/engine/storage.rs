@@ -29,6 +29,16 @@ pub fn ensure_sessions_root() {
     let _ = fs::create_dir_all(sessions_root());
 }
 
+/// Crash-safe file write: readers either see the previous complete file
+/// or the new complete file, never a truncated half-write. This matters
+/// because the Reports list reads `events.json`/`summary.json` while a
+/// running session's autosave rewrites them on a timer.
+pub(crate) fn write_file_atomic(path: &Path, contents: &[u8]) -> std::io::Result<()> {
+    let tmp = path.with_extension("tmp");
+    fs::write(&tmp, contents)?;
+    fs::rename(&tmp, path)
+}
+
 /// Create a new session directory named by local time: session-YYYY-MM-DD_HHMMSS
 /// (local = wall-clock time on the user's machine, DST-aware).
 /// Second-resolution ids collide when a stop+start lands inside the same
@@ -88,9 +98,11 @@ impl SessionWriter {
 
     /// Autosafe: rewrite events + summary-lite periodically so a crash never loses data.
     pub fn autosave(&self, events: &[EngineEvent], thresholds: &Thresholds, started_at: &str) {
-        let _ = fs::write(
-            self.dir.join("events.json"),
-            serde_json::to_string_pretty(events).unwrap_or_default(),
+        let _ = write_file_atomic(
+            &self.dir.join("events.json"),
+            serde_json::to_string_pretty(events)
+                .unwrap_or_default()
+                .as_bytes(),
         );
         let summary = serde_json::json!({
             "session": self.dir.file_name().and_then(|s| s.to_str()).unwrap_or(""),
@@ -99,9 +111,11 @@ impl SessionWriter {
             "thresholds": thresholds,
             "eventsCount": events.len(),
         });
-        let _ = fs::write(
-            self.dir.join("summary.json"),
-            serde_json::to_string_pretty(&summary).unwrap_or_default(),
+        let _ = write_file_atomic(
+            &self.dir.join("summary.json"),
+            serde_json::to_string_pretty(&summary)
+                .unwrap_or_default()
+                .as_bytes(),
         );
     }
 
@@ -130,9 +144,11 @@ impl SessionWriter {
             .collect();
 
         // events.json
-        let _ = fs::write(
-            self.dir.join("events.json"),
-            serde_json::to_string_pretty(events).unwrap_or_default(),
+        let _ = write_file_atomic(
+            &self.dir.join("events.json"),
+            serde_json::to_string_pretty(events)
+                .unwrap_or_default()
+                .as_bytes(),
         );
 
         // samples.csv
@@ -153,7 +169,7 @@ impl SessionWriter {
                 fmt(g.and_then(|g| g.temp)),
             ));
         }
-        let _ = fs::write(self.dir.join("samples.csv"), csv);
+        let _ = write_file_atomic(&self.dir.join("samples.csv"), csv.as_bytes());
 
         // summary.json + report.md
         let stats = SessionStats::from(&samples);
@@ -172,14 +188,17 @@ impl SessionWriter {
                 "backgroundPct": stats.background_pct,
             },
         });
-        let _ = fs::write(
-            self.dir.join("summary.json"),
-            serde_json::to_string_pretty(&summary).unwrap_or_default(),
+        let _ = write_file_atomic(
+            &self.dir.join("summary.json"),
+            serde_json::to_string_pretty(&summary)
+                .unwrap_or_default()
+                .as_bytes(),
         );
 
         let report = build_report(&stats, events, samples.len() as u64);
         let rp = self.dir.join("report.md");
-        fs::write(&rp, report).map_err(|e| format!("cannot write report: {e}"))?;
+        write_file_atomic(&rp, report.as_bytes())
+            .map_err(|e| format!("cannot write report: {e}"))?;
         Ok(rp)
     }
 }
@@ -864,6 +883,22 @@ mod tests {
     fn session_id_format() {
         let id = session_id_from("2026-08-31T00:19:52.123Z");
         assert_eq!(id, "session-2026-08-31_001952");
+    }
+
+    #[test]
+    fn atomic_write_replaces_target_and_leaves_no_temp() {
+        // readers must only ever see a complete file: the helper writes a
+        // sibling and renames it over the target, so a crash cannot leave
+        // a truncated events.json/summary.json behind for the Reports list.
+        let d = std::env::temp_dir().join(format!("lh-atomic-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(&d).unwrap();
+        let target = d.join("events.json");
+        fs::write(&target, r#"[{"old":true}]"#).unwrap();
+        write_file_atomic(&target, br#"[{"new":true}]"#).unwrap();
+        assert_eq!(fs::read_to_string(&target).unwrap(), r#"[{"new":true}]"#);
+        assert!(!d.join("events.tmp").exists());
+        let _ = fs::remove_dir_all(&d);
     }
 
     #[test]
