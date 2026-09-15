@@ -38,7 +38,12 @@ export function ProcessesView(props: { active: boolean }) {
       setProcs(await api.topProcesses(force));
       setError(null);
     } catch (e) {
-      if (!silent) setError(String(e)); // polling failures stay quiet
+      // polling failures stay quiet; manual failures show the localized
+      // unknown-error copy with the raw message as a technical line
+      if (!silent) {
+        const raw = typeof e === "string" ? e : String(e);
+        setError(t.dialog.unknownErrorBody(raw));
+      }
     } finally {
       busyRef.current = false;
       if (pendingManualRef.current) {
@@ -81,9 +86,17 @@ export function ProcessesView(props: { active: boolean }) {
         />
       </div>
 
-      {error ? <div className="reports-error">{error}</div> : null}
-
-      {procs === null ? (
+      {/* a LOAD failure is a page state (the retry above re-reads live
+          every 5s anyway and on every press) — never a modal, never an
+          inline red line: the one-modal surface stays for action
+          failures, and this tab's only action is the refresh itself */}
+      {error ? (
+        <EmptyState
+          icon={<Activity size={18} />}
+          title={t.dialog.somethingWrong}
+          hint={error}
+        />
+      ) : procs === null ? (
         <EmptyState icon={<Activity size={18} />} title={t.topProcessesRefreshing} hint="" />
       ) : procs.length === 0 ? (
         <EmptyState icon={<Activity size={18} />} title={t.topProcessesEmpty} hint="" />

@@ -340,6 +340,16 @@ export function Dialog(props: {
  */
 export const MODAL_OPEN_EVENT = "laghunter:modal-open";
 
+/**
+ * Global signal for VIEW-LEVEL dialogs: App dispatches it when ITS dialog
+ * (the toast surface) opens on top of a view's own confirm/notice dialog.
+ * The view dialog yields (closes itself) instead of stacking two overlays
+ * where one Escape keydown would close both. Deliberately a SEPARATE event
+ * from MODAL_OPEN_EVENT: a view dispatches that one for its OWN dialog,
+ * and listening to it here would close the view's dialog on its own open.
+ */
+export const APP_DIALOG_OPEN_EVENT = "laghunter:app-dialog-open";
+
 function useAnchoredTooltip(ref: React.RefObject<HTMLElement | null>, text: string) {
   const [anchor, setAnchor] = useState<{ left: number; bottom: number } | null>(null);
 

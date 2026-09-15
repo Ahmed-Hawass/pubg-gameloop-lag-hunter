@@ -806,10 +806,9 @@
 .proc-row:nth-child(4) { animation-delay: 0.14s; }
 .proc-row:nth-child(5) { animation-delay: 0.18s; }
 .proc-row:nth-child(6) { animation-delay: 0.22s; }
-.proc-fill {
-  transform-origin: var(--bar-origin, left);
-  animation: bar-grow 0.5s var(--ease) both;
-}
+/* .proc-fill's origin + animation live once, in the .proc-fill block
+   above — this duplicate re-declared both and drifted the day one
+   of them changed */
 
 .check-row {
   animation: rise-in 0.35s var(--ease) both;

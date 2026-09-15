@@ -15,12 +15,20 @@ export interface ErrorDialog {
 /**
  * Decide which dialog a thrown backend error maps to.
  * `raw` is the error as string; `errors` is the locale's error-code table;
- * `copy` carries the locale's titles (somethingWrong / scanNeedsGame pair).
+ * `copy` carries the locale's titles (somethingWrong / scanNeedsGame pair
+ * plus the unknown-error body: a novel Rust message must never ship raw
+ * English into an Arabic dialog — the locale explains, the raw string
+ * rides along as a technical line).
  */
 export function errorDialog(
   raw: string,
   errors: Record<string, string>,
-  copy: { somethingWrong: string; scanNeedsGame: string; scanNeedsGameBody: string },
+  copy: {
+    somethingWrong: string;
+    scanNeedsGame: string;
+    scanNeedsGameBody: string;
+    unknownErrorBody: (raw: string) => string;
+  },
 ): ErrorDialog {
   const code = Object.keys(errors).find((c) => raw.includes(c));
   if (code === "GAMELOOP_NOT_RUNNING") {
@@ -29,5 +37,9 @@ export function errorDialog(
   if (code) {
     return { title: copy.somethingWrong, body: errors[code], key: code };
   }
-  return { title: copy.somethingWrong, body: raw, key: raw };
+  return {
+    title: copy.somethingWrong,
+    body: copy.unknownErrorBody(raw),
+    key: raw,
+  };
 }

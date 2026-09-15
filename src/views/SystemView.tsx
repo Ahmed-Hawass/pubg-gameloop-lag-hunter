@@ -21,7 +21,9 @@ export function SystemView() {
       setInfo(await api.systemInfo());
       setError(null);
     } catch (e) {
-      setError(String(e));
+      // localized unknown-error copy, raw message as the technical line
+      const raw = typeof e === "string" ? e : String(e);
+      setError(t.dialog.unknownErrorBody(raw));
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -37,6 +39,7 @@ export function SystemView() {
     void load();
     // mount-time fetch only: the retry button and focus handler below
     // own every later attempt
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -44,6 +47,9 @@ export function SystemView() {
     const onFocus = () => void load();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
+    // load re-resolves the fresh locale through its closure on every
+    // focus fire — its identity is not part of the subscription contract
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [errorNow]);
 
   if (error) {

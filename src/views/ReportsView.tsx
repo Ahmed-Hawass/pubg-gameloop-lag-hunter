@@ -1,13 +1,13 @@
-// ReportsView.tsx â€” saved sessions list + in-app friendly report reader.
+// ReportsView.tsx –” saved sessions list + in-app friendly report reader.
 // Content comes from the engine (keys + English fallbacks); the UI translates.
 
 import { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, ChevronLeft, Clock, FileText, FileWarning, Folder, Gauge, Trash2 } from "lucide-react";
-import { Button, Dialog, EmptyState, Hint, NoteCard, Tip } from "../components/components";
+import { Button, Dialog, EmptyState, Hint, NoteCard, Tip, APP_DIALOG_OPEN_EVENT } from "../components/components";
 import { api, type FriendlyReport, type SessionEntry } from "../bridge";
 import { useLang } from "../i18n";
 
-/** "Xm Ys" report-row duration â€” a deliberately different shape from the
+/** "Xm Ys" report-row duration –” a deliberately different shape from the
  *  live session's mm:ss clock (this one reads naturally in a list row).
  *  Units come from the locale (Latin m/s read as English inside Arabic
  *  rows). */
@@ -34,7 +34,6 @@ export function ReportsView(props: {
   const { t } = useLang();
   const [entries, setEntries] = useState<SessionEntry[] | null>(null);
   const [report, setReport] = useState<FriendlyReport | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
@@ -46,21 +45,50 @@ export function ReportsView(props: {
     partial: { label: t.partial, tone: "mid" },
   };
 
+  /** LOAD failures (the list itself) are a PAGE state: EmptyState + retry,
+      per the app's one-modal-surface rule - an action failure must never
+      grab the modal while the page itself can carry the bad news. ACTION
+      failures (open report, delete, open folder) are dialogs: the user
+      asked for something and it did not happen; that deserves the one
+      modal surface, exactly like the Tools tab's failed-write notice. */
+  const [loadFailed, setLoadFailed] = useState<string | null>(null);
+  /** action-failure notice body (null = no notice) */
+  const [notice, setNotice] = useState<string | null>(null);
+
   const refresh = () => {
     api
       .sessionEntries()
-      .then(setEntries)
-      .catch((e) => setError(String(e)));
+      .then((e) => {
+        setEntries(e);
+        setLoadFailed(null);
+      })
+      .catch((e) => {
+        const raw = typeof e === "string" ? e : String(e);
+        setLoadFailed(t.dialog.unknownErrorBody(raw));
+      });
   };
 
+  /** an action failed: localized copy + the raw message as a technical
+      line, shown as the view's Dialog (never bare English, never inline) */
+  const actionFailed = (e: unknown) => {
+    const raw = typeof e === "string" ? e : String(e);
+    setNotice(t.dialog.unknownErrorBody(raw));
+  };
+
+  // mount-time fetch only; the visibility effect and the deep-link below
+  // own every later attempt - refresh's identity is not part of the contract
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(refresh, []);
 
   // The view stays MOUNTED (tab switch = CSS visibility only), so a session
   // that just finished would never appear without this: re-read the list
-  // every time the tab becomes visible â€” the report of the session the user
+  // every time the tab becomes visible - the report of the session the user
   // just ran is there the moment they switch to it.
   useEffect(() => {
     if (active) refresh();
+    // same as above: the interval-of-visibility contract reads `active`,
+    // refresh re-resolves t/refs through the fresh closure each fire
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
   // deep-link: "Open full report" on the Monitor tab jumps here + opens the session
@@ -69,11 +97,11 @@ export function ReportsView(props: {
       if (!entries.some((e) => e.id === openId)) {
         // the linked session is gone (deleted meanwhile): say so instead
         // of silently opening somebody else's report. An empty list with
-        // the "latest" fallback link is not an error â€” just clear it.
+        // the "latest" fallback link is not an error - just clear it.
         // onOpened() must still fire: the App-level link is one-shot, and
         // leaving it set would re-raise this error on every list refresh.
         if (entries.length > 0) {
-          setError(t.reportNotFound);
+          setNotice(t.reportNotFound);
         }
         onOpened();
         return;
@@ -83,7 +111,7 @@ export function ReportsView(props: {
       api
         .loadReport(target)
         .then(setReport)
-        .catch((e) => setError(String(e)))
+        .catch(actionFailed)
         .finally(() => {
           setLoadingId(null);
           onOpened();
@@ -96,11 +124,11 @@ export function ReportsView(props: {
 
   const openReport = (id: string) => {
     setLoadingId(id);
-    setError(null);
+    setNotice(null);
     api
       .loadReport(id)
       .then(setReport)
-      .catch((e) => setError(String(e)))
+      .catch(actionFailed)
       .finally(() => setLoadingId(null));
   };
 
@@ -112,7 +140,7 @@ export function ReportsView(props: {
       onDeleted?.(id);
       refresh();
     } catch (e) {
-      setError(String(e));
+      actionFailed(e);
     }
   };
 
@@ -124,29 +152,44 @@ export function ReportsView(props: {
       onDeletedAll?.(ids);
       refresh();
     } catch (e) {
-      setError(String(e));
+      actionFailed(e);
     }
   };
 
   const openRootFolder = async () => {
     try {
-      const any = entries?.[0];
-      if (!any) return;
-      const p = await api.sessionFolder(any.id);
-      const idx = p.lastIndexOf("\\");
-      if (idx <= 0) return; // no parent separator â€” never open a bogus path
-      const root = p.substring(0, idx);
+      // the ENGINE names the sessions root - no path string surgery in
+      // the UI (the old lastIndexOf("\") derivation assumed a flat
+      // layout). The buttons render only with saved sessions, but the
+      // engine names the folder regardless.
+      const root = await api.sessionsRoot();
       if (!root) return;
       await api.openPath(root);
     } catch (e) {
-      setError(String(e));
+      actionFailed(e);
     }
   };
+
+  // one modal surface, app-wide: when the App-level dialog (gameloop
+  // closed, an advice, an error) opens while OUR delete confirmation is
+  // up, two overlays stack and one Escape keydown closes BOTH. App
+  // broadcasts APP_DIALOG_OPEN_EVENT for exactly this class of moment -
+  // our confirmation yields (the delete is re-askable, the pushed dialog
+  // is not). No state is destroyed: closing the confirm is a plain cancel.
+  useEffect(() => {
+    if (!confirmDelete && !confirmDeleteAll) return;
+    const onAppDialog = () => {
+      setConfirmDelete(null);
+      setConfirmDeleteAll(false);
+    };
+    window.addEventListener(APP_DIALOG_OPEN_EVENT, onAppDialog);
+    return () => window.removeEventListener(APP_DIALOG_OPEN_EVENT, onAppDialog);
+  }, [confirmDelete, confirmDeleteAll]);
 
   // ---- report reader ------------------------------------------------
   if (report) {
     const meta = outcomeMeta[report.outcome] ?? outcomeMeta.partial;
-    // findings carry keys â€” translate; fall back to the backend's English text
+    // findings carry keys –” translate; fall back to the backend's English text
     return (
       <div className="reports">
         <button className="reports-back" onClick={() => setReport(null)}>
@@ -166,7 +209,7 @@ export function ReportsView(props: {
           </div>
         </div>
 
-        {/* findings â€” translated from engine keys */}
+        {/* findings –” translated from engine keys */}
         {report.findings.length > 0 ? (
           <section className="report-section">
             <h3>{t.whatWeFound}</h3>
@@ -195,20 +238,20 @@ export function ReportsView(props: {
           </section>
         )}
 
-        {/* key moments â€” composed in the user's language from raw facts */}
+        {/* key moments –” composed in the user's language from raw facts */}
         <section className="report-section">
           <h3>{t.keyMoments}</h3>
           <ul className="report-moments">
             {report.highlights.map((h, i) => {
               const base = t.highlights[h.kind] ?? h.kind;
               const clock = h.clock ? ` (${h.clock})` : "";
-              const dur = h.dur_sec ? ` â€” ${Math.round(h.dur_sec)}s` : "";
+              const dur = h.dur_sec ? ` –” ${Math.round(h.dur_sec)}s` : "";
               return <li key={i}>{`${base}${dur}${clock}`}</li>;
             })}
           </ul>
         </section>
 
-        {/* metrics in plain language â€” composed from machine keys + numbers */}
+        {/* metrics in plain language –” composed from machine keys + numbers */}
         {report.metrics_summary.length > 0 ? (
           <section className="report-section">
             <h3>{t.theNumbers}</h3>
@@ -230,9 +273,12 @@ export function ReportsView(props: {
             label={t.openReportFile}
             icon={<FileText size={15} />}
             variant="ghost"
-            onClick={() => {
-              void api.openPath(report.raw_path);
-            }}
+              onClick={() => {
+                // open the report file externally — an action, so a
+                // failure lands in the notice dialog (never an unhandled
+                // rejection leaving the user with a silently dead button)
+                api.openPath(report.raw_path).catch(actionFailed);
+              }}
           />
         </div>
       </div>
@@ -246,8 +292,16 @@ export function ReportsView(props: {
         <h2 className="reports-title">{t.sessions}</h2>
         <Hint text={t.sessionsHint} />
       </div>
-      {error ? <div className="reports-error">{error}</div> : null}
-      {entries === null ? (
+      {loadFailed ? (
+        // the LIST failed to load: a page state with a retry (never a
+        // modal - the one surface stays free for action failures), same
+        // shape as SystemView's honest error state
+        <EmptyState
+          icon={<FileWarning size={18} />}
+          title={t.dialog.somethingWrong}
+          hint={loadFailed}
+        />
+      ) : entries === null ? (
         <EmptyState icon={<Gauge size={18} />} title={t.loadingSessions} hint="" />
       ) : entries.length === 0 ? (
         <EmptyState
@@ -265,7 +319,7 @@ export function ReportsView(props: {
                 className={loadingId === e.id ? "is-loading" : ""}
                 // keyboard users could never open a report: a clickable li
                 // is invisible to tab order and screen readers. The row
-                // is a listitem button now — Enter/Space open it, and the
+                // is a listitem button now - Enter/Space open it, and the
                 // announceable name is the report's own summary line.
                 role="button"
                 tabIndex={0}
@@ -315,7 +369,11 @@ export function ReportsView(props: {
         </ul>
       )}
 
-      {/* one global folder button at the bottom of the sessions list */}
+      {/* one global folder button at the bottom of the sessions list -
+          shown ONLY with saved sessions (a fresh user meets the empty
+          state, not action buttons over an empty folder). The engine
+          still names the root itself: no path string surgery here, and
+          the button never depends on a session existing to derive it */}
       {entries && entries.length > 0 ? (
         <div className="reports-actions">
           <Button
@@ -335,7 +393,7 @@ export function ReportsView(props: {
         </div>
       ) : null}
 
-      {/* delete confirmation â€” the unified Dialog component */}
+      {/* delete confirmation –” the unified Dialog component */}
       {confirmDelete ? (
         <Dialog
           title={t.dialog.deleteTitle}
@@ -352,7 +410,7 @@ export function ReportsView(props: {
         />
       ) : null}
 
-      {/* delete-all confirmation â€” same Dialog, dynamic count in the body */}
+      {/* delete-all confirmation –” same Dialog, dynamic count in the body */}
       {confirmDeleteAll ? (
         <Dialog
           title={t.dialog.deleteAllTitle}
@@ -368,6 +426,37 @@ export function ReportsView(props: {
           onClose={() => setConfirmDeleteAll(false)}
         />
       ) : null}
+
+      {/* action failure (open report / delete / open folder) - the
+          unified Dialog, exactly like the Tools tab's failed-write
+          notice: the user asked for something and it did not happen */}
+      {notice ? (
+        <Dialog
+          title={t.dialog.somethingWrong}
+          body={notice}
+          kind="notice"
+          okLabel={t.dialog.ok}
+          onClose={() => setNotice(null)}
+        />
+      ) : null}
+
+      {/* the notice yields to the app-level dialog, same as the confirms
+          above - one modal surface, one Escape closing one thing */}
+      <NoticeYield notice={notice} setNotice={setNotice} />
     </div>
   );
+}
+
+/** the APP_DIALOG_OPEN_EVENT subscription for the notice (a tiny
+ *  component so the effect's deps stay honest without dragging the whole
+ *  view into it) */
+function NoticeYield(props: { notice: string | null; setNotice: (v: string | null) => void }) {
+  const { notice, setNotice } = props;
+  useEffect(() => {
+    if (!notice) return;
+    const onAppDialog = () => setNotice(null);
+    window.addEventListener(APP_DIALOG_OPEN_EVENT, onAppDialog);
+    return () => window.removeEventListener(APP_DIALOG_OPEN_EVENT, onAppDialog);
+  }, [notice, setNotice]);
+  return null;
 }

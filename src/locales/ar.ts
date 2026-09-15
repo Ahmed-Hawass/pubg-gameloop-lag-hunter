@@ -28,6 +28,9 @@ export const ar: Locale = {
     scanNeedsGameBody:
       "يجب أن تكون PUBG Mobile قيد التشغيل داخل GameLoop قبل بدء الفحص. شغّل اللعبة، ثم اضغط زر البدء مرة أخرى.",
     somethingWrong: "حدث خطأ ما",
+    /** a novel backend error the code table doesn't know: the locale
+        explains, the raw message rides along as a technical line */
+    unknownErrorBody: (raw: string) => `حدث خطأ غير متوقع. تفاصيل تقنية: ${raw}`,
     gameloopClosed: "تم إغلاق GameLoop",
     gameloopClosedBody:
       "أُغلقت اللعبة أثناء تشغيل الفحص، فأوقفناه وحفظنا التقرير. ابدأ فحصًا جديدًا عند عودتك إلى اللعبة.",
@@ -98,11 +101,15 @@ export const ar: Locale = {
   // including the names of the languages themselves
   langEn: "English",
   langAr: "العربية",
-  // small measurement units (translated, not hardcoded Latin)
-  gbUnit: "جيجابايت",
-  ramUnit: "رام",
-  minUnit: "د",
-  secUnit: "ث",
+  // small measurement units: standalone units are Latin by design ("25 MB"
+  // reads as one technical token inside an Arabic sentence; "25 ميجابايت"
+  // splits the number from its unit and reads unprofessionally). Full
+  // explanatory sentences stay Arabic — the unit keys cover ONLY the
+  // standalone measurements, never sentence copy.
+  gbUnit: "GB",
+  ramUnit: "RAM",
+  minUnit: "m",
+  secUnit: "s",
 
   // ---- first-run welcome (two pages, once ever) ----
   welcomeTitle: "PUBG GameLoop Lag Hunter",
@@ -249,7 +256,7 @@ export const ar: Locale = {
   fixLabel: "الحل:",
 
   // ---- monitor: hero states ----
-  spikesCaptured: (n: number) => `تم رصد ${n} ${n === 1 ? "تقطيعة واحدة" : "تقطيعات"}`,
+  spikesCaptured: (n: number) => `تم رصد ${n === 1 ? "تقطيعة واحدة" : `${n} تقطيعات`}`,
   sessionClean: "كانت الجلسة سليمة دون أي تقطيع",
 
   // ---- monitor: metrics ----
@@ -366,5 +373,14 @@ export const ar: Locale = {
   lagCaptured: "تم رصد تقطيع",
   partial: "غير مكتملة",
   samples: "عينة",
-  spikeCount: (n: number) => `${n} ${n === 1 ? "تقطيعة" : "تقطيعات"}`,
+  // MSA counting: 1 = singular, 2 = dual, 3-10 = plural, 11+ = singular
+  // again ("11 تقطيعة") — the bare-plural-for-everything shape reads wrong
+  spikeCount: (n: number) =>
+    n === 1
+      ? "تقطيعة واحدة"
+      : n === 2
+        ? "تقطيعتان"
+        : n >= 3 && n <= 10
+          ? `${n} تقطيعات`
+          : `${n} تقطيعة`,
 };

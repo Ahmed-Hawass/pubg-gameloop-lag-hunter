@@ -114,6 +114,53 @@ async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T
   return window.__TAURI_INTERNALS__.invoke(cmd, args) as Promise<T>;
 }
 
+// ---- window + dialog bindings (the app's own window chrome, not engine
+// commands — but the same rule applies: bridge.ts is the ONLY file that
+// talks to Tauri, so these wrappers exist here for every consumer) -------
+
+/** Reveal the main window (called by main.tsx on first paint). */
+export async function showMainWindow(): Promise<void> {
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  await getCurrentWindow().show();
+}
+
+/** Is the main window maximized? */
+export async function isWindowMaximized(): Promise<boolean> {
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  return getCurrentWindow().isMaximized();
+}
+
+/** Subscribe to window resizes (used to re-read the maximized state). */
+export async function onWindowResized(cb: () => void): Promise<() => void> {
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  const un = await getCurrentWindow().onResized(cb);
+  return un;
+}
+
+export async function minimizeWindow(): Promise<void> {
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  await getCurrentWindow().minimize();
+}
+
+export async function toggleMaximizeWindow(): Promise<void> {
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  await getCurrentWindow().toggleMaximize();
+}
+
+export async function closeWindow(): Promise<void> {
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  await getCurrentWindow().close();
+}
+
+/** Native save dialog (the update download's destination picker). */
+export async function saveDialog(opts: {
+  defaultPath: string;
+  filters: { name: string; extensions: string[] }[];
+}): Promise<string | null> {
+  const { save } = await import("@tauri-apps/plugin-dialog");
+  return save(opts);
+}
+
 export interface SpikeMark {
   offset_ms: number;
   kind: string;
@@ -131,6 +178,7 @@ export const api = {
   deleteAllSessions: (excludeId: string | null) =>
     invoke<string[]>("delete_all_sessions", { excludeId }),
   sessionFolder: (id: string) => invoke<string>("session_folder", { id }),
+  sessionsRoot: () => invoke<string>("sessions_root"),
   getSettings: () => invoke<Settings>("get_settings"),
   setLanguage: (lang: string) => invoke<string>("set_language", { lang }),
   setTheme: (theme: string) => invoke<string>("set_theme", { theme }),

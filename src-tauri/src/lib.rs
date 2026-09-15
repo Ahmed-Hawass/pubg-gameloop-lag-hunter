@@ -114,9 +114,11 @@ async fn system_checks(force: bool) -> Result<engine::system::SystemChecks, Stri
 async fn set_tweak(id: String, value: u32) -> Result<engine::tweaks::TweakResult, String> {
     let _t = engine::logging::timed("ipc: set_tweak");
     // a registry write must never stall the UI: blocking pool like the rest
-    tauri::async_runtime::spawn_blocking(move || engine::tweaks::set_tweak(&id, value))
+    let res = tauri::async_runtime::spawn_blocking(move || engine::tweaks::set_tweak(&id, value))
         .await
-        .map_err(|e| format!("set tweak task failed: {e}"))?
+        .map_err(|e| format!("set tweak task failed: {e}"));
+    log_err("set_tweak", &res);
+    res?
 }
 
 #[tauri::command]
@@ -235,17 +237,21 @@ async fn session_entries() -> Vec<engine::storage::SessionEntry> {
 #[tauri::command]
 async fn load_report(id: String) -> Result<engine::storage::FriendlyReport, String> {
     let _t = engine::logging::timed("ipc: load_report");
-    tauri::async_runtime::spawn_blocking(move || engine::storage::friendly_report(&id))
+    let res = tauri::async_runtime::spawn_blocking(move || engine::storage::friendly_report(&id))
         .await
-        .map_err(|e| format!("load report task failed: {e}"))?
+        .map_err(|e| format!("load report task failed: {e}"));
+    log_err("load_report", &res);
+    res?
 }
 
 #[tauri::command]
 async fn delete_session(id: String) -> Result<(), String> {
     let _t = engine::logging::timed("ipc: delete_session");
-    tauri::async_runtime::spawn_blocking(move || engine::storage::delete_session(&id))
+    let res = tauri::async_runtime::spawn_blocking(move || engine::storage::delete_session(&id))
         .await
-        .map_err(|e| format!("delete task failed: {e}"))?
+        .map_err(|e| format!("delete task failed: {e}"));
+    log_err("delete_session", &res);
+    res?
 }
 
 /// Delete every saved session except the live writer's directory (bulk
@@ -264,24 +270,49 @@ async fn delete_all_sessions(exclude_id: Option<String>) -> Result<Vec<String>, 
     if excluded.is_none() {
         excluded = exclude_id.filter(|id| !id.is_empty());
     }
-    tauri::async_runtime::spawn_blocking(move || {
+    let res = tauri::async_runtime::spawn_blocking(move || {
         engine::storage::delete_all_sessions(&engine::storage::sessions_root(), excluded.as_deref())
     })
     .await
-    .map_err(|e| format!("delete-all task failed: {e}"))?
+    .map_err(|e| format!("delete-all task failed: {e}"));
+    log_err("delete_all_sessions", &res);
+    res?
+}
+
+/// Log every command failure before it travels back to the UI: a failure
+/// the user SAW but the log never recorded is a failure we cannot debug
+/// from a user-sent log file (the open_path os-error-2 case shipped for
+/// weeks before anyone noticed it was invisible in the log).
+fn log_err<T>(cmd: &str, res: &Result<T, String>) {
+    if let Err(e) = res {
+        engine::logging::warn(&format!("ipc {cmd} failed: {e}"));
+    }
 }
 
 #[tauri::command]
 fn session_folder(id: &str) -> Result<String, String> {
-    engine::storage::session_dir(id)
+    let res = engine::storage::session_dir(id);
+    log_err("session_folder", &res);
+    res
+}
+
+/// The sessions root itself (the Reports tab's "Open sessions folder").
+/// The ENGINE owns the path — the UI never derives it by string surgery
+/// on a session path (which assumed a flat layout and would silently
+/// open the wrong folder the day the layout nests).
+#[tauri::command]
+fn sessions_root() -> String {
+    engine::storage::sessions_root().to_string_lossy().to_string()
 }
 
 #[tauri::command]
 async fn open_windows_panel(panel: String) -> Result<(), String> {
     let _t = engine::logging::timed("ipc: open_windows_panel");
-    tauri::async_runtime::spawn_blocking(move || engine::system::open_windows_panel(&panel))
+    let res = tauri::async_runtime::spawn_blocking(move || engine::system::open_windows_panel(&panel))
         .await
-        .map_err(|e| format!("open panel task failed: {e}"))?
+        .map_err(|e| format!("open panel task failed: {e}"));
+    log_err("open_windows_panel", &res);
+    res?
 }
 
 #[tauri::command]
@@ -411,7 +442,15 @@ async fn download_update(
         })
     })
     .await
-    .map_err(|e| format!("download task failed: {e}"))?;
+    .map_err(|e| format!("download task failed: {e}"))
+    .and_then(|r| r);
+    // a non-"cancelled" failure is LOGGED (a cancel is a user choice, not
+    // a failure worth a warn line)
+    if let Err(e) = &res {
+        if e != "cancelled" {
+            engine::logging::warn(&format!("ipc download_update failed: {e}"));
+        }
+    }
     if res.is_err() {
         // cancelled or failed — make sure no partial file survives
         engine::update::cleanup_active_download();
@@ -429,9 +468,11 @@ fn cancel_update_download() {
 #[tauri::command]
 async fn open_download_folder(path: String) -> Result<(), String> {
     let _t = engine::logging::timed("ipc: open_download_folder");
-    tauri::async_runtime::spawn_blocking(move || engine::update::open_folder_selected(&path))
+    let res = tauri::async_runtime::spawn_blocking(move || engine::update::open_folder_selected(&path))
         .await
-        .map_err(|e| format!("open folder task failed: {e}"))?
+        .map_err(|e| format!("open folder task failed: {e}"));
+    log_err("open_download_folder", &res);
+    res?
 }
 
 #[tauri::command]
@@ -440,6 +481,17 @@ fn open_path(path: &str, app: tauri::AppHandle) -> Result<(), String> {
     // NEVER build shell strings ourselves: no cmd /C, no injection surface.
     // Scope: only paths inside our own app-data sessions folder ever reach here
     // (session dirs + report.md files). Everything else is refused.
+    // Every refusal/error is LOGGED: the user saw a dialog, the log must show
+    // why (a failure that only lives in the UI is a failure we cannot debug
+    // from a user-sent log file).
+    let res = open_path_inner(path, &app);
+    if let Err(e) = &res {
+        engine::logging::warn(&format!("open_path '{path}' refused: {e}"));
+    }
+    res
+}
+
+fn open_path_inner(path: &str, app: &tauri::AppHandle) -> Result<(), String> {
     let allowed_root = engine::storage::sessions_root();
     let target = std::path::Path::new(path);
     let canonical = target
@@ -477,6 +529,15 @@ fn open_url(url: &str, app: tauri::AppHandle) -> Result<(), String> {
     // Enforced allowlist: same hosts the capability file lists, verified on
     // OUR side (Rust) because plugin capabilities only scope the JS command
     // path — a Rust-side opener call is NOT constrained by them.
+    // Refusals are logged like every other command failure.
+    let res = open_url_inner(url, &app);
+    if let Err(e) = &res {
+        engine::logging::warn(&format!("open_url '{url}' refused: {e}"));
+    }
+    res
+}
+
+fn open_url_inner(url: &str, app: &tauri::AppHandle) -> Result<(), String> {
     let parsed = url
         .parse::<tauri::Url>()
         .map_err(|_| format!("invalid url: {url}"))?;
@@ -553,6 +614,7 @@ pub fn run() {
             delete_session,
             delete_all_sessions,
             session_folder,
+            sessions_root,
             get_settings,
             set_language,
             set_theme,
@@ -603,6 +665,9 @@ pub fn run() {
             engine::logging::cleanup_old_logs();
             engine::logging::info("app starting");
             engine::logging::info(&format!("app version: {}", engine::VERSION));
+            // the sessions root is born with the first session otherwise;
+            // make sure it exists from boot (cheap mkdir, idempotent)
+            engine::storage::ensure_sessions_root();
 
             // fixed-size window: center it, but do NOT show it yet — the
             // frontend reveals the window itself on first paint (see

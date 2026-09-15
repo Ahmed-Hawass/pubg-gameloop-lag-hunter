@@ -14,7 +14,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { TitleBar } from "./components/TitleBar";
-import { Dialog, MODAL_OPEN_EVENT, Tip } from "./components/components";
+import { Dialog, MODAL_OPEN_EVENT, APP_DIALOG_OPEN_EVENT, Tip } from "./components/components";
 import { MonitorView } from "./views/MonitorView";
 import { ReportsView } from "./views/ReportsView";
 import { SystemView } from "./views/SystemView";
@@ -76,6 +76,10 @@ export default function App() {
   /** a newer version is available on GitHub (checked at startup, quietly;
       replaced by the About tab's manual check when that finds one first) */
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  /** the running version, ASKED ONCE from the engine (tauri.conf.json's
+      single source of truth) and handed to both consumers — the old
+      shape paid the IPC twice (TitleBar + AboutView each asked) */
+  const [appVersion, setAppVersion] = useState<string>("");
   /** the update modal: shown at startup (once per version) or via manual check */
   const [updateModal, setUpdateModal] = useState(false);
   /** first-run advice is up RIGHT NOW — derived from the live toast state,
@@ -172,10 +176,25 @@ export default function App() {
 
   // initial state + live pushes + saved preferences + gameloop watcher
   useEffect(() => {
+    // the subscription registers FIRST, the snapshot second: an engine
+    // push landing between the two used to be overwritten by the (marginally
+    // older) snapshot when its promise resolved later. The subscriber is
+    // attached for the whole flight, so the last write is always the newest
+    // truth; the snapshot only fills whatever arrived before it.
+    const un = onEngineState((ev) => {
+      handleStateRef.current(ev.payload);
+    }).catch(() => null);
     api
       .getState()
       .then(setStatus)
-      .catch((e) => setToast(String(e)));
+      .catch((e) => {
+        // a novel failure gets the localized unknown-error dialog, never
+        // a raw English string inside an Arabic UI
+        const raw = typeof e === "string" ? e : String(e);
+        setToastTitle(t.dialog.somethingWrong);
+        setToastBody(t.dialog.unknownErrorBody(raw));
+        setToast(`state:${raw}`);
+      });
     api
       .getSettings()
       .then((s) => {
@@ -202,17 +221,25 @@ export default function App() {
       .psAvailable()
       .then((ok) => setPsLimited(!ok))
       .catch(() => setPsLimited(false)); // probe failure ≠ limited claim
+    // the one version ask for the whole app (titlebar + about share it)
+    api
+      .getVersion()
+      .then(setAppVersion)
+      .catch(() => setAppVersion(""));
     // start the engine's idle GameLoop watcher. Its `engine://gameloop`
     // events have no UI consumer yet (the Start button stays pressable and
     // the engine gate answers on press) — but the WATCHER itself must run:
     // it keeps the session-start gate's emulator snapshot warm.
     void api.watchGameloop();
-    const un = onEngineState((ev) => {
-      handleStateRef.current(ev.payload);
-    }).catch(() => null);
     return () => {
       un.then((f) => f?.());
     };
+    // deliberate: mount-once bootstrap (state + preferences + watcher).
+    // The getState failure dialog reads t.dialog through the CLOSURE —
+    // re-running the bootstrap on a language switch would re-fire every
+    // startup query. The localized copy at catch-time is the locale the
+    // app booted with; a mid-session language change re-renders normally.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const chooseDuration = (secs: number) => {
@@ -241,6 +268,7 @@ export default function App() {
         somethingWrong: t.dialog.somethingWrong,
         scanNeedsGame: t.dialog.scanNeedsGame,
         scanNeedsGameBody: t.dialog.scanNeedsGameBody,
+        unknownErrorBody: t.dialog.unknownErrorBody,
       });
       setToastTitle(d.title);
       setToastBody(d.body);
@@ -366,9 +394,15 @@ export default function App() {
   // leave its bubble stuck above the modal (and after it closed) until the
   // user hovered the trigger again. Click-opened dialogs need no signal —
   // the hook already hides on pointerdown.
+  // The APP_DIALOG signal is for VIEW-LEVEL dialogs (Reports' delete
+  // confirm, Tools' notice): ours is the one surface they must yield to,
+  // one overlay at a time, one Escape closing one thing.
   useEffect(() => {
     if (toast || (updateModal && updateInfo)) {
       window.dispatchEvent(new Event(MODAL_OPEN_EVENT));
+    }
+    if (toast) {
+      window.dispatchEvent(new Event(APP_DIALOG_OPEN_EVENT));
     }
   }, [toast, updateModal, updateInfo]);
 
@@ -384,7 +418,7 @@ export default function App() {
 
   return (
     <div className="shell">
-      <TitleBar />
+      <TitleBar version={appVersion} />
       <div className="shell-body">
         {/* null = settings still loading (IPC round-trip): show NOTHING
             decisive. The old bug rendered the main UI immediately, then
@@ -497,6 +531,7 @@ export default function App() {
               <div className={view === "about" ? "" : "is-hidden-view"}>
                 <AboutView
                   updateInfo={updateInfo}
+                  version={appVersion}
                   onOpenUpdateModal={() => setUpdateModal(true)}
                   onUpdateFound={(info) => setUpdateInfo(info)}
                 />

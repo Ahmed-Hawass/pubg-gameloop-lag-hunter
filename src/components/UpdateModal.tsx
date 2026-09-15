@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { FolderOpen, ShieldCheck, TriangleAlert } from "lucide-react";
-import { api, type UpdateInfo } from "../bridge";
+import { api, saveDialog, type UpdateInfo } from "../bridge";
 import { useLang } from "../i18n";
 
 type Phase =
@@ -26,6 +26,10 @@ export function UpdateModal(props: {
   const { info, onClose } = props;
   const { t } = useLang();
   const [phase, setPhase] = useState<Phase>({ kind: "offer" });
+  // true while the offer's Download action is in flight (the OS save
+  // dialog does not block the WebView — without the gate a second click
+  // opened a second dialog and raced two downloads)
+  const [offerBusy, setOfferBusy] = useState(false);
   // closes exactly once: Escape-during-download closes the modal, then the
   // cancelled download's promise rejects LATER and would call onClose again
   // (on an unmounted component) — the ref keeps the second call a no-op
@@ -54,12 +58,37 @@ export function UpdateModal(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onClose, phase.kind]);
 
+  // UNMOUNT mid-download = the same orphan the Escape path guards against:
+  // App can swap this modal out for the advice/error dialog while the
+  // stream runs (gameloop_closed push, a one-shot advice). The component
+  // dies, but the engine-side download keeps streaming — cancel it here,
+  // exactly like Escape does. App-level re-mounts start a fresh offer.
+  useEffect(() => {
+    return () => {
+      if (closedRef.current) return; // an explicit close already cancelled
+      // a download in flight when the modal vanished without a click:
+      // the engine's cancel is idempotent, so calling it whenever a
+      // downloading phase was live is safe (no download = no-op)
+      if (phase.kind === "downloading") {
+        void api.cancelUpdateDownload();
+      }
+    };
+    // phase is the only reactive input and it IS the dep — no directive
+    // needed; the cleanup intentionally reads the phase from THIS closure
+  }, [phase.kind]);
+
   const startDownload = async () => {
+    // one flight at a time: the OS save dialog does NOT block the WebView,
+    // so a second click while it is open would open a second dialog and
+    // race two downloads. The engine refuses the second registration, but
+    // the UI must not even try (the same busy pattern every other button
+    // in the app uses).
+    if (offerBusy) return;
+    setOfferBusy(true);
     try {
-      // the Windows save dialog (official plugin): the user picks the
-      // location, the official asset name comes pre-filled
-      const { save } = await import("@tauri-apps/plugin-dialog");
-      const dest = await save({
+      // the Windows save dialog (official plugin, through the bridge): the
+      // user picks the location, the official asset name comes pre-filled
+      const dest = await saveDialog({
         defaultPath: info.asset_name,
         filters: [{ name: "Application", extensions: ["exe"] }],
       });
@@ -94,6 +123,12 @@ export function UpdateModal(props: {
       if (!closedRef.current) {
         setPhase({ kind: "failed", reason });
       }
+    } finally {
+      // the busy gate covers the whole offer→save-dialog→download handoff;
+      // once a phase transition happened (downloading/done/failed) the
+      // button is gone anyway — only a cancelled save dialog lands back on
+      // the offer, and it re-opens the gate here
+      setOfferBusy(false);
     }
   };
 
@@ -129,6 +164,7 @@ export function UpdateModal(props: {
         <button
           className="btn btn-md btn-primary"
           autoFocus
+          disabled={offerBusy}
           onClick={() => void startDownload()}
         >
           {t.updateDownload}
@@ -194,7 +230,11 @@ export function UpdateModal(props: {
         <button className="btn btn-md btn-ghost" onClick={close}>
           {t.updateClose}
         </button>
-        <button className="btn btn-md btn-primary" onClick={() => void startDownload()}>
+        <button
+          className="btn btn-md btn-primary"
+          disabled={offerBusy}
+          onClick={() => void startDownload()}
+        >
           {t.updateRetry}
         </button>
       </>

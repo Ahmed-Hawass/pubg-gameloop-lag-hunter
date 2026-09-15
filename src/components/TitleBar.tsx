@@ -6,35 +6,29 @@
 
 import { useEffect, useState } from "react";
 import { Copy, Minus, Square, X } from "lucide-react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import {
+  closeWindow,
+  isWindowMaximized,
+  minimizeWindow,
+  onWindowResized,
+  toggleMaximizeWindow,
+} from "../bridge";
 import { Tip } from "./components";
-import { api } from "../bridge";
 import { useLang } from "../i18n";
 import appIcon from "../assets/app-icon.png";
 
-export function TitleBar() {
+export function TitleBar(props: { version: string }) {
   const { t } = useLang();
-  const [version, setVersion] = useState<string>("");
+  const { version } = props;
   const [maximized, setMaximized] = useState(false);
-
-  // the version comes from the backend (tauri.conf.json) — one source of truth
-  useEffect(() => {
-    api
-      .getVersion()
-      .then(setVersion)
-      .catch(() => setVersion(""));
-  }, []);
 
   // track the maximized state for the toggle's tooltip and icon
   useEffect(() => {
-    const win = getCurrentWindow();
-    win
-      .isMaximized()
+    isWindowMaximized()
       .then(setMaximized)
       .catch(() => {});
-    const unlisten = win.onResized(() => {
-      win
-        .isMaximized()
+    const unlisten = onWindowResized(() => {
+      isWindowMaximized()
         .then(setMaximized)
         .catch(() => {});
     });
@@ -71,7 +65,7 @@ export function TitleBar() {
           <button
             aria-label={t.minimize}
             onClick={() => {
-              void getCurrentWindow().minimize();
+              void minimizeWindow();
             }}
           >
             <Minus size={13} />
@@ -81,7 +75,7 @@ export function TitleBar() {
           <button
             aria-label={maximized ? t.restore : t.maximize}
             onClick={() => {
-              void getCurrentWindow().toggleMaximize();
+              void toggleMaximizeWindow();
             }}
           >
             {maximized ? <Copy size={11} /> : <Square size={11} />}
@@ -92,7 +86,7 @@ export function TitleBar() {
             className="close"
             aria-label={t.close}
             onClick={() => {
-              void getCurrentWindow().close();
+              void closeWindow();
             }}
           >
             <X size={14} />

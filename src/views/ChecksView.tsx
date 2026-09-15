@@ -49,7 +49,13 @@ export function ChecksView(props: { active: boolean }) {
       setChecks(await api.systemChecks(force));
       setError(null);
     } catch (e) {
-      if (!silent) setError(String(e));
+      // the localized unknown-error copy, with the raw message riding
+      // along as a technical line — never a bare English string in an
+      // Arabic UI
+      if (!silent) {
+        const raw = typeof e === "string" ? e : String(e);
+        setError(t.dialog.unknownErrorBody(raw));
+      }
     } finally {
       busyRef.current = false;
       if (pendingManualRef.current) {

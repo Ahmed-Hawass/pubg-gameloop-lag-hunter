@@ -24,6 +24,9 @@ export const en = {
     scanNeedsGameBody:
       "PUBG Mobile must be running inside GameLoop before a scan can start. Start the game, then press Start again.",
     somethingWrong: "Something went wrong",
+    /** a novel backend error the code table doesn't know: the locale
+        explains, the raw message rides along as a technical line */
+    unknownErrorBody: (raw: string) => `An unexpected error occurred. Technical detail: ${raw}`,
     gameloopClosed: "GameLoop was closed",
     gameloopClosedBody:
       "The game closed while the scan was running, so we stopped it and saved the report. Start a new scan when you're back in the game.",

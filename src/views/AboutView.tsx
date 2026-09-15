@@ -19,6 +19,9 @@ const SUPPORT_URL = "https://paypal.me/ahmedhawass";
 export function AboutView(props: {
   /** the startup check's result — dot + "download" affordance when set */
   updateInfo: UpdateInfo | null;
+  /** the running version, ASKED ONCE by App and handed down (the old
+      shape paid the IPC twice: TitleBar and AboutView each asked) */
+  version: string;
   onOpenUpdateModal: () => void;
   /**
    * Manual check found a newer version the startup check MISSED (e.g. the
@@ -30,18 +33,10 @@ export function AboutView(props: {
   onUpdateFound: (info: UpdateInfo) => void;
 }) {
   const { t } = useLang();
-  const { updateInfo, onOpenUpdateModal, onUpdateFound } = props;
+  const { updateInfo, version, onOpenUpdateModal, onUpdateFound } = props;
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<"latest" | "err" | null>(null);
-  // version from the backend — the same string tauri.conf.json owns
-  const [appVersion, setAppVersion] = useState<string>("");
-
-  useEffect(() => {
-    api
-      .getVersion()
-      .then(setAppVersion)
-      .catch(() => setAppVersion(""));
-  }, []);
+  const appVersion = version;
 
   // the startup check already knows — the dot shows immediately
   useEffect(() => {
