@@ -14,8 +14,8 @@ They meet in exactly one place: a JSON state contract pushed over Tauri events.
 │  components/  the design system                   │
 │  locales/     every human string                   │
 │  bridge.ts    the ONLY file that talks             │
-│               to the backend                       │
-│  version.ts   numeric release comparison           │
+│               to the backend (commands, events,     │
+│               window chrome, dialogs)               │
 │  errors.ts    error codes → dialog copy            │
 │  i18n.tsx     language resolution + provider       │
 │               (persisted > OS > English)            │
@@ -53,7 +53,8 @@ They meet in exactly one place: a JSON state contract pushed over Tauri events.
 │             dest-validated paths (v1.3+)          │
 │                                                   │
 │  version    the update-order comparison           │
-│             (shared with the UI's copy)           │
+│             (the single copy — the UI              │
+│             asks the engine, never its own)        │
 │                                                   │
 │  settings   schema v3, atomic writes, migration   │
 │                                                   │
@@ -164,8 +165,10 @@ A crashed session can **never** be reported as `"clean"`.
 
 `npm test` (Vitest) covers the frontend's pure logic:
 
-* Version comparison (the update check)
+* Update-modal decision flow (the once-per-version rule)
 * Error-code → dialog mapping
+* Theme resolution
+* Browser-shortcut blocking
 * Locale key parity between en and ar
 
 CI (`.github/workflows/ci.yml`) runs both suites plus clippy

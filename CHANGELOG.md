@@ -4,6 +4,216 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+Branch work (the `tools` branch): not a release entry; version files stay
+at 1.6.0 until the branch ships. Covers the committed work below plus the
+in-flight session on top of it.
+
+### Added (committed)
+- Tools tab: a System tweaks card (theme-aware spot illustration) opening
+  a list grouped by area. Switches mirror the live Windows result (ON =
+  the named action holds right now, whoever flipped it): optimistic
+  flips, explicit writes both directions, verify-by-re-read, audit log,
+  rows hide when the Windows build lacks the feature, and fresh reads on
+  open and window focus pick up manual changes. Engine: tweaks.rs
+  (HKCU-only writes, whitelisted ids, value validation) plus the
+  set_tweak IPC command, and Storage Sense availability/value inside
+  SystemChecks.
+- Boot log carries the Windows build (registry read via winreg, no
+  PowerShell), and hiding a feature row on a build that lacks it is
+  logged explicitly: every user-sent log is readable on the 10/11 axis
+  from its first line.
+- All registry access goes through winreg in-process: a toggle answers
+  in milliseconds instead of seconds, string-built scripts (and their
+  quoting traps, the .'01' bug class) are structurally impossible, and
+  access errors come back as typed Results instead of silently empty
+  output. Storage Sense writes through a dedicated KEY_SET_VALUE handle
+  (the read handle is KEY_READ only; writing through it was os error 5,
+  verified live and fixed).
+- ESLint (typescript-eslint recommended + the react-hooks rules) wired as
+  npm run lint and a CI step before the tests: the repo had no lint
+  anywhere, the exact gap the summary-timer bug slipped through. The
+  deliberate fire-once effects carry documented suppress comments.
+
+### Fixed (committed)
+- The sustained CPU perf cliff (the spike rule) fires on AMD/Intel too:
+  it used to live behind two early returns inside the GPU cliff path, so
+  machines without an nvidia-smi feed could never reach it (pure CPU
+  evidence silenced by a GPU gate). It is its own check fed every
+  sample, GPU or not, with the same load gate and accumulator semantics.
+- Open conditions keep their cards beyond the 5-minute live window: a
+  condition that stays open (mem_pressure for 20 minutes) emitted one
+  Start, it aged out of the window, and the card vanished while the
+  problem was ongoing with Overall still red and nothing explaining why.
+  A Start with no later End for its kind is still open by definition and
+  passes the age filter; closed conditions still expire.
+- Cliff classification is decided once, at emit time. The diagnoser used
+  to re-derive it from the LATEST sample, so a cliff that fired while
+  the machine was healthy retroactively read as gpu_busy minutes later
+  once the machine dipped (and the reverse), and the saved report carried
+  a third, static dictionary that could disagree with both. The event kind
+  carries the answer; the report dictionary is pinned to it by a parity
+  test over every known kind.
+- The others_ok gate is machine-tuned (moved onto Thresholds): disk-queue
+  and RAM-floor bars are the session's own (a static 0.5 called a healthy
+  2-disk machine loaded; a static 2048MB bar read a mem_pressure 64GB
+  machine healthy). The missing-counter abstention rule is unchanged.
+- check_gameloop_alive applies its TTL: the comment always promised fresh
+  evidence but the code read the raw snapshot, so a dead probe thread
+  left the session running on ghost evidence. A stale read counts as a
+  miss now.
+- Session start order: the cross-session snapshot wipe ran AFTER the
+  visibility/emulator probes stored their fresh results, discarding the
+  probes' work in the same critical section every time. The wipe runs
+  first, then the seeds, so tick zero carries real evidence.
+- Same-second restart no longer truncates the previous session: ids are
+  second-resolution and File::create truncates, so a stop+start inside
+  one wall-clock second destroyed the just-finalized session's samples.
+  A collision takes a monotonic -2/-3 suffix; ids stay sortable.
+- The live session is hidden from the reports list by the ENGINE's own
+  id, not the file heuristic that broke at the first autosave (~50s in,
+  summary.json appears with partial:true and the half-written session
+  showed up as a half-finished report).
+- Severity escalates while a condition is open: a saturation opening at
+  86% (warn) then pegging 99% used to keep a medium card for the whole
+  condition. One Instant escalation event now fires when an open warn
+  condition crosses into crit; the diagnoser keeps the worst severity.
+- Correlation pairing is per window: a cliff in the gap between two
+  churn windows (or before a wake started) confirms nothing. The old
+  earliest-wake check and first-start/last-end envelope are gone.
+- Settings writes are serialized (one settings::update lock across the
+  read-modify-write; overlapping set_* commands used to race on the
+  fixed .tmp name and the loser's change silently vanished).
+- Download single-flight is enforced in the engine: register_cancel used
+  to write over a live download's Arc, dropping its only cancel path.
+  watch_gameloop spawns its never-exiting watcher thread once per process.
+- Counter values parse in both decimal cultures: typeperf CSV is always
+  dot-decimal, but the PowerShell Get-Counter emitter formats with the
+  CURRENT culture ("12,5" on de-DE/fr-FR). One parse_counter_value serves
+  both paths; the emitter splits pairs on the path separator so a comma
+  inside a value survives; the first converted value logs one culture
+  line. The live typeperf integration test was also locale-brittle (it
+  asserted the bare parse the production code does not do) and now checks
+  what actually runs.
+- The report events table reads timestamps with .get instead of a raw
+  slice: a malformed timestamp from a future producer would panic the
+  finalizer, and the app builds with panic=abort.
+- The WebView2 boot probe also checks the per-user install under
+  LOCALAPPDATA (common on non-admin accounts): those users got a false
+  runtime-missing dialog and could not start the app at all.
+- Report metrics are machine keys + raw numbers, not English sentences:
+  Arabic users read English lines in the middle of an Arabic report. The
+  locale files own the sentence per language; unknown keys fall back to
+  key: value, never a blank line.
+- Frontend honesty pass: the summary auto-dismiss timer actually expires
+  (an unstable callback identity restarted it on every App re-render), the
+  advice flags reset by the FLAG not the toast value (a stuck-high flag
+  silently suppressed the update modal for the rest of the launch),
+  SystemView recovers from a transient failure (retry + window-focus
+  re-read instead of a dead tab until app restart), ChecksView keeps its
+  header above the error state, ProcessesView queues a manual press that
+  lands mid-poll, and UpdateModal guards the save-dialog path (closing
+  the modal while the OS dialog was up, then confirming, started an
+  orphaned download with no UI attached).
+- Keyboard and screen-reader fixes: report rows are focusable buttons
+  with Enter/Space handlers, confirm dialogs move focus to CANCEL (Enter
+  on the trigger used to re-fire the delete through the overlay),
+  radiogroup options carry role/aria-checked, window controls and the
+  metric-hint trigger have accessible names, the sidebar announces the
+  current tab, and the update dots are polite status regions.
+- Dead code out after consumer greps: Detector.gpu_max_mem,
+  GpuSample.pstate, and a comment documenting a helper that never
+  existed. The GameLoop process-name list is ONE const now (the matcher
+  and the visibility probe built their own copies).
+
+### Fixed (in-flight session, uncommitted)
+- An in-flight update download is cancelled when its modal is swapped out
+  mid-flight (a GameLoop-closed push or a one-shot advice used to unmount
+  the UpdateModal silently and orphan the engine-side stream; only the
+  Escape path cancelled before).
+- The update Download button re-fires while the OS save dialog is open
+  (the dialog does not block the WebView): a second click opened a second
+  save dialog and raced two downloads. The button is busy-gated for the
+  whole offer, save dialog, and download handoff.
+- Unknown backend errors no longer ship raw English into an Arabic
+  interface: the locale explains (a new unknownErrorBody key, en + ar)
+  and the raw message rides along as a technical line.
+- Error surfaces follow one rule now: ACTION failures (open a report,
+  delete a session, open the folder, a failed tweak write) show the one
+  Dialog; LOAD failures (a tab's data) show an honest EmptyState with
+  the retry path that already existed. The stray inline red line in
+  Reports (and its reports-error CSS) is gone; Processes' inline line
+  became the same EmptyState.
+- Tools › System tweaks no longer spins "Loading..." forever when the
+  underlying checks read keeps failing: the details page states the
+  failure honestly, and the switch busy gate is a ref (a double-click
+  could slip two writes through the state gate).
+- A view-level dialog (Reports' delete confirmations, Tools' notice)
+  yields when the app-level dialog opens on top of it: two stacked
+  overlays meant one Escape closed both. A dedicated APP_DIALOG_OPEN
+  signal (separate from the tooltip-hiding one) drives the yield.
+- The sessions "Open sessions folder" and "Delete all" buttons render
+  only with saved sessions again (the agreed empty state for a fresh
+  user). The engine still names the root itself (a new sessions_root
+  command): no path string surgery in the UI, and the sessions folder is
+  created at boot so a missing folder can never produce an os-error-2
+  dialog in the first place.
+- Arabic counting: spikesCaptured no longer doubles "one" ("تم رصد 1
+  تقطيعة واحدة"), and spikeCount uses proper MSA forms (dual for 2,
+  plural for 3-10, singular for 11+).
+- Standalone measurement units render Latin in Arabic ("25 MB", "32 GB
+  RAM", "5m 30s"): the unit keys stay (1:1 parity holds), their values
+  are the technical token users read natively. Explanatory sentences
+  stay Arabic.
+- Ctrl+Shift+J (the devtools console) slipped through the
+  browser-shortcut block; only Ctrl+Shift+I was covered.
+- CPU p95 in reports is nearest-rank: every session under 21 samples
+  reported its MAXIMUM as p95 (a floor-index artifact of the old
+  formula).
+- Command failures are LOGGED before they reach the UI (open_path,
+  open_url, open_windows_panel, set_tweak, load_report, delete_session,
+  delete_all_sessions, open_download_folder, download_update): the
+  open_path os-error-2 shipped for weeks as a user-visible dialog with
+  zero log lines.
+- The engine state subscription registers before the cold-boot snapshot
+  resolves, so a push landing between the two can no longer be
+  overwritten by the marginally older snapshot; the app version is asked
+  once and shared by the title bar and About (it used to be two IPC
+  calls).
+
+### Changed (in-flight session, uncommitted)
+- The diagnoser correlator builds its indexes in ONE pass per tick
+  instead of nested full scans (events × starts) while holding the
+  session lock, and the live view reads a bounded 15-minute window
+  (still-open conditions ride along however old) while the full history
+  stays the source of truth for autosave, finalize, and the saved
+  report. The correlation-window inequality is compile-time asserted.
+- Hard-fault instants stop firing on every tick while the paging-churn
+  or disk-queue condition is already open describing the same storm
+  (a 10-minute storm used to emit ~600 near-identical events that
+  polluted the feed and double-counted the disk evidence).
+- A still-open gpu_wake/paging_churn condition no longer drives the red
+  "Lag" banner on its own (its card is correlation-gated, so the banner
+  showed red with zero cards explaining why).
+- The RAM bar shows "--" (honest no-data) when the available reading
+  meets or exceeds the assumed total, instead of painting a permanently
+  full stick (the 8 GB fallback meeting a 32 GB machine).
+- Window chrome and the save dialog route through bridge.ts like every
+  other backend call (the three files that called Tauri APIs directly
+  now use wrappers), and the dead frontend copy of the version
+  comparison was removed: the engine's comparison is the single source.
+- Streaming sources (typeperf, the PDH emitter, nvidia-smi dmon) are
+  reaped by a watchdog even when their stream goes silent mid-session:
+  a wedged emitter used to outlive every stop/start cycle until app
+  exit. Session sample counts are streamed (buffered line walks)
+  instead of reading whole samples files into memory on every Reports
+  refresh.
+- The OS theme answer is seeded on <html> before the first React paint
+  (the common cases render flash-free; a saved theme that contradicts
+  the OS still settles after the settings IPC, unavoidable without a
+  synchronous bridge).
+
 ## [1.6.0] - 2026-09-11
 
 ### Added
