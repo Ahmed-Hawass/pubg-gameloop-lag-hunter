@@ -10,6 +10,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - Tools wears a Beta pill in the sidebar and on both cards until v2
   goes stable: the tab writes to Windows and ships early, so it stays
   labelled.
+- Per-action elevation groundwork (no user-facing change yet): an
+  elevated id runs as the same binary with a hidden flag through one
+  UAC prompt per flip (never at launch), writes only, then exits while
+  the normal flow verifies by re-read. A refused prompt reports exact
+  "cancelled" and rolls the switch back silently (a choice, not an
+  error); only a failure after consent shows the Dialog.
 - Tools is two cards now: Gaming tweaks (the six game rows, no area
   dividers left inside) and Storage (Storage Sense moved there, with a
   placeholder note until the storage phase starts).

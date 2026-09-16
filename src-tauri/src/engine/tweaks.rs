@@ -19,9 +19,11 @@
 // impossible now) and access errors come back as typed Results instead of
 // silently empty output lines.
 //
-// Scope deliberately narrow: HKCU (current user) DWORDs only — no elevation,
-// no reboot, no service or policy writes. Anything needing admin or BIOS
-// stays a read-only check with a deep link, never a button here.
+// Scope: HKCU writes run directly (no elevation). Ids that need admin go
+// through the elevate module (same binary re-run elevated, one UAC prompt
+// per flip, verified by the same re-read); a refused prompt is a quiet
+// rollback, never a dialog. BIOS-level changes stay read-only checks
+// with a deep link, never a button here.
 
 use serde::Serialize;
 use winreg::enums::HKEY_CURRENT_USER;
@@ -450,6 +452,17 @@ pub fn set_tweak(id: &str, value: u32) -> Result<TweakResult, String> {
         WGC_ID => set_windowed_opt(value),
         _ => Err("unknown tweak".into()),
     }
+}
+
+/// True for every id the dispatch above knows. The elevated runner gates
+/// on this (not on a second list) so the two can never disagree about
+/// what exists: an id the engine cannot set is refused before UAC, and
+/// elevation adds privilege, never new ids.
+pub fn is_known_id(id: &str) -> bool {
+    matches!(
+        id,
+        DVR_ID | SS_ID | GAMEMODE_ID | GPUPREF_ID | FSO_ID | MOUSE_ID | WGC_ID
+    )
 }
 
 #[cfg(test)]

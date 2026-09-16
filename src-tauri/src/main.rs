@@ -2,6 +2,17 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
+    // Elevated single-action mode (see engine::elevate): the same binary
+    // re-run by ourselves through a UAC prompt, or by hand for testing.
+    // Checked FIRST: the run is headless (no window, no session, no
+    // single-instance focus steal) and exits with a machine code.
+    let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(|s| s.as_str()) == Some(lag_hunter_lib::engine::elevate::ELEVATED_ACTION_FLAG) {
+        std::process::exit(lag_hunter_lib::engine::elevate::run_elevated_action(
+            &args[2..],
+        ));
+    }
+
     // Win10 guarantee: if the WebView2 runtime is missing (machines cut off
     // from Windows Update), the app would show a blank window. Detect it up
     // front with a plain filesystem probe (the runtime's install location,

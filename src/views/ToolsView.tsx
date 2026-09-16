@@ -315,6 +315,10 @@ export function ToolsView(props: {
     } catch (e) {
       tweak.set(before);
       const raw = typeof e === "string" ? e : String(e);
+      // a refused elevation is a choice, not a failure: roll back silently
+      // (same exact-"cancelled" contract as the update flow — a message
+      // merely containing the word still counts as a real error)
+      if (raw === "cancelled") return;
       setNotice(t.dialog.unknownErrorBody(raw));
     } finally {
       tweakBusyRef.current = false;
