@@ -614,6 +614,10 @@ pub struct TweakStates {
     /// windowed-games optimization state (Win11+ only); None = unsupported
     /// build (row hides — there is no such Settings toggle to mirror there)
     pub windowed_game_opt: Option<bool>,
+    /// High Performance row state: On = a performance-class plan is
+    /// active; Off = present or restorable; Hidden = Ultimate active or
+    /// S0-only firmware (forcing plans there fights the design)
+    pub power_high_perf: RowState,
 }
 
 /// Visibility of a Tools row whose availability depends on the machine.
@@ -824,15 +828,11 @@ fn extract_power_name(raw: &str) -> String {
 /// GUIDs are identical on every Windows language — the only reliable
 /// signal on an Arabic (or any localized) Windows where the display name
 /// comes back translated ("أقصى أداء" etc.).
-fn extract_power_guid(raw: &str) -> String {
+pub(crate) fn extract_power_guid(raw: &str) -> String {
     // "Power Scheme GUID: e72c17b6-94d2-4509-adfc-8f2302229d1a  (High performance)"
-    let after = raw.split(':').nth(1).unwrap_or("");
+    let after = raw.split(':').next_back().unwrap_or("").trim();
     let guid = after.split_whitespace().next().unwrap_or("");
-    let looks_like_guid = guid.len() == 36
-        && guid.as_bytes()[8] == b'-'
-        && guid.as_bytes()[13] == b'-'
-        && guid.chars().all(|c| c.is_ascii_hexdigit() || c == '-');
-    if looks_like_guid {
+    if looks_like_guid(guid) {
         guid.to_ascii_lowercase()
     } else {
         String::new()
@@ -840,10 +840,16 @@ fn extract_power_guid(raw: &str) -> String {
 }
 
 /// Built-in Windows performance-class scheme GUIDs (locale-independent).
-const POWER_GUID_HIGH_PERFORMANCE: &str = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
-const POWER_GUID_ULTIMATE_PERFORMANCE: &str = "e9a42b02-d5df-448d-aa66-1f0f8455410a";
+/// Ultimate verified against Microsoft's documented duplicatescheme GUID
+/// (an earlier revision carried a transposed variant that could never
+/// match, so Ultimate machines fell through to name matching).
+pub(crate) const POWER_GUID_HIGH_PERFORMANCE: &str = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
+const POWER_GUID_ULTIMATE_PERFORMANCE: &str = "e9a42b02-d5df-448d-aa00-03f14749eb61";
+/// Balanced is the universal fallback (present on virtually every machine,
+// used when a stored previous plan vanished).
+pub const POWER_GUID_BALANCED: &str = "381b4222-f694-41f0-9685-ff5bb260df2e";
 
-fn is_performance_plan(name: &str, guid: &str) -> bool {
+pub(crate) fn is_performance_plan(name: &str, guid: &str) -> bool {
     // GUID first: exact, language-independent truth for built-in plans.
     if guid == POWER_GUID_HIGH_PERFORMANCE || guid == POWER_GUID_ULTIMATE_PERFORMANCE {
         return true;
@@ -859,8 +865,138 @@ fn is_performance_plan(name: &str, guid: &str) -> bool {
         || n.contains("الأداء العالي")
         || n.contains("أداء عالي")
         || n.contains("أقصى الأداء")
-        || n.contains("الأداء الأقصى");
+        || n.contains("الأداء الأقصى")
+        // reported Arabic display name of Ultimate Performance; unverified
+        // live (no Arabic Ultimate machine seen yet) — kept because a miss
+        // only risks a false warn, never a wrong write
+        || n.contains("الأداء المطلق");
     english || arabic
+}
+
+/// A powercfg GUID shape check, factored out of extract_power_guid so the
+/// plan-list parser shares the exact same rule (one definition, used by
+/// the health batch, the Tools read, and their tests).
+fn looks_like_guid(s: &str) -> bool {
+    s.len() == 36
+        && s.as_bytes()[8] == b'-'
+        && s.as_bytes()[13] == b'-'
+        && s.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
+}
+
+/// All power schemes from `powercfg /list` as (guid, display name) pairs.
+/// Names matter: a user-created High Performance duplicate carries a
+/// fresh GUID every time, so GUID-only matching can never see it — the
+/// name fallback in is_performance_plan is what recognizes it.
+pub fn power_list() -> Vec<(String, String)> {
+    let out = Command::new("powercfg")
+        .arg("/list")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .creation_flags(NO_WINDOW)
+        .output();
+    let Ok(out) = out else { return Vec::new() };
+    let text = String::from_utf8_lossy(&out.stdout);
+    text.lines()
+        .filter_map(|line| {
+            let guid = extract_power_guid(line);
+            if guid.is_empty() {
+                return None;
+            }
+            Some((guid, extract_power_name(line)))
+        })
+        .collect()
+}
+
+/// GUIDs only, for callers that restore by identity (previous-plan
+/// fallback must match the exact scheme, never a name twin).
+pub fn power_list_guids() -> Vec<String> {
+    power_list().into_iter().map(|(g, _)| g).collect()
+}
+
+/// Active scheme GUID, same source the health batch parses (kept as a
+/// separate call so the Tools read stays independent of the batch).
+pub fn power_active_guid() -> String {
+    power_active_scheme().0
+}
+
+/// Active scheme as (guid, display name): the verify step needs both
+/// (performance-class by GUID or by name fallback, like the row read).
+pub fn power_active_scheme() -> (String, String) {
+    let out = Command::new("powercfg")
+        .arg("/getactivescheme")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .creation_flags(NO_WINDOW)
+        .output();
+    let Ok(out) = out else {
+        return (String::new(), String::new());
+    };
+    let text = String::from_utf8_lossy(&out.stdout);
+    let text = text.into_owned();
+    (extract_power_guid(&text), extract_power_name(&text))
+}
+
+/// True when the firmware reports S0 Low Power Idle (Modern Standby) as
+/// AVAILABLE. Parsed structurally: only the section before the "not
+/// available" marker counts (S0 also appears in the unavailable list on
+/// S3 machines — live-proven on the dev box). The marker is English-only;
+/// on locales where it is absent we assume NOT S0 (show the row; a flip
+/// that cannot work fails honestly at verify time instead of hiding a
+/// working feature). Powercfg output is native-fast, no PowerShell.
+pub fn s0_standby_present() -> bool {
+    let out = Command::new("powercfg")
+        .arg("/a")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .creation_flags(NO_WINDOW)
+        .output();
+    let Ok(out) = out else { return false };
+    let text = String::from_utf8_lossy(&out.stdout);
+    s0_available_in(&text)
+}
+
+fn s0_available_in(powercfg_a: &str) -> bool {
+    let lower = powercfg_a.to_ascii_lowercase();
+    let available = match lower.find("not available") {
+        Some(i) => &lower[..i],
+        None => &lower[..],
+    };
+    available.contains("s0")
+}
+
+/// The Tools power row state: On = a performance-class plan is active
+/// (built-in GUID, custom duplicate, or name fallback — the dev box
+/// itself runs a custom High Performance duplicate); Off = a
+/// performance plan exists or the machine can restore one; Hidden =
+/// Ultimate already active (nothing above it to offer) or an S0-only
+/// machine (forcing plans fights the firmware by design).
+pub fn power_row_state(
+    active_guid: &str,
+    active_name: &str,
+    list: &[(String, String)],
+    s0: bool,
+) -> RowState {
+    // Ultimate first: the performance check below would also claim it
+    // (by name fallback), but hiding is the honest answer there.
+    let ultimate_active = active_guid == POWER_GUID_ULTIMATE_PERFORMANCE
+        || active_name.to_ascii_lowercase().contains("ultimate")
+        || active_name.contains("الأداء المطلق");
+    if ultimate_active {
+        return RowState::Hidden;
+    }
+    if is_performance_plan(active_name, active_guid) {
+        return RowState::On;
+    }
+    // presence = ANY performance-class plan (a duplicate's GUID is fresh
+    // every creation, so builtin-only matching would re-create forever —
+    // the exact bug that littered duplicate plans).
+    let perf_present = list
+        .iter()
+        .any(|(g, n)| is_performance_plan(n, g));
+    if perf_present || !s0 {
+        return RowState::Off;
+    }
+    RowState::Hidden
 }
 
 fn pagefile_ok(mode: &str, mb: u64) -> bool {
@@ -1237,6 +1373,27 @@ pub fn query_tweak_states() -> TweakStates {
             .as_deref(),
         ))
     };
+    // power row: three native powercfg reads (each ~tens of ms, NO_WINDOW,
+    // fixed args — the batch's 0.5-2s PowerShell cost stays untouched).
+    // Active scheme line carries "GUID (Name)": the same parse the health
+    // batch uses, so the row and the card can never disagree on what is on.
+    let power_active_raw = Command::new("powercfg")
+        .arg("/getactivescheme")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .creation_flags(NO_WINDOW)
+        .output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+        .unwrap_or_default();
+    let power_active_guid = extract_power_guid(&power_active_raw);
+    let power_active_name = extract_power_name(&power_active_raw);
+    let power_high_perf = power_row_state(
+        &power_active_guid,
+        &power_active_name,
+        &power_list(),
+        s0_standby_present(),
+    );
     TweakStates {
         game_dvr_enabled: gamedvr_armed_winreg(dvr_historical, dvr_policy),
         storage_sense: storage_sense_state(ss_exists, ss_value),
@@ -1245,6 +1402,7 @@ pub fn query_tweak_states() -> TweakStates {
         fso_disabled,
         mouse_accel_off: mouse_accel_off(mouse_speed, mouse_t1, mouse_t2),
         windowed_game_opt,
+        power_high_perf,
     }
 }
 
@@ -1375,6 +1533,71 @@ mod tests {
         assert!(is_performance_plan("الأداء العالي", ""));
         assert!(!is_performance_plan("موفر الطاقة", "")); // Power saver (Arabic)
         assert!(!is_performance_plan("متوازن", "")); // Balanced (Arabic)
+    }
+
+    #[test]
+    fn ultimate_guid_is_microsofts_documented_one() {
+        // a transposed variant lived here and could never match, so
+        // Ultimate machines fell through to name matching (and Arabic
+        // Ultimates to a false warn). Pinned against the documented
+        // duplicatescheme GUID.
+        assert_eq!(
+            POWER_GUID_ULTIMATE_PERFORMANCE,
+            "e9a42b02-d5df-448d-aa00-03f14749eb61"
+        );
+        assert!(is_performance_plan("", POWER_GUID_ULTIMATE_PERFORMANCE));
+    }
+
+    #[test]
+    fn s0_detected_only_in_the_available_section() {
+        // the dev box shape: S3 machine whose UNAVAILABLE list still names
+        // S0 — a naive substring would hide the row on a working machine
+        let s3 = "The following sleep states are available on this system:\n    Standby (S3)\n    Hibernate\n\nThe following sleep states are not available on this system:\n    Standby (S0 Low Power Idle)\n\tThe system firmware does not support this standby state.\n";
+        assert!(!s0_available_in(s3));
+        let s0 = "The following sleep states are available on this system:\n    Standby (S0 Low Power Idle) Network Connected\n    Hibernate\n\nThe following sleep states are not available on this system:\n    Standby (S3)\n\tThe system firmware does not support this standby state.\n";
+        assert!(s0_available_in(s0));
+        assert!(!s0_available_in("garbage"));
+        assert!(!s0_available_in(""));
+    }
+
+    #[test]
+    fn power_row_state_matrix() {
+        let high = POWER_GUID_HIGH_PERFORMANCE.to_string();
+        let balanced = POWER_GUID_BALANCED.to_string();
+        let pair = |g: &str, n: &str| (g.to_string(), n.to_string());
+        let list = vec![pair(&balanced, "Balanced"), pair(&high, "High performance")];
+        // on High Performance (built-in or custom duplicate by name)
+        assert_eq!(
+            power_row_state(&high, "High performance", &list, false),
+            RowState::On
+        );
+        assert_eq!(
+            power_row_state("e72c17b6-94d2-4509-adfc-8f2302229d1a", "High performance", &list, false),
+            RowState::On
+        );
+        // Ultimate active (GUID or duplicate by name): hide, nothing above it
+        assert_eq!(
+            power_row_state(POWER_GUID_ULTIMATE_PERFORMANCE, "Ultimate Performance", &list, false),
+            RowState::Hidden
+        );
+        assert_eq!(
+            power_row_state("223d3f55-7a5e-4b4f-9518-861f628282ba", "Ultimate Performance", &list, false),
+            RowState::Hidden
+        );
+        // Balanced, performance present or restorable: plain toggle
+        assert_eq!(
+            power_row_state(&balanced, "Balanced", &list, false),
+            RowState::Off
+        );
+        assert_eq!(
+            power_row_state(&balanced, "Balanced", &[pair(&balanced, "Balanced")], false),
+            RowState::Off
+        );
+        // Balanced-only on S0 firmware: hide, forcing fights the design
+        assert_eq!(
+            power_row_state(&balanced, "Balanced", std::slice::from_ref(&pair(&balanced, "Balanced")), true),
+            RowState::Hidden
+        );
     }
 
     #[test]

@@ -202,8 +202,17 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
             <span className="check-state">
               {checks.power_ok ? t.powerOk(checks.power_name) : t.powerWarn(checks.power_name)}
             </span>
-            <button className="check-open" onClick={() => void api.openWindowsPanel("power")}>
-              {t.openSettings}
+            <button
+              className="check-open"
+              onClick={() => {
+                // High Performance has an in-app row now: stay inside the
+                // app and land on it. Without the link (tests), keep the
+                // Windows page — the row may still be hidden on S0/Ultimate.
+                if (onOpenTool) onOpenTool("powerplan");
+                else void api.openWindowsPanel("power");
+              }}
+            >
+              {onOpenTool ? t.openInTools : t.openSettings}
             </button>
           </div>
         </div>

@@ -10,6 +10,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - Tools wears a Beta pill in the sidebar and on both cards until v2
   goes stable: the tab writes to Windows and ships early, so it stays
   labelled.
+- High Performance power row (first elevated tweak): one switch for the
+  built-in plan (restored with Microsoft's own command when missing),
+  OFF restores your previous plan from settings, verified by re-read
+  through one UAC prompt per flip (a refused prompt rolls back
+  silently). The health power card links to the row; S0-only machines
+  and active Ultimate hide it instead of pretending.
 - Per-action elevation groundwork (no user-facing change yet): an
   elevated id runs as the same binary with a hidden flag through one
   UAC prompt per flip (never at launch), writes only, then exits while
@@ -86,6 +92,16 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   deliberate fire-once effects carry documented suppress comments.
 
 ### Fixed
+- Power ON no longer clones a new plan every flip: duplicatescheme mints
+  a fresh GUID on each run, so "builtin missing" as presence check
+  re-created forever. Presence is any performance-class plan now, the
+  switch activates what exists, creation happens only at zero plans, and
+  verification reads performance-class instead of one GUID.
+- The Ultimate Performance GUID was a transposed variant that could
+  never match, so Ultimate machines fell through to name matching (and
+  Arabic Ultimates to a false "switch to High performance" warn). It is
+  Microsoft's documented GUID now, pinned by a test, with the reported
+  Arabic display name as fallback.
 - The sustained CPU perf cliff (the spike rule) fires on AMD/Intel too:
   it used to live behind two early returns inside the GPU cliff path, so
   machines without an nvidia-smi feed could never reach it (pure CPU

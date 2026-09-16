@@ -28,6 +28,8 @@
 use serde::Serialize;
 use winreg::enums::HKEY_CURRENT_USER;
 use winreg::RegKey;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 
 /// Registry home of the background-recording toggle ("Record what
 /// happened"): HKCU needs no elevation, takes effect immediately.
@@ -50,6 +52,9 @@ const GPUPREF_ID: &str = "gpupref";
 const FSO_ID: &str = "fso";
 const MOUSE_ID: &str = "mouse";
 const WGC_ID: &str = "windowedopt";
+/// Power plan id: the FIRST elevated tweak. Reads stay unprivileged
+/// (powercfg queries need none); writes go through the elevate module.
+pub const POWERPLAN_ID: &str = "powerplan";
 
 /// Registry homes shared with the read side (system.rs): ONE definition
 /// per key path — the lightweight tweak_states read and these writes must
@@ -439,9 +444,196 @@ pub fn set_windowed_opt(value: u32) -> Result<TweakResult, String> {
     })
 }
 
-/// Dispatch a set by id. Unknown ids (and out-of-range values) fail before
-/// anything runs.
+/// Dispatch a set by id. Elevated ids run through the elevate module
+/// (same binary re-run elevated); everything else writes directly.
+/// Unknown ids (and out-of-range values) fail before anything runs.
 pub fn set_tweak(id: &str, value: u32) -> Result<TweakResult, String> {
+    if super::elevate::is_elevated_id(id) {
+        return set_tweak_elevated(id, value);
+    }
+    set_tweak_direct(id, value)
+}
+
+/// Elevated flip: previous-state read (unprivileged powercfg queries need
+/// no elevation), UAC spawn, then the SAME verify-by-re-read. Cancellation
+/// passes through verbatim for the UI's silent rollback.
+///
+/// Ownership rule: the PARENT stores the previous plan (settings.json is
+/// the USER's file — an elevated child writing it would leave an
+/// admin-owned file future unprivileged writes cannot touch). The child
+/// touches power schemes only, never settings.
+fn set_tweak_elevated(id: &str, value: u32) -> Result<TweakResult, String> {
+    if value > 1 {
+        return Err(format!("{id} value must be 0 or 1"));
+    }
+    if id != POWERPLAN_ID {
+        return Err(format!("no elevated setter for {id}"));
+    }
+    let on = value == 1;
+    let active = super::system::power_active_guid();
+    let previous = if active.is_empty() { None } else { Some(active) };
+    if on {
+        // remember where OFF returns to (latest intent wins); skipped when
+        // already on a performance plan — there is nothing to return to.
+        // GUID-first check (names lie across locales); the previous plan
+        // is whatever is active now, however the user got there.
+        if let Some(ref prev) = previous {
+            if !super::system::is_performance_plan("", prev) {
+                let prev = prev.clone();
+                let _ = super::settings::update(|s| {
+                    s.previous_power_guid = Some(prev);
+                });
+            }
+        }
+    }
+    let code = super::elevate::elevate_self(id, value)?;
+    super::elevate::map_exit_code(code)?;
+    // verify by re-read, parent side: the child wrote, we confirm. ON
+    // means ANY performance plan active (builtin, pre-existing custom, or
+    // just created — creation mints fresh GUIDs, so exact matching would
+    // lie); OFF means exactly the restore target we chose.
+    let verified = if on {
+        let (guid, name) = super::system::power_active_scheme();
+        super::system::is_performance_plan(&name, &guid)
+    } else {
+        let stored = super::settings::load().previous_power_guid;
+        let list = super::system::power_list_guids();
+        super::system::power_active_guid()
+            == power_restore_target(stored.as_deref(), &list)
+    };
+    super::logging::info(&format!(
+        "tweak powerplan set: on={on} verified={verified}"
+    ));
+    // previous stays None: TweakResult.previous is a numeric leftover the
+    // UI never reads; the real previous plan lives in settings and is
+    // resolved at OFF time (it may change between flips).
+    Ok(TweakResult {
+        id: id.into(),
+        previous: None,
+        value,
+        verified,
+    })
+}
+
+/// One powercfg call with fixed args (native exe, NO_WINDOW, no shell —
+/// the same discipline as the panel opener; PowerShell never enters the
+/// write path). Reads need no elevation; writes run elevated (child).
+fn powercfg(args: &[&str]) -> Result<String, String> {
+    let out = std::process::Command::new("powercfg")
+        .args(args)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .creation_flags(0x0800_0000)
+        .output()
+        .map_err(|e| format!("powercfg spawn failed: {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "powercfg {} exited {}",
+            args.join(" "),
+            out.status.code().unwrap_or(-1)
+        ));
+    }
+    String::from_utf8(out.stdout).map_err(|_| "powercfg output not UTF-8".into())
+}
+
+/// Where OFF returns to: the stored previous plan when it is a real,
+/// still-present scheme; otherwise Balanced (present on virtually every
+/// machine). Pure: the whole fallback policy in one testable place.
+fn power_restore_target(stored: Option<&str>, list: &[String]) -> String {
+    match stored {
+        Some(g)
+            if !g.is_empty()
+                && list.iter().any(|x| x == g) =>
+        {
+            g.to_string()
+        }
+        _ => super::system::POWER_GUID_BALANCED.to_string(),
+    }
+}
+
+/// What ON needs: an existing performance plan's guid, or a fresh
+/// creation. Pure decision (tested): duplicatescheme mints a NEW guid on
+/// every run, so "builtin in list" can never be the presence check — a
+/// custom duplicate would re-create forever (live-proven litter).
+enum PowerEnableTarget {
+    Existing(String),
+    Create,
+}
+
+fn power_enable_target(list: &[(String, String)]) -> PowerEnableTarget {
+    if let Some((g, _)) = list
+        .iter()
+        .find(|(g, _)| g == super::system::POWER_GUID_HIGH_PERFORMANCE)
+    {
+        return PowerEnableTarget::Existing(g.clone());
+    }
+    if let Some((g, _)) = list
+        .iter()
+        .find(|(g, n)| super::system::is_performance_plan(n, g))
+    {
+        // a custom High Performance (user or OEM duplicate): activate it,
+        // create nothing — its settings are the user's own
+        return PowerEnableTarget::Existing(g.clone());
+    }
+    PowerEnableTarget::Create
+}
+
+/// Set the power plan (runs ELEVATED: /setactive and /duplicatescheme
+/// need admin). ON = High performance (the builtin when present, an
+/// existing custom duplicate when one serves, a single creation only
+/// when zero performance plans exist); OFF = the stored previous plan
+/// via power_restore_target. Verified by re-reading the active scheme,
+/// like every other setter here.
+pub fn set_power_plan(value: u32) -> Result<TweakResult, String> {
+    if value > 1 {
+        return Err("powerplan value must be 0 or 1".into());
+    }
+    let on = value == 1;
+    let target = if on {
+        match power_enable_target(&super::system::power_list()) {
+            PowerEnableTarget::Existing(g) => g,
+            PowerEnableTarget::Create => {
+                // the ONLY creation this module ever does, and only when
+                // enabling with nothing to enable: parse the minted guid
+                // from the command output (it is fresh every run) and
+                // activate exactly it
+                let created = powercfg(&[
+                    "-duplicatescheme",
+                    super::system::POWER_GUID_HIGH_PERFORMANCE,
+                ])?;
+                let guid = super::system::extract_power_guid(&created);
+                if guid.is_empty() {
+                    return Err("could not read the created plan".into());
+                }
+                super::logging::info(&format!("powerplan created: {guid}"));
+                guid
+            }
+        }
+    } else {
+        // the child never touches settings (admin-owned file hazard):
+        // the parent stored previous before spawning; here we only read.
+        // Settings load is lock-free (committed files only).
+        let stored = super::settings::load().previous_power_guid;
+        let fresh = super::system::power_list_guids();
+        power_restore_target(stored.as_deref(), &fresh)
+    };
+    powercfg(&["/setactive", &target])?;
+    let verified = super::system::power_active_guid() == target;
+    super::logging::info(&format!(
+        "tweak powerplan set: on={on} verified={verified}"
+    ));
+    Ok(TweakResult {
+        id: POWERPLAN_ID.into(),
+        previous: None,
+        value,
+        verified,
+    })
+}
+
+/// Direct dispatch (no elevation routing): what the elevated CHILD runs,
+/// and what unit tests exercise. The parent never calls this for an id
+/// in ELEVATED_IDS — that way lies an infinite UAC loop.
+pub fn set_tweak_direct(id: &str, value: u32) -> Result<TweakResult, String> {
     match id {
         DVR_ID => set_dvr(value),
         SS_ID => set_storage_sense(value),
@@ -450,6 +642,7 @@ pub fn set_tweak(id: &str, value: u32) -> Result<TweakResult, String> {
         FSO_ID => set_fso(value),
         MOUSE_ID => set_mouse_accel(value),
         WGC_ID => set_windowed_opt(value),
+        POWERPLAN_ID => set_power_plan(value),
         _ => Err("unknown tweak".into()),
     }
 }
@@ -461,7 +654,14 @@ pub fn set_tweak(id: &str, value: u32) -> Result<TweakResult, String> {
 pub fn is_known_id(id: &str) -> bool {
     matches!(
         id,
-        DVR_ID | SS_ID | GAMEMODE_ID | GPUPREF_ID | FSO_ID | MOUSE_ID | WGC_ID
+        DVR_ID
+            | SS_ID
+            | GAMEMODE_ID
+            | GPUPREF_ID
+            | FSO_ID
+            | MOUSE_ID
+            | WGC_ID
+            | POWERPLAN_ID
     )
 }
 
@@ -485,6 +685,8 @@ mod tests {
         assert!(set_tweak("fso", 3).is_err());
         assert!(set_tweak("mouse", 42).is_err());
         assert!(set_tweak("windowedopt", 2).is_err());
+        // elevated ids refuse BEFORE any UAC spawn (no prompt in tests)
+        assert!(set_tweak("powerplan", 2).is_err());
     }
 
     #[test]
@@ -510,8 +712,71 @@ mod tests {
             ("fso", "fso value must be 0 or 1"),
             ("mouse", "mouse value must be 0 or 1"),
             ("windowedopt", "windowedopt value must be 0 or 1"),
+            ("powerplan", "powerplan value must be 0 or 1"),
         ] {
             assert_eq!(set_tweak(id, 2).unwrap_err(), want, "id {id} mis-dispatched");
         }
+    }
+
+    #[test]
+    fn power_restore_target_prefers_a_live_previous() {        let list = vec![
+            "381b4222-f694-41f0-9685-ff5bb260df2e".to_string(),
+            "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c".to_string(),
+        ];
+        // stored + present = back to exactly it (even Power saver)
+        assert_eq!(
+            power_restore_target(
+                Some("381b4222-f694-41f0-9685-ff5bb260df2e"),
+                &list
+            ),
+            "381b4222-f694-41f0-9685-ff5bb260df2e"
+        );
+        // stored but vanished, never-stored, and garbage all fall back
+        // to Balanced (present on virtually every machine)
+        assert_eq!(
+            power_restore_target(Some("aaaaaaaa-0000-0000-0000-000000000000"), &list),
+            super::super::system::POWER_GUID_BALANCED
+        );
+        assert_eq!(
+            power_restore_target(None, &list),
+            super::super::system::POWER_GUID_BALANCED
+        );
+        assert_eq!(
+            power_restore_target(Some("garbage"), &list),
+            super::super::system::POWER_GUID_BALANCED
+        );
+        assert_eq!(
+            power_restore_target(Some(""), &list),
+            super::super::system::POWER_GUID_BALANCED
+        );
+    }
+
+    #[test]
+    fn power_enable_target_never_duplicates_twice() {
+        // the litter bug: duplicatescheme mints a FRESH guid every run, so
+        // "builtin in list" as presence check re-created forever. Presence
+        // is any performance-class plan; creation happens only at zero.
+        let pair = |g: &str, n: &str| (g.to_string(), n.to_string());
+        let builtin = super::super::system::POWER_GUID_HIGH_PERFORMANCE;
+        let balanced = super::super::system::POWER_GUID_BALANCED;
+        // builtin present: use it (no creation)
+        let list = vec![pair(balanced, "Balanced"), pair(builtin, "High performance")];
+        assert!(matches!(
+            power_enable_target(&list),
+            PowerEnableTarget::Existing(g) if g == builtin
+        ));
+        // custom duplicate only (the dev-box shape): use IT, create nothing
+        let list = vec![
+            pair(balanced, "Balanced"),
+            pair("e72c17b6-94d2-4509-adfc-8f2302229d1a", "High performance"),
+        ];
+        assert!(matches!(
+            power_enable_target(&list),
+            PowerEnableTarget::Existing(g) if g == "e72c17b6-94d2-4509-adfc-8f2302229d1a"
+        ));
+        // zero performance plans: the single allowed creation
+        let list = vec![pair(balanced, "Balanced")];
+        assert!(matches!(power_enable_target(&list), PowerEnableTarget::Create));
+        assert!(matches!(power_enable_target(&[]), PowerEnableTarget::Create));
     }
 }

@@ -244,6 +244,11 @@ export const en = {
     "Pointer acceleration makes the cursor travel further the faster you move your hand. Turning it off gives the same cursor travel for the same hand movement every time. Pure feel, it does not change FPS, and turning it back on takes one tap.",
   tweakWindowedHint:
     "Modern Windows can present windowed and borderless games with lower latency through a newer path. Microsoft documents smoother play for these modes when the toggle is on. Turning it off restores the old path with one tap.",
+  tweakPowerTitle: "Turn on High performance",
+  tweakPowerDesc:
+    "Switches Windows to the High performance plan. Takes effect immediately; turning it off brings back the plan you had.",
+  tweakPowerHint:
+    "Puts the processor on full speed by switching to the High performance plan. If the plan is missing it is restored first with Windows' own command, then switched on. Turning it off brings back the plan you had; machines locked to Balanced-only mode hide this row instead.",
   /** reason line under a greyed-out row whose precondition the user can
       fix (GameLoop exes not resolved) — never shown for rows that can
       never work here (those hide instead) */

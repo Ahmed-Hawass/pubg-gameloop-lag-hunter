@@ -45,6 +45,12 @@ pub struct Settings {
     /// only signal until the next version lands)
     #[serde(default)]
     pub announced_update_version: Option<String>,
+    /// the power plan active before the user first enabled High
+    /// Performance through Tools (GUID string). OFF restores exactly this,
+    /// never a hardcoded plan. None = never enabled (or enabled while
+    /// already on High Performance). serde default keeps old files valid.
+    #[serde(default)]
+    pub previous_power_guid: Option<String>,
     /// schema-compat placeholder — recomputed per session, never read back
     pub thresholds: Thresholds,
 }
@@ -63,6 +69,7 @@ impl Default for Settings {
             game_advice_done: false,
             background_advice_done: false,
             announced_update_version: None,
+            previous_power_guid: None,
             thresholds: Thresholds::default(),
         }
     }
@@ -297,6 +304,7 @@ mod tests {
             game_advice_done: true,
             background_advice_done: true,
             announced_update_version: Some("1.3.0".into()),
+            previous_power_guid: None,
             thresholds: Thresholds::default(),
         };
         let text = serde_json::to_string(&s).unwrap();

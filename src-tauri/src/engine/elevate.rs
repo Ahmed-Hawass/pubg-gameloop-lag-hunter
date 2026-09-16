@@ -34,10 +34,9 @@ pub const EXIT_OK: i32 = 0;
 pub const EXIT_USAGE: i32 = 2;
 pub const EXIT_FAILED: i32 = 3;
 
-/// Tweak ids that must go through elevation. EMPTY until the first
-/// elevated tweak lands (power plan): the routing below is the landing
-/// pad, not dead code — is_elevated_id decides per flip.
-pub static ELEVATED_IDS: &[&str] = &[];
+/// Tweak ids that must go through elevation. Power plan is first: reads
+/// stay unprivileged, /setactive and /duplicatescheme need admin.
+pub static ELEVATED_IDS: &[&str] = &["powerplan"];
 
 /// True when this id must run elevated. Pure: safe to ask from anywhere,
 /// including the UI thread (no registry, no spawn).
@@ -70,7 +69,7 @@ pub fn run_elevated_action(args: &[String]) -> i32 {
             return EXIT_USAGE;
         }
     };
-    match super::tweaks::set_tweak(id, value) {
+    match super::tweaks::set_tweak_direct(id, value) {
         Ok(r) => {
             super::logging::info(&format!(
                 "elevated tweak {id} set: value={value} verified={}",
@@ -249,9 +248,11 @@ mod tests {
     }
 
     #[test]
-    fn elevated_gate_is_empty_until_the_first_elevated_tweak() {
-        // the landing pad answers, but routes nothing yet: no current id
-        // may take the elevated path by surprise (power plan is first)
+    fn elevated_gate_routes_only_powerplan() {
+        // power plan is the first (and only) elevated id: reads stay
+        // unprivileged, writes go through UAC. Everything else — plus
+        // unknown ids — must never take the elevated path by surprise.
+        assert!(is_elevated_id("powerplan"));
         for id in [
             "dvr",
             "storagesense",

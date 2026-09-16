@@ -6,7 +6,7 @@
 // tweak_states command (a handful of registry values, microseconds) — never the
 // full system_checks batch, whose rows this page does not display.
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronLeft, Expand, Gamepad2, Info, Monitor, Mouse, Recycle, SlidersHorizontal, Video, AppWindow } from "lucide-react";
+import { ChevronLeft, Expand, Gamepad2, Info, Monitor, Mouse, Recycle, SlidersHorizontal, Video, AppWindow, Zap } from "lucide-react";
 import { Dialog, EmptyState, MODAL_OPEN_EVENT, APP_DIALOG_OPEN_EVENT } from "../components/components";
 import { api, type RowState } from "../bridge";
 import { useLang } from "../i18n";
@@ -107,6 +107,9 @@ export function ToolsView(props: {
       the user can fix — "hidden" never reaches the render below */
   const [fsoState, setFsoState] = useState<RowState>("hidden");
   const [gpuState, setGpuState] = useState<RowState>("hidden");
+  /** power plan row: On = High performance active; Off = present or
+      restorable; Hidden = Ultimate active or S0-only firmware */
+  const [powerState, setPowerState] = useState<RowState>("hidden");
   const [wgcOn, setWgcOn] = useState<boolean | null>(null);
   const [mouseOn, setMouseOn] = useState<boolean | null>(null);
   /** failed-write notice body (null = no notice) */
@@ -124,6 +127,12 @@ export function ToolsView(props: {
       the same tick both read a stale `false` from state — the ref is
       synchronous, so the second click is refused immediately */
   const tweakBusyRef = useRef(false);
+  /** read generation: bumped on every flip start. A reload that STARTED
+      before the current generation applies nothing on completion — it
+      read the pre-flip truth and would paint it over the verified
+      result (the ON-bounce seen on the slow power row: UAC + powercfg
+      leave seconds for a stale read to land late). */
+  const genRef = useRef(0);
   /** true once a fresh read has landed (landing card renders instantly,
       details wait for real data instead of showing a dead shell) */
   const [loaded, setLoaded] = useState(false);
@@ -144,19 +153,28 @@ export function ToolsView(props: {
       values, microseconds), never the full system_checks batch whose rows
       this page does not display. */
   const reload = async () => {
+    // generation at START: if a flip begins while this read is in flight,
+    // the completion below applies nothing (stale truth must never paint
+    // over an optimistic switch, let alone a verified one)
+    const gen = genRef.current;
     try {
       const s = await api.tweakStates();
+      if (gen !== genRef.current) return;
       setDvrOn(!s.game_dvr_enabled);
       setSsOn(s.storage_sense);
       setGameModeOn(s.game_mode);
       setFsoState(s.fso_disabled);
       setWgcOn(s.windowed_game_opt);
       setGpuState(s.gpu_high_perf);
+      setPowerState(s.power_high_perf);
       setMouseOn(s.mouse_accel_off);
       setLoaded(true);
       setLoadFailed(false);
       setNoticeBody(null);
     } catch (e) {
+      // same staleness rule for the error surface: a failed pre-flip read
+      // must not raise an error page over a flip that already settled
+      if (gen !== genRef.current) return;
       // an honest failure state: the landing card keeps showing, and the
       // details page (if open) surfaces the error instead of an eternal
       // "Loading..." — the raw message rides along as a technical line
@@ -169,6 +187,11 @@ export function ToolsView(props: {
 
   useEffect(() => {
     if (!active || !openCard) return;
+    // no fresh reads while a flip is in flight (the busy gate is a ref,
+    // so this is exact even for a focus storm): the verified result is
+    // the truth until it lands, and a mid-flip read could only paint
+    // the pre-flip state over it
+    if (tweakBusyRef.current) return;
     void reload();
     // the read contract is about a DETAILS page being visible, not the
     // tab alone: the landing cards need no data, so no read fires for them
@@ -177,10 +200,16 @@ export function ToolsView(props: {
   }, [active, openCard]);
 
   // returning from Windows Settings (after flipping something by hand)
-  // re-reads live: the switch must mirror what Windows says now
+  // re-reads live: the switch must mirror what Windows says now.
+  // Skipped mid-flip (same guard as the open effect): the UAC round-trip
+  // always passes through the secure desktop, so a focus storm is
+  // guaranteed exactly when a stale read would hurt most.
   useEffect(() => {
     if (!active || !openCard) return;
-    const onFocus = () => void reload();
+    const onFocus = () => {
+      if (tweakBusyRef.current) return;
+      void reload();
+    };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
     // same as above: reload's identity is not part of the subscription
@@ -271,6 +300,14 @@ export function ToolsView(props: {
       set: (v: boolean) => setGpuState(v ? "on" : "off"),
       get: () => (gpuState === "on" ? true : gpuState === "off" ? false : null),
     },
+    powerplan: {
+      goal: (on: boolean): 0 | 1 => (on ? 1 : 0), // ON = High performance active
+      set: (v: boolean) => setPowerState(v ? "on" : "off"),
+      // only on/off are flippable — hidden never reaches the render below.
+      // The flip runs elevated (one UAC per press); a refused prompt rolls
+      // back silently, a post-consent failure shows the notice.
+      get: () => (powerState === "on" ? true : powerState === "off" ? false : null),
+    },
     windowedopt: {
       goal: (on: boolean): 0 | 1 => (on ? 1 : 0), // ON = optimizations on
       set: setWgcOn,
@@ -301,6 +338,7 @@ export function ToolsView(props: {
     const before = tweak.get();
     if (before === null) return; // feature unavailable or not read yet
     tweakBusyRef.current = true;
+    genRef.current += 1; // any read older than this is stale on arrival
     tweak.set(on); // optimistic: the switch answers instantly
     setTweakBusy(true);
     try {
@@ -357,6 +395,21 @@ export function ToolsView(props: {
           {/* hidden until read; a feature the Windows build lacks stays
               hidden — a dead switch must never be shown. No area dividers:
               every row here targets gaming, subdivision would be noise. */}
+          {powerState !== "hidden" ? (
+            <SwitchRow
+              tweakId="powerplan"
+              linked={linkedId === "powerplan"}
+              on={powerState === "on"}
+              func={<Zap size={15} />}
+              name={t.tweakPowerTitle}
+              desc={t.tweakPowerDesc}
+              hintTitle={t.tweakPowerTitle}
+              hintBody={t.tweakPowerHint}
+              onHint={showHint}
+              busy={tweakBusy}
+              onFlip={(next) => void flipTweak("powerplan", next)}
+            />
+          ) : null}
           {dvrOn !== null ? (
             <SwitchRow
               tweakId="dvr"

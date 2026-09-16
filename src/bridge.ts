@@ -286,6 +286,9 @@ export interface TweakStates {
   /** windowed-games optimization state (Win11+ only); None = unsupported
       build (row hides — there is no such Settings toggle to mirror there) */
   windowed_game_opt: boolean | null;
+  /** High Performance row state: on/off/disabled-with-reason/hidden,
+      same contract as the per-exe rows */
+  power_high_perf: RowState;
 }
 
 // ---- settings (persisted user preferences — schema v3) --------------------
