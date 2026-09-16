@@ -7,7 +7,7 @@ import {
   CheckCircle2,
   Cpu,
   Database,
-  HardDrive,
+  Info,
   Plug,
   RefreshCw,
   ShieldAlert,
@@ -15,14 +15,14 @@ import {
   XCircle,
   Zap,
 } from "lucide-react";
-import { Button, EmptyState } from "../components/components";
+import { Button, Dialog, EmptyState, MODAL_OPEN_EVENT, APP_DIALOG_OPEN_EVENT } from "../components/components";
 import { api, type SystemChecks } from "../bridge";
 import { useLang } from "../i18n";
 
 const LIVE_INTERVAL_MS = 30000;
 
-export function ChecksView(props: { active: boolean }) {
-  const { active } = props;
+export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) => void }) {
+  const { active, onOpenTool } = props;
   const { t } = useLang();
   const [checks, setChecks] = useState<SystemChecks | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +34,10 @@ export function ChecksView(props: { active: boolean }) {
   // swallowing the click silently, the button spins immediately and the
   // press runs right after the in-flight query finishes — one click suffices
   const pendingManualRef = useRef(false);
+  /** background-note dialog behind a card's (?) button (null = closed).
+      Same unified Dialog as everywhere: one modal surface, yields to the
+      App-level dialog like every view dialog. */
+  const [hint, setHint] = useState<{ title: string; body: string } | null>(null);
 
   const load = async (silent: boolean, force = false) => {
     if (busyRef.current) {
@@ -90,6 +94,23 @@ export function ChecksView(props: { active: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
+  // a dialog mounting under a parked cursor never fires mouseleave — tell
+  // every tooltip to hide the moment ours opens (same signal as the shell)
+  useEffect(() => {
+    if (hint) {
+      window.dispatchEvent(new Event(MODAL_OPEN_EVENT));
+    }
+  }, [hint]);
+
+  // one modal surface, app-wide: an App-level dialog opening on top of
+  // our hint yields it instead of stacking two overlays
+  useEffect(() => {
+    if (!hint) return;
+    const onAppDialog = () => setHint(null);
+    window.addEventListener(APP_DIALOG_OPEN_EVENT, onAppDialog);
+    return () => window.removeEventListener(APP_DIALOG_OPEN_EVENT, onAppDialog);
+  }, [hint]);
+
   // the error renders INSIDE the page, below the header: the early-return
   // version hid the Refresh button too, leaving the user stuck with a dead
   // tab until the silent 30s poll or a window focus rescued it
@@ -140,13 +161,6 @@ export function ChecksView(props: { active: boolean }) {
 
   const chargerBad = checks.laptop && !checks.on_ac;
 
-  const diskOk = checks.disk_level === "ok";
-  const diskText = diskOk
-    ? t.diskOk(checks.disk_id, Math.round(checks.disk_free_pct), Math.round(checks.disk_free_gb))
-    : checks.disk_level === "critical"
-      ? t.diskCritical(checks.disk_id, Math.round(checks.disk_free_pct), Math.round(checks.disk_free_gb))
-      : t.diskLow(checks.disk_id, Math.round(checks.disk_free_pct), Math.round(checks.disk_free_gb));
-
   return (
     <div className="checks">
       <div className="checks-head">
@@ -171,6 +185,14 @@ export function ChecksView(props: { active: boolean }) {
               <Zap size={15} />
             </span>
             <span className="check-name">{t.checkPower}</span>
+            <button
+              type="button"
+              className="switch-hint"
+              aria-label={t.checkPower}
+              onClick={() => setHint({ title: t.checkPower, body: t.checkPowerHint })}
+            >
+              <Info size={13} />
+            </button>
             <span className={`check-badge ${checks.power_ok ? "ok" : "warn"}`}>
               {checks.power_ok ? t.checkOkBadge : t.checkWarnBadge}
             </span>
@@ -196,6 +218,14 @@ export function ChecksView(props: { active: boolean }) {
               <Cpu size={15} />
             </span>
             <span className="check-name">{t.checkVt}</span>
+            <button
+              type="button"
+              className="switch-hint"
+              aria-label={t.checkVt}
+              onClick={() => setHint({ title: t.checkVt, body: t.checkVtHint })}
+            >
+              <Info size={13} />
+            </button>
             <span className={`check-badge ${checks.vt_enabled ? "ok" : "warn"}`}>
               {checks.vt_enabled ? t.checkOkBadge : t.checkWarnBadge}
             </span>
@@ -216,6 +246,14 @@ export function ChecksView(props: { active: boolean }) {
               <Video size={15} />
             </span>
             <span className="check-name">{t.checkDvr}</span>
+            <button
+              type="button"
+              className="switch-hint"
+              aria-label={t.checkDvr}
+              onClick={() => setHint({ title: t.checkDvr, body: t.tweakDvrHint })}
+            >
+              <Info size={13} />
+            </button>
             <span className={`check-badge ${checks.game_dvr_enabled ? "warn" : "ok"}`}>
               {checks.game_dvr_enabled ? t.checkWarnBadge : t.checkOkBadge}
             </span>
@@ -225,9 +263,15 @@ export function ChecksView(props: { active: boolean }) {
             <span className="check-state">{checks.game_dvr_enabled ? t.dvrWarn : t.dvrOk}</span>
             <button
               className="check-open"
-              onClick={() => void api.openWindowsPanel("gaming-captures")}
+              onClick={() => {
+                // DVR has an in-app fix (the Tools row): stay inside the
+                // app and land on the row itself. Every other card keeps
+                // its Windows page (no in-app counterpart exists yet).
+                if (onOpenTool) onOpenTool("dvr");
+                else void api.openWindowsPanel("gaming-captures");
+              }}
             >
-              {t.openSettings}
+              {onOpenTool ? t.openInTools : t.openSettings}
             </button>
           </div>
         </div>
@@ -242,6 +286,14 @@ export function ChecksView(props: { active: boolean }) {
               <Database size={15} />
             </span>
             <span className="check-name">{t.checkPagefile}</span>
+            <button
+              type="button"
+              className="switch-hint"
+              aria-label={t.checkPagefile}
+              onClick={() => setHint({ title: t.checkPagefile, body: t.checkPagefileHint })}
+            >
+              <Info size={13} />
+            </button>
             <span className={`check-badge ${checks.pagefile_ok ? "ok" : "warn"}`}>
               {checks.pagefile_ok ? t.checkOkBadge : t.checkWarnBadge}
             </span>
@@ -250,29 +302,6 @@ export function ChecksView(props: { active: boolean }) {
           <div className="check-foot">
             <span className="check-state">{pagefileText}</span>
             <button className="check-open" onClick={() => void api.openWindowsPanel("system")}>
-              {t.openSettings}
-            </button>
-          </div>
-        </div>
-
-        {/* disk space */}
-        <div className={`check-row ${diskOk ? "ok" : "warn"}`}>
-          <div className="check-top">
-            <span className="check-icon">
-              {diskOk ? <CheckCircle2 size={17} /> : <XCircle size={17} />}
-            </span>
-            <span className="check-func">
-              <HardDrive size={15} />
-            </span>
-            <span className="check-name">{t.checkDisk}</span>
-            <span className={`check-badge ${diskOk ? "ok" : "warn"}`}>
-              {diskOk ? t.checkOkBadge : t.checkWarnBadge}
-            </span>
-          </div>
-          <p className="check-desc">{t.checkDiskDesc}</p>
-          <div className="check-foot">
-            <span className="check-state">{diskText}</span>
-            <button className="check-open" onClick={() => void api.openWindowsPanel("storage")}>
               {t.openSettings}
             </button>
           </div>
@@ -289,7 +318,15 @@ export function ChecksView(props: { active: boolean }) {
                 <Plug size={15} />
               </span>
               <span className="check-name">{t.checkCharger}</span>
-              <span className={`check-badge ${chargerBad ? "warn" : "ok"}`}>
+            <button
+              type="button"
+              className="switch-hint"
+              aria-label={t.checkCharger}
+              onClick={() => setHint({ title: t.checkCharger, body: t.checkChargerHint })}
+            >
+              <Info size={13} />
+            </button>
+            <span className={`check-badge ${chargerBad ? "warn" : "ok"}`}>
                 {chargerBad ? t.checkWarnBadge : t.checkOkBadge}
               </span>
             </div>
@@ -300,6 +337,17 @@ export function ChecksView(props: { active: boolean }) {
           </div>
         ) : null}
       </div>
+      {/* background note behind a card's (?) button — the one unified
+          Dialog, notice only */}
+      {hint ? (
+        <Dialog
+          title={hint.title}
+          body={hint.body}
+          kind="notice"
+          okLabel={t.dialog.ok}
+          onClose={() => setHint(null)}
+        />
+      ) : null}
     </div>
   );
 }

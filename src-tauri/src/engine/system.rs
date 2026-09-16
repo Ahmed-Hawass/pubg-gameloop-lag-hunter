@@ -583,22 +583,13 @@ pub struct SystemChecks {
     /// true when Game DVR / background recording is on (steals GPU + disk
     /// mid-match). Unknown reads as off (no false alarm on probe failure).
     pub game_dvr_enabled: bool,
-    /// system-drive letter, e.g. "C:"
-    pub disk_id: String,
-    /// free space on the system drive (GB and percent)
-    pub disk_free_gb: f64,
-    pub disk_free_pct: f64,
-    /// "ok" | "low" | "critical" — graduated copy, warn badge for non-ok.
-    /// Unknown reads as "ok" (no false alarm on probe failure).
-    pub disk_level: String,
     /// true when Storage Sense is on. `None` = the policy key does not
     /// exist on this Windows build (feature unavailable): the row hides,
     /// never shows a dead switch. Documented on Windows 10 (1709+) and 11.
     pub storage_sense: Option<bool>,
 }
 
-/// The Tools tab's two switches and nothing else: Game DVR background
-/// recording + Storage Sense, live from the registry. The full
+/// The Tools tab's switches, live from the registry — and ONLY that. The full
 /// system_checks batch costs a PowerShell spawn the Tools page never
 /// needs (it displays none of those rows); the tweak_states command
 /// serves this struct instead — microseconds, in-process.
@@ -609,6 +600,74 @@ pub struct TweakStates {
     /// true when Storage Sense is on; None = policy key missing on this
     /// build (feature unavailable, the row hides)
     pub storage_sense: Option<bool>,
+    /// true when Game Mode is on (both toggles read 1; a missing value is
+    /// the OS default = on, never a false "off")
+    pub game_mode: bool,
+    /// per-exe GPU preference over the resolved GameLoop executables
+    pub gpu_high_perf: RowState,
+    /// per-exe fullscreen-optimizations opt-out over the resolved
+    /// GameLoop executables
+    pub fso_disabled: RowState,
+    /// true when pointer precision is off (all three values zero; anything
+    /// missing is the OS default = on, so the switch reads off)
+    pub mouse_accel_off: bool,
+    /// windowed-games optimization state (Win11+ only); None = unsupported
+    /// build (row hides — there is no such Settings toggle to mirror there)
+    pub windowed_game_opt: Option<bool>,
+}
+
+/// Visibility of a Tools row whose availability depends on the machine.
+/// The UI translates the reason (keys, not sentences — the engine never
+/// ships user-facing text):
+/// - On/Off: live switch state, row interactive.
+/// - DisabledGameloopNotFound: visible but greyed — GameLoop exes did not
+///   resolve, which the user can fix (install/run GameLoop). A row the
+///   user can act on must explain itself, never vanish silently.
+/// - Hidden: can never work here (unsupported OS/build) — the row is
+///   absent entirely. A permanently dead row is clutter, not honesty.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RowState {
+    On,
+    Off,
+    DisabledGameloopNotFound,
+    Hidden,
+}
+
+/// Windows build number (e.g. 22631), None when unreadable. Same source
+/// as the boot-log identity line, factored out so feature gates can ask
+/// the OS a yes/no question without parsing a display string.
+pub(crate) fn windows_build_number() -> Option<u32> {
+    winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE)
+        .open_subkey(r"SOFTWARE\Microsoft\Windows NT\CurrentVersion")
+        .ok()?
+        .get_value::<String, _>("CurrentBuildNumber")
+        .ok()?
+        .trim()
+        .parse::<u32>()
+        .ok()
+}
+
+/// First build shipping per-app GPU preferences (Win10 1803): older
+/// builds silently ignore the UserGpuPreferences values, so our
+/// verify-by-re-read would report success for a write the OS never
+/// honors — a manufactured success. Unreadable build fails OPEN (match
+/// current behavior everywhere): only a positively-identified old build
+/// hides the row.
+pub(crate) const GPU_PREF_MIN_BUILD: u32 = 17134;
+
+pub(crate) fn gpu_pref_supported(build: Option<u32>) -> bool {
+    build.map(|b| b >= GPU_PREF_MIN_BUILD).unwrap_or(true)
+}
+
+/// First build shipping the windowed-games optimization (Windows 11
+/// RTM): older builds have no such Settings toggle, so a row for it
+/// would be a dead switch there. Same fail-open contract as the GPU
+/// gate above: only a positively-identified old build hides the row.
+pub(crate) const WGC_MIN_BUILD: u32 = 22000;
+
+pub(crate) fn windowed_opt_supported(build: Option<u32>) -> bool {
+    build.map(|b| b >= WGC_MIN_BUILD).unwrap_or(true)
 }
 
 /// Live DWORD read from a registry subkey under a given root, as bool-ish
@@ -621,6 +680,15 @@ fn reg_dword(root: winreg::HKEY, subkey: &str, name: &str) -> Option<u32> {
     let hk = winreg::RegKey::predef(root);
     let key = hk.open_subkey(subkey).ok()?;
     key.get_value::<u32, _>(name).ok()
+}
+
+/// Live string read from a registry subkey — same fail-soft contract as
+/// reg_dword above: anything missing or unreadable is None, never an
+/// error (a probe failure must never fire a false warning).
+fn reg_string(root: winreg::HKEY, subkey: &str, name: &str) -> Option<String> {
+    let hk = winreg::RegKey::predef(root);
+    let key = hk.open_subkey(subkey).ok()?;
+    key.get_value::<String, _>(name).ok()
 }
 
 /// Is the Storage Sense policy KEY present on this build? (Availability is
@@ -676,8 +744,6 @@ $bat = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue
 if ($bat) { "battery|$($bat.BatteryStatus)" } else { "battery|none" }
 $vt = (Get-CimInstance Win32_Processor | Select-Object -First 1).VirtualizationFirmwareEnabled
 "vt|$vt"
-$sys = Get-CimInstance Win32_LogicalDisk -Filter ("DeviceID='" + $env:SystemDrive + "'")
-"diskfree|$($sys.DeviceID)|$($sys.FreeSpace)|$($sys.Size)"
 "#)?;
     let mut c = SystemChecks {
         power_name: "Unknown".into(),
@@ -689,10 +755,6 @@ $sys = Get-CimInstance Win32_LogicalDisk -Filter ("DeviceID='" + $env:SystemDriv
         on_ac: true,
         vt_enabled: true,
         game_dvr_enabled: false,
-        disk_id: "C:".into(),
-        disk_free_gb: 0.0,
-        disk_free_pct: 100.0,
-        disk_level: "ok".into(),
         storage_sense: None,
     };
     for line in text.lines().map(|l| l.trim()).filter(|l| !l.is_empty()) {
@@ -721,21 +783,6 @@ $sys = Get-CimInstance Win32_LogicalDisk -Filter ("DeviceID='" + $env:SystemDriv
                 // PowerShell prints True/False; empty = probe failed, keep the safe default
                 let v = parts.next().unwrap_or("True").trim().to_ascii_lowercase();
                 c.vt_enabled = v != "false" && v != "0";
-            }
-            Some("diskfree") => {
-                // system-drive free space: id | bytes free | bytes total.
-                // Unparsable = probe failed, keep the safe "ok" default.
-                let id = parts.next().unwrap_or("").trim();
-                let free: Option<f64> = parts.next().and_then(|v| v.trim().parse().ok());
-                let total: Option<f64> = parts.next().and_then(|v| v.trim().parse().ok());
-                if let (Some(f), Some(t)) = (free, total) {
-                    if t > 0.0 && f >= 0.0 {
-                        c.disk_id = if id.is_empty() { "C:".into() } else { id.into() };
-                        c.disk_free_gb = f / 1_073_741_824.0;
-                        c.disk_free_pct = f / t * 100.0;
-                        c.disk_level = disk_level(c.disk_free_pct, c.disk_free_gb).into();
-                    }
-                }
             }
             _ => {}
         }
@@ -854,13 +901,234 @@ fn storage_sense_state(exists: bool, value: Option<u32>) -> Option<bool> {
     }
 }
 
-/// The Tools tab's two switches, live from the registry — and ONLY that.
+/// Game Mode is on iff BOTH master toggles read 1. A missing value is the
+/// OS default (on): Settings shows the toggle on for a fresh profile, so
+/// a missing key must never read as "off" (that would flip a user's
+/// switch off on first sight — the exact false-negative class the DVR
+/// rule was written against).
+pub(crate) fn game_mode_on(allow: Option<u32>, auto: Option<u32>) -> bool {
+    allow.unwrap_or(1) == 1 && auto.unwrap_or(1) == 1
+}
+
+/// Parse one `key=value;`-style token string (UserGpuPreferences values)
+/// into the named token's number. Sibling tokens (AutoHDR etc.) are
+/// ignored, never rejected: we only ever read or replace our own token.
+pub(crate) fn parse_pref_token(raw: &str, key: &str) -> Option<u32> {
+    raw.split(';').find_map(|tok| {
+        let (k, v) = tok.split_once('=')?;
+        if k.trim().eq_ignore_ascii_case(key) {
+            v.trim().parse::<u32>().ok()
+        } else {
+            None
+        }
+    })
+}
+
+/// Parse one UserGpuPreferences value ("GpuPreference=2;...") into its
+/// preference number.
+pub(crate) fn parse_gpu_pref(raw: &str) -> Option<u32> {
+    parse_pref_token(raw, "GpuPreference")
+}
+
+/// The windowed-games optimization is on iff its token reads exactly 1.
+/// Anything else (absent, 0, garbage) is off — the OS default.
+pub(crate) fn wgc_opt_on(raw: Option<&str>) -> bool {
+    raw.and_then(|r| parse_pref_token(r, super::tweaks::WGC_TOKEN)) == Some(1)
+}
+
+/// Build a UserGpuPreferences value with our token set (on) or removed
+/// (off). None = nothing remains — the caller deletes the value instead
+/// of writing an empty string (matches "revert to Windows decides").
+pub(crate) fn with_gpu_pref(raw: Option<&str>, on: bool) -> Option<String> {
+    let mut kept: Vec<&str> = raw
+        .unwrap_or("")
+        .split(';')
+        .map(str::trim)
+        .filter(|tok| !tok.is_empty())
+        .filter(|tok| {
+            !tok
+                .split_once('=')
+                .is_some_and(|(k, _)| k.trim().eq_ignore_ascii_case("GpuPreference"))
+        })
+        .collect();
+    if on {
+        kept.push("GpuPreference=2");
+    }
+    if kept.is_empty() {
+        None
+    } else {
+        Some(kept.join(";") + ";")
+    }
+}
+
+/// Build a UserGpuPreferences value with the windowed-games token set to
+/// 1 (on) or 0 (off), preserving sibling tokens. Unlike the per-exe GPU
+/// preference (whose off DELETES the token), off here WRITES `=0`: that
+/// is byte-for-byte what the Settings toggle itself does (verified live
+/// on Win11 24H2 — off leaves `SwapEffectUpgradeEnable=0;` present, never
+/// deletes). Always returns a value: there is always a token to write.
+pub(crate) fn with_wgc_token(raw: Option<&str>, on: bool) -> String {
+    let mut kept: Vec<&str> = raw
+        .unwrap_or("")
+        .split(';')
+        .map(str::trim)
+        .filter(|tok| !tok.is_empty())
+        .filter(|tok| {
+            !tok
+                .split_once('=')
+                .is_some_and(|(k, _)| k.trim().eq_ignore_ascii_case(super::tweaks::WGC_TOKEN))
+        })
+        .collect();
+    kept.push(if on {
+        "SwapEffectUpgradeEnable=1"
+    } else {
+        "SwapEffectUpgradeEnable=0"
+    });
+    kept.join(";") + ";"
+}
+
+/// Does one Layers value carry the fullscreen-optimizations opt-out?
+/// Whole-token match only: a substring test would false-positive on a
+/// hypothetical future flag containing this one as a prefix.
+pub(crate) fn fso_has_flag(raw: Option<&str>) -> bool {
+    raw.map(|r| {
+        r.split_whitespace()
+            .any(|tok| tok == super::tweaks::FSO_FLAG)
+    })
+    .unwrap_or(false)
+}
+
+/// Build a Layers value with our flag set (on) or removed (off),
+/// preserving every other compatibility flag byte-for-byte in content
+/// (whitespace is normalized — these values are machine-written).
+/// None = nothing remains — the caller deletes the value instead of
+/// leaving a bare "~" behind.
+pub(crate) fn fso_with_flag(raw: Option<&str>, on: bool) -> Option<String> {
+    let body = raw.unwrap_or("");
+    if on {
+        if fso_has_flag(Some(body)) {
+            return Some(body.to_string());
+        }
+        let trimmed = body.trim();
+        if trimmed.is_empty() {
+            return Some(format!("~ {}", super::tweaks::FSO_FLAG));
+        }
+        let mut out = trimmed.to_string();
+        if !out.starts_with('~') {
+            out = format!("~ {out}");
+        }
+        out.push(' ');
+        out.push_str(super::tweaks::FSO_FLAG);
+        return Some(out);
+    }
+    let rest: Vec<&str> = body
+        .split_whitespace()
+        .filter(|tok| *tok != super::tweaks::FSO_FLAG)
+        .collect();
+    let rest = rest.join(" ");
+    let rest = rest.trim();
+    if rest.is_empty() || rest == "~" {
+        None
+    } else {
+        Some(rest.to_string())
+    }
+}
+
+/// Pointer precision is off iff all three values read exactly zero.
+/// Anything missing is the OS default (precision on), so the switch
+/// reads off — never a false "already off".
+pub(crate) fn mouse_accel_off(speed: Option<u32>, t1: Option<u32>, t2: Option<u32>) -> bool {
+    speed == Some(0) && t1 == Some(0) && t2 == Some(0)
+}
+
+/// All-or-nothing over several executables: an empty list (nothing
+/// resolved) hides the row; otherwise ON means EVERY exe carries the
+/// state. A partial set reads as OFF so the switch never claims
+/// coverage it does not have.
+pub(crate) fn unanimous_state(states: &[bool]) -> Option<bool> {
+    if states.is_empty() {
+        None
+    } else {
+        Some(states.iter().all(|s| *s))
+    }
+}
+
+/// GameLoop rendering executables, resolved live (never spawned, never
+/// recursed): install roots come from Tencent's own InstallPath values
+/// (any component subkey, either registry view) plus the stock location;
+/// each root contributes only `<root>\ui\<exe>` and `<root>\<exe>` when
+/// the file actually exists. A bounded handful of exists() checks —
+/// microseconds, no process enumeration, no PowerShell.
+pub(crate) fn gameloop_exe_paths() -> Vec<std::path::PathBuf> {
+    const BASES: [&str; 2] = [
+        r"SOFTWARE\Tencent\MobileGamePC",
+        r"SOFTWARE\WOW6432Node\Tencent\MobileGamePC",
+    ];
+    const EXES: [&str; 2] = ["aow_exe.exe", "AndroidEmulatorEn.exe"];
+    let hklm = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE);
+    let mut roots: Vec<std::path::PathBuf> = Vec::new();
+    for base in BASES {
+        let Ok(key) = hklm.open_subkey(base) else {
+            continue;
+        };
+        // EnumKeys yields per-item Results (infallible constructor):
+        // flatten skips unreadable subkeys, fail-soft like every probe
+        for sub in key.enum_keys().flatten() {
+            let path = format!("{base}\\{sub}");
+            if let Ok(subkey) = hklm.open_subkey(&path) {
+                if let Ok(install) = subkey.get_value::<String, _>("InstallPath") {
+                    let install = install.trim();
+                    if !install.is_empty() {
+                        let dir = std::path::PathBuf::from(install);
+                        roots.push(dir.clone());
+                        if let Some(parent) = dir.parent() {
+                            roots.push(parent.to_path_buf());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    roots.push(std::path::PathBuf::from(
+        r"C:\Program Files\TxGameAssistant",
+    ));
+    let mut out: Vec<std::path::PathBuf> = Vec::new();
+    for root in &roots {
+        for exe in EXES {
+            for cand in [root.join("ui").join(exe), root.join(exe)] {
+                // case-insensitive dedup: `UI\aow_exe.exe` and
+                // `ui\aow_exe.exe` are the SAME file on Windows, but
+                // PathBuf equality is byte-wise — without this the same
+                // exe resolves twice (live-proven: exes=4 for 2 files)
+                // and every write/verify runs doubled with a lying count
+                if cand.is_file() && !contains_case_insensitive(&out, &cand) {
+                    out.push(cand);
+                }
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+/// Case-insensitive path membership: Windows paths compare
+/// case-insensitively, PathBuf equality does not. Pure and unit-tested
+/// (the resolver itself touches the real registry + filesystem).
+fn contains_case_insensitive(haystack: &[std::path::PathBuf], needle: &std::path::Path) -> bool {
+    let needle = needle.to_string_lossy().to_lowercase();
+    haystack
+        .iter()
+        .any(|p| p.to_string_lossy().to_lowercase() == needle)
+}
+
+/// The Tools tab's switches, live from the registry — and ONLY that.
 /// Same derivation as the full batch (shared helpers above), so the two
 /// paths agree by construction. Silent by design: the diagnostic log
 /// lines live on the full-batch path, not on every tab open.
 pub fn query_tweak_states() -> TweakStates {
+    use winreg::enums::HKEY_CURRENT_USER;
     let dvr_historical = reg_dword(
-        winreg::enums::HKEY_CURRENT_USER,
+        HKEY_CURRENT_USER,
         r"SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR",
         "HistoricalCaptureEnabled",
     );
@@ -872,29 +1140,111 @@ pub fn query_tweak_states() -> TweakStates {
     let ss_exists = ss_policy_key_exists();
     let ss_value = if ss_exists {
         reg_dword(
-            winreg::enums::HKEY_CURRENT_USER,
+            HKEY_CURRENT_USER,
             r"SOFTWARE\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy",
             "01",
         )
     } else {
         None
     };
+    let gm_allow = reg_dword(
+        HKEY_CURRENT_USER,
+        super::tweaks::GAMEBAR_SUBKEY,
+        super::tweaks::GAMEMODE_ALLOW,
+    );
+    let gm_auto = reg_dword(
+        HKEY_CURRENT_USER,
+        super::tweaks::GAMEBAR_SUBKEY,
+        super::tweaks::GAMEMODE_AUTO,
+    );
+    let mouse_speed = reg_dword(
+        HKEY_CURRENT_USER,
+        super::tweaks::MOUSE_SUBKEY,
+        super::tweaks::MOUSE_SPEED,
+    );
+    let mouse_t1 = reg_dword(
+        HKEY_CURRENT_USER,
+        super::tweaks::MOUSE_SUBKEY,
+        super::tweaks::MOUSE_T1,
+    );
+    let mouse_t2 = reg_dword(
+        HKEY_CURRENT_USER,
+        super::tweaks::MOUSE_SUBKEY,
+        super::tweaks::MOUSE_T2,
+    );
+    // per-exe states over the resolved GameLoop executables. No resolved
+    // exes + supported build = DISABLED with an actionable reason (the
+    // user can install/run GameLoop); unsupported build = HIDDEN (can
+    // never work here — a permanently dead row is clutter). The GPU row
+    // additionally requires Win10 1803+: older builds ignore the
+    // preference value while our re-read would still "verify", so the
+    // write would lie about succeeding.
+    let exes = gameloop_exe_paths();
+    let gpu_supported = gpu_pref_supported(windows_build_number());
+    let gpu_vals: Vec<Option<u32>> = exes
+        .iter()
+        .map(|p| {
+            reg_string(
+                HKEY_CURRENT_USER,
+                super::tweaks::GPU_PREF_SUBKEY,
+                &p.to_string_lossy(),
+            )
+            .and_then(|raw| parse_gpu_pref(&raw))
+        })
+        .collect();
+    let gpu_on: Vec<bool> = gpu_vals.iter().map(|v| *v == Some(2)).collect();
+    let fso_on: Vec<bool> = exes
+        .iter()
+        .map(|p| {
+            fso_has_flag(
+                reg_string(
+                    HKEY_CURRENT_USER,
+                    super::tweaks::LAYERS_SUBKEY,
+                    &p.to_string_lossy(),
+                )
+                .as_deref(),
+            )
+        })
+        .collect();
+    let gpu_high_perf = if !gpu_supported {
+        RowState::Hidden
+    } else {
+        match unanimous_state(&gpu_on) {
+            Some(true) => RowState::On,
+            Some(false) => RowState::Off,
+            None => RowState::DisabledGameloopNotFound,
+        }
+    };
+    let fso_disabled = match unanimous_state(&fso_on) {
+        Some(true) => RowState::On,
+        Some(false) => RowState::Off,
+        None => RowState::DisabledGameloopNotFound,
+    };
+    // windowed-games optimization: same UserGpuPreferences store as the
+    // per-app GPU preference (verified live: ON writes
+    // `SwapEffectUpgradeEnable=1;`, OFF writes `=0`, never deletes).
+    // Win11+ only — older builds have no such toggle to mirror.
+    let build = windows_build_number();
+    let windowed_game_opt = if !windowed_opt_supported(build) {
+        None
+    } else {
+        Some(wgc_opt_on(
+            reg_string(
+                HKEY_CURRENT_USER,
+                super::tweaks::GPU_PREF_SUBKEY,
+                super::tweaks::WGC_SETTINGS_NAME,
+            )
+            .as_deref(),
+        ))
+    };
     TweakStates {
         game_dvr_enabled: gamedvr_armed_winreg(dvr_historical, dvr_policy),
         storage_sense: storage_sense_state(ss_exists, ss_value),
-    }
-}
-
-/// System-drive free-space level: "ok" | "low" | "critical".
-/// Either axis can hurt alone: a tiny percent starves Windows services and
-/// updates, a tiny absolute number starves pagefile growth.
-fn disk_level(free_pct: f64, free_gb: f64) -> &'static str {
-    if free_pct < 10.0 || free_gb < 10.0 {
-        "critical"
-    } else if free_pct < 15.0 || free_gb < 20.0 {
-        "low"
-    } else {
-        "ok"
+        game_mode: game_mode_on(gm_allow, gm_auto),
+        gpu_high_perf,
+        fso_disabled,
+        mouse_accel_off: mouse_accel_off(mouse_speed, mouse_t1, mouse_t2),
+        windowed_game_opt,
     }
 }
 
@@ -932,12 +1282,6 @@ pub fn open_windows_panel(panel: &str) -> Result<(), String> {
             "gaming-captures" => {
                 let mut c = Command::new("explorer.exe");
                 c.arg("ms-settings:gaming-gamedvr");
-                c
-            }
-            // documented Storage page (Win10 + Win11): ms-settings:storagesense
-            "storage" => {
-                let mut c = Command::new("explorer.exe");
-                c.arg("ms-settings:storagesense");
                 c
             }
             _ => return Err("unknown panel".into()),
@@ -1057,15 +1401,6 @@ mod tests {
     }
 
     #[test]
-    fn disk_level_thresholds() {
-        assert_eq!(disk_level(20.0, 30.0), "ok");
-        assert_eq!(disk_level(12.0, 50.0), "low");
-        assert_eq!(disk_level(20.0, 15.0), "low");
-        assert_eq!(disk_level(5.0, 100.0), "critical");
-        assert_eq!(disk_level(50.0, 5.0), "critical");
-    }
-
-    #[test]
     fn storagesense_field_contract() {
         // the winreg-era contract, now a real shared function (not a
         // test-local closure): key-exists decides visibility, the DWORD
@@ -1081,5 +1416,219 @@ mod tests {
         // key absent on this build = row hides
         assert_eq!(storage_sense_state(false, None), None);
         assert_eq!(storage_sense_state(false, Some(1)), None);
+    }
+
+    #[test]
+    fn game_mode_on_needs_both_toggles() {
+        // the Settings toggle writes the pair together: ON means both
+        // read 1, and a missing value is the OS default (on) — never a
+        // false "off" that would flip a user's switch on first sight
+        assert!(game_mode_on(Some(1), Some(1)));
+        assert!(game_mode_on(None, None));
+        assert!(game_mode_on(None, Some(1)));
+        assert!(game_mode_on(Some(1), None));
+        assert!(!game_mode_on(Some(0), Some(1)));
+        assert!(!game_mode_on(Some(1), Some(0)));
+        assert!(!game_mode_on(Some(0), Some(0)));
+    }
+
+    #[test]
+    fn gpu_pref_parses_only_its_own_token() {
+        assert_eq!(parse_gpu_pref("GpuPreference=2;"), Some(2));
+        assert_eq!(parse_gpu_pref("AutoHDREnable=0;GpuPreference=1;"), Some(1));
+        assert_eq!(parse_gpu_pref("GpuPreference=0;"), Some(0));
+        // sibling tokens alone carry no preference
+        assert_eq!(parse_gpu_pref("AutoHDREnable=1;"), None);
+        assert_eq!(parse_gpu_pref(""), None);
+        // malformed values are dropped, never guessed
+        assert_eq!(parse_gpu_pref("GpuPreference=x;"), None);
+        assert_eq!(parse_gpu_pref("GpuPreference=;"), None);
+        // case-tolerant key (Windows writes it capitalized; be liberal)
+        assert_eq!(parse_gpu_pref("gpupreference=2;"), Some(2));
+    }
+
+    #[test]
+    fn gpu_pref_build_preserves_other_tokens() {
+        // ON sets exactly our token, keeping the rest byte-identical
+        assert_eq!(
+            with_gpu_pref(None, true).as_deref(),
+            Some("GpuPreference=2;")
+        );
+        assert_eq!(
+            with_gpu_pref(Some(""), true).as_deref(),
+            Some("GpuPreference=2;")
+        );
+        assert_eq!(
+            with_gpu_pref(Some("AutoHDREnable=0;GpuPreference=1;"), true).as_deref(),
+            Some("AutoHDREnable=0;GpuPreference=2;")
+        );
+        assert_eq!(
+            with_gpu_pref(Some("GpuPreference=2;"), true).as_deref(),
+            Some("GpuPreference=2;")
+        );
+        // OFF removes only our token; an emptied value means "delete the
+        // value" (revert to Windows decides)
+        assert_eq!(with_gpu_pref(Some("GpuPreference=2;"), false), None);
+        assert_eq!(
+            with_gpu_pref(Some("AutoHDREnable=0;GpuPreference=2;"), false).as_deref(),
+            Some("AutoHDREnable=0;")
+        );
+        assert_eq!(with_gpu_pref(None, false), None);
+    }
+
+    #[test]
+    fn gpu_state_needs_every_exe() {
+        // nothing resolved (GameLoop absent) = row hides, never a guess
+        assert_eq!(unanimous_state(&[]), None);
+        assert_eq!(unanimous_state(&[true]), Some(true));
+        assert_eq!(unanimous_state(&[true, true]), Some(true));
+        // partial coverage reads as OFF so the switch never claims
+        // coverage it does not have
+        assert_eq!(unanimous_state(&[true, false]), Some(false));
+        assert_eq!(unanimous_state(&[false]), Some(false));
+    }
+
+    #[test]
+    fn gpu_pref_supported_needs_win10_1803() {
+        // per-app GPU preferences arrived in 1803 (build 17134): older
+        // builds ignore the value while our re-read would still verify —
+        // fail OPEN on unreadable (match current behavior everywhere),
+        // hide only on a positively-identified old build
+        assert!(gpu_pref_supported(None));
+        assert!(!gpu_pref_supported(Some(10240))); // 1507
+        assert!(!gpu_pref_supported(Some(17133)));
+        assert!(gpu_pref_supported(Some(17134))); // 1803, the floor
+        assert!(gpu_pref_supported(Some(22631)));
+    }
+
+    #[test]
+    fn exe_dedup_ignores_case() {
+        // Windows paths compare case-insensitively, PathBuf equality
+        // does not: `UI\aow_exe.exe` and `ui\aow_exe.exe` are the same
+        // file (live-proven: exes=4 for 2 files), and counting both
+        // doubles every write/verify with a lying count
+        use std::path::PathBuf;
+        let have = vec![PathBuf::from(r"C:\G\ui\aow_exe.exe")];
+        assert!(contains_case_insensitive(&have, &PathBuf::from(r"C:\G\UI\AOW_EXE.EXE")));
+        assert!(!contains_case_insensitive(&have, &PathBuf::from(r"C:\G\ui\other.exe")));
+        assert!(!contains_case_insensitive(&[], &PathBuf::from(r"C:\G\ui\aow_exe.exe")));
+    }
+
+    #[test]
+    fn fso_flag_matches_whole_tokens() {
+        assert!(fso_has_flag(Some("~ DISABLEDXMAXIMIZEDWINDOWEDMODE")));
+        assert!(!fso_has_flag(Some("~ HIGHDPIAWARE")));
+        assert!(!fso_has_flag(None));
+        assert!(!fso_has_flag(Some("")));
+    }
+
+    #[test]
+    fn fso_build_preserves_other_flags() {
+        assert_eq!(
+            fso_with_flag(None, true).as_deref(),
+            Some("~ DISABLEDXMAXIMIZEDWINDOWEDMODE")
+        );
+        assert_eq!(
+            fso_with_flag(Some("~ HIGHDPIAWARE"), true).as_deref(),
+            Some("~ HIGHDPIAWARE DISABLEDXMAXIMIZEDWINDOWEDMODE")
+        );
+        // already set: byte-identical, no duplicate token
+        assert_eq!(
+            fso_with_flag(Some("~ DISABLEDXMAXIMIZEDWINDOWEDMODE"), true).as_deref(),
+            Some("~ DISABLEDXMAXIMIZEDWINDOWEDMODE")
+        );
+        // OFF removes only our flag; an emptied value means "delete it"
+        assert_eq!(
+            fso_with_flag(Some("~ DISABLEDXMAXIMIZEDWINDOWEDMODE"), false),
+            None
+        );
+        assert_eq!(
+            fso_with_flag(
+                Some("~ HIGHDPIAWARE DISABLEDXMAXIMIZEDWINDOWEDMODE"),
+                false
+            )
+            .as_deref(),
+            Some("~ HIGHDPIAWARE")
+        );
+        assert_eq!(fso_with_flag(None, false), None);
+    }
+
+    #[test]
+    fn mouse_accel_off_needs_all_three_zero() {
+        assert!(mouse_accel_off(Some(0), Some(0), Some(0)));
+        // anything missing is the OS default (precision on), so the
+        // switch reads off — never a false "already off"
+        assert!(!mouse_accel_off(None, None, None));
+        assert!(!mouse_accel_off(Some(0), Some(0), Some(6)));
+        assert!(!mouse_accel_off(Some(1), Some(6), Some(10)));
+    }
+
+    #[test]
+    fn windowed_opt_reads_exactly_one() {
+        // ON is exactly `=1`; anything else (absent, 0, garbage) is off —
+        // the verified-live OFF state is a present `=0`, not absence
+        assert!(wgc_opt_on(Some("SwapEffectUpgradeEnable=1;")));
+        assert!(!wgc_opt_on(Some("SwapEffectUpgradeEnable=0;")));
+        assert!(!wgc_opt_on(None));
+        assert!(!wgc_opt_on(Some("")));
+        assert!(!wgc_opt_on(Some("GpuPreference=2;")));
+    }
+
+    #[test]
+    fn windowed_opt_build_writes_zero_on_off() {
+        // unlike the per-exe GPU preference (whose off DELETES the token),
+        // off here writes `=0`: byte-for-byte what the Settings toggle
+        // itself does (verified live — off leaves the value present)
+        assert_eq!(
+            with_wgc_token(None, true),
+            "SwapEffectUpgradeEnable=1;"
+        );
+        assert_eq!(
+            with_wgc_token(Some("SwapEffectUpgradeEnable=0;"), true),
+            "SwapEffectUpgradeEnable=1;"
+        );
+        assert_eq!(
+            with_wgc_token(Some("SwapEffectUpgradeEnable=1;"), false),
+            "SwapEffectUpgradeEnable=0;"
+        );
+        assert_eq!(
+            with_wgc_token(None, false),
+            "SwapEffectUpgradeEnable=0;"
+        );
+        // sibling tokens survive both directions
+        assert_eq!(
+            with_wgc_token(Some("GpuPreference=2;"), true),
+            "GpuPreference=2;SwapEffectUpgradeEnable=1;"
+        );
+        assert_eq!(
+            with_wgc_token(
+                Some("GpuPreference=2;SwapEffectUpgradeEnable=1;"),
+                false
+            ),
+            "GpuPreference=2;SwapEffectUpgradeEnable=0;"
+        );
+    }
+
+    #[test]
+    fn windowed_opt_supported_needs_win11() {
+        // the Settings toggle does not exist before Win11 (RTM 22000):
+        // unreadable build fails OPEN like every other gate here, only a
+        // positively-identified old build hides the row
+        assert!(windowed_opt_supported(None));
+        assert!(!windowed_opt_supported(Some(19045))); // Win10 22H2
+        assert!(!windowed_opt_supported(Some(21999)));
+        assert!(windowed_opt_supported(Some(22000))); // Win11 RTM, the floor
+        assert!(windowed_opt_supported(Some(26200)));
+    }
+
+    #[test]
+    fn pref_token_parser_is_generic() {
+        // the shared parser behind both GPU and windowed prefs: exact key,
+        // tolerant key case, strict value
+        assert_eq!(parse_pref_token("SwapEffectUpgradeEnable=1;", "SwapEffectUpgradeEnable"), Some(1));
+        assert_eq!(parse_pref_token("swapeffectupgradeenable=0;", "SwapEffectUpgradeEnable"), Some(0));
+        assert_eq!(parse_pref_token("GpuPreference=2;", "SwapEffectUpgradeEnable"), None);
+        assert_eq!(parse_pref_token("SwapEffectUpgradeEnable=x;", "SwapEffectUpgradeEnable"), None);
+        assert_eq!(parse_pref_token("", "SwapEffectUpgradeEnable"), None);
     }
 }

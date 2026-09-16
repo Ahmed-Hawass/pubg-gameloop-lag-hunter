@@ -260,23 +260,32 @@ export interface SystemChecks {
   vt_enabled: boolean;
   /** true when Game DVR / background recording is on */
   game_dvr_enabled: boolean;
-  /** system-drive letter, e.g. "C:" */
-  disk_id: string;
-  /** free space on the system drive */
-  disk_free_gb: number;
-  disk_free_pct: number;
-  /** "ok" | "low" | "critical" */
-  disk_level: string;
   /** Storage Sense on/off; null = feature unavailable on this Windows
       build (the row hides, never a dead switch) */
   storage_sense: boolean | null;
 }
 
-/** the Tools tab's two switches, nothing else — mirrors TweakStates in
-    engine/system.rs (game_dvr_enabled + storage_sense only) */
+/** Visibility of a Tools row whose availability depends on the machine —
+    mirrors RowState in engine/system.rs. `disabled_gameloop_not_found`
+    renders greyed with a translated reason (fixable by the user);
+    `hidden` renders nothing (can never work here). */
+export type RowState = "on" | "off" | "disabled_gameloop_not_found" | "hidden";
 export interface TweakStates {
   game_dvr_enabled: boolean;
   storage_sense: boolean | null;
+  /** Game Mode master toggles read 1 (missing reads as the OS default) */
+  game_mode: boolean;
+  /** every resolved GameLoop exe prefers the high-performance GPU */
+  gpu_high_perf: RowState;
+  /** every resolved GameLoop exe carries the fullscreen-optimizations
+      opt-out flag */
+  fso_disabled: RowState;
+  /** pointer precision values all read zero (missing reads as the OS
+      default, precision on) */
+  mouse_accel_off: boolean;
+  /** windowed-games optimization state (Win11+ only); None = unsupported
+      build (row hides — there is no such Settings toggle to mirror there) */
+  windowed_game_opt: boolean | null;
 }
 
 // ---- settings (persisted user preferences — schema v3) --------------------

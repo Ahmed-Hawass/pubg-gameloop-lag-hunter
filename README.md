@@ -53,9 +53,9 @@ CPU, RAM, GPU, and disk are sampled every second while you play.
 
 Stop the scan, or let auto-stop finish it, and review the findings, key moments, and measurements.
 
-The **Reports** tab keeps every finished session with its full report. **System** shows your rig as the tool sees it, **Processes** shows what's eating the machine right now, and **Checks** points at Windows settings that silently cause lag (it only opens the right page, you flip the switch).
+The **Reports** tab keeps every finished session with its full report. **System** shows your rig as the tool sees it, **Processes** shows what's eating the machine right now, **Checks** shows your machine's most important settings (most fixes open the right Windows page, background recording jumps straight to its switch in **Tools**), and **Tools** holds every performance switch grouped by area.
 
-> **Read-only by design:** Lag Hunter diagnoses and advises. It never changes Windows settings.
+> **Honest by design:** monitoring and diagnosis never change anything. A setting changes only when you flip its switch yourself, and every change is verified by re-reading Windows.
 
 ---
 

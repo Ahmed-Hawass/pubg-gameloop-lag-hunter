@@ -20,11 +20,11 @@ If it can't be measured honestly, it isn't shown.
 
 A `--` is worth more than a guess.
 
-### 🔒 Read-only on the user's system
+### Changes only by the user's hand
 
-The tool never modifies Windows settings.
+Monitoring and diagnosis never modify Windows settings.
 
-New "checks" point to the right page; they never flip switches.
+New rows mirror the live state, write explicitly in both directions, verify by re-read, and log. New health cards point at the fix; they never flip switches themselves.
 
 ### 🌍 Localization
 

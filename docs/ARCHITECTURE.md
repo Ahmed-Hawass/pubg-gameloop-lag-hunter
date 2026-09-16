@@ -91,11 +91,11 @@ Unavailable sources show `--`.
 
 Measured limits are stated, including freeze durations at 1 Hz resolution.
 
-### 🔒 Read-only on the user's machine
+### Changes only by your hand
 
 The engine reads counters and opens whitelisted Windows panels.
 
-It never flips a switch.
+A setting changes only from an explicit user action through a whitelisted command: scoped writes, validated values, verified by re-read, audit-logged. Diagnosis paths never write.
 
 ### 📦 Bounded everything
 

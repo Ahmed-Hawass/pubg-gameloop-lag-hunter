@@ -7,6 +7,47 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Tools rows carry a (?) background note behind the row name: at most 3
+  plain-language sentences per tweak (what it does, when it helps or
+  hurts, one-tap revert), shown in the one unified Dialog, never invented
+  numbers. The Game Mode note is the documented case (independent
+  frame-time tests under background load, CPU-maxed exceptions named).
+- System health cards carry the same (?) background notes as Tools: the
+  DVR card reuses the Tools note verbatim (same option, same note),
+  power, pagefile, VT, and charger own theirs. Same contract (plain
+  language, at most 3 sentences, no invented numbers, one unified
+  Dialog); states and effect timing stay in the card's own lines.
+- System health DVR card links inside the app: its button opens the Tools
+  DVR row directly (same card name on both sides, smooth scroll plus focus
+  plus a temporary ring, one-shot like the Reports deep link) instead of
+  the Windows Settings page. Every other health card keeps its external
+  page: power and pagefile have no in-app counterpart yet, and VT/charger
+  can never have one (BIOS and hardware).
+- Performance tweaks: five new rows in the Tools tab Gaming group (the
+  System tweaks card is renamed, content unchanged): Game Mode on/off
+  (both master toggles together), per-exe high-performance GPU
+  preference for the GameLoop renderers, per-exe fullscreen-optimizations
+  opt-out, pointer-precision off, and windowed-games optimizations. Same
+  contract as the existing rows (live mirror, optimistic flip, verify by
+  re-read, audit log); the two per-exe rows resolve GameLoop paths live
+  from Tencent's own InstallPath values plus the stock location, writes
+  touch only our own token/flag (sibling tokens and foreign flags are
+  preserved), and turning a row off reverts to Windows decides instead of
+  ever forcing power-saving — except windowed-games off, which writes
+  `=0` exactly like the Settings toggle itself does (verified live).
+  Row copy states the function plus the required action (close and reopen
+  the game), never bare mechanics; the mouse row states plainly that it
+  is a feel preference with no FPS claim. The windowed row hides below
+  Windows 11 (no such toggle to mirror there) and its backing store
+  (DirectXUserGlobalSettings) was identified by live before/after
+  registry diffing, not from guides.
+- Per-exe rows that cannot resolve GameLoop render greyed-out with a
+  translated reason instead of hiding: a missing precondition the user
+  can fix (install GameLoop) must explain itself, while rows that can
+  never work here (unsupported OS build) still hide. The GPU row
+  additionally hides below Windows 10 1803, whose builds ignore the
+  preference value while a re-read would still verify: a manufactured
+  success the gate refuses to ship.
 - Tools tab: a System tweaks card (theme-aware spot illustration) opening
   a list grouped by area. Switches mirror the live Windows result (ON =
   the named action holds right now, whoever flipped it): optimistic
@@ -231,6 +272,18 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   (the common cases render flash-free; a saved theme that contradicts
   the OS still settles after the settings IPC, unavoidable without a
   synchronous bridge).
+- The System health intro no longer talks about read-only mechanics:
+  it names what the tab is (the machine's most important settings) and
+  promises one-click help. The product docs (README, SPEC,
+  ARCHITECTURE, CONTRIBUTING) now describe settings changes the same
+  way the app behaves: only by the user's hand, verified by re-read.
+
+### Removed
+- The System health disk-space card is gone (measurement only, no in-app
+  fix, and its Storage Sense page link duplicated a destination nothing
+  else needs): the struct fields, the Win32_LogicalDisk query line, the
+  level helper with its test, the "storage" panel route, the card, and
+  both locales. Storage Sense itself stays as a Tools switch.
 
 ## [1.6.0] - 2026-09-11
 

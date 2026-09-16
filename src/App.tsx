@@ -43,6 +43,10 @@ export default function App() {
   const [toastBody, setToastBody] = useState<string | null>(null);
   const [view, setView] = useState<View>("monitor");
   const [reportOpenId, setReportOpenId] = useState<string | null>(null);
+  /** Tools deep-link target row id (the health DVR card jumps to its row):
+      one-shot, cleared by ToolsView once the landing finishes — the same
+      contract as reportOpenId above */
+  const [toolOpenId, setToolOpenId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<boolean | null>(null); // null = loading saved pref
   /** first-run welcome: null = still loading the setting */
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
@@ -451,6 +455,7 @@ export default function App() {
                       aria-current={view === tab.id ? "page" : undefined}
                       onClick={() => {
                         setReportOpenId(null);
+                        setToolOpenId(null);
                         setView(tab.id);
                       }}
                     >
@@ -520,10 +525,20 @@ export default function App() {
                 <ProcessesView active={view === "processes"} />
               </div>
               <div className={view === "checks" ? "" : "is-hidden-view"}>
-                <ChecksView active={view === "checks"} />
+                <ChecksView
+                  active={view === "checks"}
+                  onOpenTool={(id) => {
+                    setToolOpenId(id);
+                    setView("tools");
+                  }}
+                />
               </div>
               <div className={view === "tools" ? "" : "is-hidden-view"}>
-                <ToolsView active={view === "tools"} />
+                <ToolsView
+                  active={view === "tools"}
+                  toolOpenId={toolOpenId}
+                  onToolOpened={() => setToolOpenId(null)}
+                />
               </div>
               <div className={view === "settings" ? "" : "is-hidden-view"}>
                 <SettingsView theme={themeSetting} onThemeChange={onThemeChange} />

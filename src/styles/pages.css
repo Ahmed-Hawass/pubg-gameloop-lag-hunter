@@ -473,6 +473,12 @@
 .switch-row.off {
   border-inline-start-color: var(--warn);
 }
+/* deep-link landing (health DVR card): a temporary primary ring so the
+   eye finds the row the card promised. Cleared with the link itself. */
+.switch-row.is-linked {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-dim);
+}
 /* icon tile, scoped to tools rows only (System health keeps the bare glyph) */
 .switch-row .check-func {
   align-items: center;
@@ -486,6 +492,21 @@
 .switch-row.on .check-func {
   background: var(--primary-dim);
   color: var(--primary);
+}
+/* disabled-with-reason row: greyed but legible — the row teaches (the
+   reason line underneath) instead of acting; the switch itself is inert
+   via the native disabled state above */
+.switch-row.is-disabled {
+  opacity: 0.65;
+}
+.switch-row.is-disabled .switch {
+  cursor: not-allowed;
+}
+.switch-reason {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-3);
+  line-height: 1.45;
 }
 /* area divider inside the tweaks list (no letter-spacing: Arabic-safe) */
 .check-list > .tweak-group {
@@ -505,8 +526,33 @@
   min-width: 0;
 }
 .switch-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12.5px;
   font-weight: 700;
+}
+/* (?) background-note trigger: the same Info glyph as every other Hint,
+   ghost until hovered so the row stays quiet */
+.switch-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  flex: none;
+}
+.switch-hint:hover {
+  color: var(--primary);
+  background: var(--primary-dim);
+}
+.switch-hint:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
 }
 .switch-desc {
   font-size: 12px;

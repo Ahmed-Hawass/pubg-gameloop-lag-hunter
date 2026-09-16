@@ -78,11 +78,11 @@ tasklist (GameLoop probe)       ─┘
 
 ## Guarantees
 
-### 🔒 Read-only on the user's machine
+### Changes only by your hand
 
-No settings are ever modified.
+Monitoring and diagnosis never modify anything.
 
-System health shows read-only statuses and opens the relevant Windows page; **the user flips the switch**.
+System health shows statuses and points at the fix; **the user flips the switch**. Every change states its value explicitly in both directions, is verified by re-reading Windows, and leaves an audit line in the log.
 
 ### 📏 No fabricated numbers
 
