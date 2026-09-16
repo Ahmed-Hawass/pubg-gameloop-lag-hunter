@@ -110,7 +110,7 @@ async fn system_checks(force: bool) -> Result<engine::system::SystemChecks, Stri
     }
 }
 
-/// The Tools tab's two switches, live from the registry (microseconds,
+/// The Tools tab's switches, live from the registry (microseconds,
 /// in-process — no PowerShell spawn). SYNC by the codebase's own rule:
 /// only commands slower than a few milliseconds go async. The full
 /// system_checks batch costs 0.5–2s and the Tools page displays none of

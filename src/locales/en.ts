@@ -253,7 +253,7 @@ export const en = {
     "~25 MB of RAM, less than one browser tab",
     "~200 KB per minute of scanning on disk",
     "Every session stops by itself, nothing runs forgotten",
-    "It never modifies Windows settings",
+    "It changes a setting only when you flip its switch yourself",
   ],
   aboutUpdate: "Updates",
   aboutCheckUpdate: "Check for updates",

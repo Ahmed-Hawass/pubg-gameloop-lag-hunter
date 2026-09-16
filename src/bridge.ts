@@ -194,7 +194,7 @@ export const api = {
   topProcesses: (force?: boolean) => invoke<TopProcess[]>("top_processes", { force: force ?? false }),
   systemChecks: (force?: boolean) =>
     invoke<SystemChecks>("system_checks", { force: force ?? false }),
-  /** the Tools tab's two switches only (microseconds, in-process) — the
+  /** the Tools tab's switches only (microseconds, in-process) — the
       full systemChecks batch is never paid for a page that displays none
       of its rows */
   tweakStates: () => invoke<TweakStates>("tweak_states"),

@@ -272,6 +272,9 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   (the common cases render flash-free; a saved theme that contradicts
   the OS still settles after the settings IPC, unavoidable without a
   synchronous bridge).
+- The About cost list no longer claims the tool never modifies Windows:
+  it promises a change only by the user's own switch flip. Two stale
+  "two switches" comments (bridge, engine) now say switches.
 - The System health intro no longer talks about read-only mechanics:
   it names what the tab is (the machine's most important settings) and
   promises one-click help. The product docs (README, SPEC,
