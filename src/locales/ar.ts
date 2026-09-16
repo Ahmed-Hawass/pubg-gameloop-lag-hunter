@@ -197,11 +197,18 @@ export const ar: Locale = {
 
   // ---- tools tab ----
   tools: "الأدوات",
+  /** beta pill next to the Tools entry in the sidebar: the tab writes to
+      Windows and ships before the v2 release, so it stays labelled until
+      v2 goes stable */
+  toolsBeta: "تجريبية",
   toolsBack: "الأدوات",
-  toolGaming: "الألعاب",
+  toolGamingTweaks: "تعديلات الألعاب",
+  toolGamingTweaksDesc: "كل مفاتيح أداء الألعاب في مكان واحد.",
   toolStorage: "التخزين",
-  toolPerfTweaks: "تعديلات الأداء",
-  toolPerfTweaksDesc: "كل مفاتيح الأداء في مكان واحد، مقسمة حسب المجال.",
+  toolStorageDesc: "تنظيف تلقائي لأقراصك.",
+  /** PLACEHOLDER, remove when the storage phase starts: the card exists
+      now so the destination split reads clearly with a single row */
+  toolStorageComing: "أدوات تخزين إضافية في الطريق.",
 
   // ---- tweaks (Tools tab writes — switch mirrors live state) ----
   tweakDvrTitle: "إيقاف التسجيل الخلفي (DVR)",

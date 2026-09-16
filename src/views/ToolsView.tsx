@@ -1,7 +1,7 @@
-// ToolsView.tsx — one "Performance tweaks" list holding every toggle,
-// grouped by area. A switch MIRRORS THE LIVE RESULT of its named action (ON = the
-// action holds right now, whoever made it hold), so manual changes outside
-// the app appear on the next fresh read: opening the details page and
+// ToolsView.tsx — one card per area (Gaming tweaks, Storage), each opening
+// its own details list. A switch MIRRORS THE LIVE RESULT of its named action
+// (ON = the action holds right now, whoever made it hold), so manual changes
+// outside the app appear on the next fresh read: opening a details page and
 // regaining window focus both re-read live. The read is the lightweight
 // tweak_states command (a handful of registry values, microseconds) — never the
 // full system_checks batch, whose rows this page does not display.
@@ -12,6 +12,8 @@ import { api, type RowState } from "../bridge";
 import { useLang } from "../i18n";
 import spotTweaksDark from "../assets/spot-system-tweaks-dark.svg?url";
 import spotTweaksLight from "../assets/spot-system-tweaks-light.svg?url";
+import spotStorageDark from "../assets/spot-storage-dark.svg?url";
+import spotStorageLight from "../assets/spot-storage-light.svg?url";
 
 /** one switch row. The switch mirrors the live RESULT of the named action
     (ON = the action holds right now). The label names the action itself
@@ -94,8 +96,8 @@ export function ToolsView(props: {
 }) {
   const { active, toolOpenId, onToolOpened } = props;
   const { t } = useLang();
-  /** details page open (the landing card was pressed) */
-  const [open, setOpen] = useState(false);
+  /** which card's details are open (the landing cards need no data) */
+  const [openCard, setOpenCard] = useState<"gaming" | "storage" | null>(null);
   /** optimistic switch positions: flip instantly on click; restored to the
       verified live truth after the write settles (and on every fresh read) */
   const [dvrOn, setDvrOn] = useState<boolean | null>(null);
@@ -166,36 +168,36 @@ export function ToolsView(props: {
   };
 
   useEffect(() => {
-    if (!active || !open) return;
+    if (!active || !openCard) return;
     void reload();
-    // the read contract is about the DETAILS page being visible, not the
-    // tab alone: the landing card needs no data, so no read fires for it
-    // (and none fires on window focus while it shows, either)
+    // the read contract is about a DETAILS page being visible, not the
+    // tab alone: the landing cards need no data, so no read fires for them
+    // (and none fires on window focus while they show, either)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, open]);
+  }, [active, openCard]);
 
   // returning from Windows Settings (after flipping something by hand)
   // re-reads live: the switch must mirror what Windows says now
   useEffect(() => {
-    if (!active || !open) return;
+    if (!active || !openCard) return;
     const onFocus = () => void reload();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
     // same as above: reload's identity is not part of the subscription
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, open]);
+  }, [active, openCard]);
 
   // deep-link: the health DVR card jumps here. The rows live on the
-  // DETAILS page, so the link opens it first (the open effect above fires
+  // GAMING details page, so the link opens it first (the open effect above fires
   // the live read); the landing effect below scrolls once data arrives.
   useEffect(() => {
-    if (toolOpenId && !open) setOpen(true);
+    if (toolOpenId && openCard !== "gaming") setOpenCard("gaming");
     // one-shot per link arrival, like the Reports openId effect
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toolOpenId]);
 
   useEffect(() => {
-    if (!toolOpenId || !open || !loaded) return;
+    if (!toolOpenId || openCard !== "gaming" || !loaded) return;
     const target = toolOpenId;
     const row = listRef.current?.querySelector<HTMLElement>(`[data-tweak="${target}"]`);
     if (!row) {
@@ -214,7 +216,7 @@ export function ToolsView(props: {
     return () => window.clearTimeout(timer);
     // one-shot per link arrival, like the Reports openId effect
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toolOpenId, open, loaded]);
+  }, [toolOpenId, openCard, loaded]);
 
   // a dialog mounting under a parked cursor never fires mouseleave — tell
   // every tooltip to hide the moment ours opens (same signal as the shell)
@@ -320,14 +322,14 @@ export function ToolsView(props: {
     }
   };
 
-  if (open) {
+  if (openCard) {
     if (!loaded) {
       // details wait for a real read: a dead shell must never show, and a
       // FAILED read surfaces as an honest error instead of a "Loading..."
       // that spins forever (the window-focus retry is the rescue)
       return (
         <div className="tools">
-          <button className="tools-back" onClick={() => setOpen(false)}>
+          <button className="tools-back" onClick={() => setOpenCard(null)}>
             <ChevronLeft size={16} />
             {t.toolsBack}
           </button>
@@ -339,16 +341,18 @@ export function ToolsView(props: {
         </div>
       );
     }
+    const gaming = openCard === "gaming";
     return (
       <div className="tools">
-        <button className="tools-back" onClick={() => setOpen(false)}>
+        <button className="tools-back" onClick={() => setOpenCard(null)}>
           <ChevronLeft size={16} />
           {t.toolsBack}
         </button>
+        {gaming ? (
         <div className="check-list" ref={listRef}>
-          <div className="tweak-group">{t.toolGaming}</div>
           {/* hidden until read; a feature the Windows build lacks stays
-              hidden — a dead switch must never be shown */}
+              hidden — a dead switch must never be shown. No area dividers:
+              every row here targets gaming, subdivision would be noise. */}
           {dvrOn !== null ? (
             <SwitchRow
               tweakId="dvr"
@@ -443,7 +447,9 @@ export function ToolsView(props: {
               onFlip={(next) => void flipTweak("mouse", next)}
             />
           ) : null}
-          <div className="tweak-group">{t.toolStorage}</div>
+        </div>
+        ) : (
+        <div className="check-list">
           {/* hidden when the Windows build has no Storage Sense policy
               key (storage_sense === null): never a dead switch */}
           {ssOn !== null ? (
@@ -461,7 +467,12 @@ export function ToolsView(props: {
               onFlip={(next) => void flipTweak("storagesense", next)}
             />
           ) : null}
+          {/* PLACEHOLDER, remove with the key when the storage phase
+              starts: one row cannot carry a card alone without saying
+              what lives here next */}
+          <p className="tool-note">{t.toolStorageComing}</p>
         </div>
+        )}
         {/* background note behind a row's (?) button — the same unified
             Dialog as the failed-write notice below (one modal surface) */}
         {hint ? (
@@ -493,7 +504,7 @@ export function ToolsView(props: {
       {/* no intro paragraph: it duplicated the card description below
           almost verbatim — the card carries the meaning alone */}
       <div className="tools-grid">
-        <button className="tool-card" onClick={() => setOpen(true)}>
+        <button className="tool-card" onClick={() => setOpenCard("gaming")}>
           <img
             className="tool-spot"
             src={document.documentElement.dataset.theme === "light" ? spotTweaksLight : spotTweaksDark}
@@ -501,8 +512,25 @@ export function ToolsView(props: {
             aria-hidden="true"
             draggable={false}
           />
-          <span className="tool-title">{t.toolPerfTweaks}</span>
-          <span className="tool-desc">{t.toolPerfTweaksDesc}</span>
+          <span className="tool-title-row">
+            <span className="tool-title">{t.toolGamingTweaks}</span>
+            <span className="sb-beta">{t.toolsBeta}</span>
+          </span>
+          <span className="tool-desc">{t.toolGamingTweaksDesc}</span>
+        </button>
+        <button className="tool-card" onClick={() => setOpenCard("storage")}>
+          <img
+            className="tool-spot"
+            src={document.documentElement.dataset.theme === "light" ? spotStorageLight : spotStorageDark}
+            alt=""
+            aria-hidden="true"
+            draggable={false}
+          />
+          <span className="tool-title-row">
+            <span className="tool-title">{t.toolStorage}</span>
+            <span className="sb-beta">{t.toolsBeta}</span>
+          </span>
+          <span className="tool-desc">{t.toolStorageDesc}</span>
         </button>
       </div>
     </div>

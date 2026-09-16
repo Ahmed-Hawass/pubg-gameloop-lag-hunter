@@ -410,12 +410,12 @@ export default function App() {
     }
   }, [toast, updateModal, updateInfo]);
 
-  const tabs: { id: View; icon: React.ReactNode; label: string }[] = [
+  const tabs: { id: View; icon: React.ReactNode; label: string; beta?: boolean }[] = [
     { id: "monitor", icon: <Crosshair size={17} />, label: t.monitor },
     { id: "system", icon: <Cpu size={17} />, label: t.system },
     { id: "processes", icon: <Activity size={17} />, label: t.topProcesses },
     { id: "checks", icon: <ShieldCheck size={17} />, label: t.systemHealth },
-    { id: "tools", icon: <Wrench size={17} />, label: t.tools },
+    { id: "tools", icon: <Wrench size={17} />, label: t.tools, beta: true },
     { id: "reports", icon: <FolderOpen size={17} />, label: t.reports },
     { id: "settings", icon: <Settings size={17} />, label: t.settings },
   ];
@@ -461,6 +461,12 @@ export default function App() {
                     >
                       {tab.icon}
                       {!collapsed ? <span>{tab.label}</span> : null}
+                      {/* beta pill: in-flow label (not the corner update
+                          dot), hidden with the labels on the collapsed
+                          rail; remove with the key when v2 goes stable */}
+                      {!collapsed && tab.beta ? (
+                        <span className="sb-beta">{t.toolsBeta}</span>
+                      ) : null}
                     </button>
                   </Tip>
                 ))}

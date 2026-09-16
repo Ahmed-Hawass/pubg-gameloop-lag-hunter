@@ -7,6 +7,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Tools wears a Beta pill in the sidebar and on both cards until v2
+  goes stable: the tab writes to Windows and ships early, so it stays
+  labelled.
+- Tools is two cards now: Gaming tweaks (the six game rows, no area
+  dividers left inside) and Storage (Storage Sense moved there, with a
+  placeholder note until the storage phase starts).
 - Tools rows carry a (?) background note behind the row name: at most 3
   plain-language sentences per tweak (what it does, when it helps or
   hurts, one-tap revert), shown in the one unified Dialog, never invented

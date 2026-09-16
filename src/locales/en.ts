@@ -192,11 +192,18 @@ export const en = {
 
   // ---- tools tab ----
   tools: "Tools",
+  /** beta pill next to the Tools entry in the sidebar: the tab writes to
+      Windows and ships before the v2 release, so it stays labelled until
+      v2 goes stable */
+  toolsBeta: "Beta",
   toolsBack: "Tools",
-  toolGaming: "Gaming",
+  toolGamingTweaks: "Gaming tweaks",
+  toolGamingTweaksDesc: "Every game performance switch in one place.",
   toolStorage: "Storage",
-  toolPerfTweaks: "Performance tweaks",
-  toolPerfTweaksDesc: "Every performance switch in one place, grouped by area.",
+  toolStorageDesc: "Automatic cleanup for your drives.",
+  /** PLACEHOLDER, remove when the storage phase starts: the card exists
+      now so the destination split reads clearly with a single row */
+  toolStorageComing: "More storage tools are on the way.",
 
   // ---- tweaks (Tools tab writes — switch mirrors live state) ----
   tweakDvrTitle: "Turn off background recording (DVR)",
