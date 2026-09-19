@@ -21,8 +21,10 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   Restart-now-or-Later offer (Restart now reboots immediately, Later
   leaves the self-clearing pending note). The editor collapses under a
   summary row carrying the live status (plus a restart badge while a
-  reboot is pending). No auto-reboot, no invented
-  sizes.
+  reboot is pending). Empty entries end the drive list exactly like
+  Windows reads them (never skipped), and every rewrite drops strays,
+  healing poisoned lists instead of preserving them. No auto-reboot, no
+  invented sizes.
 - High Performance power row (first elevated tweak): one switch for the
   built-in plan (restored with Microsoft's own command when missing),
   OFF restores your previous plan from settings, verified by re-read

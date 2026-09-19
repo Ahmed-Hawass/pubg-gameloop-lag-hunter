@@ -539,6 +539,20 @@
 .pf-chev.is-open {
   transform: rotate(180deg);
 }
+/* the chevron's own toggle (a button cannot nest inside the title
+   button): visually weightless, same action as the title area */
+.pf-chev-btn {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 4px;
+}
 /* the expanded editor: global checkbox, selectable drive rows (the
    selected row carries the primary ring), sizes only for custom */
 .pf-auto {

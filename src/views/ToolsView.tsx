@@ -483,10 +483,22 @@ export function ToolsView(props: {
     return `${free} · ${state}`;
   };
 
+  /** the edge verdict: green means SAFE paging, not automatic (automatic
+      always qualifies; otherwise a single viable file suffices — a
+      healthy drive beside an off one is the normal single-file setup,
+      not a warning. Small, off, and unreadable everywhere stays warn). */
+  const pfHealthy =
+    !!pfSettings &&
+    (pfSettings.automatic ||
+      pfSettings.drives.some(
+        (d) =>
+          d.mode === "system" ||
+          (d.mode === "custom" && (d.max_mb ?? 0) >= 8192),
+      ));
+  const pfLiveDrive = pfSettings?.drives.find((d) => d.drive === pfDrive);
   /** Apply dies while nothing differs from live (no dead round-trip,
       no pointless UAC): automatic flag first, then the selected drive's
       mode and sizes */
-  const pfLiveDrive = pfSettings?.drives.find((d) => d.drive === pfDrive);
   const pfUnchanged = (() => {
     if (!pfSettings || !pfLiveDrive) return true;
     if (pfAutomatic !== pfSettings.automatic) return false;
@@ -704,7 +716,7 @@ export function ToolsView(props: {
           {pfSettings ? (
             <div
               data-tweak="pagefile"
-              className={`pf-summary${pfSettings.automatic ? " on" : " off"}${linkedId === "pagefile" ? " is-linked" : ""}`}
+              className={`pf-summary${pfHealthy ? " on" : " off"}${linkedId === "pagefile" ? " is-linked" : ""}`}
             >
               <button
                 type="button"
@@ -727,10 +739,6 @@ export function ToolsView(props: {
                 {pfSettings.pending ? (
                   <span className="check-badge warn">{t.tweakPfPendingBadge}</span>
                 ) : null}
-                <ChevronDown
-                  size={16}
-                  className={`pf-chev${pfOpen ? " is-open" : ""}`}
-                />
               </button>
               <button
                 type="button"
@@ -739,6 +747,21 @@ export function ToolsView(props: {
                 onClick={() => showHint(t.tweakPfTitle, t.tweakPfHint)}
               >
                 <Info size={13} />
+              </button>
+              {/* its own toggle button (a button cannot nest): title-area
+                  and chevron expand the same editor, matching the row
+                  order of every other card (tile, texts, badge, ?, ctl) */}
+              <button
+                type="button"
+                className="pf-chev-btn"
+                aria-expanded={pfOpen}
+                aria-label={t.tweakPfTitle}
+                onClick={() => setPfOpen(!pfOpen)}
+              >
+                <ChevronDown
+                  size={16}
+                  className={`pf-chev${pfOpen ? " is-open" : ""}`}
+                />
               </button>
             </div>
           ) : null}

@@ -1075,10 +1075,16 @@ pub(crate) fn read_pagefile_flag_and_entries() -> Option<(bool, Vec<String>)> {
 /// unknown); a bare legacy `?:\pagefile.sys` marker with no drive of its
 /// own reads as system-managed; no entry at all = off. Other drives'
 /// entries are never interpreted here, only preserved on write.
+/// Strict like Windows on one point: an empty line ENDS the list (that is
+/// what "" means in a REG_MULTI_SZ), it is never skipped — a poisoned
+/// list reads as off, which is exactly what Windows activates.
 pub(crate) fn parse_drive_mode(raw: &[String], drive: &str) -> (PagefileMode, Option<u32>, Option<u32>) {
     let prefix = format!("{drive}\\").to_uppercase();
     let mut marker = false;
     for entry in raw {
+        if entry.trim().is_empty() {
+            return (PagefileMode::Off, None, None);
+        }
         let mut parts = entry.split_whitespace();
         let path = parts.next().unwrap_or("");
         if path == r"?:\pagefile.sys" && parts.next().is_none() {
@@ -1907,6 +1913,19 @@ mod tests {
         assert_eq!(
             parse_drive_mode(&["garbage".into(), "D:\\pagefile.sys 1 2".into()], "C:"),
             (off, None, None)
+        );
+        // an empty line ENDS the list (REG_MULTI_SZ terminator semantics,
+        // exactly like Windows): a valid entry after it is invisible, so
+        // the drive reads as off — never as the entry Windows will not
+        // activate
+        assert_eq!(
+            parse_drive_mode(&["".into(), "C:\\pagefile.sys 1024 4096".into()], "C:"),
+            (off, None, None)
+        );
+        // ...while an entry before the terminator still counts
+        assert_eq!(
+            parse_drive_mode(&["C:\\pagefile.sys 1024 4096".into(), "".into()], "C:"),
+            (PagefileMode::Custom, Some(1024), Some(4096))
         );
     }
 

@@ -803,8 +803,7 @@ fn write_pagefile_raw(valid: &ValidatedPagefileApply) -> Result<(), String> {
         return Ok(());
     }
     let drive = drive_id_string(valid.drive);
-    let prefix = format!("{drive}\\").to_uppercase();
-    let mut entries: Vec<String> = match key.get_value("PagingFiles") {
+    let current: Vec<String> = match key.get_value("PagingFiles") {
         Ok(entries) => entries,
         // missing value = no entries yet (honest empty, not corruption)
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
@@ -813,29 +812,58 @@ fn write_pagefile_raw(valid: &ValidatedPagefileApply) -> Result<(), String> {
         // files Windows manages
         Err(_) => return Err("PF_WRITE_FAILED".into()),
     };
-    entries.retain(|e| {
-        let first = e.split_whitespace().next().unwrap_or("");
-        !first.to_uppercase().starts_with(&prefix)
-    });
-    match valid.mode {
+    let entries = rebuild_pagefile_entries(
+        current,
+        &drive,
+        valid.mode,
+        valid.min_mb,
+        valid.max_mb,
+    );
+    key.set_value("PagingFiles", &entries)
+        .map_err(|_| "PF_WRITE_FAILED".to_string())?;
+    Ok(())
+}
+
+/// Pure list rebuild shared by the writer (and its tests): drop the
+/// selected drive's old entries, drop empty lines, preserve everything
+/// else byte-for-byte (other drives, the legacy `?:` marker), then add
+/// the selected drive's new line — unless off, which just drops.
+/// The empty-line drop is the healer: Windows reads "" as the list
+/// terminator and stops, so a stale empty amputates every entry after
+/// it (a poisoned list reads as off and boots a temporary file); every
+/// rewrite cleans it.
+fn rebuild_pagefile_entries(
+    current: Vec<String>,
+    drive: &str,
+    mode: PagefileRequestMode,
+    min_mb: u32,
+    max_mb: u32,
+) -> Vec<String> {
+    let prefix = format!("{drive}\\").to_uppercase();
+    let mut entries: Vec<String> = current
+        .into_iter()
+        .filter(|e| {
+            let first = e.split_whitespace().next();
+            match first {
+                None => false,
+                Some(path) => !path.to_uppercase().starts_with(&prefix),
+            }
+        })
+        .collect();
+    match mode {
         // 0 0 is the documented system-managed shape (InitialSize =
         // MaximumSize = 0), explicit where a bare path could misread
         PagefileRequestMode::System => {
             entries.push(format!("{drive}\\pagefile.sys 0 0"));
         }
         PagefileRequestMode::Custom => {
-            entries.push(format!(
-                "{drive}\\pagefile.sys {} {}",
-                valid.min_mb, valid.max_mb
-            ));
+            entries.push(format!("{drive}\\pagefile.sys {min_mb} {max_mb}"));
         }
         // off drops the drive's entry; an empty list with the flag off
         // is Windows' own no-paging-file state
         PagefileRequestMode::Off => {}
     }
-    key.set_value("PagingFiles", &entries)
-        .map_err(|_| "PF_WRITE_FAILED".to_string())?;
-    Ok(())
+    entries
 }
 
 /// True when the desired state holds: the shared verifier for the
@@ -1278,8 +1306,63 @@ mod tests {
     }
 
     #[test]
-    fn pagefile_warnings_fire_before_the_write() {
-        // off always warns (crash risk is real); small warns but allows
+    fn pagefile_rebuild_heals_and_preserves() {
+        use super::PagefileRequestMode;
+        // the poisoned list from the live incident: a stale empty first
+        // (Windows stops there), then the intended entry — a rewrite
+        // drops the empty and keeps the intent, healing the list
+        let healed = rebuild_pagefile_entries(
+            vec!["".into(), "C:\\pagefile.sys 16384 49152".into()],
+            "C:",
+            PagefileRequestMode::Custom,
+            16384,
+            49152,
+        );
+        assert_eq!(healed, vec!["C:\\pagefile.sys 16384 49152".to_string()]);
+        // selected drive replaced, other drives and the legacy marker
+        // preserved byte-for-byte, whitespace-only lines dropped too
+        let rebuilt = rebuild_pagefile_entries(
+            vec![
+                "C:\\pagefile.sys 1 2".into(),
+                "D:\\pagefile.sys 512 1024".into(),
+                r"?:\pagefile.sys".into(),
+                "   ".into(),
+            ],
+            "C:",
+            PagefileRequestMode::System,
+            0,
+            0,
+        );
+        assert_eq!(
+            rebuilt,
+            vec![
+                "D:\\pagefile.sys 512 1024".to_string(),
+                r"?:\pagefile.sys".to_string(),
+                "C:\\pagefile.sys 0 0".to_string(),
+            ]
+        );
+        // off only drops, never adds
+        let offed = rebuild_pagefile_entries(
+            vec!["C:\\pagefile.sys 1 2".into()],
+            "C:",
+            PagefileRequestMode::Off,
+            0,
+            0,
+        );
+        assert!(offed.is_empty());
+        // drive matching is letter-scoped: C: never eats D:
+        let scoped = rebuild_pagefile_entries(
+            vec!["D:\\pagefile.sys 1 2".into()],
+            "C:",
+            PagefileRequestMode::Off,
+            0,
+            0,
+        );
+        assert_eq!(scoped, vec!["D:\\pagefile.sys 1 2".to_string()]);
+    }
+
+    #[test]
+    fn pagefile_warnings_fire_before_the_write() {        // off always warns (crash risk is real); small warns but allows
         assert_eq!(pagefile_warning(PagefileRequestMode::Off, 0), Some("off".into()));
         assert_eq!(
             pagefile_warning(PagefileRequestMode::Custom, 4096),
