@@ -447,6 +447,190 @@
   line-height: 1.55;
   margin-block-start: 4px;
 }
+/* status readout atop the storage details: deliberately UNBOXED (plain
+   text, not a row surface) so it never reads as clickable — it answers
+   "what holds now", actions live below it */
+.pf-status {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 4px;
+}
+/* custom page file form: same card language as switch rows (elev-1
+   surface, border, radius), labels above Latin-digit inputs; flex follows
+   reading direction, no physical properties anywhere */
+.pf-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--elev-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+}
+.pf-form .switch-hint {
+  align-self: flex-start;
+}
+/* the section's face: the same row as every other Tools row (tile +
+   texts + badge + control, identical metrics), only the control is a
+   chevron into the editor instead of a switch. The inline-start edge
+   carries the same verdict language as the rows (automatic = the
+   recommended state). Flex follows reading direction, no physical
+   properties anywhere */
+.pf-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--elev-1);
+  border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+}
+.pf-summary.on {
+  border-inline-start-color: var(--primary);
+}
+.pf-summary.off {
+  border-inline-start-color: var(--warn);
+}
+/* deep-link landing (health page file card): the same temporary primary
+   ring the rows get, cleared with the link itself */
+.pf-summary.is-linked {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-dim);
+}
+.pf-summary-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  padding: 0;
+}
+.pf-summary .check-func {
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--elev-3);
+  color: var(--text-2);
+  display: flex;
+}
+.pf-summary-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.pf-chev {
+  flex: none;
+  color: var(--text-3);
+  transition: transform 0.15s;
+}
+.pf-chev.is-open {
+  transform: rotate(180deg);
+}
+/* the expanded editor: global checkbox, selectable drive rows (the
+   selected row carries the primary ring), sizes only for custom */
+.pf-auto {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-1);
+  cursor: pointer;
+}
+.pf-auto input {
+  accent-color: var(--primary);
+  width: 16px;
+  height: 16px;
+}
+.pf-manual {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-block-start: 4px;
+}
+/* automatic on greys the manual controls (the dialog's own language:
+   the list is visible but inert); every control inside is also natively
+   disabled, this is only the visual echo */
+.pf-manual.is-disabled {
+  opacity: 0.55;
+}
+.pf-drives {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pf-drive {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--elev-3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: var(--text-1);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.pf-drive.is-selected {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-dim);
+}
+.pf-drive:disabled {
+  cursor: not-allowed;
+}
+.pf-drive-id {
+  font-weight: 700;
+}
+.pf-drive-state {
+  font-size: 12px;
+  color: var(--text-2);
+}
+.pf-fields {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-block-start: 6px;
+}
+.pf-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.pf-field input {
+  width: 130px;
+  background: var(--elev-3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--text-1);
+  font: inherit;
+}
+.pf-field input:disabled {
+  opacity: 0.5;
+}
+.pf-field input:focus-visible {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-dim);
+  outline: none;
+}
 .tools-back {
   display: inline-flex;
   align-items: center;
@@ -825,9 +1009,12 @@
   text-overflow: ellipsis;
   transition: background 0.12s, color 0.12s;
 }
-.lang-seg:hover:not(.is-active) {
+.lang-seg:hover:not(.is-active):not(:disabled) {
   color: var(--hover-text);
   background: var(--hover-bg);
+}
+.lang-seg:disabled {
+  cursor: not-allowed;
 }
 .lang-seg.is-active {
   background: var(--primary);

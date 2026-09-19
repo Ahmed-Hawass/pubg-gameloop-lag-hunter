@@ -131,6 +131,61 @@ async fn set_tweak(id: String, value: u32) -> Result<engine::tweaks::TweakResult
     res?
 }
 
+/// The Virtual Memory-style editor's single read: the global automatic
+/// flag plus one live state per fixed drive. SYNC like tweak_states
+/// (registry + two native calls, microseconds, in-process).
+#[tauri::command]
+fn pagefile_settings() -> Result<engine::system::PagefileSettings, String> {
+    engine::system::pagefile_settings()
+}
+
+/// Validate-only entry for the editor's confirm step: the same keys as
+/// the write path, plus the pre-write warning ("off" | "small" | null).
+/// SYNC (two fresh reads at most, no spawn, no writes).
+#[tauri::command]
+fn validate_pagefile_settings(
+    automatic: bool,
+    drive: String,
+    mode: String,
+    min_mb: String,
+    max_mb: String,
+) -> Result<Option<String>, String> {
+    engine::tweaks::validate_pagefile_settings(automatic, &drive, &mode, &min_mb, &max_mb)
+}
+
+/// Apply the editor's request (dedicated command: a mode is data, never
+/// a 0/1 tweak). Same blocking-pool + error-log discipline as set_tweak.
+#[tauri::command]
+async fn apply_pagefile_settings(
+    automatic: bool,
+    drive: String,
+    mode: String,
+    min_mb: String,
+    max_mb: String,
+) -> Result<engine::tweaks::TweakResult, String> {
+    let _t = engine::logging::timed("ipc: apply_pagefile_settings");
+    let res = tauri::async_runtime::spawn_blocking(move || {
+        engine::tweaks::set_pagefile_settings_parent(automatic, &drive, &mode, &min_mb, &max_mb)
+    })
+    .await
+    .map_err(|e| format!("set pagefile task failed: {e}"));
+    log_err("apply_pagefile_settings", &res);
+    res?
+}
+
+/// Immediate reboot for applying page file changes (the confirm dialog
+/// in Tools is the only caller; a refused UAC stays quiet like every
+/// other cancellation).
+#[tauri::command]
+async fn schedule_reboot() -> Result<(), String> {
+    let _t = engine::logging::timed("ipc: schedule_reboot");
+    let res = tauri::async_runtime::spawn_blocking(engine::elevate::request_reboot)
+        .await
+        .map_err(|e| format!("reboot task failed: {e}"));
+    log_err("schedule_reboot", &res);
+    res?
+}
+
 #[tauri::command]
 async fn session_start(
     app: tauri::AppHandle,
@@ -632,6 +687,10 @@ pub fn run() {
             system_checks,
             tweak_states,
             set_tweak,
+            pagefile_settings,
+            validate_pagefile_settings,
+            apply_pagefile_settings,
+            schedule_reboot,
             open_windows_panel,
             set_auto_stop,
             open_path,

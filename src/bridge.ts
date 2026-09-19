@@ -214,6 +214,44 @@ export const api = {
   openDownloadFolder: (path: string) => invoke<void>("open_download_folder", { path }),
   // tweaks (Tools tab writes): the switch mirrors the live Windows state
   setTweak: (id: string, value: number) => invoke<TweakResult>("set_tweak", { id, value }),
+  /** the Virtual Memory-style editor's single read (global flag + one
+      live state per fixed drive) */
+  pagefileSettings: () => invoke<PagefileSettings>("pagefile_settings"),
+  /** validate-only entry for the editor's confirm step: the same keys as
+      the write path, plus the pre-write warning ("off" | "small" | null).
+      Arg keys are camelCase (Tauri maps them to the Rust snake_case
+      params); a snake_case key here is a certain "missing key" error. */
+  validatePagefileSettings: (
+    automatic: boolean,
+    drive: string,
+    mode: string,
+    minMb: string,
+    maxMb: string,
+  ) =>
+    invoke<PagefileWarning>("validate_pagefile_settings", {
+      automatic,
+      drive,
+      mode,
+      minMb,
+      maxMb,
+    }),
+  /** apply the editor's request (a mode is data, never a 0/1 tweak) */
+  applyPagefileSettings: (
+    automatic: boolean,
+    drive: string,
+    mode: string,
+    minMb: string,
+    maxMb: string,
+  ) =>
+    invoke<TweakResult>("apply_pagefile_settings", {
+      automatic,
+      drive,
+      mode,
+      minMb,
+      maxMb,
+    }),
+  /** immediate reboot (page file changes apply at boot) */
+  scheduleReboot: () => invoke<void>("schedule_reboot"),
 };
 
 // ---- system tabs -----------------------------------------------------------
@@ -290,6 +328,28 @@ export interface TweakStates {
       same contract as the per-exe rows */
   power_high_perf: RowState;
 }
+
+/** one fixed drive's page file state (mirrors PagefileDriveState in
+    engine/system.rs; mode is a machine key, the UI translates it) */
+export type PagefileMode = "system" | "custom" | "off" | "unknown";
+export interface PagefileDrive {
+  drive: string;
+  /** free MB on this drive (null = unreadable, custom refuses blind) */
+  free_mb: number | null;
+  mode: PagefileMode;
+  /** live sizes, custom only */
+  min_mb: number | null;
+  max_mb: number | null;
+}
+/** the editor's single read (mirrors PagefileSettings in system.rs) */
+export interface PagefileSettings {
+  automatic: boolean;
+  drives: PagefileDrive[];
+  /** a page file write is waiting for a reboot (self-clearing) */
+  pending: boolean;
+}
+/** pre-write warning from validate_pagefile_settings */
+export type PagefileWarning = "off" | "small" | null;
 
 // ---- settings (persisted user preferences — schema v3) --------------------
 

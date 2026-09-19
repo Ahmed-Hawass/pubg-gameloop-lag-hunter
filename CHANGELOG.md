@@ -7,9 +7,22 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- Tools wears a Beta pill in the sidebar and on both cards until v2
-  goes stable: the tab writes to Windows and ships early, so it stays
-  labelled.
+- Tools wears a Beta pill in the sidebar until v2 goes stable: the tab
+  writes to Windows and ships early, so it stays labelled (the cards
+  themselves carry no pill).
+- Page file editor in the Storage card (elevated), mirroring the Windows
+  Virtual Memory dialog: an automatic-management checkbox for all drives,
+  one selectable row per fixed drive, and per-drive system-managed,
+  custom, or no-paging-file modes with the dialog's own validation
+  (digits-only at the keystroke, 10-digit cap, 16MB floor, free-space
+  bound). Only the selected drive ever changes; every other drive is
+  preserved exactly. Confirms before removing a drive's file or going
+  below 8GB, verifies by re-read, and every write ends in a
+  Restart-now-or-Later offer (Restart now reboots immediately, Later
+  leaves the self-clearing pending note). The editor collapses under a
+  summary row carrying the live status (plus a restart badge while a
+  reboot is pending). No auto-reboot, no invented
+  sizes.
 - High Performance power row (first elevated tweak): one switch for the
   built-in plan (restored with Microsoft's own command when missing),
   OFF restores your previous plan from settings, verified by re-read

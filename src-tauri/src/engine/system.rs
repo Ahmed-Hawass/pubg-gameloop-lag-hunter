@@ -1009,6 +1009,252 @@ fn pagefile_ok(mode: &str, mb: u64) -> bool {
     }
 }
 
+/// One fixed drive's page file state, the way the Virtual Memory dialog
+/// shows it: system-managed, custom sizes, none, or an entry in a shape
+/// this app never writes (shown honestly as unknown, never guessed into
+/// another mode). The backend ships these machine keys; the UI translates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PagefileMode {
+    System,
+    Custom,
+    Off,
+    Unknown,
+}
+
+/// One row of the drive list: letter, free space, and current mode.
+/// Sizes ride along only for custom; free None means that drive's bound
+/// is unreadable (a custom write there refuses blind).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct PagefileDriveState {
+    pub drive: String,
+    pub free_mb: Option<u64>,
+    pub mode: PagefileMode,
+    pub min_mb: Option<u32>,
+    pub max_mb: Option<u32>,
+}
+
+/// Everything the Virtual Memory-style editor needs in one read:
+/// the global automatic flag plus one state per fixed drive, and whether
+/// a page file write is still waiting for a reboot (self-clearing: the
+/// uptime clock zeroes on reboot, no writes involved).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct PagefileSettings {
+    pub automatic: bool,
+    pub drives: Vec<PagefileDriveState>,
+    pub pending: bool,
+}
+
+/// The raw desired state Windows stores: the AutomaticManagedPagefile
+/// flag plus the PagingFiles multi-string. HKLM reads need no elevation.
+/// None = unreadable: the editor refuses rather than mirrors a guess.
+struct PagefileRaw {
+    automatic: bool,
+    entries: Vec<String>,
+}
+
+fn read_pagefile_raw() -> Option<PagefileRaw> {
+    let (automatic, entries) = read_pagefile_flag_and_entries()?;
+    Some(PagefileRaw { automatic, entries })
+}
+
+/// The flag plus the raw entries for the write side's verifier (tweaks):
+/// same read, no second opinion about where the state lives.
+pub(crate) fn read_pagefile_flag_and_entries() -> Option<(bool, Vec<String>)> {
+    let hklm = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE);
+    let mem = hklm
+        .open_subkey(r"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management")
+        .ok()?;
+    let auto: u32 = mem.get_value("AutomaticManagedPagefile").unwrap_or(0);
+    let entries: Vec<String> = mem.get_value("PagingFiles").unwrap_or_default();
+    Some((auto == 1, entries))
+}
+
+/// Pure half of the per-drive read: first entry addressed to this drive
+/// wins (bare or 0 0 = system-managed, min/max = custom, anything else =
+/// unknown); a bare legacy `?:\pagefile.sys` marker with no drive of its
+/// own reads as system-managed; no entry at all = off. Other drives'
+/// entries are never interpreted here, only preserved on write.
+pub(crate) fn parse_drive_mode(raw: &[String], drive: &str) -> (PagefileMode, Option<u32>, Option<u32>) {
+    let prefix = format!("{drive}\\").to_uppercase();
+    let mut marker = false;
+    for entry in raw {
+        let mut parts = entry.split_whitespace();
+        let path = parts.next().unwrap_or("");
+        if path == r"?:\pagefile.sys" && parts.next().is_none() {
+            marker = true;
+            continue;
+        }
+        if !path.to_uppercase().starts_with(&prefix) {
+            continue;
+        }
+        let rest: Vec<&str> = parts.collect();
+        match rest.as_slice() {
+            [] => return (PagefileMode::System, None, None),
+            [a, b] => match (a.trim().parse::<u32>(), b.trim().parse::<u32>()) {
+                (Ok(0), Ok(0)) => return (PagefileMode::System, None, None),
+                (Ok(mn), Ok(mx)) => return (PagefileMode::Custom, Some(mn), Some(mx)),
+                _ => return (PagefileMode::Unknown, None, None),
+            },
+            _ => return (PagefileMode::Unknown, None, None),
+        }
+    }
+    if marker {
+        return (PagefileMode::System, None, None);
+    }
+    (PagefileMode::Off, None, None)
+}
+
+/// Fixed local drives only (the dialog never offers removable, optical,
+/// or network volumes): GetLogicalDrives bitmask filtered by
+/// GetDriveTypeW == DRIVE_FIXED. Read-only, no spawn.
+#[cfg(windows)]
+pub fn fixed_drives() -> Vec<String> {
+    use std::os::windows::ffi::OsStrExt;
+    let mut drives = Vec::new();
+    // SAFETY: no preconditions.
+    let mask = unsafe { GetLogicalDrives() };
+    for i in 0..26 {
+        if mask & (1 << i) == 0 {
+            continue;
+        }
+        let letter = (b'A' + i) as char;
+        let root = format!("{letter}:\\");
+        let wide: Vec<u16> = std::ffi::OsStr::new(&root)
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+        // SAFETY: pointer to a live nul-terminated buffer.
+        if unsafe { GetDriveTypeW(wide.as_ptr()) } == DRIVE_FIXED {
+            drives.push(format!("{letter}:"));
+        }
+    }
+    drives
+}
+
+#[cfg(not(windows))]
+pub fn fixed_drives() -> Vec<String> {
+    Vec::new()
+}
+
+#[cfg(windows)]
+const DRIVE_FIXED: u32 = 3;
+
+/// The editor's single read: global flag plus one live state per fixed
+/// drive. Unreadable registry or zero fixed drives refuses with a machine
+/// key (the UI translates); per-drive free space may still be None, which
+/// only gates custom writes on that drive.
+pub fn pagefile_settings() -> Result<PagefileSettings, String> {
+    let raw = read_pagefile_raw().ok_or_else(|| "PF_READ_FAILED".to_string())?;
+    let drives = fixed_drives();
+    if drives.is_empty() {
+        return Err("PF_READ_FAILED".into());
+    }
+    let states = drives
+        .iter()
+        .map(|drive| {
+            let (mode, min_mb, max_mb) = parse_drive_mode(&raw.entries, drive);
+            PagefileDriveState {
+                drive: drive.clone(),
+                free_mb: drive_free_mb_for(drive),
+                mode,
+                min_mb,
+                max_mb,
+            }
+        })
+        .collect();
+    let pending = super::settings::load().pending_restart.as_ref().is_some_and(|p| {
+        p.tweak == super::tweaks::PAGEFILE_SETTINGS_ID
+            && restart_pending_visible(p.at_uptime_ms, boot_uptime_ms())
+    });
+    Ok(PagefileSettings {
+        automatic: raw.automatic,
+        drives: states,
+        pending,
+    })
+}
+
+/// Free megabytes on one drive (GetDiskFreeSpaceExW, read-only,
+/// no spawn): the dialog's own upper bound ("Space available" is the
+/// TOTAL free number, quota-independent: Raymond Chen's documented
+/// gotcha is that the caller-available figure subtracts quotas, so we
+/// read the third out-param like the dialog does). None = unreadable (a
+/// custom write on that drive refuses blind). A malformed drive id reads
+/// unreadable, never as another drive's space.
+#[cfg(windows)]
+pub fn drive_free_mb_for(drive: &str) -> Option<u64> {
+    use std::os::windows::ffi::OsStrExt;
+    let drive = drive.to_uppercase();
+    let letter = drive.as_bytes().first()?;
+    if drive.len() != 2 || !letter.is_ascii_alphabetic() || !drive.ends_with(':') {
+        return None;
+    }
+    let path: Vec<u16> = std::ffi::OsStr::new(&format!("{drive}\\"))
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let mut total_free: u64 = 0;
+    // SAFETY: pointer to a stack u64, written once on success.
+    let ok = unsafe {
+        GetDiskFreeSpaceExW(
+            path.as_ptr(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &mut total_free,
+        )
+    };
+    if ok == 0 {
+        return None;
+    }
+    Some(total_free / 1_048_576)
+}
+
+#[cfg(not(windows))]
+pub fn drive_free_mb_for(_drive: &str) -> Option<u64> {
+    None
+}
+
+#[cfg(windows)]
+#[link(name = "kernel32")]
+extern "system" {
+    fn GetDiskFreeSpaceExW(
+        dir: *const u16,
+        free_to_caller: *mut u64,
+        total: *mut u64,
+        total_free: *mut u64,
+    ) -> i32;
+    fn GetLogicalDrives() -> u32;
+    fn GetDriveTypeW(root: *const u16) -> u32;
+}
+
+/// Milliseconds since boot (GetTickCount64, no spawn): the pending-restart
+/// clock. A reboot zeroes it, which is exactly the signal.
+#[cfg(windows)]
+pub fn boot_uptime_ms() -> u64 {
+    // SAFETY: no preconditions.
+    unsafe { GetTickCount64() }
+}
+
+#[cfg(not(windows))]
+pub fn boot_uptime_ms() -> u64 {
+    0
+}
+
+#[cfg(windows)]
+#[link(name = "kernel32")]
+extern "system" {
+    fn GetTickCount64() -> u64;
+}
+
+/// Pending-restart visibility, pure: a change is pending while the clock
+/// still reads past the write moment; a reboot zeroes the clock and the
+/// note clears itself with zero writes. (49-day wraparound without a
+/// reboot clears it early — documented, accepted: a wall clock would
+/// break on manual time changes, which is worse.)
+pub fn restart_pending_visible(stored_at_ms: u64, now_ms: u64) -> bool {
+    now_ms >= stored_at_ms
+}
+
 /// Is background recording actually armed? Warn ONLY when the background
 /// toggle itself ("Record what happened", HistoricalCaptureEnabled) is on.
 /// Rationale, verified on a real Win11 machine: the Captures UI toggle does
@@ -1597,6 +1843,70 @@ mod tests {
         assert_eq!(
             power_row_state(&balanced, "Balanced", std::slice::from_ref(&pair(&balanced, "Balanced")), true),
             RowState::Hidden
+        );
+    }
+
+    #[test]
+    fn pagefile_drive_modes_parsed_like_the_dialog() {
+        use super::PagefileMode;
+        let sys = PagefileMode::System;
+        let off = PagefileMode::Off;
+        let unknown = PagefileMode::Unknown;
+        // bare and 0 0 both mean system-managed on that drive
+        assert_eq!(
+            parse_drive_mode(&["C:\\pagefile.sys".into()], "C:"),
+            (PagefileMode::System, None, None)
+        );
+        assert_eq!(
+            parse_drive_mode(&["C:\\pagefile.sys 0 0".into()], "C:"),
+            (sys, None, None)
+        );
+        // custom sizes ride along
+        assert_eq!(
+            parse_drive_mode(&["C:\\pagefile.sys 1024 4096".into()], "C:"),
+            (PagefileMode::Custom, Some(1024), Some(4096))
+        );
+        // other drives never decide this one; missing = off
+        assert_eq!(
+            parse_drive_mode(&["D:\\pagefile.sys 512 1024".into()], "C:"),
+            (off, None, None)
+        );
+        assert_eq!(parse_drive_mode(&[], "C:"), (off, None, None));
+        // the legacy no-drive marker reads as system-managed
+        assert_eq!(
+            parse_drive_mode(&[r"?:\pagefile.sys".into()], "C:"),
+            (sys, None, None)
+        );
+        // an explicit entry beats the marker
+        assert_eq!(
+            parse_drive_mode(
+                &[r"?:\pagefile.sys".into(), "C:\\pagefile.sys 512 2048".into()],
+                "C:"
+            ),
+            (PagefileMode::Custom, Some(512), Some(2048))
+        );
+        // malformed shapes are unknown, never guessed into another mode
+        assert_eq!(
+            parse_drive_mode(&["C:\\pagefile.sys 1024".into()], "C:"),
+            (unknown, None, None)
+        );
+        assert_eq!(
+            parse_drive_mode(&["C:\\pagefile.sys a b".into()], "C:"),
+            (unknown, None, None)
+        );
+        assert_eq!(
+            parse_drive_mode(&["C:\\pagefile.sys 1 2 3".into()], "C:"),
+            (unknown, None, None)
+        );
+        // drive matching is case-insensitive on the letter
+        assert_eq!(
+            parse_drive_mode(&["c:\\pagefile.sys 16 16".into()], "C:"),
+            (PagefileMode::Custom, Some(16), Some(16))
+        );
+        // garbage lines never match a drive
+        assert_eq!(
+            parse_drive_mode(&["garbage".into(), "D:\\pagefile.sys 1 2".into()], "C:"),
+            (off, None, None)
         );
     }
 

@@ -10,6 +10,14 @@ use super::types::Thresholds;
 
 pub const SETTINGS_VERSION: u32 = 3;
 
+/// A write waiting for a reboot (page file first; generic by tweak id
+/// for whatever needs it next).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PendingRestart {
+    pub tweak: String,
+    pub at_uptime_ms: u64,
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -51,6 +59,11 @@ pub struct Settings {
     /// already on High Performance). serde default keeps old files valid.
     #[serde(default)]
     pub previous_power_guid: Option<String>,
+    /// a write waiting for a reboot: which tweak plus the uptime clock at
+    /// write time. Self-clearing (the clock zeroes on reboot, no writes
+    /// involved); serde default keeps old files valid.
+    #[serde(default)]
+    pub pending_restart: Option<PendingRestart>,
     /// schema-compat placeholder — recomputed per session, never read back
     pub thresholds: Thresholds,
 }
@@ -70,6 +83,7 @@ impl Default for Settings {
             background_advice_done: false,
             announced_update_version: None,
             previous_power_guid: None,
+            pending_restart: None,
             thresholds: Thresholds::default(),
         }
     }
@@ -305,6 +319,7 @@ mod tests {
             background_advice_done: true,
             announced_update_version: Some("1.3.0".into()),
             previous_power_guid: None,
+            pending_restart: None,
             thresholds: Thresholds::default(),
         };
         let text = serde_json::to_string(&s).unwrap();

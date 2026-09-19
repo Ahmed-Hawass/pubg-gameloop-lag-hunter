@@ -6,9 +6,10 @@
 // tweak_states command (a handful of registry values, microseconds) — never the
 // full system_checks batch, whose rows this page does not display.
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronLeft, Expand, Gamepad2, Info, Monitor, Mouse, Recycle, SlidersHorizontal, Video, AppWindow, Zap } from "lucide-react";
-import { Dialog, EmptyState, MODAL_OPEN_EVENT, APP_DIALOG_OPEN_EVENT } from "../components/components";
-import { api, type RowState } from "../bridge";
+import { ChevronLeft, ChevronDown, Database, Expand, Gamepad2, Info, Monitor, Mouse, Recycle, SlidersHorizontal, Video, AppWindow, Zap } from "lucide-react";
+import { Button, Dialog, EmptyState, MODAL_OPEN_EVENT, APP_DIALOG_OPEN_EVENT } from "../components/components";
+import { api, type PagefileSettings, type RowState } from "../bridge";
+import { errorDialog } from "../errors";
 import { useLang } from "../i18n";
 import spotTweaksDark from "../assets/spot-system-tweaks-dark.svg?url";
 import spotTweaksLight from "../assets/spot-system-tweaks-light.svg?url";
@@ -88,9 +89,9 @@ function SwitchRow(props: {
 
 export function ToolsView(props: {
   active: boolean;
-  /** health-card deep-link target row id (DVR today): one-shot, cleared
-      via onToolOpened once the landing finishes — same contract as the
-      Reports openId */
+  /** health-card deep-link target (a gaming row id, or "pagefile" for
+      the Storage editor): one-shot, cleared via onToolOpened once the
+      landing finishes — same contract as the Reports openId */
   toolOpenId: string | null;
   onToolOpened: () => void;
 }) {
@@ -112,6 +113,32 @@ export function ToolsView(props: {
   const [powerState, setPowerState] = useState<RowState>("hidden");
   const [wgcOn, setWgcOn] = useState<boolean | null>(null);
   const [mouseOn, setMouseOn] = useState<boolean | null>(null);
+  /** Virtual Memory-style editor: the backend's single read (global
+      automatic flag + one live state per fixed drive). Null = not read
+      yet; a failed read surfaces inline below, never a guessed editor. */
+  const [pfSettings, setPfSettings] = useState<PagefileSettings | null>(null);
+  /** mapped page file read-failure body (null = no failure) */
+  const [pfError, setPfError] = useState<string | null>(null);
+  /** working copies the user edits (dirty = a fresh read must not
+      clobber typing, selection, or the checkbox) */
+  const [pfAutomatic, setPfAutomatic] = useState(true);
+  const [pfDrive, setPfDrive] = useState("");
+  const pfDriveRef = useRef("");
+  const [pfMode, setPfMode] = useState<"system" | "custom" | "off">("system");
+  const [minInput, setMinInput] = useState("");
+  const [maxInput, setMaxInput] = useState("");
+  /** true once the user typed (a fresh read must not clobber typing) */
+  const dirtyRef = useRef(false);
+  /** pre-write confirm payload (null = no confirm): "off" names a
+      destructive destination, "small" warns below the stutter floor */
+  const [pfConfirm, setPfConfirm] = useState<{ warning: "off" | "small" } | null>(null);
+  /** the editor collapses under its summary row (the section never
+      opens itself: only a tap, or a health-card landing, expands it —
+      the pending badge on the summary carries the waiting reboot) */
+  const [pfOpen, setPfOpen] = useState(false);
+  /** reboot offer after a verified page file write (once per write,
+      never on load — Later dismisses for good until the next write) */
+  const [rebootModal, setRebootModal] = useState(false);
   /** failed-write notice body (null = no notice) */
   const [notice, setNotice] = useState<string | null>(null);
   /** background-note dialog behind a row's (?) button (null = closed).
@@ -146,6 +173,17 @@ export function ToolsView(props: {
       retry stays the rescue) */
   const [loadFailed, setLoadFailed] = useState(false);
 
+  /** backend machine key to dialog body (known keys get their copy; a
+      novel message rides along as the technical line, never raw English
+      into an Arabic dialog) */
+  const pfErrorBody = (raw: string) =>
+    errorDialog(raw, t.errors, {
+      somethingWrong: t.dialog.somethingWrong,
+      scanNeedsGame: t.dialog.scanNeedsGame,
+      scanNeedsGameBody: t.dialog.scanNeedsGameBody,
+      unknownErrorBody: t.dialog.unknownErrorBody,
+    }).body;
+
   /** fresh switch positions, live from the registry: Windows is the
       single source of truth, so every entry point (open the details page
       / window focus) re-reads live — manual changes outside the app must
@@ -168,6 +206,35 @@ export function ToolsView(props: {
       setGpuState(s.gpu_high_perf);
       setPowerState(s.power_high_perf);
       setMouseOn(s.mouse_accel_off);
+      try {
+        const pf = await api.pagefileSettings();
+        if (gen !== genRef.current) return;
+        setPfSettings(pf);
+        setPfError(null);
+        if (!dirtyRef.current) {
+          // sync the working copies from live (never while the user is
+          // editing); the selection survives when the drive is still
+          // there, the mode falls back to custom on an unreadable drive
+          // (forces an explicit choice, validation guides from there)
+          setPfAutomatic(pf.automatic);
+          const drive = pf.drives.some((d) => d.drive === pfDriveRef.current)
+            ? pfDriveRef.current
+            : (pf.drives[0]?.drive ?? "");
+          pfDriveRef.current = drive;
+          setPfDrive(drive);
+          const live = pf.drives.find((d) => d.drive === drive);
+          setPfMode(live && live.mode !== "unknown" ? live.mode : "custom");
+          setMinInput(live?.min_mb?.toString() ?? "");
+          setMaxInput(live?.max_mb?.toString() ?? "");
+        }
+      } catch (e) {
+        if (gen !== genRef.current) return;
+        // the editor reads nothing guessed: an inline honest error, the
+        // rest of the page keeps working (the window-focus retry rescues)
+        const raw = typeof e === "string" ? e : String(e);
+        setPfSettings(null);
+        setPfError(pfErrorBody(raw));
+      }
       setLoaded(true);
       setLoadFailed(false);
       setNoticeBody(null);
@@ -216,17 +283,25 @@ export function ToolsView(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, openCard]);
 
-  // deep-link: the health DVR card jumps here. The rows live on the
-  // GAMING details page, so the link opens it first (the open effect above fires
-  // the live read); the landing effect below scrolls once data arrives.
+  // deep-link: a health card jumps here (DVR to the GAMING page, the
+  // page file to the STORAGE section). The link opens the right page
+  // first (the open effect above fires the live read); the landing
+  // effect below scrolls once data arrives.
   useEffect(() => {
-    if (toolOpenId && openCard !== "gaming") setOpenCard("gaming");
+    if (!toolOpenId) return;
+    const card = toolOpenId === "pagefile" ? "storage" : "gaming";
+    if (openCard !== card) setOpenCard(card);
     // one-shot per link arrival, like the Reports openId effect
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toolOpenId]);
 
   useEffect(() => {
-    if (!toolOpenId || openCard !== "gaming" || !loaded) return;
+    if (!toolOpenId || !loaded) return;
+    const wantCard = toolOpenId === "pagefile" ? "storage" : "gaming";
+    if (openCard !== wantCard) return;
+    // the page file landing opens its accordion (the summary alone
+    // would hide the editor the card promised)
+    if (toolOpenId === "pagefile") setPfOpen(true);
     const target = toolOpenId;
     const row = listRef.current?.querySelector<HTMLElement>(`[data-tweak="${target}"]`);
     if (!row) {
@@ -237,7 +312,9 @@ export function ToolsView(props: {
     }
     setLinkedId(target);
     row.scrollIntoView({ behavior: "smooth", block: "center" });
-    row.querySelector<HTMLButtonElement>("button.switch")?.focus({ preventScroll: true });
+    row
+      .querySelector<HTMLButtonElement>("button.switch, button.pf-summary-main")
+      ?.focus({ preventScroll: true });
     const timer = window.setTimeout(() => {
       setLinkedId(null);
       onToolOpened();
@@ -362,6 +439,120 @@ export function ToolsView(props: {
       tweakBusyRef.current = false;
       setTweakBusy(false);
     }
+  };
+
+  /** digits-only field writer (mirrors the dialog: garbage never enters,
+      Arabic-Indic digits normalized, 10-char DWORD cap) */
+  const writeDigits = (
+    raw: string,
+    set: (v: string) => void,
+  ) => {
+    const latin = raw.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
+    set(latin.replace(/\D/g, "").slice(0, 10));
+    dirtyRef.current = true;
+  };
+
+  /** pick a drive in the editor: the mode + sizes prefill from that
+      drive's live state (unreadable forces custom-with-empty, an
+      explicit choice validation guides from there) */
+  const selectPfDrive = (drive: string) => {
+    if (!pfSettings) return;
+    dirtyRef.current = true;
+    pfDriveRef.current = drive;
+    setPfDrive(drive);
+    const live = pfSettings.drives.find((d) => d.drive === drive);
+    setPfMode(live && live.mode !== "unknown" ? live.mode : "custom");
+    setMinInput(live?.min_mb?.toString() ?? "");
+    setMaxInput(live?.max_mb?.toString() ?? "");
+  };
+
+  /** one drive's status line: letter, free space, live mode (read, never
+      derived from the working copies) */
+  const pfDriveLine = (drive: string, freeMb: number | null, mode: string, min: number | null, max: number | null) => {
+    const free = freeMb == null
+      ? t.tweakPfDriveNoSpace(drive)
+      : t.tweakPfDriveFree(drive, Math.round(freeMb / 1024));
+    const state =
+      mode === "custom" && min != null && max != null
+        ? t.tweakPfDriveCustom(min, max)
+        : mode === "system"
+          ? t.tweakPfModeSystem
+          : mode === "off"
+            ? t.tweakPfModeOff
+            : t.tweakPfModeUnknown;
+    return `${free} · ${state}`;
+  };
+
+  /** Apply dies while nothing differs from live (no dead round-trip,
+      no pointless UAC): automatic flag first, then the selected drive's
+      mode and sizes */
+  const pfLiveDrive = pfSettings?.drives.find((d) => d.drive === pfDrive);
+  const pfUnchanged = (() => {
+    if (!pfSettings || !pfLiveDrive) return true;
+    if (pfAutomatic !== pfSettings.automatic) return false;
+    if (pfAutomatic) return true;
+    const liveMode = pfLiveDrive.mode === "unknown" ? "custom" : pfLiveDrive.mode;
+    if (pfMode !== liveMode) return false;
+    if (pfMode !== "custom") return true;
+    return (
+      minInput === (pfLiveDrive.min_mb?.toString() ?? "") &&
+      maxInput === (pfLiveDrive.max_mb?.toString() ?? "")
+    );
+  })();
+
+  /** the editor write: one elevated request, verified live truth settles
+      it. A verified result IS the fresh truth, so the reload below only
+      refreshes the working copies (dirty cleared first). */
+  const runPfApply = async () => {
+    if (tweakBusyRef.current || !pfSettings) return;
+    genRef.current += 1;
+    tweakBusyRef.current = true;
+    setTweakBusy(true);
+    try {
+      const res = await api.applyPagefileSettings(pfAutomatic, pfDrive, pfMode, minInput, maxInput);
+      if (!res.verified) {
+        setNotice(t.tweakFailed);
+        return;
+      }
+      dirtyRef.current = false;
+      setPfConfirm(null);
+      setRebootModal(true);
+      void reload();
+    } catch (e) {
+      const raw = typeof e === "string" ? e : String(e);
+      // a refused elevation is a choice, not a failure: silent, like flips
+      if (raw === "cancelled") return;
+      setNotice(pfErrorBody(raw));
+    } finally {
+      tweakBusyRef.current = false;
+      setTweakBusy(false);
+    }
+  };
+
+  /** Apply entry: the backend validates first (keys, never sentences)
+      for the confirm step ("off" and "small" pause on a confirm, clean
+      requests go straight to the write). */
+  const applyPf = async () => {
+    if (tweakBusyRef.current || !pfSettings || pfUnchanged) return;
+    try {
+      const warning = await api.validatePagefileSettings(
+        pfAutomatic,
+        pfDrive,
+        pfMode,
+        minInput,
+        maxInput,
+      );
+      if (warning === "off" || warning === "small") {
+        setPfConfirm({ warning });
+        return;
+      }
+    } catch (e) {
+      const raw = typeof e === "string" ? e : String(e);
+      if (raw === "cancelled") return;
+      setNotice(pfErrorBody(raw));
+      return;
+    }
+    void runPfApply();
   };
 
   if (openCard) {
@@ -506,9 +697,169 @@ export function ToolsView(props: {
           ) : null}
         </div>
         ) : (
-        <div className="check-list">
-          {/* hidden when the Windows build has no Storage Sense policy
-              key (storage_sense === null): never a dead switch */}
+        <div className="check-list" ref={listRef}>
+          {/* the section's face: one summary row (title + live global
+              status), the editor lives one tap under it instead of owning
+              the page open forever */}
+          {pfSettings ? (
+            <div
+              data-tweak="pagefile"
+              className={`pf-summary${pfSettings.automatic ? " on" : " off"}${linkedId === "pagefile" ? " is-linked" : ""}`}
+            >
+              <button
+                type="button"
+                className="pf-summary-main"
+                aria-expanded={pfOpen}
+                onClick={() => setPfOpen(!pfOpen)}
+              >
+                <span className="check-func">
+                  <Database size={15} />
+                </span>
+                <span className="pf-summary-text">
+                  <span className="switch-name">{t.tweakPfTitle}</span>
+                  <span className="switch-desc">
+                    {pfSettings.automatic ? t.tweakPfStatusAuto : t.tweakPfStatusManual}
+                  </span>
+                </span>
+                {/* pending survives collapsing: the full note lives in
+                    the expanded card, this badge keeps the collapsed row
+                    honest */}
+                {pfSettings.pending ? (
+                  <span className="check-badge warn">{t.tweakPfPendingBadge}</span>
+                ) : null}
+                <ChevronDown
+                  size={16}
+                  className={`pf-chev${pfOpen ? " is-open" : ""}`}
+                />
+              </button>
+              <button
+                type="button"
+                className="switch-hint"
+                aria-label={t.tweakPfTitle}
+                onClick={() => showHint(t.tweakPfTitle, t.tweakPfHint)}
+              >
+                <Info size={13} />
+              </button>
+            </div>
+          ) : null}
+          {/* read failure: the editor shows nothing guessed (an inline
+              honest error; the window-focus retry is the rescue) */}
+          {pfError ? (
+            <EmptyState
+              icon={<Database size={18} />}
+              title={t.dialog.somethingWrong}
+              hint={pfError}
+            />
+          ) : null}
+          {/* per-drive live lines + the Virtual Memory-style editor, only
+              while expanded: global automatic checkbox, one selectable row
+              per fixed drive, the selected drive's mode, sizes only for
+              custom (only the selected drive ever changes) */}
+          {pfSettings && pfOpen ? (
+            <div className="pf-status">
+              {pfSettings.drives.map((d) => (
+                <span key={d.drive} className="switch-desc">
+                  {pfDriveLine(d.drive, d.free_mb, d.mode, d.min_mb, d.max_mb)}
+                </span>
+              ))}
+            </div>
+          ) : null}
+          {pfSettings && pfOpen ? (
+            <div className="pf-form">
+              {/* the (?) lives on the summary row (always visible); no
+                  second copy in here */}
+              <label className="pf-auto">
+                <input
+                  type="checkbox"
+                  checked={pfAutomatic}
+                  disabled={tweakBusy}
+                  onChange={(e) => {
+                    dirtyRef.current = true;
+                    setPfAutomatic(e.target.checked);
+                  }}
+                />
+                <span>{t.tweakPfAutoLabel}</span>
+              </label>
+              <div className={pfAutomatic ? "pf-manual is-disabled" : "pf-manual"}>
+                <span className="switch-desc">{t.tweakPfDrivesLabel}</span>
+                <div className="pf-drives" role="radiogroup" aria-label={t.tweakPfDrivesLabel}>
+                  {pfSettings.drives.map((d) => (
+                    <button
+                      key={d.drive}
+                      type="button"
+                      role="radio"
+                      aria-checked={d.drive === pfDrive}
+                      className={`pf-drive${d.drive === pfDrive ? " is-selected" : ""}`}
+                      disabled={tweakBusy || pfAutomatic}
+                      onClick={() => selectPfDrive(d.drive)}
+                    >
+                      <span className="pf-drive-id num">{d.drive}</span>
+                      <span className="pf-drive-state">
+                        {pfDriveLine(d.drive, d.free_mb, d.mode, d.min_mb, d.max_mb)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                {/* the mode in the app's own selection language (the same
+                    segmented pills as language/theme): one tap, the active
+                    segment fills */}
+                <div className="lang-segment" role="radiogroup" aria-label={t.tweakPfTitle}>
+                  {(
+                    [
+                      ["system", t.tweakPfModeSystem],
+                      ["custom", t.tweakPfModeCustom],
+                      ["off", t.tweakPfModeOff],
+                    ] as const
+                  ).map(([mode, label]) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      role="radio"
+                      aria-checked={pfMode === mode}
+                      className={`lang-seg${pfMode === mode ? " is-active" : ""}`}
+                      disabled={tweakBusy || pfAutomatic}
+                      onClick={() => {
+                        dirtyRef.current = true;
+                        setPfMode(mode);
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="pf-fields">
+                  <label className="pf-field">
+                    <span>{t.tweakPfMinLabel}</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={10}
+                      value={minInput}
+                      disabled={tweakBusy || pfAutomatic || pfMode !== "custom"}
+                      onChange={(e) => writeDigits(e.target.value, setMinInput)}
+                    />
+                  </label>
+                  <label className="pf-field">
+                    <span>{t.tweakPfMaxLabel}</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={10}
+                      value={maxInput}
+                      disabled={tweakBusy || pfAutomatic || pfMode !== "custom"}
+                      onChange={(e) => writeDigits(e.target.value, setMaxInput)}
+                    />
+                  </label>
+                  <Button
+                    label={t.tweakPfApply}
+                    variant="ghost"
+                    disabled={tweakBusy || pfUnchanged}
+                    onClick={() => void applyPf()}
+                  />
+                </div>
+              </div>
+            </div>
+          ) : null}
           {ssOn !== null ? (
             <SwitchRow
               tweakId="storagesense"
@@ -524,12 +875,59 @@ export function ToolsView(props: {
               onFlip={(next) => void flipTweak("storagesense", next)}
             />
           ) : null}
-          {/* PLACEHOLDER, remove with the key when the storage phase
-              starts: one row cannot carry a card alone without saying
-              what lives here next */}
-          <p className="tool-note">{t.toolStorageComing}</p>
+          {/* pending reboot note, inside the expanded card (self-clearing
+              on reboot, no writes); the summary badge above covers the
+              collapsed state */}
+          {pfSettings && pfOpen && pfSettings.pending ? (
+            <p className="tool-note">{t.tweakPfPending}</p>
+          ) : null}
         </div>
         )}
+        {/* pre-write confirm from the backend's validate step: "off"
+            names its destructive destination like a delete (danger
+            styling), "small" warns below the diagnosed stutter floor but
+            allows (the engine floor constant is the same number) */}
+        {pfConfirm ? (
+          <Dialog
+            title={
+              pfConfirm.warning === "off"
+                ? t.tweakPfWarnOffTitle(pfDrive)
+                : t.tweakPfWarnSmallTitle
+            }
+            body={
+              pfConfirm.warning === "off"
+                ? t.tweakPfWarnOffBody(pfDrive)
+                : t.tweakPfWarnSmallBody(pfDrive, parseInt(maxInput, 10) || 0)
+            }
+            kind="confirm"
+            danger={pfConfirm.warning === "off"}
+            confirmLabel={t.tweakPfApply}
+            cancelLabel={t.dialog.cancel}
+            onConfirm={() => {
+              setPfConfirm(null);
+              void runPfApply();
+            }}
+            onClose={() => setPfConfirm(null)}
+          />
+        ) : null}
+        {/* reboot offer, once per verified write (Later dismisses until
+            the next write — never nagged on load) */}
+        {rebootModal ? (
+          <Dialog
+            title={t.rebootTitle}
+            body={t.rebootBody}
+            kind="confirm"
+            confirmLabel={t.rebootNow}
+            cancelLabel={t.rebootLater}
+            onConfirm={() => {
+              setRebootModal(false);
+              void api
+                .scheduleReboot()
+                .catch(() => setNotice(t.tweakFailed));
+            }}
+            onClose={() => setRebootModal(false)}
+          />
+        ) : null}
         {/* background note behind a row's (?) button — the same unified
             Dialog as the failed-write notice below (one modal surface) */}
         {hint ? (
@@ -571,7 +969,6 @@ export function ToolsView(props: {
           />
           <span className="tool-title-row">
             <span className="tool-title">{t.toolGamingTweaks}</span>
-            <span className="sb-beta">{t.toolsBeta}</span>
           </span>
           <span className="tool-desc">{t.toolGamingTweaksDesc}</span>
         </button>
@@ -585,7 +982,6 @@ export function ToolsView(props: {
           />
           <span className="tool-title-row">
             <span className="tool-title">{t.toolStorage}</span>
-            <span className="sb-beta">{t.toolsBeta}</span>
           </span>
           <span className="tool-desc">{t.toolStorageDesc}</span>
         </button>

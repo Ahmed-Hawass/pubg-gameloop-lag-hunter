@@ -55,6 +55,16 @@ const WGC_ID: &str = "windowedopt";
 /// Power plan id: the FIRST elevated tweak. Reads stay unprivileged
 /// (powercfg queries need none); writes go through the elevate module.
 pub const POWERPLAN_ID: &str = "powerplan";
+/// Page file editor id: ONE elevated write carrying the whole Virtual
+/// Memory-style request (global automatic flag plus the selected drive's
+/// mode and sizes). No per-mode ids: a mode is data, never a new command.
+pub const PAGEFILE_SETTINGS_ID: &str = "pagefile-settings";
+/// The dialog's own floor ("Minimum allowed: 16 MB" on real Windows —
+/// ReactOS sources say 2 MB, the shipping dialog says 16; trust the ship).
+pub const PAGEFILE_MIN_MB: u32 = 16;
+/// Our stutter floor for page files (diagnosed on real 8GB machines):
+/// below this a confirm dialog warns but still allows (user's call).
+pub const PAGEFILE_WARN_FLOOR_MB: u32 = 8192;
 
 /// Registry homes shared with the read side (system.rs): ONE definition
 /// per key path — the lightweight tweak_states read and these writes must
@@ -466,9 +476,13 @@ fn set_tweak_elevated(id: &str, value: u32) -> Result<TweakResult, String> {
     if value > 1 {
         return Err(format!("{id} value must be 0 or 1"));
     }
-    if id != POWERPLAN_ID {
-        return Err(format!("no elevated setter for {id}"));
+    if id == POWERPLAN_ID {
+        return set_tweak_elevated_powerplan(value);
     }
+    Err(format!("no elevated setter for {id}"))
+}
+
+fn set_tweak_elevated_powerplan(value: u32) -> Result<TweakResult, String> {
     let on = value == 1;
     let active = super::system::power_active_guid();
     let previous = if active.is_empty() { None } else { Some(active) };
@@ -486,7 +500,7 @@ fn set_tweak_elevated(id: &str, value: u32) -> Result<TweakResult, String> {
             }
         }
     }
-    let code = super::elevate::elevate_self(id, value)?;
+    let code = super::elevate::elevate_self(POWERPLAN_ID, value)?;
     super::elevate::map_exit_code(code)?;
     // verify by re-read, parent side: the child wrote, we confirm. ON
     // means ANY performance plan active (builtin, pre-existing custom, or
@@ -508,7 +522,7 @@ fn set_tweak_elevated(id: &str, value: u32) -> Result<TweakResult, String> {
     // UI never reads; the real previous plan lives in settings and is
     // resolved at OFF time (it may change between flips).
     Ok(TweakResult {
-        id: id.into(),
+        id: POWERPLAN_ID.into(),
         previous: None,
         value,
         verified,
@@ -630,9 +644,366 @@ pub fn set_power_plan(value: u32) -> Result<TweakResult, String> {
     })
 }
 
-/// Direct dispatch (no elevation routing): what the elevated CHILD runs,
-/// and what unit tests exercise. The parent never calls this for an id
-/// in ELEVATED_IDS — that way lies an infinite UAC loop.
+/// One apply request for the Virtual Memory-style editor: the global
+/// automatic flag plus the selected drive's mode and sizes. Automatic on
+/// ignores the drive fields (the dialog greys the list); automatic off
+/// applies exactly the selected drive's mode and preserves every other
+/// drive byte-for-byte. Sizes stay strings so the DWORD digit rules are
+/// checked exactly, never through a lossy number parse.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PagefileRequestMode {
+    System,
+    Custom,
+    Off,
+}
+
+/// A validated request both sides agree on (parent validates with fresh
+/// reads before UAC, the child re-validates with its own fresh reads:
+/// defense in depth, the child never trusts the parent).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ValidatedPagefileApply {
+    pub automatic: bool,
+    pub drive: [u8; 2],
+    pub mode: PagefileRequestMode,
+    pub min_mb: u32,
+    pub max_mb: u32,
+}
+
+/// Canonical drive id: one ASCII letter plus a colon, uppercased
+/// ("c:" and "C:" are the same drive; "C:\\", "C", "" are refused).
+fn normalize_drive_id(raw: &str) -> Option<[u8; 2]> {
+    let raw = raw.trim().to_uppercase();
+    let bytes = raw.as_bytes();
+    if bytes.len() == 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' {
+        Some([bytes[0], bytes[1]])
+    } else {
+        None
+    }
+}
+
+fn drive_id_string(drive: [u8; 2]) -> String {
+    String::from_utf8_lossy(&drive).into_owned()
+}
+
+fn parse_request_mode(raw: &str) -> Result<PagefileRequestMode, String> {
+    match raw.trim() {
+        "system" => Ok(PagefileRequestMode::System),
+        "custom" => Ok(PagefileRequestMode::Custom),
+        "off" => Ok(PagefileRequestMode::Off),
+        _ => Err("PF_MODE_INVALID".into()),
+    }
+}
+
+/// Validate custom sizes the dialog's own way: digits only (the UI
+/// filters keystrokes; this is the second gate), at most 10 digits
+/// (DWORD range), 16MB floor (the shipping dialog's "Minimum allowed",
+/// verified live), maximum >= initial and within free space. Pure:
+/// every refusal is a machine key (the UI translates), unit-tested.
+/// Free space unknown (None) refuses blind (a write must never guess
+/// a bound).
+pub fn validate_pagefile_sizes(
+    min_raw: &str,
+    max_raw: &str,
+    free_mb: Option<u64>,
+) -> Result<(u32, u32), String> {
+    let digits = |s: &str| !s.is_empty() && s.len() <= 10 && s.bytes().all(|b| b.is_ascii_digit());
+    if !digits(min_raw) {
+        return Err("PF_INITIAL_INVALID".into());
+    }
+    if !digits(max_raw) {
+        return Err("PF_MAX_INVALID".into());
+    }
+    let free = free_mb.ok_or_else(|| "PF_NO_SPACE".to_string())?;
+    let min_mb: u64 = min_raw.parse().unwrap_or(u64::MAX);
+    let max_mb: u64 = max_raw.parse().unwrap_or(u64::MAX);
+    if min_mb < PAGEFILE_MIN_MB as u64 || min_mb > free {
+        return Err("PF_INITIAL_INVALID".into());
+    }
+    if max_mb < min_mb || max_mb > free {
+        return Err("PF_MAX_INVALID".into());
+    }
+    Ok((min_mb as u32, max_mb as u32))
+}
+
+/// Validate a whole editor request against a live drive list and the
+/// selected drive's fresh free space. Automatic on skips the drive
+/// fields entirely (like the dialog's greyed list); anything else is
+/// refused with a machine key before any elevation or write.
+pub fn validate_pagefile_apply(
+    automatic: bool,
+    drive_raw: &str,
+    mode_raw: &str,
+    min_raw: &str,
+    max_raw: &str,
+    drives: &[String],
+    free_mb: Option<u64>,
+) -> Result<ValidatedPagefileApply, String> {
+    if automatic {
+        return Ok(ValidatedPagefileApply {
+            automatic: true,
+            drive: *b"C:",
+            mode: PagefileRequestMode::System,
+            min_mb: 0,
+            max_mb: 0,
+        });
+    }
+    let drive = normalize_drive_id(drive_raw).ok_or_else(|| "PF_DRIVE_INVALID".to_string())?;
+    if !drives.iter().any(|d| d == &drive_id_string(drive)) {
+        return Err("PF_DRIVE_INVALID".into());
+    }
+    let mode = parse_request_mode(mode_raw)?;
+    let (min_mb, max_mb) = match mode {
+        PagefileRequestMode::Custom => validate_pagefile_sizes(min_raw, max_raw, free_mb)?,
+        _ => (0, 0),
+    };
+    Ok(ValidatedPagefileApply {
+        automatic: false,
+        drive,
+        mode,
+        min_mb,
+        max_mb,
+    })
+}
+
+/// Pre-write warning for the confirm step (pure): turning a drive's file
+/// off risks out-of-memory crashes, and a maximum below our diagnosed
+/// stutter floor gets a warn-but-allow. Anything else applies silently.
+pub fn pagefile_warning(mode: PagefileRequestMode, max_mb: u32) -> Option<String> {
+    match mode {
+        PagefileRequestMode::Off => Some("off".into()),
+        PagefileRequestMode::Custom if max_mb < PAGEFILE_WARN_FLOOR_MB => Some("small".into()),
+        _ => None,
+    }
+}
+
+/// Write the desired state (runs ELEVATED, child side): set the global
+/// flag, then rewrite ONLY the selected drive's PagingFiles entry
+/// (every other drive survives byte-for-byte, including the legacy `?:`
+/// marker. Automatic on preserves the entries untouched (the flag takes
+/// precedence; fully reversible). Full-value rewrite = delete+recreate
+/// at the registry level, which sidesteps the silent in-place-shrink
+/// failure Windows is known for. Any failure past validation is the one
+/// write key: past this point the request was legitimate, only the
+/// machine refused it.
+fn write_pagefile_raw(valid: &ValidatedPagefileApply) -> Result<(), String> {
+    use winreg::enums::HKEY_LOCAL_MACHINE;
+    let hklm = winreg::RegKey::predef(HKEY_LOCAL_MACHINE);
+    // SET for the writes plus QUERY for the entries read below: a
+    // SET-only handle fails the read with access-denied, which the
+    // corruption guard would (correctly, but wrongly here) refuse.
+    let key = hklm
+        .open_subkey_with_flags(
+            r"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management",
+            winreg::enums::KEY_SET_VALUE | winreg::enums::KEY_QUERY_VALUE,
+        )
+        .map_err(|_| "PF_WRITE_FAILED".to_string())?;
+    key.set_value("AutomaticManagedPagefile", &(valid.automatic as u32))
+        .map_err(|_| "PF_WRITE_FAILED".to_string())?;
+    if valid.automatic {
+        return Ok(());
+    }
+    let drive = drive_id_string(valid.drive);
+    let prefix = format!("{drive}\\").to_uppercase();
+    let mut entries: Vec<String> = match key.get_value("PagingFiles") {
+        Ok(entries) => entries,
+        // missing value = no entries yet (honest empty, not corruption)
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        // present but unreadable (wrong type, ACL weirdness): refuse
+        // rather than rebuild the list from nothing and orphan the real
+        // files Windows manages
+        Err(_) => return Err("PF_WRITE_FAILED".into()),
+    };
+    entries.retain(|e| {
+        let first = e.split_whitespace().next().unwrap_or("");
+        !first.to_uppercase().starts_with(&prefix)
+    });
+    match valid.mode {
+        // 0 0 is the documented system-managed shape (InitialSize =
+        // MaximumSize = 0), explicit where a bare path could misread
+        PagefileRequestMode::System => {
+            entries.push(format!("{drive}\\pagefile.sys 0 0"));
+        }
+        PagefileRequestMode::Custom => {
+            entries.push(format!(
+                "{drive}\\pagefile.sys {} {}",
+                valid.min_mb, valid.max_mb
+            ));
+        }
+        // off drops the drive's entry; an empty list with the flag off
+        // is Windows' own no-paging-file state
+        PagefileRequestMode::Off => {}
+    }
+    key.set_value("PagingFiles", &entries)
+        .map_err(|_| "PF_WRITE_FAILED".to_string())?;
+    Ok(())
+}
+
+/// True when the desired state holds: the shared verifier for the
+/// idempotency skip and the post-write check, so the two can never
+/// disagree about what "done" looks like. Unreadable mid-write reads as
+/// not-done, never as done.
+fn pagefile_matches(valid: &ValidatedPagefileApply) -> bool {
+    let Some((automatic, entries)) = super::system::read_pagefile_flag_and_entries() else {
+        return false;
+    };
+    if automatic != valid.automatic {
+        return false;
+    }
+    if valid.automatic {
+        return true;
+    }
+    let (mode, min_mb, max_mb) =
+        super::system::parse_drive_mode(&entries, &drive_id_string(valid.drive));
+    match valid.mode {
+        PagefileRequestMode::System => mode == super::system::PagefileMode::System,
+        PagefileRequestMode::Off => mode == super::system::PagefileMode::Off,
+        PagefileRequestMode::Custom => {
+            mode == super::system::PagefileMode::Custom
+                && min_mb == Some(valid.min_mb)
+                && max_mb == Some(valid.max_mb)
+        }
+    }
+}
+
+/// Child side of the editor write (runs ELEVATED): re-read the drive
+/// list and the selected drive's free space, re-validate the raw request
+/// from scratch (defense in depth: the child never trusts the parent),
+/// write, verify by re-read. The child never touches settings.json (an
+/// admin-owned settings file would lock out future unprivileged
+/// writes); pending is marked parent-side.
+pub fn set_pagefile_settings(
+    automatic: bool,
+    drive_raw: &str,
+    mode_raw: &str,
+    min_raw: &str,
+    max_raw: &str,
+) -> Result<TweakResult, String> {
+    let drives = super::system::fixed_drives();
+    if drives.is_empty() {
+        return Err("PF_READ_FAILED".into());
+    }
+    let normalized =
+        normalize_drive_id(drive_raw).ok_or_else(|| "PF_DRIVE_INVALID".to_string())?;
+    let free = if automatic {
+        None
+    } else {
+        super::system::drive_free_mb_for(&drive_id_string(normalized))
+    };
+    let valid =
+        validate_pagefile_apply(automatic, drive_raw, mode_raw, min_raw, max_raw, &drives, free)?;
+    write_pagefile_raw(&valid)?;
+    let verified = pagefile_matches(&valid);
+    super::logging::info(&format!(
+        "pagefile settings set: automatic={automatic} drive={} verified={verified}",
+        drive_id_string(valid.drive)
+    ));
+    Ok(TweakResult {
+        id: PAGEFILE_SETTINGS_ID.into(),
+        previous: None,
+        value: automatic as u32,
+        verified,
+    })
+}
+
+/// Validate-only entry for the confirm step: the same validation as the
+/// write path (keys, never sentences), plus the pre-write warning.
+/// Automatic needs no warning: handing sizing back to Windows is the
+/// safe, reversible direction.
+pub fn validate_pagefile_settings(
+    automatic: bool,
+    drive_raw: &str,
+    mode_raw: &str,
+    min_raw: &str,
+    max_raw: &str,
+) -> Result<Option<String>, String> {
+    if automatic {
+        return Ok(None);
+    }
+    let drives = super::system::fixed_drives();
+    if drives.is_empty() {
+        return Err("PF_READ_FAILED".into());
+    }
+    let normalized =
+        normalize_drive_id(drive_raw).ok_or_else(|| "PF_DRIVE_INVALID".to_string())?;
+    let free = super::system::drive_free_mb_for(&drive_id_string(normalized));
+    let valid =
+        validate_pagefile_apply(false, drive_raw, mode_raw, min_raw, max_raw, &drives, free)?;
+    Ok(pagefile_warning(valid.mode, valid.max_mb))
+}
+
+/// Parent side: validate with fresh unprivileged reads, skip the UAC
+/// round-trip when the desired state already holds, else elevate (one
+/// prompt), mark pending, verify by re-read. Cancellation passes through
+/// verbatim for the UI's silent rollback; any other elevation failure is
+/// the one write key.
+pub fn set_pagefile_settings_parent(
+    automatic: bool,
+    drive_raw: &str,
+    mode_raw: &str,
+    min_raw: &str,
+    max_raw: &str,
+) -> Result<TweakResult, String> {
+    let drives = super::system::fixed_drives();
+    if drives.is_empty() {
+        return Err("PF_READ_FAILED".into());
+    }
+    let normalized =
+        normalize_drive_id(drive_raw).ok_or_else(|| "PF_DRIVE_INVALID".to_string())?;
+    let free = if automatic {
+        None
+    } else {
+        super::system::drive_free_mb_for(&drive_id_string(normalized))
+    };
+    let valid =
+        validate_pagefile_apply(automatic, drive_raw, mode_raw, min_raw, max_raw, &drives, free)?;
+    if pagefile_matches(&valid) {
+        return Ok(TweakResult {
+            id: PAGEFILE_SETTINGS_ID.into(),
+            previous: None,
+            value: automatic as u32,
+            verified: true,
+        });
+    }
+    let mode_raw = match valid.mode {
+        PagefileRequestMode::System => "system",
+        PagefileRequestMode::Custom => "custom",
+        PagefileRequestMode::Off => "off",
+    };
+    let code = super::elevate::elevate_pagefile_settings(
+        valid.automatic,
+        &drive_id_string(valid.drive),
+        mode_raw,
+        valid.min_mb,
+        valid.max_mb,
+    )?;
+    if code != 0 {
+        return Err("PF_WRITE_FAILED".into());
+    }
+    mark_pending_restart();
+    let verified = pagefile_matches(&valid);
+    super::logging::info(&format!(
+        "pagefile settings set: automatic={automatic} drive={} verified={verified}",
+        drive_id_string(valid.drive)
+    ));
+    Ok(TweakResult {
+        id: PAGEFILE_SETTINGS_ID.into(),
+        previous: None,
+        value: automatic as u32,
+        verified,
+    })
+}
+
+/// Record a pending reboot (parent side, after a verified page file
+/// write): which tweak plus the uptime clock. Self-clearing on reboot.
+fn mark_pending_restart() {
+    let _ = super::settings::update(|s| {
+        s.pending_restart = Some(super::settings::PendingRestart {
+            tweak: PAGEFILE_SETTINGS_ID.into(),
+            at_uptime_ms: super::system::boot_uptime_ms(),
+        });
+    });
+}
+
 pub fn set_tweak_direct(id: &str, value: u32) -> Result<TweakResult, String> {
     match id {
         DVR_ID => set_dvr(value),
@@ -695,6 +1066,11 @@ mod tests {
         assert!(set_tweak("", 1).is_err());
         assert!(set_tweak("DVR", 1).is_err()); // case-sensitive, no fuzzy match
         assert!(set_tweak("StorageSense", 0).is_err());
+        // the page file editor left the 0/1 dispatch: its old ids are
+        // unknown now (its request rides its own elevated command)
+        assert!(set_tweak("pagefile", 1).is_err());
+        assert!(set_tweak("pagefile-custom", 1).is_err());
+        assert!(set_tweak("pagefile-off", 0).is_err());
     }
 
     #[test]
@@ -752,8 +1128,7 @@ mod tests {
     }
 
     #[test]
-    fn power_enable_target_never_duplicates_twice() {
-        // the litter bug: duplicatescheme mints a FRESH guid every run, so
+    fn power_enable_target_never_duplicates_twice() {        // the litter bug: duplicatescheme mints a FRESH guid every run, so
         // "builtin in list" as presence check re-created forever. Presence
         // is any performance-class plan; creation happens only at zero.
         let pair = |g: &str, n: &str| (g.to_string(), n.to_string());
@@ -778,5 +1153,149 @@ mod tests {
         let list = vec![pair(balanced, "Balanced")];
         assert!(matches!(power_enable_target(&list), PowerEnableTarget::Create));
         assert!(matches!(power_enable_target(&[]), PowerEnableTarget::Create));
+    }
+
+    #[test]
+    fn pagefile_sizes_validate_like_the_dialog_with_keys() {
+        // the dialog's own rules: digits only at the keystroke, 10-digit
+        // DWORD cap, 16MB floor (the shipping dialog's "Minimum allowed",
+        // verified live), max >= min and within free space. Free = 350000MB
+        // fixture below (a real drive reading shape). Every refusal is a
+        // machine key (the UI translates), never a sentence.
+        let free = Some(350000u64);
+        assert_eq!(validate_pagefile_sizes("1024", "4096", free), Ok((1024, 4096)));
+        assert_eq!(validate_pagefile_sizes("16", "16", free), Ok((16, 16)));
+        // 10 digits overflowing u32: refused as out-of-range, never wrapped
+        assert_eq!(
+            validate_pagefile_sizes("42949672960", "42949672960", free).unwrap_err(),
+            "PF_INITIAL_INVALID"
+        );
+        // non-digits (the UI filters these, this is the second gate)
+        assert_eq!(
+            validate_pagefile_sizes("1a", "4096", free).unwrap_err(),
+            "PF_INITIAL_INVALID"
+        );
+        assert_eq!(
+            validate_pagefile_sizes("", "4096", free).unwrap_err(),
+            "PF_INITIAL_INVALID"
+        );
+        assert_eq!(
+            validate_pagefile_sizes("1024", "", free).unwrap_err(),
+            "PF_MAX_INVALID"
+        );
+        assert_eq!(
+            validate_pagefile_sizes(" 1024", "4096", free).unwrap_err(),
+            "PF_INITIAL_INVALID"
+        );
+        assert_eq!(
+            validate_pagefile_sizes("10.5", "4096", free).unwrap_err(),
+            "PF_INITIAL_INVALID"
+        );
+        assert_eq!(
+            validate_pagefile_sizes("-5", "4096", free).unwrap_err(),
+            "PF_INITIAL_INVALID"
+        );
+        // below the 16MB floor (1 and 15 both refuse; 16 passes)
+        assert_eq!(
+            validate_pagefile_sizes("1", "4096", free).unwrap_err(),
+            "PF_INITIAL_INVALID"
+        );
+        assert_eq!(
+            validate_pagefile_sizes("15", "4096", free).unwrap_err(),
+            "PF_INITIAL_INVALID"
+        );
+        assert_eq!(
+            validate_pagefile_sizes("0", "0", free).unwrap_err(),
+            "PF_INITIAL_INVALID"
+        );
+        // max below min
+        assert_eq!(
+            validate_pagefile_sizes("4096", "1024", free).unwrap_err(),
+            "PF_MAX_INVALID"
+        );
+        // beyond free space on either side
+        assert_eq!(
+            validate_pagefile_sizes("400000", "400000", free).unwrap_err(),
+            "PF_INITIAL_INVALID"
+        );
+        assert_eq!(
+            validate_pagefile_sizes("1024", "400000", free).unwrap_err(),
+            "PF_MAX_INVALID"
+        );
+        // unknown free space refuses blind (a bound must never be guessed)
+        assert_eq!(
+            validate_pagefile_sizes("1024", "4096", None).unwrap_err(),
+            "PF_NO_SPACE"
+        );
+    }
+
+    #[test]
+    fn pagefile_apply_validates_drive_and_mode_first() {
+        let drives = vec!["C:".to_string(), "D:".to_string()];
+        let free = Some(350000u64);
+        // automatic ignores the drive fields entirely (greyed list)
+        let v = validate_pagefile_apply(true, "???", "bogus", "", "", &drives, None).unwrap();
+        assert!(v.automatic);
+        // drive ids are canonical: letter + colon, member of the live list
+        // (surrounding whitespace trims; the id itself must be exact)
+        for bad in ["", "C", "C:\\", "CC:", "1:", "E:"] {
+            assert_eq!(
+                validate_pagefile_apply(false, bad, "system", "0", "0", &drives, free)
+                    .unwrap_err(),
+                "PF_DRIVE_INVALID",
+                "drive {bad:?} must refuse"
+            );
+        }
+        // lowercase is the same drive, not a refusal
+        let v =
+            validate_pagefile_apply(false, "c:", "system", "0", "0", &drives, free).unwrap();
+        assert!(!v.automatic);
+        assert_eq!(v.drive, [b'C', b':']);
+        assert_eq!(v.mode, PagefileRequestMode::System);
+        // the mode word is closed: only the dialog's three options
+        assert_eq!(
+            validate_pagefile_apply(false, "C:", "auto", "0", "0", &drives, free).unwrap_err(),
+            "PF_MODE_INVALID"
+        );
+        assert_eq!(
+            validate_pagefile_apply(false, "C:", "System", "0", "0", &drives, free).unwrap_err(),
+            "PF_MODE_INVALID"
+        );
+        // system and off carry no sizes (garbage sizes never reach a write)
+        let v =
+            validate_pagefile_apply(false, "D:", "off", "zzz", "", &drives, free).unwrap();
+        assert_eq!(v.mode, PagefileRequestMode::Off);
+        assert_eq!((v.min_mb, v.max_mb), (0, 0));
+        // custom validates sizes against the SELECTED drive's free space
+        let v = validate_pagefile_apply(false, "D:", "custom", "1024", "4096", &drives, free)
+            .unwrap();
+        assert_eq!((v.min_mb, v.max_mb), (1024, 4096));
+        assert_eq!(
+            validate_pagefile_apply(false, "D:", "custom", "1024", "4096", &drives, None)
+                .unwrap_err(),
+            "PF_NO_SPACE"
+        );
+    }
+
+    #[test]
+    fn pagefile_warnings_fire_before_the_write() {
+        // off always warns (crash risk is real); small warns but allows
+        assert_eq!(pagefile_warning(PagefileRequestMode::Off, 0), Some("off".into()));
+        assert_eq!(
+            pagefile_warning(PagefileRequestMode::Custom, 4096),
+            Some("small".into())
+        );
+        assert_eq!(pagefile_warning(PagefileRequestMode::Custom, 8192), None);
+        assert_eq!(pagefile_warning(PagefileRequestMode::Custom, 16384), None);
+        assert_eq!(pagefile_warning(PagefileRequestMode::System, 0), None);
+    }
+
+    #[test]
+    fn pagefile_pending_visibility() {
+        // same boot (clock past the write): pending shows
+        assert!(super::super::system::restart_pending_visible(1000, 5000));
+        assert!(super::super::system::restart_pending_visible(1000, 1000));
+        // reboot zeroes the clock: clears itself with zero writes
+        assert!(!super::super::system::restart_pending_visible(5000, 1000));
     }
 }

@@ -310,8 +310,16 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
           <p className="check-desc">{t.checkPagefileDesc}</p>
           <div className="check-foot">
             <span className="check-state">{pagefileText}</span>
-            <button className="check-open" onClick={() => void api.openWindowsPanel("system")}>
-              {t.openSettings}
+            <button
+              className="check-open"
+              onClick={() => {
+                // the page file has an in-app editor (the Storage
+                // section): stay inside the app and land on it, like DVR
+                if (onOpenTool) onOpenTool("pagefile");
+                else void api.openWindowsPanel("system");
+              }}
+            >
+              {onOpenTool ? t.openInTools : t.openSettings}
             </button>
           </div>
         </div>

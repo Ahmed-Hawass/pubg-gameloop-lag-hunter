@@ -51,6 +51,13 @@ export const ar: Locale = {
     SESSION_ALREADY_RUNNING: "هناك فحص قيد التشغيل بالفعل.",
     SESSION_STOPPING: "الفحص السابق لا يزال قيد الحفظ، حاول مرة أخرى بعد قليل.",
     SESSION_SAVE_FAILED: "تعذّر حفظ تقرير الجلسة. تحقق من توفر مساحة كافية على القرص، ثم حاول مرة أخرى.",
+    PF_READ_FAILED: "تعذّر قراءة إعدادات page file.",
+    PF_DRIVE_INVALID: "هذا القرص غير متاح لـ page file.",
+    PF_MODE_INVALID: "وضع page file هذا غير صالح.",
+    PF_NO_SPACE: "تعذّر قراءة المساحة الفارغة على هذا القرص، لن نكتب بدون حد.",
+    PF_INITIAL_INVALID: "الحجم الأولي غير صالح لهذا القرص.",
+    PF_MAX_INVALID: "الحجم الأقصى غير صالح لهذا القرص.",
+    PF_WRITE_FAILED: "رفض ويندوز تغيير page file.",
   } as Record<string, string>,
 
   // ---- report highlights (composed in the UI from event kinds) ----
@@ -206,9 +213,6 @@ export const ar: Locale = {
   toolGamingTweaksDesc: "كل مفاتيح أداء الألعاب في مكان واحد.",
   toolStorage: "التخزين",
   toolStorageDesc: "تنظيف تلقائي لأقراصك.",
-  /** PLACEHOLDER, remove when the storage phase starts: the card exists
-      now so the destination split reads clearly with a single row */
-  toolStorageComing: "أدوات تخزين إضافية في الطريق.",
 
   // ---- tweaks (Tools tab writes — switch mirrors live state) ----
   tweakDvrTitle: "إيقاف التسجيل الخلفي (DVR)",
@@ -249,6 +253,36 @@ export const ar: Locale = {
     "تسريع المؤشر يجعل المؤشر يقطع مسافة أبعد كلما أسرعت بحركة يدك. إيقافه يجعل نفس حركة اليد تعطي نفس مسافة المؤشر دائمًا. إحساس خالص لا يغيّر عدد الإطارات، وإعادته ضغطة واحدة.",
   tweakWindowedHint:
     "يستطيع ويندوز الحديث عرض الألعاب النافذة والتي بلا حدود بزمن استجابة أقل عبر مسار أحدث. توثّق مايكروسوفت لعبًا أنعم لهذه الأنماط عند تشغيل المفتاح. إيقافه يعيد المسار القديم بضغطة واحدة.",
+  tweakPfTitle: "الذاكرة الظاهرية (page file)",
+  tweakPfHint:
+    "يطابق ديالوج الذاكرة الظاهرية في ويندوز: إدارة تلقائية لجميع الأقراص، أو لكل قرص حجم يديره النظام أو مخصص أو بدون page file. يتغير القرص المحدد فقط، وتبقى بقية الأقراص كما هي تمامًا. تُطبق التغييرات بعد إعادة تشغيل ويندوز.",
+  tweakPfAutoLabel: "إدارة حجم page file تلقائيًا لجميع الأقراص",
+  tweakPfStatusAuto: "تلقائي: ويندوز يدير كل الأقراص",
+  tweakPfStatusManual: "يدوي: إعدادات كل قرص أدناه",
+  tweakPfDrivesLabel: "الأقراص",
+  tweakPfDriveFree: (drive: string, gb: number) => `${drive} · ${gb} جيجابايت فارغة`,
+  tweakPfDriveNoSpace: (drive: string) => `${drive} · المساحة الفارغة غير معروفة`,
+  tweakPfModeSystem: "حجم يديره النظام",
+  tweakPfModeCustom: "حجم مخصص",
+  tweakPfModeOff: "بدون page file",
+  tweakPfModeUnknown: "غير قابل للقراءة",
+  tweakPfDriveCustom: (min: number, max: number) => `مخصص ${min}–${max} ميجابايت`,
+  tweakPfMinLabel: "الحجم الأولي (ميجابايت)",
+  tweakPfMaxLabel: "الحجم الأقصى (ميجابايت)",
+  tweakPfApply: "تطبيق",
+  tweakPfWarnOffTitle: (drive: string) => `إزالة page file على ${drive}؟`,
+  tweakPfWarnOffBody: (drive: string) =>
+    `بدون page file على ${drive}، كراشات نفاد الذاكرة مرجحة تحت الحمل. يُطبق بعد إعادة تشغيل ويندوز.`,
+  tweakPfWarnSmallTitle: "page file صغير؟",
+  tweakPfWarnSmallBody: (drive: string, max: number) =>
+    `الأحجام تحت 8 جيجابايت سببت تقطيعًا على أجهزة حقيقية. تعيين ${max} ميجابايت على ${drive} على أي حال؟`,
+  tweakPfPending: "أعد تشغيل ويندوز لتطبيق تغيير page file.",
+  tweakPfPendingBadge: "يلزم إعادة التشغيل",
+  rebootTitle: "إعادة تشغيل ويندوز؟",
+  rebootBody:
+    "يسري تغيير page file بعد إعادة التشغيل. الإعادة الآن تعيد تشغيل ويندوز فورًا.",
+  rebootNow: "إعادة التشغيل",
+  rebootLater: "لاحقًا",
   tweakPowerTitle: "تشغيل الأداء العالي",
   tweakPowerDesc:
     "يبدّل ويندوز إلى خطة الأداء العالي. يُطبق فورًا، وإيقافه يعيد خطتك السابقة.",

@@ -12,6 +12,10 @@ fn main() {
             &args[2..],
         ));
     }
+    // Reboot countdown mode (see request_reboot): headless like above.
+    if args.get(1).map(|s| s.as_str()) == Some(lag_hunter_lib::engine::elevate::REBOOT_FLAG) {
+        std::process::exit(lag_hunter_lib::engine::elevate::run_reboot_action());
+    }
 
     // Win10 guarantee: if the WebView2 runtime is missing (machines cut off
     // from Windows Update), the app would show a blank window. Detect it up

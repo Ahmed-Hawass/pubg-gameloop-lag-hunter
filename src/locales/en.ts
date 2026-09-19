@@ -47,6 +47,13 @@ export const en = {
     SESSION_ALREADY_RUNNING: "A scan is already running.",
     SESSION_STOPPING: "The previous scan is still being saved. Try again in a moment.",
     SESSION_SAVE_FAILED: "The session report couldn't be saved. Check free disk space and try again.",
+    PF_READ_FAILED: "Could not read the page file settings.",
+    PF_DRIVE_INVALID: "That drive is not available for a page file.",
+    PF_MODE_INVALID: "That page file mode is not valid.",
+    PF_NO_SPACE: "Could not read free space on that drive, refusing to guess a bound.",
+    PF_INITIAL_INVALID: "The initial size is not valid for that drive.",
+    PF_MAX_INVALID: "The maximum size is not valid for that drive.",
+    PF_WRITE_FAILED: "Windows refused the page file change.",
   } as Record<string, string>,
 
   // ---- report highlights (composed in the UI from event kinds) ----
@@ -201,9 +208,6 @@ export const en = {
   toolGamingTweaksDesc: "Every game performance switch in one place.",
   toolStorage: "Storage",
   toolStorageDesc: "Automatic cleanup for your drives.",
-  /** PLACEHOLDER, remove when the storage phase starts: the card exists
-      now so the destination split reads clearly with a single row */
-  toolStorageComing: "More storage tools are on the way.",
 
   // ---- tweaks (Tools tab writes — switch mirrors live state) ----
   tweakDvrTitle: "Turn off background recording (DVR)",
@@ -244,6 +248,36 @@ export const en = {
     "Pointer acceleration makes the cursor travel further the faster you move your hand. Turning it off gives the same cursor travel for the same hand movement every time. Pure feel, it does not change FPS, and turning it back on takes one tap.",
   tweakWindowedHint:
     "Modern Windows can present windowed and borderless games with lower latency through a newer path. Microsoft documents smoother play for these modes when the toggle is on. Turning it off restores the old path with one tap.",
+  tweakPfTitle: "Virtual memory (page file)",
+  tweakPfHint:
+    "Mirrors the Windows Virtual Memory dialog: automatic management for all drives, or per-drive system-managed, custom, or no paging file. Only the selected drive ever changes; every other drive is preserved exactly. Changes apply after you restart Windows.",
+  tweakPfAutoLabel: "Automatically manage paging file size for all drives",
+  tweakPfStatusAuto: "Automatic: Windows manages every drive",
+  tweakPfStatusManual: "Manual: per-drive settings below",
+  tweakPfDrivesLabel: "Drives",
+  tweakPfDriveFree: (drive: string, gb: number) => `${drive} · ${gb} GB free`,
+  tweakPfDriveNoSpace: (drive: string) => `${drive} · free space unknown`,
+  tweakPfModeSystem: "System managed size",
+  tweakPfModeCustom: "Custom size",
+  tweakPfModeOff: "No paging file",
+  tweakPfModeUnknown: "Unreadable",
+  tweakPfDriveCustom: (min: number, max: number) => `Custom ${min}–${max} MB`,
+  tweakPfMinLabel: "Initial size (MB)",
+  tweakPfMaxLabel: "Maximum size (MB)",
+  tweakPfApply: "Apply",
+  tweakPfWarnOffTitle: (drive: string) => `Remove the page file on ${drive}?`,
+  tweakPfWarnOffBody: (drive: string) =>
+    `Without a page file on ${drive}, out-of-memory crashes are likely under load. This takes effect after you restart Windows.`,
+  tweakPfWarnSmallTitle: "Small page file?",
+  tweakPfWarnSmallBody: (drive: string, max: number) =>
+    `Below 8 GB has caused stutters on real machines. Set ${max} MB on ${drive} anyway?`,
+  tweakPfPending: "Restart Windows to apply the page file change.",
+  tweakPfPendingBadge: "Restart needed",
+  rebootTitle: "Restart Windows?",
+  rebootBody:
+    "The page file change applies after a restart. Restarting now reboots Windows immediately.",
+  rebootNow: "Restart",
+  rebootLater: "Later",
   tweakPowerTitle: "Turn on High performance",
   tweakPowerDesc:
     "Switches Windows to the High performance plan. Takes effect immediately; turning it off brings back the plan you had.",
