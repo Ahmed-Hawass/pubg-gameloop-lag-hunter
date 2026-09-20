@@ -173,6 +173,90 @@ async fn apply_pagefile_settings(
     res?
 }
 
+/// Storage sweep scan: measures the four safe places (user temp, system
+/// temp, recycle bin, delivery cache) plus the sweep memory. Read-only.
+/// Async: dir walks can take seconds on bloated temp folders — never the
+/// IPC thread. Progress rides the channel (one event per category step);
+/// the final answer is the command's own return.
+#[tauri::command]
+async fn storage_scan(on_event: tauri::ipc::Channel<engine::cleanup::CleanupProgress>) -> engine::cleanup::CleanupScan {
+    let _t = engine::logging::timed("ipc: storage_scan");
+    match tauri::async_runtime::spawn_blocking(move || {
+        engine::cleanup::scan_with(|index, total, id| {
+            let _ = on_event.send(engine::cleanup::CleanupProgress::Category {
+                id: id.to_string(),
+                index,
+                total,
+            });
+        })
+    })
+    .await
+    {
+        Ok(scan) => {
+            // success line for user reports: measured bytes per place
+            // (numbers only, never names or paths)
+            let sizes: Vec<String> = scan
+                .categories
+                .iter()
+                .map(|c| {
+                    format!(
+                        "{}={}",
+                        c.id,
+                        c.bytes.map(|b| b.to_string()).unwrap_or_else(|| "-".into())
+                    )
+                })
+                .collect();
+            engine::logging::info(&format!("storage scan: {}", sizes.join(" ")));
+            scan
+        }
+        Err(e) => {
+            engine::logging::warn(&format!("storage_scan task failed: {e}"));
+            engine::cleanup::scan()
+        }
+    }
+}
+
+/// Storage sweep clean: deletes only the ticked categories and reports
+/// measured freed bytes per category. A denied UAC is "cancelled"
+/// (quiet, like every other refusal); anything else is logged before it
+/// reaches the UI. Progress rides the channel like the scan.
+#[tauri::command]
+async fn storage_clean(
+    categories: Vec<String>,
+    on_event: tauri::ipc::Channel<engine::cleanup::CleanupProgress>,
+) -> Result<Vec<engine::cleanup::CleanupResult>, String> {
+    let _t = engine::logging::timed("ipc: storage_clean");
+    let res = tauri::async_runtime::spawn_blocking(move || {
+        engine::cleanup::clean_selected_with(&categories, |index, total, id| {
+            let _ = on_event.send(engine::cleanup::CleanupProgress::Category {
+                id: id.to_string(),
+                index,
+                total,
+            });
+        })
+    })
+    .await
+    .map_err(|e| format!("clean task failed: {e}"))
+    .and_then(|r| r);
+    match &res {
+        // success line for user reports: what ran and what it measured
+        // (ids + bytes only, never names or paths)
+        Ok(results) => {
+            let freed: Vec<String> = results
+                .iter()
+                .map(|r| format!("{}={}", r.id, r.freed_bytes))
+                .collect();
+            engine::logging::info(&format!("storage clean: {}", freed.join(" ")));
+        }
+        Err(e) => {
+            if e != "cancelled" {
+                engine::logging::warn(&format!("ipc storage_clean failed: {e}"));
+            }
+        }
+    }
+    res
+}
+
 /// Immediate reboot for applying page file changes (the confirm dialog
 /// in Tools is the only caller; a refused UAC stays quiet like every
 /// other cancellation).
@@ -690,6 +774,8 @@ pub fn run() {
             pagefile_settings,
             validate_pagefile_settings,
             apply_pagefile_settings,
+            storage_scan,
+            storage_clean,
             schedule_reboot,
             open_windows_panel,
             set_auto_stop,

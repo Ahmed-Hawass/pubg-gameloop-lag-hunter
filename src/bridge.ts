@@ -252,6 +252,18 @@ export const api = {
     }),
   /** immediate reboot (page file changes apply at boot) */
   scheduleReboot: () => invoke<void>("schedule_reboot"),
+  /** the Storage sweep's read-only scan (four safe places + memory),
+      with per-category progress over the channel */
+  storageScan: (onEvent: (ev: CleanupProgress) => void) =>
+    invoke<CleanupScan>("storage_scan", {
+      onEvent: new Channel<CleanupProgress>(onEvent),
+    }),
+  /** delete only the ticked sweep categories, verified by re-measure */
+  storageClean: (categories: string[], onEvent: (ev: CleanupProgress) => void) =>
+    invoke<CleanupResult[]>("storage_clean", {
+      categories,
+      onEvent: new Channel<CleanupProgress>(onEvent),
+    }),
 };
 
 // ---- system tabs -----------------------------------------------------------
@@ -350,6 +362,36 @@ export interface PagefileSettings {
 }
 /** pre-write warning from validate_pagefile_settings */
 export type PagefileWarning = "off" | "small" | null;
+
+/** one measured sweep place (mirrors CleanupCategory in engine/cleanup.rs;
+    bytes null = unreadable, the UI shows "--", never a guess) */
+export interface CleanupCategory {
+  id: string;
+  bytes: number | null;
+}
+/** measured freed bytes per swept category */
+export interface CleanupResult {
+  id: string;
+  freed_bytes: number;
+}
+/** sweep memory: last run + last-30-days total, bytes only */
+export interface CleanupHistory {
+  last_freed_bytes: number;
+  last_at: string | null;
+  last_30d_bytes: number;
+}
+/** the scan answer: measured places plus the sweep memory */
+export interface CleanupScan {
+  categories: CleanupCategory[];
+  history: CleanupHistory;
+}
+/** per-category progress streamed over the scan/clean channel */
+export type CleanupProgress = {
+  event: "category";
+  id: string;
+  index: number;
+  total: number;
+};
 
 // ---- settings (persisted user preferences — schema v3) --------------------
 

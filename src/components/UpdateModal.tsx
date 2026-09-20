@@ -175,8 +175,8 @@ export function UpdateModal(props: {
     title = t.updateDownloading;
     body = (
       <div className="um-body">
-        <div className="um-progress">
-          <div className="um-progress-fill" style={{ width: `${phase.pct}%` }} />
+        <div className="progress">
+          <div className="progress-fill" style={{ width: `${phase.pct}%` }} />
         </div>
         <div className="um-progress-text num">
           {phase.pct}% · {phase.mb} MB

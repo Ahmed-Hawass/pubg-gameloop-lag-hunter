@@ -1,4 +1,5 @@
-// engine/mod.rs — the brain: sampling, detection, diagnosis, session, storage, settings, logging, system, tweaks, elevation
+// engine/mod.rs — the brain: sampling, detection, diagnosis, session, storage, settings, logging, system, tweaks, elevation, cleanup
+pub mod cleanup;
 pub mod detector;
 pub mod diagnoser;
 pub mod elevate;

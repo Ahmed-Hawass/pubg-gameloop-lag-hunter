@@ -207,7 +207,7 @@ export const en = {
   toolGamingTweaks: "Gaming tweaks",
   toolGamingTweaksDesc: "Every game performance switch in one place.",
   toolStorage: "Storage",
-  toolStorageDesc: "Automatic cleanup for your drives.",
+  toolStorageDesc: "Automatic cleanup plus a manual sweep for junk files.",
 
   // ---- tweaks (Tools tab writes — switch mirrors live state) ----
   tweakDvrTitle: "Turn off background recording (DVR)",
@@ -288,6 +288,39 @@ export const en = {
       never work here (those hide instead) */
   tweakNeedsGameloop: "Needs GameLoop installed on this PC.",
   tweakFailed: "The change could not be verified and was not applied.",
+  /** storage sweep: scan four safe places, delete only the ticked ones */
+  cleanupTitle: "Clean temporary files",
+  cleanupDesc:
+    "Scans four safe places and deletes only what you tick. Locked files are skipped, freed space is measured, never estimated.",
+  cleanupScan: "Scan",
+  cleanupScanning: "Scanning...",
+  cleanupRescan: "Scan again",
+  cleanupClean: "Clean selected",
+  cleanupCleaning: "Cleaning...",
+  cleanupNothing: "Nothing to clean: every measured place is already empty.",
+  cleanupScanFailed: "The scan could not read this PC. Try again.",
+  cleanupFreed: (mb: number) => `Freed ${mb} MB, measured before and after.`,
+  cleanupSelected: (mb: number) => `Selected: ${mb} MB.`,
+  cleanupLastNever: "Never cleaned yet.",
+  cleanupLast: (mb: number, when: string) => `Last clean: ${mb} MB on ${when}.`,
+  cleanup30d: (mb: number) => `Last 30 days: ${mb} MB.`,
+  cleanupScanningCat: (name: string) => `Scanning ${name}...`,
+  cleanupCleaningCat: (name: string) => `Cleaning ${name}...`,
+  cleanupConfirmTitle: "Delete the selected files?",
+  cleanupConfirmBody: (names: string) =>
+    `This permanently deletes temporary files in: ${names}. Only the ticked places are touched, files in use are skipped.`,
+  cleanupCatUserTemp: "My temporary files",
+  cleanupCatUserTempHint:
+    "Leftovers your apps left in your own temp folder. Safe to delete, apps rebuild what they still need.",
+  cleanupCatSystemTemp: "Windows temporary files",
+  cleanupCatSystemTempHint:
+    "Leftovers Windows services and installers left behind. Safe to delete, files in use are skipped.",
+  cleanupCatRecycle: "Recycle Bin",
+  cleanupCatRecycleHint:
+    "Files you already deleted that still occupy drive space. Emptying it is permanent, check it first.",
+  cleanupCatDelivery: "Update sharing cache",
+  cleanupCatDeliveryHint:
+    "Windows Update files kept to share with other PCs on your network. Safe to delete, Windows re-downloads what it needs.",
 
   // ---- about tab ----
   aboutTitle: "PUBG GameLoop Lag Hunter",

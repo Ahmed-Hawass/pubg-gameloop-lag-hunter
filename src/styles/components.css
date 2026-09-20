@@ -475,7 +475,11 @@
   margin: 0;
 }
 
-.um-progress {
+/* Progress — the single bar language (update download, storage sweep).
+   Base matches the button radius scale; .progress-md matches the btn-md
+   row height for inline placement next to buttons. Fill grows from the
+   inline-start side by block flow (RTL-safe, no physical properties). */
+.progress {
   height: 8px;
   border-radius: 999px;
   background: var(--bg-2);
@@ -483,11 +487,20 @@
   overflow: hidden;
 }
 
-.um-progress-fill {
+.progress-fill {
   height: 100%;
   background: var(--primary);
   border-radius: 999px;
   transition: width 0.2s var(--ease);
+}
+
+.progress-md {
+  min-height: 38px;
+  border-radius: 10px;
+}
+
+.progress-md .progress-fill {
+  border-radius: 8px;
 }
 
 .um-progress-text {

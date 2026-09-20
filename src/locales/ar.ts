@@ -212,7 +212,7 @@ export const ar: Locale = {
   toolGamingTweaks: "تعديلات الألعاب",
   toolGamingTweaksDesc: "كل مفاتيح أداء الألعاب في مكان واحد.",
   toolStorage: "التخزين",
-  toolStorageDesc: "تنظيف تلقائي لأقراصك.",
+  toolStorageDesc: "تنظيف تلقائي مع فحص يدوي للملفات المؤقتة.",
 
   // ---- tweaks (Tools tab writes — switch mirrors live state) ----
   tweakDvrTitle: "إيقاف التسجيل الخلفي (DVR)",
@@ -293,6 +293,39 @@ export const ar: Locale = {
       never work here (those hide instead) */
   tweakNeedsGameloop: "يتطلب تثبيت GameLoop على هذا الجهاز.",
   tweakFailed: "تعذّر التحقق من التغيير ولم يُطبَّق.",
+  /** storage sweep: scan four safe places, delete only the ticked ones */
+  cleanupTitle: "تنظيف الملفات المؤقتة",
+  cleanupDesc:
+    "يفحص أربعة أماكن آمنة ويحذف فقط ما تحدده. الملفات المستخدمة تُتخطى، والمساحة المحررة مقاسة فعليًا وليست تقديرًا.",
+  cleanupScan: "فحص",
+  cleanupScanning: "جارٍ الفحص...",
+  cleanupRescan: "فحص مجددًا",
+  cleanupClean: "تنظيف المحدد",
+  cleanupCleaning: "جارٍ التنظيف...",
+  cleanupNothing: "لا شيء للتنظيف: كل الأماكن المقاسة فارغة بالفعل.",
+  cleanupScanFailed: "تعذّر فحص هذا الجهاز. حاول مجددًا.",
+  cleanupFreed: (mb: number) => `تم تحرير ${mb} MB مقاسة قبل التنظيف وبعده.`,
+  cleanupSelected: (mb: number) => `المحدد: ${mb} MB.`,
+  cleanupLastNever: "لم يُنظَّف بعد.",
+  cleanupLast: (mb: number, when: string) => `آخر تنظيف: ${mb} MB بتاريخ ${when}.`,
+  cleanup30d: (mb: number) => `آخر 30 يومًا: ${mb} MB.`,
+  cleanupScanningCat: (name: string) => `جارٍ فحص ${name}...`,
+  cleanupCleaningCat: (name: string) => `جارٍ تنظيف ${name}...`,
+  cleanupConfirmTitle: "حذف الملفات المحددة؟",
+  cleanupConfirmBody: (names: string) =>
+    `سيحذف هذا نهائيًا الملفات المؤقتة في: ${names}. تُمس الأماكن المحددة فقط، والملفات المستخدمة تُتخطى.`,
+  cleanupCatUserTemp: "ملفاتي المؤقتة",
+  cleanupCatUserTempHint:
+    "بقايا تركتها تطبيقاتك في مجلدك المؤقت. حذفها آمن، والتطبيقات تعيد بناء ما تحتاجه.",
+  cleanupCatSystemTemp: "ملفات ويندوز المؤقتة",
+  cleanupCatSystemTempHint:
+    "بقايا تركتها خدمات ويندوز وبرامج التثبيت. حذفها آمن، والملفات المستخدمة تُتخطى.",
+  cleanupCatRecycle: "سلة المحذوفات",
+  cleanupCatRecycleHint:
+    "ملفات حذفتها بنفسك وما زالت تشغل مساحة. إفراغها نهائي، راجعها أولًا.",
+  cleanupCatDelivery: "كاش مشاركة التحديثات",
+  cleanupCatDeliveryHint:
+    "ملفات تحديثات ويندوز المحتفظ بها لمشاركتها مع أجهزة شبكتك. حذفها آمن، وويندوز يعيد تنزيل ما يحتاجه.",
 
   // ---- about tab ----
   aboutTitle: "PUBG GameLoop Lag Hunter",

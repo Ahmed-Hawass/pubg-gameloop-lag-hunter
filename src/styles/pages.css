@@ -447,6 +447,108 @@
   line-height: 1.55;
   margin-block-start: 4px;
 }
+/* manual sweep (storage card): same card language as switch rows
+   (elev-1 surface, border, radius); checkboxes instead of switches, one
+   per measured place. Flex follows reading direction, no physical
+   properties anywhere */
+.cleanup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--elev-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+}
+.cleanup-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.cleanup-head .check-func {
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--elev-3);
+  color: var(--text-2);
+  display: flex;
+}
+.cleanup-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-block: 8px;
+  border-block-start: 1px solid var(--border);
+  cursor: pointer;
+}
+.cleanup-row input[type="checkbox"] {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+}
+.cleanup-name {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.cleanup-size {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+}
+.cleanup-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-block-start: 4px;
+}
+.cleanup-result {
+  font-size: 12.5px;
+  color: var(--text-2);
+  line-height: 1.55;
+}
+/* the payoff: one big measured number after a clean (tabular Latin
+   numerals either way); the track fills from the inline-start side so
+   progress follows the reading direction with no physical properties */
+.cleanup-hero {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-block-start: 6px;
+}
+.cleanup-hero-num {
+  font-size: 30px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.cleanup-hero-unit {
+  font-size: 13px;
+  color: var(--text-2);
+}
+.cleanup-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-block-start: 6px;
+}
+/* zero/unknown rows stay visible (the industry norm: CCleaner, PC
+   Manager, BleachBit and Disk Cleanup all show zero rows) but muted
+   with a disabled checkbox: nothing to decide, nothing to clean */
+.cleanup-row.is-empty {
+  opacity: 0.55;
+  cursor: default;
+}
+.cleanup-selected {
+  font-size: 12px;
+  color: var(--text-3);
+}
 /* status readout atop the storage details: deliberately UNBOXED (plain
    text, not a row surface) so it never reads as clickable — it answers
    "what holds now", actions live below it */
@@ -499,19 +601,29 @@
   border-color: var(--primary);
   box-shadow: 0 0 0 3px var(--primary-dim);
 }
-.pf-summary-main {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
+/* summary title + status as text-styled buttons (unstyled so the (?)
+   can sit inside the name line like every SwitchRow, without nesting a
+   button inside a button). Logical properties only, like everywhere. */
+.pf-name-btn {
   background: transparent;
   border: none;
-  color: inherit;
+  padding: 0;
   font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: inherit;
   text-align: start;
   cursor: pointer;
+}
+.pf-desc-btn {
+  background: transparent;
+  border: none;
   padding: 0;
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.55;
+  text-align: start;
+  cursor: pointer;
 }
 .pf-summary .check-func {
   flex: none;
@@ -524,13 +636,7 @@
   color: var(--text-2);
   display: flex;
 }
-.pf-summary-text {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
+
 .pf-chev {
   flex: none;
   color: var(--text-3);

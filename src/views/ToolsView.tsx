@@ -6,9 +6,9 @@
 // tweak_states command (a handful of registry values, microseconds) — never the
 // full system_checks batch, whose rows this page does not display.
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronLeft, ChevronDown, Database, Expand, Gamepad2, Info, Monitor, Mouse, Recycle, SlidersHorizontal, Video, AppWindow, Zap } from "lucide-react";
+import { ChevronLeft, ChevronDown, Database, Expand, Gamepad2, Info, Monitor, Mouse, Recycle, SlidersHorizontal, Trash2, Video, AppWindow, Zap } from "lucide-react";
 import { Button, Dialog, EmptyState, MODAL_OPEN_EVENT, APP_DIALOG_OPEN_EVENT } from "../components/components";
-import { api, type PagefileSettings, type RowState } from "../bridge";
+import { api, type CleanupResult, type CleanupScan, type PagefileSettings, type RowState } from "../bridge";
 import { errorDialog } from "../errors";
 import { useLang } from "../i18n";
 import spotTweaksDark from "../assets/spot-system-tweaks-dark.svg?url";
@@ -172,6 +172,22 @@ export function ToolsView(props: {
       honestly instead of spinning "Loading..." forever (the window-focus
       retry stays the rescue) */
   const [loadFailed, setLoadFailed] = useState(false);
+  /** storage sweep: measured places + memory (null = never scanned),
+      ticked ids, last clean result, confirm gate, and scan-read failure.
+      Own busy ref so a scan/clean never blocks the switches above. */
+  const [clScan, setClScan] = useState<CleanupScan | null>(null);
+  const [clChecked, setClChecked] = useState<string[]>([]);
+  const [clResult, setClResult] = useState<CleanupResult[] | null>(null);
+  const [clScanError, setClScanError] = useState<string | null>(null);
+  const [clConfirm, setClConfirm] = useState(false);
+  const [clBusy, setClBusy] = useState(false);
+  const clBusyRef = useRef(false);
+  /** the sweep collapses under its summary row like the page file editor
+      (the section never opens itself: only a tap expands it) */
+  const [clOpen, setClOpen] = useState(false);
+  /** live progress: current step; phase tells scan apart from clean */
+  const [clProg, setClProg] = useState<{ index: number; total: number; id: string } | null>(null);
+  const [clPhase, setClPhase] = useState<"scan" | "clean" | null>(null);
 
   /** backend machine key to dialog body (known keys get their copy; a
       novel message rides along as the technical line, never raw English
@@ -313,7 +329,7 @@ export function ToolsView(props: {
     setLinkedId(target);
     row.scrollIntoView({ behavior: "smooth", block: "center" });
     row
-      .querySelector<HTMLButtonElement>("button.switch, button.pf-summary-main")
+      .querySelector<HTMLButtonElement>("button.switch, button.pf-name-btn")
       ?.focus({ preventScroll: true });
     const timer = window.setTimeout(() => {
       setLinkedId(null);
@@ -439,6 +455,126 @@ export function ToolsView(props: {
       tweakBusyRef.current = false;
       setTweakBusy(false);
     }
+  };
+
+  /** sweep helpers: machine id to translated name/hint, measured bytes
+      to a Latin-unit size (units stay Latin in Arabic, like every other
+      measurement), and the scan/clean runners with the ref busy gate */
+  // the backend only ever sends the four known ids; an unknown one
+  // falls back to the raw id itself (never a sibling's name)
+  const clName = (id: string) =>
+    id === "user_temp"
+      ? t.cleanupCatUserTemp
+      : id === "system_temp"
+        ? t.cleanupCatSystemTemp
+        : id === "recycle_bin"
+          ? t.cleanupCatRecycle
+          : id === "delivery_opt"
+            ? t.cleanupCatDelivery
+            : id;
+  const clHintBody = (id: string) =>
+    id === "user_temp"
+      ? t.cleanupCatUserTempHint
+      : id === "system_temp"
+        ? t.cleanupCatSystemTempHint
+        : id === "recycle_bin"
+          ? t.cleanupCatRecycleHint
+          : id === "delivery_opt"
+            ? t.cleanupCatDeliveryHint
+            : t.cleanupDesc;
+  const clSize = (bytes: number | null) => {
+    if (bytes == null) return "--";
+    if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
+    return `${(bytes / 1048576).toFixed(1)} MB`;
+  };
+  const clProgress = (phase: "scan" | "clean") => (ev: { event: string; id: string; index: number; total: number }) => {
+    if (ev.event !== "category") return;
+    setClPhase(phase);
+    setClProg({ index: ev.index, total: ev.total, id: ev.id });
+  };
+  const runClScan = async () => {
+    if (clBusyRef.current) return;
+    clBusyRef.current = true;
+    setClBusy(true);
+    setClProg(null);
+    setClPhase("scan");
+    setClScanError(null);
+    try {
+      const scan = await api.storageScan(clProgress("scan"));
+      setClScan(scan);
+      // every non-empty place ticked by default (the user unticks, never
+      // us); zero/unknown rows render muted with a disabled checkbox
+      setClChecked(
+        scan.categories.filter((c) => (c.bytes ?? 0) > 0).map((c) => c.id),
+      );
+      setClResult(null);
+    } catch {
+      setClScanError(t.cleanupScanFailed);
+    } finally {
+      clBusyRef.current = false;
+      setClBusy(false);
+      setClProg(null);
+      setClPhase(null);
+    }
+  };
+  const runClClean = async () => {
+    if (clBusyRef.current || clChecked.length === 0) return;
+    setClConfirm(false);
+    clBusyRef.current = true;
+    setClBusy(true);
+    setClProg(null);
+    setClPhase("clean");
+    try {
+      const res = await api.storageClean(clChecked, clProgress("clean"));
+      setClResult(res);
+      // re-measure so the list shows the verified live truth, not hope
+      try {
+        setClScan(await api.storageScan(clProgress("scan")));
+      } catch {
+        // the clean already verified by re-measure inside; a failed
+        // refresh only leaves the old sizes painted, never wrong data
+      }
+    } catch (e) {
+      const raw = typeof e === "string" ? e : String(e);
+      // a refused elevation is a choice, not a failure (same
+      // exact-"cancelled" contract as the switch flips above)
+      if (raw === "cancelled") return;
+      setNotice(t.dialog.unknownErrorBody(raw));
+    } finally {
+      clBusyRef.current = false;
+      setClBusy(false);
+      setClProg(null);
+      setClPhase(null);
+    }
+  };
+  const clFreedBytes = clResult
+    ? clResult.reduce((s, r) => s + r.freed_bytes, 0)
+    : 0;
+  /** hero number: GB above 1 GB, MB below (Latin units either way) */
+  const clHero =
+    clFreedBytes >= 1073741824
+      ? { num: (clFreedBytes / 1073741824).toFixed(1), unit: "GB" }
+      : { num: (clFreedBytes / 1048576).toFixed(1), unit: "MB" };
+  const clFreedMb = Math.round((clFreedBytes / 1048576) * 10) / 10;
+  /** what counts as "worth cleaning": documented in one place, so the
+      edge verdict below never drifts from the copy */
+  const CLEAN_WORTHY_BYTES = 500 * 1048576;
+  /** summary edge from the LAST SCAN (current truth, like every other
+      card), never from history: green = nothing worth cleaning, warn =
+      measurable junk above the floor, neutral = unscanned or unreadable */
+  const clEdge = (() => {
+    if (!clScan) return "";
+    const measured = clScan.categories.filter((c) => c.bytes != null);
+    if (measured.length === 0) return "";
+    const total = measured.reduce((s, c) => s + (c.bytes ?? 0), 0);
+    return total >= CLEAN_WORTHY_BYTES ? "off" : "on";
+  })();
+  /** summary status line from the sweep memory (last run + 30 days) */
+  const clStatus = (h: { last_freed_bytes: number; last_at: string | null; last_30d_bytes: number }) => {
+    if (!h.last_at) return t.cleanupLastNever;
+    const mb = (b: number) => Math.round((b / 1048576) * 10) / 10;
+    const when = `${h.last_at.slice(0, 10)} ${h.last_at.slice(11, 16)}`;
+    return `${t.cleanupLast(mb(h.last_freed_bytes), when)} · ${t.cleanup30d(mb(h.last_30d_bytes))}`;
   };
 
   /** digits-only field writer (mirrors the dialog: garbage never enters,
@@ -718,39 +854,50 @@ export function ToolsView(props: {
               data-tweak="pagefile"
               className={`pf-summary${pfHealthy ? " on" : " off"}${linkedId === "pagefile" ? " is-linked" : ""}`}
             >
-              <button
-                type="button"
-                className="pf-summary-main"
-                aria-expanded={pfOpen}
-                onClick={() => setPfOpen(!pfOpen)}
-              >
-                <span className="check-func">
-                  <Database size={15} />
+              {/* same row language as every SwitchRow (tile, texts with
+                  the (?) inside the name line, badge, chevron): the title
+                  and desc are text-styled buttons so the (?) can sit next
+                  to the title without nesting a button inside a button */}
+              <span className="check-func">
+                <Database size={15} />
+              </span>
+              <div className="switch-body">
+                <span className="switch-name">
+                  <button
+                    type="button"
+                    className="pf-name-btn"
+                    aria-expanded={pfOpen}
+                    onClick={() => setPfOpen(!pfOpen)}
+                  >
+                    {t.tweakPfTitle}
+                  </button>
+                  <button
+                    type="button"
+                    className="switch-hint"
+                    aria-label={t.tweakPfTitle}
+                    onClick={() => showHint(t.tweakPfTitle, t.tweakPfHint)}
+                  >
+                    <Info size={13} />
+                  </button>
                 </span>
-                <span className="pf-summary-text">
-                  <span className="switch-name">{t.tweakPfTitle}</span>
-                  <span className="switch-desc">
-                    {pfSettings.automatic ? t.tweakPfStatusAuto : t.tweakPfStatusManual}
-                  </span>
-                </span>
-                {/* pending survives collapsing: the full note lives in
-                    the expanded card, this badge keeps the collapsed row
-                    honest */}
-                {pfSettings.pending ? (
-                  <span className="check-badge warn">{t.tweakPfPendingBadge}</span>
-                ) : null}
-              </button>
-              <button
-                type="button"
-                className="switch-hint"
-                aria-label={t.tweakPfTitle}
-                onClick={() => showHint(t.tweakPfTitle, t.tweakPfHint)}
-              >
-                <Info size={13} />
-              </button>
+                <button
+                  type="button"
+                  className="pf-desc-btn"
+                  aria-expanded={pfOpen}
+                  onClick={() => setPfOpen(!pfOpen)}
+                >
+                  {pfSettings.automatic ? t.tweakPfStatusAuto : t.tweakPfStatusManual}
+                </button>
+              </div>
+              {/* pending survives collapsing: the full note lives in
+                  the expanded card, this badge keeps the collapsed row
+                  honest */}
+              {pfSettings.pending ? (
+                <span className="check-badge warn">{t.tweakPfPendingBadge}</span>
+              ) : null}
               {/* its own toggle button (a button cannot nest): title-area
                   and chevron expand the same editor, matching the row
-                  order of every other card (tile, texts, badge, ?, ctl) */}
+                  order of every other card (tile, texts, ?, badge, ctl) */}
               <button
                 type="button"
                 className="pf-chev-btn"
@@ -896,6 +1043,193 @@ export function ToolsView(props: {
               onHint={showHint}
               busy={tweakBusy}
               onFlip={(next) => void flipTweak("storagesense", next)}
+            />
+          ) : null}
+          {/* manual sweep: scan four safe places, delete only the ticked
+              ones. No auto-delete, no estimates: sizes are measured, the
+              freed number is before-minus-after, locked files are skipped.
+              Collapses under its summary row like the page file editor. */}
+          <div className={`pf-summary ${clEdge}`} data-tweak="cleanup">
+            {/* same row language as the page file summary above: the (?)
+                sits inside the name line, like every SwitchRow */}
+            <span className="check-func">
+              <Trash2 size={15} />
+            </span>
+            <div className="switch-body">
+              <span className="switch-name">
+                <button
+                  type="button"
+                  className="pf-name-btn"
+                  aria-expanded={clOpen}
+                  // the section never scans by itself (not on open, not
+                  // on launch): the Scan button below is the only
+                  // trigger, so the sweep costs nothing until asked
+                  onClick={() => setClOpen(!clOpen)}
+                >
+                  {t.cleanupTitle}
+                </button>
+                <button
+                  type="button"
+                  className="switch-hint"
+                  aria-label={t.cleanupTitle}
+                  onClick={() => showHint(t.cleanupTitle, t.cleanupDesc)}
+                >
+                  <Info size={13} />
+                </button>
+              </span>
+              <button
+                type="button"
+                className="pf-desc-btn"
+                aria-expanded={clOpen}
+                onClick={() => setClOpen(!clOpen)}
+              >
+                {clScan ? clStatus(clScan.history) : t.cleanupDesc}
+              </button>
+            </div>
+            {/* the chevron toggles the same editor as the title area */}
+            <button
+              type="button"
+              className="pf-chev-btn"
+              aria-expanded={clOpen}
+              aria-label={t.cleanupTitle}
+              onClick={() => setClOpen(!clOpen)}
+            >
+              <ChevronDown
+                size={16}
+                className={`pf-chev${clOpen ? " is-open" : ""}`}
+              />
+            </button>
+          </div>
+          {clOpen ? (
+            <div className="cleanup">
+              {clScanError ? <p className="tool-note">{clScanError}</p> : null}
+              {clScan
+                ? clScan.categories.map((c) => {
+                    // zero/unknown rows stay visible but muted with a
+                    // disabled checkbox: nothing to decide, nothing to
+                    // clean (and an unmeasured clean could never report
+                    // an honest freed number)
+                    const empty = (c.bytes ?? 0) <= 0;
+                    return (
+                      <label
+                        key={c.id}
+                        className={`cleanup-row${empty ? " is-empty" : ""}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={clChecked.includes(c.id)}
+                          disabled={clBusy || empty}
+                          onChange={(e) =>
+                            setClChecked((prev) =>
+                              e.target.checked
+                                ? [...prev, c.id]
+                                : prev.filter((id) => id !== c.id),
+                            )
+                          }
+                        />
+                        <span className="cleanup-name">
+                          {clName(c.id)}
+                          <button
+                            type="button"
+                            className="switch-hint"
+                            aria-label={clName(c.id)}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              showHint(clName(c.id), clHintBody(c.id));
+                            }}
+                          >
+                            <Info size={13} />
+                          </button>
+                        </span>
+                        <span className="cleanup-size">{clSize(c.bytes)}</span>
+                      </label>
+                    );
+                  })
+                : null}
+              {clScan && clChecked.length > 0 ? (
+                <p className="cleanup-selected">
+                  {t.cleanupSelected(
+                    Math.round(
+                      (clScan.categories
+                        .filter((c) => clChecked.includes(c.id))
+                        .reduce((s, c) => s + (c.bytes ?? 0), 0) /
+                        1048576) *
+                        10,
+                    ) / 10,
+                  )}
+                </p>
+              ) : null}
+              {/* all-unreadable is a read failure, not a clean drive:
+                  "--" everywhere must never read as "nothing to clean" */}
+              {clScan &&
+              !clBusy &&
+              clScan.categories.every((c) => c.bytes == null) ? (
+                <p className="tool-note">{t.cleanupScanFailed}</p>
+              ) : null}
+              {clScan &&
+              !clBusy &&
+              clScan.categories.some((c) => c.bytes != null) &&
+              clScan.categories.every((c) => (c.bytes ?? 0) <= 0) ? (
+                <p className="tool-note">{t.cleanupNothing}</p>
+              ) : null}
+              {/* live progress: one step per category (honest granularity,
+                  never a fake per-byte bar) */}
+              {clBusy && clProg ? (
+                <div className="cleanup-progress" role="status">
+                  <div className="progress progress-md">
+                    <div
+                      className="progress-fill"
+                      style={{ width: `${((clProg.index + 1) / Math.max(clProg.total, 1)) * 100}%` }}
+                    />
+                  </div>
+                  <p className="tool-note">
+                    {clPhase === "clean"
+                      ? t.cleanupCleaningCat(clName(clProg.id))
+                      : t.cleanupScanningCat(clName(clProg.id))}
+                  </p>
+                </div>
+              ) : null}
+              {clBusy && !clProg ? <p className="tool-note">{t.cleanupScanning}</p> : null}
+              {/* the payoff: one big measured number, then its sentence */}
+              {clResult ? (
+                <div className="cleanup-hero">
+                  <span className="cleanup-hero-num">{clHero.num}</span>
+                  <span className="cleanup-hero-unit">{clHero.unit}</span>
+                </div>
+              ) : null}
+              {clResult ? <p className="cleanup-result">{t.cleanupFreed(clFreedMb)}</p> : null}
+              <div className="cleanup-actions">
+                <Button
+                  label={clScan ? t.cleanupRescan : t.cleanupScan}
+                  variant="ghost"
+                  disabled={clBusy}
+                  onClick={() => void runClScan()}
+                />
+                {clScan ? (
+                  <Button
+                    label={clBusy ? t.cleanupCleaning : t.cleanupClean}
+                    variant="ghost"
+                    disabled={clBusy || clChecked.length === 0}
+                    // no empty-selection error path: the disabled gate
+                    // above makes it unreachable (dead code is a lie)
+                    onClick={() => setClConfirm(true)}
+                  />
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+          {/* destructive confirm (recycle bin is permanent): names the
+              ticked places like the pagefile-off confirm names its drive */}
+          {clConfirm ? (
+            <Dialog
+              title={t.cleanupConfirmTitle}
+              body={t.cleanupConfirmBody(clChecked.map(clName).join(", "))}
+              kind="confirm"
+              danger
+              confirmLabel={t.cleanupClean}
+              cancelLabel={t.dialog.cancel}
+              onConfirm={() => void runClClean()}
+              onClose={() => setClConfirm(false)}
             />
           ) : null}
           {/* pending reboot note, inside the expanded card (self-clearing

@@ -38,8 +38,10 @@ pub const EXIT_FAILED: i32 = 3;
 
 /// Tweak ids that must go through elevation. Power plan was first;
 /// the page file editor joins (HKLM writes): reads stay unprivileged,
-/// the whole apply request goes through one UAC prompt.
-pub static ELEVATED_IDS: &[&str] = &["powerplan", "pagefile-settings"];
+/// the whole apply request goes through one UAC prompt. The storage
+/// sweep's admin categories join the same way (system temp + delivery
+/// cache need admin to delete).
+pub static ELEVATED_IDS: &[&str] = &["powerplan", "pagefile-settings", "storage-clean"];
 
 /// Headless reboot flag: `exe --laghunter-reboot`. NOT a tweak (it never
 /// enters is_known_id or the dispatch); handled first in the runner.
@@ -59,9 +61,33 @@ pub fn is_elevated_id(id: &str) -> bool {
 ///
 /// Shapes: `[id, 0|1]` for switches, `[pagefile-settings, 0|1, DRIVE,
 /// mode, min, max]` for the page file editor (a mode is data, never a
-/// new command shape). Anything else is usage.
+/// new command shape), `[storage-clean, cat...]` for the sweep's admin
+/// categories (category words only, never paths). Anything else is usage.
 pub fn run_elevated_action(args: &[String]) -> i32 {
     super::logging::init_panic_hook();
+    if !args.is_empty() && args[0] == super::cleanup::STORAGE_CLEAN_ID {
+        // category words only, at least one, admin scope only — the
+        // child resolves the whitelisted dirs itself, never from args
+        // (defense in depth: no path ever crosses the boundary).
+        if args.len() < 2 || args.len() > 1 + 2 {
+            super::logging::warn("elevated run refused: bad storage-clean arity");
+            return EXIT_USAGE;
+        }
+        let cats: Vec<String> = args[1..].to_vec();
+        return match super::cleanup::clean_admin(&cats) {
+            Ok(()) => EXIT_OK,
+            Err(e) => {
+                // refusal (bad shape/scope) vs failure (delete attempted):
+                // both stay non-zero, the message tells them apart
+                super::logging::warn(&format!("elevated storage clean: {e}"));
+                if e.starts_with("refused") || e == "nothing selected" {
+                    EXIT_USAGE
+                } else {
+                    EXIT_FAILED
+                }
+            }
+        };
+    }
     if !args.is_empty() && args[0] == super::tweaks::PAGEFILE_SETTINGS_ID {
         if args.len() != 6 {
             super::logging::warn("elevated run refused: bad pagefile-settings arity");
@@ -232,6 +258,33 @@ pub fn elevate_pagefile_settings(
     }
 }
 
+/// Storage sweep variant (parent side): one UAC prompt for the whole
+/// click's admin categories (system temp + delivery cache). Category
+/// words only, validated here AND inside the child; a denied prompt
+/// maps to exact "cancelled" like every other refusal.
+#[cfg(windows)]
+pub fn elevate_storage_clean(cats: &[String]) -> Result<u32, String> {
+    if cats.is_empty() || cats.len() > 2 || cats.iter().any(|c| !super::cleanup::is_admin_category(c)) {
+        return Err("elevated request refused before UAC: storage-clean".into());
+    }
+    let params = format!(
+        "{ELEVATED_ACTION_FLAG} {} {}",
+        super::cleanup::STORAGE_CLEAN_ID,
+        cats.join(" ")
+    );
+    let process = spawn_elevated_raw(&params)?;
+    unsafe {
+        WaitForSingleObject(process, INFINITE);
+        let mut code: u32 = 0;
+        if GetExitCodeProcess(process, &mut code) == 0 {
+            CloseHandle(process);
+            return Err("could not read elevated child exit code".into());
+        }
+        CloseHandle(process);
+        Ok(code)
+    }
+}
+
 /// Reboot request (parent side): spawn ourselves elevated with the
 /// reboot flag and return immediately WITHOUT waiting (the machine is
 /// going down; waiting on it would wedge the IPC thread). The child
@@ -358,6 +411,12 @@ pub fn request_reboot() -> Result<(), String> {
     Err("elevation needs Windows".into())
 }
 
+/// Non-Windows stub for the storage sweep variant.
+#[cfg(not(windows))]
+pub fn elevate_storage_clean(_cats: &[String]) -> Result<u32, String> {
+    Err("elevation needs Windows".into())
+}
+
 #[cfg(windows)]
 const SEE_MASK_NOCLOSEPROCESS: u32 = 0x0000_0040;
 #[cfg(windows)]
@@ -468,14 +527,27 @@ mod tests {
             ed(&["pagefile-settings", "0", "Q:", "custom", "200", "100"]),
             EXIT_FAILED
         );
+        // storage sweep: category words only, never paths; anything else
+        // is usage with no side effects
+        assert_eq!(ed(&["storage-clean"]), EXIT_USAGE);
+        assert_eq!(ed(&["storage-clean", "user_temp"]), EXIT_USAGE);
+        assert_eq!(ed(&["storage-clean", "recycle_bin"]), EXIT_USAGE);
+        assert_eq!(ed(&["storage-clean", "nope"]), EXIT_USAGE);
+        assert_eq!(ed(&["storage-clean", "C:\\Windows\\Temp"]), EXIT_USAGE);
+        assert_eq!(
+            ed(&["storage-clean", "system_temp", "delivery_opt", "system_temp"]),
+            EXIT_USAGE
+        );
     }
 
     #[test]
     fn elevated_gate_routes_only_declared_ids() {
         // power plan was first; the page file editor joins as ONE id (a
-        // mode is data, never a new command). Everything else (plus
-        // unknown ids) must never take the elevated path by surprise.
-        for id in ["powerplan", "pagefile-settings"] {
+        // mode is data, never a new command); the storage sweep joins as
+        // ONE id too (categories are data, never new commands). Everything
+        // else (plus unknown ids) must never take the elevated path by
+        // surprise.
+        for id in ["powerplan", "pagefile-settings", "storage-clean"] {
             assert!(is_elevated_id(id), "{id} must elevate");
         }
         for id in [

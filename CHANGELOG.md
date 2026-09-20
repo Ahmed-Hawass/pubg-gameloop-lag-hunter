@@ -7,6 +7,24 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Storage sweep in the Storage card: a Scan button measures four safe
+  places (user temp, Windows temp, Recycle Bin, update sharing cache),
+  checkboxes select what to delete, and one Clean button removes only
+  the ticked places after a confirm dialog. Locked files are skipped,
+  freed space is measured before and after (never estimated), and the
+  two admin places go through one UAC prompt per clean with a silent
+  rollback on refusal. Shader and prefetch caches are deliberately out
+  of scope (rebuilding them causes the first-load hitches this tool
+  diagnoses), as are the registry, RAM boosting, Downloads, and browser
+  caches. Refinements: the bin is measured by walking $Recycle.Bin per
+  drive (the Shell probe undercounted folders), the summary edge reads
+  the last scan (green under 500 MB, warn above), zero rows stay visible
+  but muted with disabled boxes, a per-category progress bar rides both
+  scan and clean, and a numbers-only history feeds the summary
+  (last run plus last-30-days) with success lines in the technical log.
+  The sweep never scans by itself (Scan is the only trigger), an
+  all-unreadable scan reports a read failure instead of a clean drive,
+  and runs that free nothing leave the history untouched.
 - Tools wears a Beta pill in the sidebar until v2 goes stable: the tab
   writes to Windows and ships early, so it stays labelled (the cards
   themselves carry no pill).
