@@ -258,6 +258,10 @@ pub fn set_storage_sense(value: u32) -> Result<TweakResult, String> {
 
 /// Set Game Mode to `value` (1 = on, 0 = off) on BOTH master toggles and
 /// verify by re-reading. Anything but 0/1 is refused before anything runs.
+/// NOTE: the two GameBar values are written sequentially (the registry
+/// offers no transaction here): if the second write fails, the first
+/// stays changed and the result reports verified=false. Callers must
+/// treat verified=false as "state unknown, re-read", never as success.
 pub fn set_game_mode(value: u32) -> Result<TweakResult, String> {
     if value > 1 {
         return Err("gamemode value must be 0 or 1".into());
@@ -383,6 +387,9 @@ pub fn set_fso(value: u32) -> Result<TweakResult, String> {
 /// defaults) and verify by re-reading. Anything but 0/1 is refused before
 /// anything runs. OFF deletes the three values (absent = OS defaults),
 /// never writes guesswork numbers.
+/// NOTE: the three mouse values are written sequentially (no registry
+/// transaction exists): a mid-way failure leaves a partial state and the
+/// result reports verified=false for the caller to re-read.
 pub fn set_mouse_accel(value: u32) -> Result<TweakResult, String> {
     if value > 1 {
         return Err("mouse value must be 0 or 1".into());
@@ -1007,8 +1014,13 @@ pub fn set_pagefile_settings_parent(
     if code != 0 {
         return Err("PF_WRITE_FAILED".into());
     }
-    mark_pending_restart();
     let verified = pagefile_matches(&valid);
+    // the pending-reboot badge is for a VERIFIED write only: marking it
+    // before the re-read showed a reboot prompt for a write that never
+    // landed on the rare verify-after-exit-0 race.
+    if verified {
+        mark_pending_restart();
+    }
     super::logging::info(&format!(
         "pagefile settings set: automatic={automatic} drive={} verified={verified}",
         drive_id_string(valid.drive)

@@ -3,6 +3,7 @@
 
 use std::fs;
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -11,26 +12,71 @@ const NO_WINDOW: u32 = 0x0800_0000;
 
 /// PowerShell runner shared with the tweaks writer (crate-visible so the
 /// write path reuses the exact same spawn flags, never its own variant).
+/// Bounded: a hung powershell.exe fails after PS_TIMEOUT instead of
+/// blocking the caller forever (only the availability probe had a
+/// deadline before; every other query waited indefinitely). stderr is
+/// captured for the error message only, never shown to the user.
+#[cfg(windows)]
+const PS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 pub(crate) fn ps(script: &str) -> Result<String, String> {
     #[cfg(windows)]
-    let out = Command::new("powershell.exe")
+    let mut child = Command::new("powershell.exe")
         .args(["-NoProfile", "-NonInteractive", "-Command", script])
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .creation_flags(NO_WINDOW)
-        .output()
+        .spawn()
         .map_err(|e| format!("powershell spawn failed: {e}"))?;
     #[cfg(not(windows))]
-    let out = Command::new("powershell.exe")
+    let mut child = Command::new("powershell.exe")
         .args(["-NoProfile", "-NonInteractive", "-Command", script])
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .output()
+        .stderr(Stdio::piped())
+        .spawn()
         .map_err(|e| format!("powershell spawn failed: {e}"))?;
-    if !out.status.success() {
-        return Err("powershell exited nonzero".into());
+    let deadline = std::time::Instant::now()
+        + {
+            #[cfg(windows)]
+            {
+                PS_TIMEOUT
+            }
+            #[cfg(not(windows))]
+            {
+                std::time::Duration::from_secs(15)
+            }
+        };
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                let mut err = String::new();
+                if let Some(stderr) = child.stderr.take() {
+                    use std::io::Read;
+                    let _ = std::io::BufReader::new(stderr).read_to_string(&mut err);
+                }
+                if !status.success() {
+                    let hint: String = err.lines().next().unwrap_or("").trim().chars().take(160).collect();
+                    if hint.is_empty() {
+                        return Err("powershell exited nonzero".into());
+                    }
+                    return Err(format!("powershell exited nonzero: {hint}"));
+                }
+                let mut out = String::new();
+                if let Some(stdout) = child.stdout.take() {
+                    use std::io::Read;
+                    let _ = std::io::BufReader::new(stdout).read_to_string(&mut out);
+                }
+                return Ok(out);
+            }
+            Ok(None) => {
+                if std::time::Instant::now() >= deadline {
+                    let _ = child.kill();
+                    return Err("powershell timed out".into());
+                }
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            Err(e) => return Err(format!("powershell wait failed: {e}")),
+        }
     }
-    Ok(String::from_utf8_lossy(&out.stdout).to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -195,15 +241,22 @@ pub async fn system_info_async() -> Result<SystemInfo, String> {
 /// `None` when the cache isn't filled yet (first machine run before the
 /// async warm-up completes): the caller falls back to its own probe path.
 pub fn cached_machine_profile() -> Option<(f64, u32)> {
-    let info = SYSTEM_CACHE
-        .get()
-        .cloned()
-        .or_else(load_system_cache)?;
-    // a placeholder/never-filled profile carries ram_gb = 0 — not usable
+    if let Some(info) = SYSTEM_CACHE.get() {
+        if info.ram_gb <= 0.0 {
+            return None;
+        }
+        return Some((info.ram_gb * 1024.0, info.disks.len().max(1) as u32));
+    }
+    // first call before the async warm-up: read the disk file once and
+    // seed the memory cache with it, so later calls in this run stop
+    // paying a file read + JSON parse every time.
+    let info = load_system_cache()?;
     if info.ram_gb <= 0.0 {
         return None;
     }
-    Some((info.ram_gb * 1024.0, info.disks.len().max(1) as u32))
+    let out = (info.ram_gb * 1024.0, info.disks.len().max(1) as u32);
+    let _ = SYSTEM_CACHE.set(info);
+    Some(out)
 }
 
 // ---------------------------------------------------------------------------
@@ -258,16 +311,26 @@ const TOP_PROCESSES_TTL: std::time::Duration = std::time::Duration::from_secs(10
 /// How long a system-checks read stays fresh.
 const SYSTEM_CHECKS_TTL: std::time::Duration = std::time::Duration::from_secs(30);
 
+/// one background refresh in flight at a time per cache: rapid tab flips
+/// past the TTL used to spawn an unbounded burst of powershell.exe
+/// processes. A skipped spawn just serves the stale copy once more.
+static TOP_REFRESHING: AtomicBool = AtomicBool::new(false);
+static CHECKS_REFRESHING: AtomicBool = AtomicBool::new(false);
 /// top processes with TTL: returns the cached copy immediately when one
 /// exists (even stale) and refreshes in the background past the TTL.
 pub fn top_processes_cached() -> Result<Vec<TopProcess>, String> {
     if let Some(cached) = TOP_PROCESSES_CACHE.get() {
-        if !TOP_PROCESSES_CACHE.fresh_for(TOP_PROCESSES_TTL) {
-            // stale — serve the copy now, refresh in the background
+        // stale — serve the copy now, refresh in the background
+        if !TOP_PROCESSES_CACHE.fresh_for(TOP_PROCESSES_TTL)
+            && TOP_REFRESHING
+                .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
+                .is_ok()
+        {
             std::thread::spawn(|| {
                 if let Ok(fresh) = query_top_processes() {
                     TOP_PROCESSES_CACHE.set(fresh);
                 }
+                TOP_REFRESHING.store(false, Ordering::Relaxed);
             });
         }
         return Ok(cached);
@@ -291,11 +354,16 @@ pub fn top_processes_fresh() -> Result<Vec<TopProcess>, String> {
 /// System checks with TTL: same stale-while-revalidate pattern.
 pub fn system_checks_cached() -> Result<SystemChecks, String> {
     if let Some(cached) = SYSTEM_CHECKS_CACHE.get() {
-        if !SYSTEM_CHECKS_CACHE.fresh_for(SYSTEM_CHECKS_TTL) {
+        if !SYSTEM_CHECKS_CACHE.fresh_for(SYSTEM_CHECKS_TTL)
+            && CHECKS_REFRESHING
+                .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
+                .is_ok()
+        {
             std::thread::spawn(|| {
                 if let Ok(fresh) = query_system_checks() {
                     SYSTEM_CHECKS_CACHE.set(fresh);
                 }
+                CHECKS_REFRESHING.store(false, Ordering::Relaxed);
             });
         }
         return Ok(cached);
@@ -423,8 +491,11 @@ fn nvidia_vram_mb() -> Option<f64> {
     return None;
     #[cfg(windows)]
     {
+        // multi-GPU machines print one value per line ("8192\n8192"):
+        // parsing the whole blob as one number always failed and fell
+        // back to the 32-bit CIM field. The primary GPU is the first line.
         let text = String::from_utf8_lossy(&out.stdout);
-        text.trim().parse::<f64>().ok()
+        text.lines().next()?.trim().parse::<f64>().ok()
     }
 }
 
@@ -740,12 +811,14 @@ pub fn query_system_checks() -> Result<SystemChecks, String> {
 $scheme = (powercfg /getactivescheme) -join ' '
 "power|$scheme"
 $cs = Get-CimInstance Win32_ComputerSystem
-$pf = Get-CimInstance Win32_PageFileUsage | Select-Object -First 1
-if ($cs.AutomaticManagedPagefile) { "pagefile|auto|$($pf.AllocatedBaseSize)" }
-elseif ($pf) { "pagefile|manual|$($pf.AllocatedBaseSize)" }
+$pfs = Get-CimInstance Win32_PageFileUsage
+$total = ($pfs | Measure-Object -Property AllocatedBaseSize -Sum).Sum
+if ($null -eq $total) { $total = 0 }
+if ($cs.AutomaticManagedPagefile) { "pagefile|auto|$total" }
+elseif ($pfs) { "pagefile|manual|$total" }
 else { "pagefile|off|0" }
 $bat = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue
-if ($bat) { "battery|$($bat.BatteryStatus)" } else { "battery|none" }
+if ($bat) { $ac = ($bat.BatteryStatus -contains 2); "battery|yes|$ac" } else { "battery|none|" }
 $vt = (Get-CimInstance Win32_Processor | Select-Object -First 1).VirtualizationFirmwareEnabled
 "vt|$vt"
 "#)?;
@@ -778,10 +851,13 @@ $vt = (Get-CimInstance Win32_Processor | Select-Object -First 1).VirtualizationF
                 c.pagefile_ok = pagefile_ok(&c.pagefile_mode, c.pagefile_mb);
             }
             Some("battery") => {
-                let b = parts.next().unwrap_or("none").trim();
-                c.laptop = b != "none";
-                // BatteryStatus 2 = on AC; 1 = discharging
-                c.on_ac = !c.laptop || b == "2";
+                let present = parts.next().unwrap_or("none").trim();
+                c.laptop = present != "none";
+                // second field is the pre-computed "any battery on AC"
+                // (BatteryStatus 2); computed in PowerShell so multi-battery
+                // arrays ("2 2") can never break a string compare here.
+                let ac = parts.next().unwrap_or("").trim().to_ascii_lowercase();
+                c.on_ac = !c.laptop || ac == "true";
             }
             Some("vt") => {
                 // PowerShell prints True/False; empty = probe failed, keep the safe default
@@ -957,11 +1033,14 @@ pub fn s0_standby_present() -> bool {
 
 fn s0_available_in(powercfg_a: &str) -> bool {
     let lower = powercfg_a.to_ascii_lowercase();
-    let available = match lower.find("not available") {
-        Some(i) => &lower[..i],
-        None => &lower[..],
+    // the "not available" marker is English-only: on locales where it is
+    // absent we know NOTHING about which section S0 sits in, so the
+    // honest answer is NOT S0 (show the row; a flip that cannot work
+    // fails at verify time instead of hiding a working feature).
+    let Some(i) = lower.find("not available") else {
+        return false;
     };
-    available.contains("s0")
+    lower[..i].contains("s0")
 }
 
 /// The Tools power row state: On = a performance-class plan is active
@@ -1810,6 +1889,9 @@ mod tests {
         assert!(s0_available_in(s0));
         assert!(!s0_available_in("garbage"));
         assert!(!s0_available_in(""));
+        // non-English output with no marker: S0 may sit in the unavailable
+        // section in another language — unknown means NOT S0 (show the row)
+        assert!(!s0_available_in("Standby (S0 Low Power Idle)"));
     }
 
     #[test]

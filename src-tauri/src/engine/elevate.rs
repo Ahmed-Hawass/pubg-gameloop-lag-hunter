@@ -176,7 +176,12 @@ pub fn elevate_self(id: &str, value: u32) -> Result<u32, String> {
     unsafe {
         WaitForSingleObject(process, INFINITE);
         let mut code: u32 = 0;
-        GetExitCodeProcess(process, &mut code);
+        // the read itself can fail (invalid handle): an unread code
+        // must never pass as 0/success — fail loudly instead.
+        if GetExitCodeProcess(process, &mut code) == 0 {
+            CloseHandle(process);
+            return Err("could not read elevated child exit code".into());
+        }
         CloseHandle(process);
         Ok(code)
     }
@@ -218,7 +223,10 @@ pub fn elevate_pagefile_settings(
     unsafe {
         WaitForSingleObject(process, INFINITE);
         let mut code: u32 = 0;
-        GetExitCodeProcess(process, &mut code);
+        if GetExitCodeProcess(process, &mut code) == 0 {
+            CloseHandle(process);
+            return Err("could not read elevated child exit code".into());
+        }
         CloseHandle(process);
         Ok(code)
     }

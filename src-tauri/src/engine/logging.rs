@@ -31,7 +31,8 @@ fn logs_dir() -> PathBuf {
 fn log_path_in(dir: &Path) -> PathBuf {
     // one file per day: laghunter-2026-08-31.log
     let iso = sampler::iso_now(); // 2026-08-31T...
-    let date = &iso[0..10];
+    // never slice blindly: a malformed clock must not panic the logger itself
+    let date = iso.get(0..10).unwrap_or("unknown");
     dir.join(format!("laghunter-{date}.log"))
 }
 
@@ -43,7 +44,7 @@ fn write_line_to(dir: &Path, level: &str, msg: &str) {
     let _guard = LOG_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     let _ = fs::create_dir_all(dir);
     let iso = sampler::iso_now();
-    let clock = &iso[11..23];
+    let clock = iso.get(11..23).unwrap_or(&iso);
     if let Ok(mut f) = fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -151,7 +152,8 @@ pub fn init_panic_hook() {
             .open(log_path())
         {
             let iso = sampler::iso_now();
-            let _ = writeln!(f, "{} [PANIC] {}", &iso[11..23], msg);
+            let clock = iso.get(11..23).unwrap_or(&iso);
+            let _ = writeln!(f, "{clock} [PANIC] {msg}");
         }
     }));
 }
