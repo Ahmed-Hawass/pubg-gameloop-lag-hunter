@@ -24,7 +24,19 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   (last run plus last-30-days) with success lines in the technical log.
   The sweep never scans by itself (Scan is the only trigger), an
   all-unreadable scan reports a read failure instead of a clean drive,
-  and runs that free nothing leave the history untouched.
+  and runs that free nothing leave the history untouched. An opt-in
+  deep scan shares the card through a Quick versus Deep
+  toggle with one Scan button. Quick holds the three no-judgment
+  places (both temps plus update sharing); Deep gathers all nine
+  (those plus the bin, update leftovers, system logs older than 7
+  days, thumbnails, finished reports, and dumps older than 30 days).
+  Nothing deep is ever auto-ticked, and Clean takes only the ticked
+  rows of the visible set, measured and logged the same way. Recent
+  dumps and fresh logs are never touched. One toggle selects or
+  clears the visible list only (never the set hidden behind the mode).
+  Partial reads report no-data instead of a short sum, and admin
+  verdicts are measured by the elevated run itself (an unmeasurable
+  clean says so instead of printing 0).
 - Tools wears a Beta pill in the sidebar until v2 goes stable: the tab
   writes to Windows and ships early, so it stays labelled (the cards
   themselves carry no pill).

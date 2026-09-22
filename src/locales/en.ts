@@ -297,9 +297,13 @@ export const en = {
   cleanupRescan: "Scan again",
   cleanupClean: "Clean selected",
   cleanupCleaning: "Cleaning...",
+  cleanupSelectAll: "Select all",
+  cleanupDeselectAll: "Deselect all",
   cleanupNothing: "Nothing to clean: every measured place is already empty.",
   cleanupScanFailed: "The scan could not read this PC. Try again.",
   cleanupFreed: (mb: number) => `Freed ${mb} MB, measured before and after.`,
+  cleanupUnmeasured:
+    "Plus freed space Windows would not let us measure, so it stays out of the number above.",
   cleanupSelected: (mb: number) => `Selected: ${mb} MB.`,
   cleanupLastNever: "Never cleaned yet.",
   cleanupLast: (mb: number, when: string) => `Last clean: ${mb} MB on ${when}.`,
@@ -321,6 +325,25 @@ export const en = {
   cleanupCatDelivery: "Update sharing cache",
   cleanupCatDeliveryHint:
     "Windows Update files kept to share with other PCs on your network. Safe to delete, Windows re-downloads what it needs.",
+  /** opt-in deep scan: same card flips to its results, never auto-ticked */
+  cleanupDeepScan: "Deep scan",
+  cleanupModeQuick: "Quick",
+  cleanupModeDeep: "Deep",
+  cleanupCatThumb: "Thumbnail previews",
+  cleanupCatThumbHint:
+    "Cached image previews Windows rebuilds on its own. Safe to delete.",
+  cleanupCatReports: "Finished error reports",
+  cleanupCatReportsHint:
+    "Old Windows error reports already sent or abandoned. Safe to delete.",
+  cleanupCatDumps: "Old crash dumps",
+  cleanupCatDumpsHint:
+    "Crash memory files older than 30 days. Recent dumps are never touched, they may explain a fresh crash.",
+  cleanupCatDownload: "Update leftovers",
+  cleanupCatDownloadHint:
+    "Downloaded update files Windows no longer needs. Run after updates finish; Windows re-downloads what it still needs.",
+  cleanupCatLogs: "System log files",
+  cleanupCatLogsHint:
+    "Old Windows logs that pile up after updates. Files from the last 7 days are never touched.",
 
   // ---- about tab ----
   aboutTitle: "PUBG GameLoop Lag Hunter",

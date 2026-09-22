@@ -1,13 +1,15 @@
-// cleanup.rs — the Storage card's manual sweep: measure four safe places,
+// cleanup.rs — the Storage card's manual sweep: measure safe places,
 // delete only what the user ticked, report measured freed bytes.
 //
-// Scope is deliberately narrow (the anti-CCleaner lesson): user temp,
-// system temp, the recycle bin, and the Delivery Optimization cache.
-// No registry, no RAM boost, no WinSxS, no browser caches, no Downloads,
-// no shader/prefetch caches (rebuilding those CAUSES the first-load
-// hitches this tool diagnoses). Every category answers "which lag card
-// does a full drive cause?" (disk_wait / mem_low via pagefile pressure)
-// or it does not ship.
+// Scope is deliberately narrow (the anti-CCleaner lesson). Quick holds
+// the safe, self-renewing, no-judgment places (user temp, system temp,
+// Delivery Optimization cache). Deep holds what needs judgment (recycle
+// bin, update leftovers, system logs, thumbnails, finished reports,
+// stale dumps). No registry, no RAM boost, no WinSxS, no browser caches,
+// no personal Downloads, no shader/prefetch caches (rebuilding those
+// CAUSES the first-load hitches this tool diagnoses). Every category
+// answers "which lag card does a full drive cause?" (disk_wait / mem_low
+// via pagefile pressure) or it does not ship.
 //
 // Contract (the Tools contract): scan is read-only, clean runs only from
 // an explicit click, locked files are skipped (never forced), and the
@@ -22,20 +24,51 @@ pub const SYSTEM_TEMP_ID: &str = "system_temp";
 pub const RECYCLE_BIN_ID: &str = "recycle_bin";
 pub const DELIVERY_OPT_ID: &str = "delivery_opt";
 
-/// Elevated-run id: system temp + delivery cache need admin. The parent
+/// Elevated-run id: the admin places need admin. The parent
 /// measures before/after itself (verify by re-read); the child only
 /// deletes and exits with a code.
 pub const STORAGE_CLEAN_ID: &str = "storage-clean";
 
+/// Deep-scan ids (opt-in, always unticked by default). Same contract
+/// as the standard places: the bin (deletion is permanent, review
+/// first), update leftovers, system logs, thumbnail previews, finished
+/// error reports, and stale crash dumps. Everything else other cleaners
+/// offer stays out (see the module docs).
+pub const THUMB_CACHE_ID: &str = "thumb_cache";
+pub const ERROR_REPORTS_ID: &str = "error_reports";
+pub const OLD_MINIDUMPS_ID: &str = "old_minidumps";
+pub const UPDATE_DOWNLOAD_ID: &str = "update_download";
+pub const SYSTEM_LOGS_ID: &str = "system_logs";
+
 /// Categories that must go through elevation (the rest run unprivileged).
 pub fn is_admin_category(id: &str) -> bool {
-    id == SYSTEM_TEMP_ID || id == DELIVERY_OPT_ID
+    id == SYSTEM_TEMP_ID
+        || id == DELIVERY_OPT_ID
+        || id == ERROR_REPORTS_ID
+        || id == OLD_MINIDUMPS_ID
+        || id == UPDATE_DOWNLOAD_ID
+        || id == SYSTEM_LOGS_ID
+}
+
+/// Deep-scan membership: everything needs judgment (permanent deletion,
+/// timing, or diagnostic value), so nothing here is ever auto-ticked.
+pub fn is_deep_category(id: &str) -> bool {
+    id == RECYCLE_BIN_ID
+        || id == THUMB_CACHE_ID
+        || id == ERROR_REPORTS_ID
+        || id == OLD_MINIDUMPS_ID
+        || id == UPDATE_DOWNLOAD_ID
+        || id == SYSTEM_LOGS_ID
 }
 
 /// Every id the scan/clean path accepts. Anything else is refused before
 /// anything runs (no user-supplied paths ever cross this module).
 pub fn is_cleanup_id(id: &str) -> bool {
-    id == USER_TEMP_ID || id == SYSTEM_TEMP_ID || id == RECYCLE_BIN_ID || id == DELIVERY_OPT_ID
+    id == USER_TEMP_ID
+        || id == SYSTEM_TEMP_ID
+        || id == RECYCLE_BIN_ID
+        || id == DELIVERY_OPT_ID
+        || is_deep_category(id)
 }
 
 /// One measured place: None bytes = could not be read (honest no-data).
@@ -46,10 +79,13 @@ pub struct CleanupCategory {
 }
 
 /// Measured result per category: before minus after, saturating.
+/// None = the freed bytes could not be measured (an admin place the
+/// unprivileged parent cannot re-read and the sidecar did not cover):
+/// unknown, never zero.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct CleanupResult {
     pub id: String,
-    pub freed_bytes: u64,
+    pub freed_bytes: Option<u64>,
 }
 
 /// Progress events pushed to the UI over the IPC channel: one per
@@ -85,29 +121,41 @@ pub fn scan() -> CleanupScan {
     scan_with(|_, _, _| {})
 }
 
-/// One scan step: category id plus its measuring function.
-type ScanStep = (&'static str, fn() -> Option<u64>);
-
-/// Scan with a per-category progress callback (index, total, id).
-pub fn scan_with(progress: impl Fn(u64, u64, &str)) -> CleanupScan {
-    let mut categories = Vec::new();
-    let steps: [ScanStep; 4] = [
-        (USER_TEMP_ID, || user_temp_dir().and_then(dir_size_capped)),
-        (
-            SYSTEM_TEMP_ID,
-            || system_temp_dir().and_then(dir_size_capped),
-        ),
-        (RECYCLE_BIN_ID, recycle_bin_bytes),
+/// One measuring function per category id: the single source every
+/// scan, clean-verdict, and elevated-sidecar read goes through, so the
+/// three can never disagree about what a category means.
+fn measure_category(id: &str) -> Option<u64> {
+    match id {
+        USER_TEMP_ID => user_temp_dir().and_then(dir_size_capped),
+        SYSTEM_TEMP_ID => system_temp_dir().and_then(dir_size_capped),
+        RECYCLE_BIN_ID => recycle_bin_bytes(),
         // a machine that never cached peer data has no dir at all:
         // that is 0 cleanable bytes (a fact), not unreadable.
-        (DELIVERY_OPT_ID, delivery_opt_bytes),
-    ];
-    let total = steps.len() as u64;
-    for (i, (id, measure)) in steps.into_iter().enumerate() {
+        DELIVERY_OPT_ID => delivery_opt_bytes(),
+        THUMB_CACHE_ID => thumb_cache_bytes(),
+        ERROR_REPORTS_ID => error_reports_bytes(),
+        OLD_MINIDUMPS_ID => old_minidumps_bytes(),
+        UPDATE_DOWNLOAD_ID => update_download_bytes(),
+        SYSTEM_LOGS_ID => system_logs_bytes(),
+        _ => None,
+    }
+}
+
+/// Scan with a per-category progress callback (index, total, id).
+/// Quick holds the three safe, self-renewing places only: the bin left
+/// for Deep (its deletion is permanent, review first).
+pub fn scan_with(progress: impl Fn(u64, u64, &str)) -> CleanupScan {
+    scan_ids_with(&[USER_TEMP_ID, SYSTEM_TEMP_ID, DELIVERY_OPT_ID], progress)
+}
+
+fn scan_ids_with(ids: &[&str], progress: impl Fn(u64, u64, &str)) -> CleanupScan {
+    let mut categories = Vec::new();
+    let total = ids.len() as u64;
+    for (i, id) in ids.iter().enumerate() {
         progress(i as u64, total, id);
         categories.push(CleanupCategory {
-            id: id.into(),
-            bytes: measure(),
+            id: (*id).into(),
+            bytes: measure_category(id),
         });
     }
     CleanupScan {
@@ -121,6 +169,29 @@ fn delivery_opt_bytes() -> Option<u64> {
         None => Some(0),
         Some(dir) => dir_size_capped(dir),
     }
+}
+
+/// Deep scan: all nine places (the quick three plus the six
+/// judgment-needed ones). Same shape as `scan` (measured categories +
+/// shared history), own progress steps.
+pub fn deep_scan_with(progress: impl Fn(u64, u64, &str)) -> CleanupScan {
+    // deep gathers EVERYTHING (the three quick places plus the six
+    // judgment-needed ones): Deep mode is the complete picture, Quick
+    // is the fast subset. Same rows, same contract, one superset.
+    scan_ids_with(
+        &[
+            USER_TEMP_ID,
+            SYSTEM_TEMP_ID,
+            DELIVERY_OPT_ID,
+            RECYCLE_BIN_ID,
+            UPDATE_DOWNLOAD_ID,
+            SYSTEM_LOGS_ID,
+            THUMB_CACHE_ID,
+            ERROR_REPORTS_ID,
+            OLD_MINIDUMPS_ID,
+        ],
+        progress,
+    )
 }
 
 /// Clean exactly the given category ids (already validated). Measures
@@ -146,17 +217,24 @@ pub fn clean_selected_with(
         }
     }
     let before = scan_map();
-    // admin categories first, through one UAC prompt for the whole click
+    // admin categories first, through one UAC prompt for the whole click.
+    // The parent often cannot re-read admin places itself (denied
+    // listing), so the elevated child measures them with ITS eyes and
+    // leaves the numbers in the sidecar; without it an admin verdict
+    // would read 0 after a real multi-GB clean (a lie, never a number).
+    let mut elevated: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
     let admin: Vec<String> = ids.iter().filter(|id| is_admin_category(id)).cloned().collect();
     if !admin.is_empty() {
         // one UAC prompt for the whole click; a denied prompt is
         // "cancelled" (quiet), a post-consent failure is a real error
+        clear_clean_sidecar();
         let code = super::elevate::elevate_storage_clean(&admin)?;
         super::elevate::map_exit_code(code)?;
+        elevated = take_clean_sidecar();
     }
     let total = ids.len() as u64;
-    // unprivileged categories run here (user temp + recycle bin); admin
-    // ones were already handled above, their step only moves the bar
+    // unprivileged categories run here (user temp, bin, thumbnails);
+    // admin ones were already handled above, their step only moves the bar
     for (i, id) in ids.iter().enumerate() {
         progress(i as u64, total, id);
         if !is_admin_category(id) {
@@ -167,12 +245,18 @@ pub fn clean_selected_with(
     let results: Vec<CleanupResult> = ids
         .iter()
         .map(|id| {
-            let freed = before
-                .get(id.as_str())
-                .copied()
-                .flatten()
-                .unwrap_or(0)
-                .saturating_sub(after.get(id.as_str()).copied().flatten().unwrap_or(0));
+            // sidecar first (measured elevated, authoritative for admin
+            // places); otherwise the unprivileged before/after diff when
+            // both ends are readable; otherwise unknown, never zero.
+            let freed = elevated.get(id.as_str()).copied().or_else(|| {
+                match (
+                    before.get(id.as_str()).copied().flatten(),
+                    after.get(id.as_str()).copied().flatten(),
+                ) {
+                    (Some(b), Some(a)) => Some(b.saturating_sub(a)),
+                    _ => None,
+                }
+            });
             CleanupResult {
                 id: id.clone(),
                 freed_bytes: freed,
@@ -181,6 +265,79 @@ pub fn clean_selected_with(
         .collect();
     record_history(&results);
     Ok(results)
+}
+
+/// Fixed sidecar for the elevated clean's measurements (parent deletes
+/// before spawning, reads after the child exits). Predetermined path,
+/// never user-supplied: nothing crosses the boundary but category words.
+/// Stale files cannot linger: the parent clears first on every run, and
+/// the UI single-flights Clean behind its busy gate.
+fn clean_sidecar_path() -> PathBuf {
+    std::env::temp_dir().join("laghunter-clean-sidecar.json")
+}
+
+fn clear_clean_sidecar() {
+    let _ = std::fs::remove_file(clean_sidecar_path());
+}
+
+/// Read (and remove) the sidecar the elevated child left: category id
+/// to freed bytes. Missing or corrupt means unknown, never zero.
+fn take_clean_sidecar() -> std::collections::HashMap<String, u64> {
+    let path = clean_sidecar_path();
+    let text = std::fs::read_to_string(&path).unwrap_or_default();
+    let _ = std::fs::remove_file(&path);
+    parse_clean_sidecar(&text)
+}
+
+/// Parse sidecar JSON: admin ids with u64 values only. A smuggled
+/// user_temp entry, a non-number, or garbage anywhere fails the entry
+/// (or the whole file): the parent falls back to unknown, never to a
+/// number it did not earn.
+fn parse_clean_sidecar(text: &str) -> std::collections::HashMap<String, u64> {
+    let mut out = std::collections::HashMap::new();
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(text) {
+        if let Some(map) = v.as_object() {
+            for (k, val) in map {
+                if is_admin_category(k) {
+                    if let Some(n) = val.as_u64() {
+                        out.insert(k.clone(), n);
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Elevated-child entry: measure the admin categories with elevated
+/// eyes, delete, measure again, and leave per-category freed bytes in
+/// the sidecar for the parent's verdict. Only pairs with both ends
+/// readable are recorded; the parent treats the rest as unknown.
+pub fn run_admin_clean(ids: &[String]) -> Result<(), String> {
+    let mut before = std::collections::HashMap::new();
+    for id in ids {
+        if !is_admin_category(id) {
+            return Err(format!("refused outside elevated scope: {id}"));
+        }
+        before.insert(id.clone(), measure_category(id));
+    }
+    clean_admin(ids)?;
+    let mut freed = serde_json::Map::new();
+    for id in ids {
+        if let (Some(Some(b)), Some(a)) = (before.get(id), measure_category(id)) {
+            freed.insert(id.clone(), serde_json::Value::from(b.saturating_sub(a)));
+        }
+    }
+    let path = clean_sidecar_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    // best effort: a lost sidecar only degrades the verdict to unknown
+    let _ = super::storage::write_file_atomic(
+        &path,
+        serde_json::to_string(&freed).unwrap_or_default().as_bytes(),
+    );
+    Ok(())
 }
 
 /// Child-side entry for the elevated run: deletes the CONTENTS of the
@@ -207,10 +364,67 @@ pub fn clean_admin(ids: &[String]) -> Result<(), String> {
                     empty_dir_contents(&dir);
                 }
             }
+            ERROR_REPORTS_ID => {
+                for dir in wer_dirs() {
+                    empty_dir_contents(&dir);
+                }
+            }
+            OLD_MINIDUMPS_ID => {
+                if let Some(dir) = minidump_dir() {
+                    remove_old_files(&dir, MINIDUMP_KEEP_MS);
+                }
+            }
+            UPDATE_DOWNLOAD_ID => {
+                if let Some(dir) = update_download_dir() {
+                    empty_dir_contents(&dir);
+                }
+            }
+            SYSTEM_LOGS_ID => {
+                if let Some(dir) = syslog_dir() {
+                    remove_old_files(&dir, SYSLOG_KEEP_MS);
+                }
+            }
             _ => return Err(format!("refused outside elevated scope: {id}")),
         }
     }
     Ok(())
+}
+
+/// Delete only files older than `keep_ms` (direct children). Fresh
+/// files, links and dirs are left alone; locked files are skipped.
+fn remove_old_files(dir: &Path, keep_ms: i64) {
+    let Ok(canonical) = dir.canonicalize() else {
+        return;
+    };
+    let now = super::types::iso_ms(&super::sampler::iso_now()).unwrap_or(0);
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Ok(meta) = std::fs::symlink_metadata(&path) else {
+            continue;
+        };
+        if meta.is_symlink() || meta.is_dir() {
+            continue;
+        }
+        if !path
+            .canonicalize()
+            .map(|c| c.starts_with(&canonical))
+            .unwrap_or(false)
+        {
+            continue;
+        }
+        let old = meta
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| now.saturating_sub(d.as_millis() as i64) > keep_ms)
+            .unwrap_or(false);
+        if old {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
 }
 
 fn scan_map() -> std::collections::HashMap<String, Option<u64>> {
@@ -274,7 +488,9 @@ fn record_history(results: &[CleanupResult]) {
 }
 
 fn record_history_in(path: &Path, results: &[CleanupResult]) {
-    let freed: u64 = results.iter().map(|r| r.freed_bytes).sum();
+    // unknown verdicts count as 0 in the memory total (the memory tracks
+    // measured bytes; an unmeasured run keeps its honesty in the UI note)
+    let freed: u64 = results.iter().map(|r| r.freed_bytes.unwrap_or(0)).sum();
     // a run that freed nothing updates nothing: recording it would paint
     // "last clean: 0 MB" over a real older result (noise, not memory)
     if freed == 0 {
@@ -321,7 +537,47 @@ fn clean_one_unprivileged(id: &str) {
         RECYCLE_BIN_ID => {
             empty_recycle_bin();
         }
+        THUMB_CACHE_ID => {
+            if let Some(dir) = explorer_dir() {
+                remove_thumb_caches(&dir);
+            }
+        }
         _ => {}
+    }
+}
+
+/// Delete thumbcache_*.db files only (same pattern as the measure, so
+/// the freed number can only come from what was counted).
+fn remove_thumb_caches(dir: &Path) {
+    let Ok(canonical) = dir.canonicalize() else {
+        return;
+    };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+        if !(name.starts_with("thumbcache_") && name.ends_with(".db")) {
+            continue;
+        }
+        let Ok(meta) = std::fs::symlink_metadata(&path) else {
+            continue;
+        };
+        if meta.is_symlink() || meta.is_dir() {
+            continue;
+        }
+        if !path
+            .canonicalize()
+            .map(|c| c.starts_with(&canonical))
+            .unwrap_or(false)
+        {
+            continue;
+        }
+        let _ = std::fs::remove_file(&path);
     }
 }
 
@@ -357,13 +613,186 @@ fn delivery_opt_dir() -> Option<PathBuf> {
     None
 }
 
+/// Crash dumps count only past this age: a fresh dump is live crash
+/// evidence (the very thing this tool's diagnoses may need), a stale
+/// one is junk. Documented in one place, used by measure and delete.
+const MINIDUMP_KEEP_MS: i64 = 30 * 86_400 * 1000;
+
+#[cfg(windows)]
+fn explorer_dir() -> Option<PathBuf> {
+    std::env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .map(|p| p.join(r"Microsoft\Windows\Explorer"))
+        .filter(|p| p.is_dir())
+}
+
+#[cfg(not(windows))]
+fn explorer_dir() -> Option<PathBuf> {
+    None
+}
+
+#[cfg(windows)]
+fn wer_dirs() -> Vec<PathBuf> {
+    // finished reports only (Queue + Archive): the live `ReportQueue`
+    // staging subdir for an in-flight report is left to Windows, and
+    // anything outside these two dirs is never touched
+    let base: PathBuf = [r"C:\ProgramData", r"Microsoft\Windows\WER"]
+        .iter()
+        .collect();
+    [base.join("ReportQueue"), base.join("ReportArchive")]
+        .into_iter()
+        .filter(|p| p.is_dir())
+        .collect()
+}
+
+#[cfg(not(windows))]
+fn wer_dirs() -> Vec<PathBuf> {
+    Vec::new()
+}
+
+#[cfg(windows)]
+fn minidump_dir() -> Option<PathBuf> {
+    let dir = PathBuf::from(r"C:\Windows\Minidump");
+    dir.is_dir().then_some(dir)
+}
+
+#[cfg(not(windows))]
+fn minidump_dir() -> Option<PathBuf> {
+    None
+}
+
+/// Downloaded update files waiting in (or left behind by) Windows
+/// Update. Deleting mid-install only costs a re-download, but the hint
+/// still advises running after updates finish: politeness over repair.
+#[cfg(windows)]
+fn update_download_dir() -> Option<PathBuf> {
+    let windir = std::env::var_os("windir").map(PathBuf::from)?;
+    let dir = windir.join(r"SoftwareDistribution\Download");
+    dir.is_dir().then_some(dir)
+}
+
+#[cfg(not(windows))]
+fn update_download_dir() -> Option<PathBuf> {
+    None
+}
+
+/// Recent logs stay out of both measure and delete (a fresh failure's
+/// trail may be under diagnosis right now); only older files count.
+const SYSLOG_KEEP_MS: i64 = 7 * 86_400 * 1000;
+
+#[cfg(windows)]
+fn syslog_dir() -> Option<PathBuf> {
+    let dir = PathBuf::from(r"C:\Windows\Logs\CBS");
+    dir.is_dir().then_some(dir)
+}
+
+#[cfg(not(windows))]
+fn syslog_dir() -> Option<PathBuf> {
+    None
+}
+
+fn update_download_bytes() -> Option<u64> {
+    match update_download_dir() {
+        // never staged an update here: 0 cleanable bytes, not unreadable
+        None => Some(0),
+        Some(dir) => dir_size_capped(dir),
+    }
+}
+
+fn system_logs_bytes() -> Option<u64> {
+    old_files_size(&syslog_dir()?, SYSLOG_KEEP_MS)
+}
+
+fn thumb_cache_bytes() -> Option<u64> {
+    let dir = explorer_dir()?;
+    let mut total = 0u64;
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return None;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        // thumbcache_*.db only: icon caches and anything else in this
+        // dir stay exactly as they are (never a sibling casualty)
+        let name = path.file_name()?.to_string_lossy();
+        if !(name.starts_with("thumbcache_") && name.ends_with(".db")) {
+            continue;
+        }
+        let Ok(meta) = std::fs::symlink_metadata(&path) else {
+            continue;
+        };
+        if meta.is_symlink() || meta.is_dir() {
+            continue;
+        }
+        total = total.saturating_add(meta.len());
+    }
+    Some(total)
+}
+
+fn error_reports_bytes() -> Option<u64> {
+    let dirs = wer_dirs();
+    if dirs.is_empty() {
+        // never reported on this machine: 0 cleanable bytes, not unreadable
+        return Some(0);
+    }
+    // every existing root must read cleanly: filter_map would silently
+    // drop a denied dir and present the short sum as exact (a denied WER
+    // branch once read as "almost empty")
+    let mut total = 0u64;
+    for dir in dirs {
+        total = total.saturating_add(dir_size_capped(dir)?);
+    }
+    Some(total)
+}
+
+/// Stale dumps only: fresh ones (inside MINIDUMP_KEEP_MS) are excluded
+/// from BOTH measure and delete, so a recent crash's evidence can never
+/// be swept away by its own diagnostician.
+fn old_minidumps_bytes() -> Option<u64> {
+    old_files_size(&minidump_dir()?, MINIDUMP_KEEP_MS)
+}
+
+/// Sum of files older than `keep_ms` (direct children only: dumps land
+/// flat in this dir). Unreadable mtimes count as fresh (skip, never
+/// delete what cannot be dated). An unreadable root is None (a missing
+/// CBS/Minidump listing must read "--", never 0).
+fn old_files_size(dir: &Path, keep_ms: i64) -> Option<u64> {
+    let now = super::types::iso_ms(&super::sampler::iso_now()).unwrap_or(0);
+    let mut total = 0u64;
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return None;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Ok(meta) = std::fs::symlink_metadata(&path) else {
+            continue;
+        };
+        if meta.is_symlink() || meta.is_dir() {
+            continue;
+        }
+        let old = meta
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| now.saturating_sub(d.as_millis() as i64) > keep_ms)
+            .unwrap_or(false);
+        if old {
+            total = total.saturating_add(meta.len());
+        }
+    }
+    Some(total)
+}
+
 // ---- measurement ----------------------------------------------------------
 
 /// Recursive dir size in bytes. Read-only, never follows symlinks, depth
-/// capped (a hostile link farm cannot loop it). Errors (locked files,
-/// denied entries) are skipped: the number is "at least this much", and
-/// the clean step measures again anyway.
+/// capped (a hostile link farm cannot loop it). Vanished files (raced
+/// deletion) are skipped silently; DENIED entries poison the whole
+/// measurement to None: a partial sum parading as exact is how a bin
+/// full of denied WER subdirs once read as "almost empty". Callers
+/// render None as "--", never as 0.
 fn dir_size_capped(root: PathBuf) -> Option<u64> {
+    use std::io::ErrorKind;
+    let denied = |e: &std::io::Error| e.kind() == ErrorKind::PermissionDenied;
     let mut total: u64 = 0;
     let mut stack: Vec<(PathBuf, u8)> = vec![(root, 0)];
     let mut seen_any = false;
@@ -371,14 +800,20 @@ fn dir_size_capped(root: PathBuf) -> Option<u64> {
         if depth > 64 {
             continue;
         }
-        let Ok(entries) = std::fs::read_dir(&dir) else {
-            continue;
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(entries) => entries,
+            // a denied root was already None before; a denied subdir
+            // poisons just as honestly
+            Err(e) if denied(&e) => return None,
+            Err(_) => continue,
         };
         seen_any = true;
         for entry in entries.flatten() {
             let path = entry.path();
-            let Ok(meta) = std::fs::symlink_metadata(&path) else {
-                continue;
+            let meta = match std::fs::symlink_metadata(&path) {
+                Ok(meta) => meta,
+                Err(e) if denied(&e) => return None,
+                Err(_) => continue,
             };
             if meta.is_symlink() {
                 continue;
@@ -399,27 +834,40 @@ fn dir_size_capped(root: PathBuf) -> Option<u64> {
 /// items' `Size` property, which folders do not carry: a 5GB folder in
 /// the bin read as a fraction of itself. Missing bin dirs count 0;
 /// denied entries are skipped like everywhere else.
+/// Every fixed drive's bin root (shared by measure and display, so the
+/// shown path can never drift from the measured one).
 #[cfg(windows)]
-fn recycle_bin_bytes() -> Option<u64> {
-    let drives = super::system::fixed_drives();
-    if drives.is_empty() {
-        return None;
-    }
-    let roots: Vec<PathBuf> = drives
+fn recycle_roots() -> Vec<PathBuf> {
+    super::system::fixed_drives()
         .iter()
         .map(|d| PathBuf::from(format!("{d}\\")) .join("$Recycle.Bin"))
-        .collect();
-    Some(recycle_bin_bytes_in(&roots))
+        .collect()
+}
+
+#[cfg(not(windows))]
+fn recycle_roots() -> Vec<PathBuf> {
+    Vec::new()
+}
+
+#[cfg(windows)]
+fn recycle_bin_bytes() -> Option<u64> {
+    if super::system::fixed_drives().is_empty() {
+        return None;
+    }
+    recycle_bin_bytes_in(&recycle_roots())
 }
 
 /// Sum helper, roots injected for tests (a fake bin tree with nested
 /// folders and known sizes proves folders are counted, the COM bug).
-fn recycle_bin_bytes_in(roots: &[PathBuf]) -> u64 {
-    roots
-        .iter()
-        .filter(|r| r.is_dir())
-        .filter_map(|r| dir_size_capped(r.clone()))
-        .fold(0u64, |a, b| a.saturating_add(b))
+/// Missing roots count 0 (no bin on that drive); an existing but
+/// denied root poisons the whole answer to None (same rule as the
+/// walker: a short sum must never parade as exact).
+fn recycle_bin_bytes_in(roots: &[PathBuf]) -> Option<u64> {
+    let mut total = 0u64;
+    for root in roots.iter().filter(|r| r.is_dir()) {
+        total = total.saturating_add(dir_size_capped(root.clone())?);
+    }
+    Some(total)
 }
 
 #[cfg(not(windows))]
@@ -593,19 +1041,125 @@ mod tests {
         std::fs::write(sid.join("loose.bin"), vec![0u8; 100]).unwrap();
         std::fs::write(sid.join("folder").join("deep.bin"), vec![0u8; 50]).unwrap();
         let probe = root.clone();
-        assert_eq!(recycle_bin_bytes_in(std::slice::from_ref(&probe)), 150);
+        assert_eq!(
+            recycle_bin_bytes_in(std::slice::from_ref(&probe)),
+            Some(150)
+        );
         // missing roots count 0, never an error
         let missing = root.join("no-such-drive-root");
-        assert_eq!(recycle_bin_bytes_in(std::slice::from_ref(&missing)), 0);
+        assert_eq!(
+            recycle_bin_bytes_in(std::slice::from_ref(&missing)),
+            Some(0)
+        );
         let _ = std::fs::remove_dir_all(root.parent().unwrap());
     }
 
     #[test]
-    fn scan_returns_all_four_categories() {
+    fn deep_ids_join_the_contract() {
+        for id in [THUMB_CACHE_ID, ERROR_REPORTS_ID, OLD_MINIDUMPS_ID] {
+            assert!(is_cleanup_id(id), "{id} must be accepted");
+            assert!(is_deep_category(id), "{id} must be deep");
+        }
+        for id in [USER_TEMP_ID, SYSTEM_TEMP_ID, DELIVERY_OPT_ID] {
+            assert!(!is_deep_category(id), "{id} must stay standard");
+        }
+        // the bin moved to Deep: permanent deletion needs review first
+        assert!(is_deep_category(RECYCLE_BIN_ID));
+        // admin scope: reports + stale dumps need elevation, thumbnail
+        // previews are the user's own files
+        assert!(!is_admin_category(THUMB_CACHE_ID));
+        assert!(is_admin_category(ERROR_REPORTS_ID));
+        assert!(is_admin_category(OLD_MINIDUMPS_ID));
+        // the child still refuses everything outside admin scope
+        assert!(clean_admin(&[THUMB_CACHE_ID.to_string()]).is_err());
+    }
+
+    #[test]
+    fn minidump_age_gate_keeps_fresh_evidence() {
+        // old dump counts (and deletes), fresh dump is invisible to both
+        let dir = temp_workdir("minidump");
+        let old_path = dir.join("old.dmp");
+        let fresh_path = dir.join("fresh.dmp");
+        std::fs::write(&old_path, vec![0u8; 100]).unwrap();
+        std::fs::write(&fresh_path, vec![0u8; 50]).unwrap();
+        // backdate the old one 40 days (past the 30-day keep window)
+        let old_time = std::time::SystemTime::now() - std::time::Duration::from_secs(40 * 86_400);
+        std::fs::File::options()
+            .write(true)
+            .open(&old_path)
+            .unwrap()
+            .set_modified(old_time)
+            .unwrap();
+        assert_eq!(old_files_size(&dir, MINIDUMP_KEEP_MS), Some(100));
+        // an unreadable root is no-data, never 0
+        assert_eq!(
+            old_files_size(&dir.join("no-such-dir"), MINIDUMP_KEEP_MS),
+            None
+        );
+        remove_old_files(&dir, MINIDUMP_KEEP_MS);
+        assert!(!old_path.exists());
+        assert!(fresh_path.exists(), "fresh dumps must survive the sweep");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn thumb_pattern_touches_only_its_own_files() {
+        let dir = temp_workdir("thumb");
+        std::fs::write(dir.join("thumbcache_256.db"), vec![0u8; 100]).unwrap();
+        std::fs::write(dir.join("thumbcache_idx.db"), vec![0u8; 50]).unwrap();
+        std::fs::write(dir.join("iconcache_16.db"), vec![0u8; 1000]).unwrap();
+        std::fs::write(dir.join("other.txt"), "x").unwrap();
+        remove_thumb_caches(&dir);
+        assert!(!dir.join("thumbcache_256.db").exists());
+        assert!(!dir.join("thumbcache_idx.db").exists());
+        assert!(dir.join("iconcache_16.db").exists(), "icon caches stay");
+        assert!(dir.join("other.txt").exists(), "siblings stay");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn deep_scan_gathers_all_nine_places() {
+        // Deep mode is the complete picture: the three quick places
+        // plus the six judgment-needed ones, quick first like the
+        // quick list
+        let cats = deep_scan_with(|_, _, _| {}).categories;
+        let ids: Vec<&str> = cats.iter().map(|c| c.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            vec![
+                USER_TEMP_ID,
+                SYSTEM_TEMP_ID,
+                DELIVERY_OPT_ID,
+                RECYCLE_BIN_ID,
+                UPDATE_DOWNLOAD_ID,
+                SYSTEM_LOGS_ID,
+                THUMB_CACHE_ID,
+                ERROR_REPORTS_ID,
+                OLD_MINIDUMPS_ID,
+            ]
+        );
+    }
+
+    #[test]
+    fn quick_scan_holds_only_the_no_judgment_places() {
+        // the bin left Quick: its deletion is permanent, review first
         let cats = scan().categories;
         let mut ids: Vec<&str> = cats.iter().map(|c| c.id.as_str()).collect();
         ids.sort();
-        assert_eq!(ids, vec![DELIVERY_OPT_ID, RECYCLE_BIN_ID, SYSTEM_TEMP_ID, USER_TEMP_ID]);
+        assert_eq!(ids, vec![DELIVERY_OPT_ID, SYSTEM_TEMP_ID, USER_TEMP_ID]);
+        assert!(!ids.contains(&RECYCLE_BIN_ID));
+    }
+
+    #[test]
+    fn new_deep_ids_join_the_contract() {
+        for id in [UPDATE_DOWNLOAD_ID, SYSTEM_LOGS_ID] {
+            assert!(is_cleanup_id(id), "{id} must be accepted");
+            assert!(is_deep_category(id), "{id} must be deep");
+            assert!(is_admin_category(id), "{id} must elevate");
+        }
+        // NOTE: clean_admin itself is never invoked here: with a valid
+        // admin id it would REALLY delete on a Windows CI box. Scope
+        // refusal is covered by clean_admin_refuses_non_admin_scope.
     }
 
     #[test]
@@ -618,7 +1172,7 @@ mod tests {
             &path,
             &[CleanupResult {
                 id: USER_TEMP_ID.into(),
-                freed_bytes: 10 * 1024 * 1024,
+                freed_bytes: Some(10 * 1024 * 1024),
             }],
         );
         let totals = history_totals_in(&path);
@@ -629,7 +1183,7 @@ mod tests {
             &path,
             &[CleanupResult {
                 id: RECYCLE_BIN_ID.into(),
-                freed_bytes: 5,
+                freed_bytes: Some(5),
             }],
         );
         let totals = history_totals_in(&path);
@@ -651,7 +1205,7 @@ mod tests {
             &path,
             &[CleanupResult {
                 id: USER_TEMP_ID.into(),
-                freed_bytes: 7,
+                freed_bytes: Some(7),
             }],
         );
         let body = std::fs::read_to_string(&path).unwrap();
@@ -664,6 +1218,24 @@ mod tests {
     }
 
     #[test]
+    fn sidecar_trusts_admin_numbers_only() {
+        // the parent trusts the child's numbers only for admin ids with
+        // u64 values; everything else falls back to unknown
+        let out = parse_clean_sidecar(
+            r#"{"system_temp": 100, "user_temp": 999, "nope": 5, "delivery_opt": "x"}"#,
+        );
+        assert_eq!(out.get("system_temp"), Some(&100));
+        assert!(!out.contains_key("user_temp"), "smuggled unprivileged id refused");
+        assert!(!out.contains_key("nope"), "unknown id refused");
+        assert!(
+            !out.contains_key("delivery_opt"),
+            "non-number value refused"
+        );
+        assert!(parse_clean_sidecar("not json").is_empty());
+        assert!(parse_clean_sidecar("").is_empty());
+    }
+
+    #[test]
     fn zero_freed_runs_record_nothing() {
         // a clean that measured zero must not overwrite "last clean"
         // with a 0 MB entry (and must not even create the file)
@@ -672,7 +1244,7 @@ mod tests {
             &path,
             &[CleanupResult {
                 id: USER_TEMP_ID.into(),
-                freed_bytes: 0,
+                freed_bytes: Some(0),
             }],
         );
         assert!(

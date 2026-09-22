@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronDown, Database, Expand, Gamepad2, Info, Monitor, Mouse, Recycle, SlidersHorizontal, Trash2, Video, AppWindow, Zap } from "lucide-react";
 import { Button, Dialog, EmptyState, MODAL_OPEN_EVENT, APP_DIALOG_OPEN_EVENT } from "../components/components";
-import { api, type CleanupResult, type CleanupScan, type PagefileSettings, type RowState } from "../bridge";
+import { api, type CleanupCategory, type CleanupResult, type CleanupScan, type PagefileSettings, type RowState } from "../bridge";
 import { errorDialog } from "../errors";
 import { useLang } from "../i18n";
 import spotTweaksDark from "../assets/spot-system-tweaks-dark.svg?url";
@@ -185,6 +185,15 @@ export function ToolsView(props: {
   /** the sweep collapses under its summary row like the page file editor
       (the section never opens itself: only a tap expands it) */
   const [clOpen, setClOpen] = useState(false);
+  /** deep scan answer (null = never asked). Deep places are NEVER
+      auto-ticked, however big they measure. The card flips to
+      whichever scan ran last: one list visible, one selection shared. */
+  const [clDeep, setClDeep] = useState<CleanupScan | null>(null);
+  const [clDeepError, setClDeepError] = useState<string | null>(null);
+  /** scan mode doubles as the visible set: one toggle, one Scan button,
+      no twin buttons. A completed scan flips the mode to its own
+      results; flipping the toggle by hand only switches the display. */
+  const [clMode, setClMode] = useState<"quick" | "deep">("quick");
   /** live progress: current step; phase tells scan apart from clean */
   const [clProg, setClProg] = useState<{ index: number; total: number; id: string } | null>(null);
   const [clPhase, setClPhase] = useState<"scan" | "clean" | null>(null);
@@ -460,7 +469,7 @@ export function ToolsView(props: {
   /** sweep helpers: machine id to translated name/hint, measured bytes
       to a Latin-unit size (units stay Latin in Arabic, like every other
       measurement), and the scan/clean runners with the ref busy gate */
-  // the backend only ever sends the four known ids; an unknown one
+  // the backend only ever sends the known ids; an unknown one
   // falls back to the raw id itself (never a sibling's name)
   const clName = (id: string) =>
     id === "user_temp"
@@ -471,7 +480,17 @@ export function ToolsView(props: {
           ? t.cleanupCatRecycle
           : id === "delivery_opt"
             ? t.cleanupCatDelivery
-            : id;
+            : id === "thumb_cache"
+              ? t.cleanupCatThumb
+              : id === "error_reports"
+                ? t.cleanupCatReports
+                : id === "old_minidumps"
+                  ? t.cleanupCatDumps
+                  : id === "update_download"
+                    ? t.cleanupCatDownload
+                    : id === "system_logs"
+                      ? t.cleanupCatLogs
+                      : id;
   const clHintBody = (id: string) =>
     id === "user_temp"
       ? t.cleanupCatUserTempHint
@@ -481,7 +500,17 @@ export function ToolsView(props: {
           ? t.cleanupCatRecycleHint
           : id === "delivery_opt"
             ? t.cleanupCatDeliveryHint
-            : t.cleanupDesc;
+            : id === "thumb_cache"
+              ? t.cleanupCatThumbHint
+              : id === "error_reports"
+                ? t.cleanupCatReportsHint
+                : id === "old_minidumps"
+                  ? t.cleanupCatDumpsHint
+                  : id === "update_download"
+                    ? t.cleanupCatDownloadHint
+                    : id === "system_logs"
+                      ? t.cleanupCatLogsHint
+                      : t.cleanupDesc;
   const clSize = (bytes: number | null) => {
     if (bytes == null) return "--";
     if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
@@ -502,6 +531,7 @@ export function ToolsView(props: {
     try {
       const scan = await api.storageScan(clProgress("scan"));
       setClScan(scan);
+      setClMode("quick");
       // every non-empty place ticked by default (the user unticks, never
       // us); zero/unknown rows render muted with a disabled checkbox
       setClChecked(
@@ -517,19 +547,45 @@ export function ToolsView(props: {
       setClPhase(null);
     }
   };
+  const runClDeepScan = async () => {
+    if (clBusyRef.current) return;
+    clBusyRef.current = true;
+    setClBusy(true);
+    setClProg(null);
+    setClPhase("scan");
+    setClDeepError(null);
+    try {
+      const deep = await api.storageDeepScan(clProgress("scan"));
+      setClDeep(deep);
+      setClMode("deep");
+      // opt-in means opt-in: deep places are never auto-ticked, however
+      // big they measure. The user ticks, never us.
+    } catch {
+      setClDeepError(t.cleanupScanFailed);
+    } finally {
+      clBusyRef.current = false;
+      setClBusy(false);
+      setClProg(null);
+      setClPhase(null);
+    }
+  };
   const runClClean = async () => {
-    if (clBusyRef.current || clChecked.length === 0) return;
+    if (clBusyRef.current || clCleanIds.length === 0) return;
     setClConfirm(false);
     clBusyRef.current = true;
     setClBusy(true);
     setClProg(null);
     setClPhase("clean");
     try {
-      const res = await api.storageClean(clChecked, clProgress("clean"));
+      const res = await api.storageClean(clCleanIds, clProgress("clean"));
       setClResult(res);
       // re-measure so the list shows the verified live truth, not hope
+      // (both groups when both were scanned)
       try {
         setClScan(await api.storageScan(clProgress("scan")));
+        if (clDeep !== null) {
+          setClDeep(await api.storageDeepScan(clProgress("scan")));
+        }
       } catch {
         // the clean already verified by re-measure inside; a failed
         // refresh only leaves the old sizes painted, never wrong data
@@ -547,9 +603,12 @@ export function ToolsView(props: {
       setClPhase(null);
     }
   };
+  // unknown verdicts add nothing to the hero number (a null is not a
+  // zero); the note below owns the honesty instead
   const clFreedBytes = clResult
-    ? clResult.reduce((s, r) => s + r.freed_bytes, 0)
+    ? clResult.reduce((s, r) => s + (r.freed_bytes ?? 0), 0)
     : 0;
+  const clUnmeasured = clResult?.some((r) => r.freed_bytes == null) ?? false;
   /** hero number: GB above 1 GB, MB below (Latin units either way) */
   const clHero =
     clFreedBytes >= 1073741824
@@ -561,14 +620,87 @@ export function ToolsView(props: {
   const CLEAN_WORTHY_BYTES = 500 * 1048576;
   /** summary edge from the LAST SCAN (current truth, like every other
       card), never from history: green = nothing worth cleaning, warn =
-      measurable junk above the floor, neutral = unscanned or unreadable */
+      measurable junk above the floor, neutral = unscanned or unreadable.
+      Both groups count once scanned. */
   const clEdge = (() => {
-    if (!clScan) return "";
-    const measured = clScan.categories.filter((c) => c.bytes != null);
+    const all = [
+      ...(clScan?.categories ?? []),
+      ...(clDeep?.categories ?? []),
+    ];
+    if (all.length === 0) return "";
+    const measured = all.filter((c) => c.bytes != null);
     if (measured.length === 0) return "";
     const total = measured.reduce((s, c) => s + (c.bytes ?? 0), 0);
     return total >= CLEAN_WORTHY_BYTES ? "off" : "on";
   })();
+  /** one row per measured place (shared by both groups so the two lists
+      can never drift apart in behavior) */
+  const renderClRows = (cats: CleanupCategory[]) =>
+    cats.map((c) => {
+      // zero/unknown rows stay visible but muted with a
+      // disabled checkbox: nothing to decide, nothing to
+      // clean (and an unmeasured clean could never report
+      // an honest freed number)
+      const empty = (c.bytes ?? 0) <= 0;
+      return (
+        <label key={c.id} className={`cleanup-row${empty ? " is-empty" : ""}`}>
+          <input
+            type="checkbox"
+            checked={clChecked.includes(c.id)}
+            disabled={clBusy || empty}
+            onChange={(e) =>
+              setClChecked((prev) =>
+                e.target.checked
+                  ? [...prev, c.id]
+                  : prev.filter((id) => id !== c.id),
+              )
+            }
+          />
+          <span className="cleanup-name">
+            <span className="cleanup-title">
+              {clName(c.id)}
+              <button
+                type="button"
+                className="switch-hint"
+                aria-label={clName(c.id)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  showHint(clName(c.id), clHintBody(c.id));
+                }}
+              >
+                <Info size={13} />
+              </button>
+            </span>
+          </span>
+          <span className="cleanup-size">{clSize(c.bytes)}</span>
+        </label>
+      );
+    });
+  /** visible rows (the mode): the toggle below acts on these only,
+      never on the hidden set behind the mode */
+  const clModeScan = clMode === "deep" ? clDeep : clScan;
+  const clVisible = clModeScan?.categories ?? [];
+  /** Clean acts on the visible set only: rows ticked in Quick then
+      hidden behind the Deep flip are never swept along silently. The
+      "Selected" line counts the same ids Clean will take. */
+  const clCleanIds = clChecked.filter((id) => clVisible.some((c) => c.id === id));
+  const clSelectedBytes = clVisible
+    .filter((c) => clCleanIds.includes(c.id))
+    .reduce((s, c) => s + (c.bytes ?? 0), 0);
+  const clTickable = clVisible.filter((c) => (c.bytes ?? 0) > 0);
+  const clAllTicked =
+    clTickable.length > 0 && clTickable.every((c) => clChecked.includes(c.id));
+  const toggleClAll = () => {
+    if (clBusy) return;
+    setClChecked((prev) =>
+      clAllTicked
+        ? prev.filter((id) => !clTickable.some((c) => c.id === id))
+        : [
+            ...prev,
+            ...clTickable.map((c) => c.id).filter((id) => !prev.includes(id)),
+          ],
+    );
+  };
   /** summary status line from the sweep memory (last run + 30 days) */
   const clStatus = (h: { last_freed_bytes: number; last_at: string | null; last_30d_bytes: number }) => {
     if (!h.last_at) return t.cleanupLastNever;
@@ -1103,73 +1235,66 @@ export function ToolsView(props: {
           {clOpen ? (
             <div className="cleanup">
               {clScanError ? <p className="tool-note">{clScanError}</p> : null}
-              {clScan
-                ? clScan.categories.map((c) => {
-                    // zero/unknown rows stay visible but muted with a
-                    // disabled checkbox: nothing to decide, nothing to
-                    // clean (and an unmeasured clean could never report
-                    // an honest freed number)
-                    const empty = (c.bytes ?? 0) <= 0;
-                    return (
-                      <label
-                        key={c.id}
-                        className={`cleanup-row${empty ? " is-empty" : ""}`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={clChecked.includes(c.id)}
-                          disabled={clBusy || empty}
-                          onChange={(e) =>
-                            setClChecked((prev) =>
-                              e.target.checked
-                                ? [...prev, c.id]
-                                : prev.filter((id) => id !== c.id),
-                            )
-                          }
-                        />
-                        <span className="cleanup-name">
-                          {clName(c.id)}
-                          <button
-                            type="button"
-                            className="switch-hint"
-                            aria-label={clName(c.id)}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              showHint(clName(c.id), clHintBody(c.id));
-                            }}
-                          >
-                            <Info size={13} />
-                          </button>
-                        </span>
-                        <span className="cleanup-size">{clSize(c.bytes)}</span>
-                      </label>
-                    );
-                  })
-                : null}
-              {clScan && clChecked.length > 0 ? (
+              {clDeepError ? <p className="tool-note">{clDeepError}</p> : null}
+              {/* one toggle for the visible list only (the flip hides a
+                  set; the toggle never touches what the user cannot see) */}
+              {clTickable.length > 0 ? (
+                <div className="cleanup-actions">
+                  <Button
+                    label={clAllTicked ? t.cleanupDeselectAll : t.cleanupSelectAll}
+                    variant="ghost"
+                    disabled={clBusy}
+                    onClick={toggleClAll}
+                  />
+                </div>
+              ) : null}
+              {/* mode toggle first: one control decides what Scan
+                  measures and what the list shows. No twin buttons. */}
+              <div className="cleanup-actions" role="radiogroup" aria-label={t.cleanupTitle}>
+                {(["quick", "deep"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    role="radio"
+                    aria-checked={clMode === m}
+                    className={`lang-seg${clMode === m ? " is-active" : ""}`}
+                    disabled={clBusy}
+                    onClick={() => setClMode(m)}
+                  >
+                    {m === "quick" ? t.cleanupModeQuick : t.cleanupModeDeep}
+                  </button>
+                ))}
+              </div>
+              {/* one list visible: the mode's own results. Selection stays
+                  shared, so Clean always acts on every ticked row. */}
+              {clModeScan ? renderClRows(clModeScan.categories) : null}
+              {(clScan ?? clDeep) && clCleanIds.length > 0 ? (
                 <p className="cleanup-selected">
-                  {t.cleanupSelected(
-                    Math.round(
-                      (clScan.categories
-                        .filter((c) => clChecked.includes(c.id))
-                        .reduce((s, c) => s + (c.bytes ?? 0), 0) /
-                        1048576) *
-                        10,
-                    ) / 10,
-                  )}
+                  {t.cleanupSelected(Math.round((clSelectedBytes / 1048576) * 10) / 10)}
                 </p>
               ) : null}
               {/* all-unreadable is a read failure, not a clean drive:
-                  "--" everywhere must never read as "nothing to clean" */}
-              {clScan &&
+                  "--" everywhere must never read as "nothing to clean".
+                  Both groups count: deep rows join the verdict once
+                  scanned. */}
+              {(clScan ?? clDeep) &&
               !clBusy &&
-              clScan.categories.every((c) => c.bytes == null) ? (
+              [
+                ...(clScan?.categories ?? []),
+                ...(clDeep?.categories ?? []),
+              ].every((c) => c.bytes == null) ? (
                 <p className="tool-note">{t.cleanupScanFailed}</p>
               ) : null}
-              {clScan &&
+              {(clScan ?? clDeep) &&
               !clBusy &&
-              clScan.categories.some((c) => c.bytes != null) &&
-              clScan.categories.every((c) => (c.bytes ?? 0) <= 0) ? (
+              [
+                ...(clScan?.categories ?? []),
+                ...(clDeep?.categories ?? []),
+              ].some((c) => c.bytes != null) &&
+              [
+                ...(clScan?.categories ?? []),
+                ...(clDeep?.categories ?? []),
+              ].every((c) => (c.bytes ?? 0) <= 0) ? (
                 <p className="tool-note">{t.cleanupNothing}</p>
               ) : null}
               {/* live progress: one step per category (honest granularity,
@@ -1198,18 +1323,29 @@ export function ToolsView(props: {
                 </div>
               ) : null}
               {clResult ? <p className="cleanup-result">{t.cleanupFreed(clFreedMb)}</p> : null}
+              {clResult && clUnmeasured ? (
+                <p className="tool-note">{t.cleanupUnmeasured}</p>
+              ) : null}
               <div className="cleanup-actions">
                 <Button
-                  label={clScan ? t.cleanupRescan : t.cleanupScan}
+                  label={
+                    clMode === "deep"
+                      ? clDeep
+                        ? t.cleanupRescan
+                        : t.cleanupDeepScan
+                      : clScan
+                        ? t.cleanupRescan
+                        : t.cleanupScan
+                  }
                   variant="ghost"
                   disabled={clBusy}
-                  onClick={() => void runClScan()}
+                  onClick={() => void (clMode === "deep" ? runClDeepScan() : runClScan())}
                 />
-                {clScan ? (
+                {clModeScan ? (
                   <Button
                     label={clBusy ? t.cleanupCleaning : t.cleanupClean}
                     variant="ghost"
-                    disabled={clBusy || clChecked.length === 0}
+                    disabled={clBusy || clCleanIds.length === 0}
                     // no empty-selection error path: the disabled gate
                     // above makes it unreachable (dead code is a lie)
                     onClick={() => setClConfirm(true)}
@@ -1223,7 +1359,7 @@ export function ToolsView(props: {
           {clConfirm ? (
             <Dialog
               title={t.cleanupConfirmTitle}
-              body={t.cleanupConfirmBody(clChecked.map(clName).join(", "))}
+              body={t.cleanupConfirmBody(clCleanIds.map(clName).join(", "))}
               kind="confirm"
               danger
               confirmLabel={t.cleanupClean}

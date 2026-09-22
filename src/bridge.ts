@@ -258,6 +258,12 @@ export const api = {
     invoke<CleanupScan>("storage_scan", {
       onEvent: new Channel<CleanupProgress>(onEvent),
     }),
+  /** the opt-in deep scan (thumbnail previews, error reports, stale
+      dumps), same answer shape as the standard scan */
+  storageDeepScan: (onEvent: (ev: CleanupProgress) => void) =>
+    invoke<CleanupScan>("storage_deep_scan", {
+      onEvent: new Channel<CleanupProgress>(onEvent),
+    }),
   /** delete only the ticked sweep categories, verified by re-measure */
   storageClean: (categories: string[], onEvent: (ev: CleanupProgress) => void) =>
     invoke<CleanupResult[]>("storage_clean", {
@@ -369,10 +375,11 @@ export interface CleanupCategory {
   id: string;
   bytes: number | null;
 }
-/** measured freed bytes per swept category */
+/** measured freed bytes per swept category (null = unmeasurable,
+    the UI says so instead of printing 0) */
 export interface CleanupResult {
   id: string;
-  freed_bytes: number;
+  freed_bytes: number | null;
 }
 /** sweep memory: last run + last-30-days total, bytes only */
 export interface CleanupHistory {

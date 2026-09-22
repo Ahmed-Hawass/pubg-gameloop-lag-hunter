@@ -302,9 +302,13 @@ export const ar: Locale = {
   cleanupRescan: "فحص مجددًا",
   cleanupClean: "تنظيف المحدد",
   cleanupCleaning: "جارٍ التنظيف...",
+  cleanupSelectAll: "تحديد الكل",
+  cleanupDeselectAll: "إلغاء تحديد الكل",
   cleanupNothing: "لا شيء للتنظيف: كل الأماكن المقاسة فارغة بالفعل.",
   cleanupScanFailed: "تعذّر فحص هذا الجهاز. حاول مجددًا.",
   cleanupFreed: (mb: number) => `تم تحرير ${mb} MB مقاسة قبل التنظيف وبعده.`,
+  cleanupUnmeasured:
+    "بالإضافة لمساحة محررة منعنا ويندوز من قياسها، فبقيت خارج الرقم أعلاه.",
   cleanupSelected: (mb: number) => `المحدد: ${mb} MB.`,
   cleanupLastNever: "لم يُنظَّف بعد.",
   cleanupLast: (mb: number, when: string) => `آخر تنظيف: ${mb} MB بتاريخ ${when}.`,
@@ -326,6 +330,25 @@ export const ar: Locale = {
   cleanupCatDelivery: "كاش مشاركة التحديثات",
   cleanupCatDeliveryHint:
     "ملفات تحديثات ويندوز المحتفظ بها لمشاركتها مع أجهزة شبكتك. حذفها آمن، وويندوز يعيد تنزيل ما يحتاجه.",
+  /** opt-in deep scan: same card flips to its results, never auto-ticked */
+  cleanupDeepScan: "فحص عميق",
+  cleanupModeQuick: "سريع",
+  cleanupModeDeep: "عميق",
+  cleanupCatThumb: "معاينات الصور المصغرة",
+  cleanupCatThumbHint:
+    "معاينات صور مخزنة يعيد ويندوز بناؤها بنفسه. حذفها آمن.",
+  cleanupCatReports: "تقارير الأخطاء المنتهية",
+  cleanupCatReportsHint:
+    "تقارير أخطاء ويندوز القديمة المرسلة أو المهملة. حذفها آمن.",
+  cleanupCatDumps: "ملفات الكراش القديمة",
+  cleanupCatDumpsHint:
+    "ملفات ذاكرة الأعطال الأقدم من 30 يوما. الملفات الحديثة لا تُمس أبدا لأنها قد تفسر عطلا حديثا.",
+  cleanupCatDownload: "بقايا التحديثات",
+  cleanupCatDownloadHint:
+    "ملفات تحديثات نزلت ولم يعد ويندوز يحتاجها. نفذ بعد انتهاء التحديثات، وويندوز يعيد تنزيل ما يلزمه.",
+  cleanupCatLogs: "سجلات النظام",
+  cleanupCatLogsHint:
+    "سجلات ويندوز القديمة المتراكمة بعد التحديثات. ملفات آخر 7 أيام لا تُمس أبدا.",
 
   // ---- about tab ----
   aboutTitle: "PUBG GameLoop Lag Hunter",

@@ -68,13 +68,20 @@ pub fn run_elevated_action(args: &[String]) -> i32 {
     if !args.is_empty() && args[0] == super::cleanup::STORAGE_CLEAN_ID {
         // category words only, at least one, admin scope only — the
         // child resolves the whitelisted dirs itself, never from args
-        // (defense in depth: no path ever crosses the boundary).
-        if args.len() < 2 || args.len() > 1 + 2 {
+        // (defense in depth: no path ever crosses the boundary). The
+        // cap is the admin-category count (system temp, delivery,
+        // reports, stale dumps, update leftovers, system logs):
+        // duplicates cannot smuggle anything past the per-item scope
+        // check in clean_admin.
+        if args.len() < 2 || args.len() > 1 + 6 {
             super::logging::warn("elevated run refused: bad storage-clean arity");
             return EXIT_USAGE;
         }
         let cats: Vec<String> = args[1..].to_vec();
-        return match super::cleanup::clean_admin(&cats) {
+        // run_admin_clean measures with elevated eyes before AND after
+        // the delete and leaves the verdict in the sidecar; scope
+        // refusal happens inside before anything is touched
+        return match super::cleanup::run_admin_clean(&cats) {
             Ok(()) => EXIT_OK,
             Err(e) => {
                 // refusal (bad shape/scope) vs failure (delete attempted):
@@ -259,12 +266,13 @@ pub fn elevate_pagefile_settings(
 }
 
 /// Storage sweep variant (parent side): one UAC prompt for the whole
-/// click's admin categories (system temp + delivery cache). Category
-/// words only, validated here AND inside the child; a denied prompt
-/// maps to exact "cancelled" like every other refusal.
+/// click's admin categories (system temp, delivery, reports, stale
+/// dumps, update leftovers, system logs). Category words only,
+/// validated here AND inside the child; a denied prompt maps to exact
+/// "cancelled" like every other refusal.
 #[cfg(windows)]
 pub fn elevate_storage_clean(cats: &[String]) -> Result<u32, String> {
-    if cats.is_empty() || cats.len() > 2 || cats.iter().any(|c| !super::cleanup::is_admin_category(c)) {
+    if cats.is_empty() || cats.len() > 6 || cats.iter().any(|c| !super::cleanup::is_admin_category(c)) {
         return Err("elevated request refused before UAC: storage-clean".into());
     }
     let params = format!(
@@ -534,8 +542,19 @@ mod tests {
         assert_eq!(ed(&["storage-clean", "recycle_bin"]), EXIT_USAGE);
         assert_eq!(ed(&["storage-clean", "nope"]), EXIT_USAGE);
         assert_eq!(ed(&["storage-clean", "C:\\Windows\\Temp"]), EXIT_USAGE);
+        // arity cap: the six admin categories at most (a seventh word
+        // is usage even when every word is a valid category)
         assert_eq!(
-            ed(&["storage-clean", "system_temp", "delivery_opt", "system_temp"]),
+            ed(&[
+                "storage-clean",
+                "system_temp",
+                "delivery_opt",
+                "error_reports",
+                "old_minidumps",
+                "update_download",
+                "system_logs",
+                "system_temp"
+            ]),
             EXIT_USAGE
         );
     }

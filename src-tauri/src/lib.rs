@@ -216,6 +216,46 @@ async fn storage_scan(on_event: tauri::ipc::Channel<engine::cleanup::CleanupProg
     }
 }
 
+/// Storage deep scan: the three opt-in places (thumbnail previews,
+/// finished error reports, stale crash dumps) plus the shared sweep
+/// memory. Same shape and contract as storage_scan: read-only, blocking
+/// pool, per-category progress over the channel.
+#[tauri::command]
+async fn storage_deep_scan(on_event: tauri::ipc::Channel<engine::cleanup::CleanupProgress>) -> engine::cleanup::CleanupScan {
+    let _t = engine::logging::timed("ipc: storage_deep_scan");
+    match tauri::async_runtime::spawn_blocking(move || {
+        engine::cleanup::deep_scan_with(|index, total, id| {
+            let _ = on_event.send(engine::cleanup::CleanupProgress::Category {
+                id: id.to_string(),
+                index,
+                total,
+            });
+        })
+    })
+    .await
+    {
+        Ok(scan) => {
+            let sizes: Vec<String> = scan
+                .categories
+                .iter()
+                .map(|c| {
+                    format!(
+                        "{}={}",
+                        c.id,
+                        c.bytes.map(|b| b.to_string()).unwrap_or_else(|| "-".into())
+                    )
+                })
+                .collect();
+            engine::logging::info(&format!("storage deep scan: {}", sizes.join(" ")));
+            scan
+        }
+        Err(e) => {
+            engine::logging::warn(&format!("storage_deep_scan task failed: {e}"));
+            engine::cleanup::deep_scan_with(|_, _, _| {})
+        }
+    }
+}
+
 /// Storage sweep clean: deletes only the ticked categories and reports
 /// measured freed bytes per category. A denied UAC is "cancelled"
 /// (quiet, like every other refusal); anything else is logged before it
@@ -242,9 +282,17 @@ async fn storage_clean(
         // success line for user reports: what ran and what it measured
         // (ids + bytes only, never names or paths)
         Ok(results) => {
+            // unknown verdicts log as "-" (a 0 here would rewrite history:
+            // "freed nothing" is a different fact from "could not measure")
             let freed: Vec<String> = results
                 .iter()
-                .map(|r| format!("{}={}", r.id, r.freed_bytes))
+                .map(|r| {
+                    format!(
+                        "{}={}",
+                        r.id,
+                        r.freed_bytes.map(|b| b.to_string()).unwrap_or_else(|| "-".into())
+                    )
+                })
                 .collect();
             engine::logging::info(&format!("storage clean: {}", freed.join(" ")));
         }
@@ -775,6 +823,7 @@ pub fn run() {
             validate_pagefile_settings,
             apply_pagefile_settings,
             storage_scan,
+            storage_deep_scan,
             storage_clean,
             schedule_reboot,
             open_windows_panel,
