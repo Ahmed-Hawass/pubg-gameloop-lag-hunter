@@ -522,6 +522,14 @@ fn set_tweak_elevated_powerplan(value: u32) -> Result<TweakResult, String> {
         super::system::power_active_guid()
             == power_restore_target(stored.as_deref(), &list)
     };
+    if !on && verified {
+        // The restore target is consumed by a successful OFF transition;
+        // leaving it behind can make a later toggle restore an unrelated,
+        // stale scheme.
+        let _ = super::settings::update(|s| {
+            s.previous_power_guid = None;
+        });
+    }
     super::logging::info(&format!(
         "tweak powerplan set: on={on} verified={verified}"
     ));

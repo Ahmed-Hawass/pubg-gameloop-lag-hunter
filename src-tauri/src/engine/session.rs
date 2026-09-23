@@ -151,6 +151,17 @@ impl Engine {
         )
     }
 
+    /// Delete one saved session while holding the same filesystem guard as
+    /// start() and bulk deletion. A live writer is refused by the engine,
+    /// regardless of what the frontend requested.
+    pub fn delete_session_guarded(&self, id: &str) -> Result<(), String> {
+        let _fs = self.fs_guard.lock().unwrap_or_else(|p| p.into_inner());
+        if self.live_session_id().as_deref() == Some(id) {
+            return Err("SESSION_RUNNING".into());
+        }
+        super::storage::delete_session(id)
+    }
+
     /// Start a monitoring session. `auto_stop_secs`: None = manual stop only
     /// (used by the headless `engine_probe` binary; the Tauri command always
     /// sends a bounded value — see MAX_SESSION_SECS in lib.rs).

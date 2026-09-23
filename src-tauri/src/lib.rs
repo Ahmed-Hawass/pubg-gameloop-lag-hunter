@@ -173,8 +173,9 @@ async fn apply_pagefile_settings(
     res?
 }
 
-/// Storage sweep scan: measures the four safe places (user temp, system
-/// temp, recycle bin, delivery cache) plus the sweep memory. Read-only.
+/// Storage sweep scan: measures the three quick places (user temp, system
+/// temp, delivery cache) plus the sweep memory. Recycle Bin is deep-only
+/// because cleaning it is permanent. Read-only.
 /// Async: dir walks can take seconds on bloated temp folders — never the
 /// IPC thread. Progress rides the channel (one event per category step);
 /// the final answer is the command's own return.
@@ -444,7 +445,9 @@ async fn load_report(id: String) -> Result<engine::storage::FriendlyReport, Stri
 #[tauri::command]
 async fn delete_session(id: String) -> Result<(), String> {
     let _t = engine::logging::timed("ipc: delete_session");
-    let res = tauri::async_runtime::spawn_blocking(move || engine::storage::delete_session(&id))
+    let res = tauri::async_runtime::spawn_blocking(move || {
+        session::init_global().delete_session_guarded(&id)
+    })
         .await
         .map_err(|e| format!("delete task failed: {e}"));
     log_err("delete_session", &res);

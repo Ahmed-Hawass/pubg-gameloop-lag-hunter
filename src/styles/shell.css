@@ -319,16 +319,16 @@
    always-on gray bar. One :is() list covers both layouts (the direct child
    and the keep-alive wrapper div) — the old three 15-selector blocks were
    copy-pasted per property. */
-:is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::webkit-scrollbar,
-:is(.monitor, .feed-list)::webkit-scrollbar {
+:is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::-webkit-scrollbar,
+:is(.monitor, .feed-list)::-webkit-scrollbar {
   width: 8px;
 }
-:is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::webkit-scrollbar-thumb,
-:is(.monitor, .feed-list)::webkit-scrollbar-thumb {
+:is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::-webkit-scrollbar-thumb,
+:is(.monitor, .feed-list)::-webkit-scrollbar-thumb {
   background: var(--border-2);
   border-radius: 4px;
 }
-:is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::webkit-scrollbar-track,
-:is(.monitor, .feed-list)::webkit-scrollbar-track {
+:is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::-webkit-scrollbar-track,
+:is(.monitor, .feed-list)::-webkit-scrollbar-track {
   background: transparent;
 }

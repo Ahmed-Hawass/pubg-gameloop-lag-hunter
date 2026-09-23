@@ -577,15 +577,15 @@ pub struct TopProcess {
 }
 
 pub fn query_top_processes() -> Result<Vec<TopProcess>, String> {
-    // ONE PowerShell process: two quick snapshots 400ms apart, top-by-RAM only
-    // (60 processes max) — snappy on busy machines, still accurate for the
-    // processes that matter. CPU% = delta between the two snapshots.
+    // ONE PowerShell process: two quick snapshots 400ms apart. Capture every
+    // process in both snapshots before ranking, otherwise a CPU-heavy process
+    // with modest RAM usage can disappear before its CPU delta is calculated.
     let text = ps(r#"
 $cores = [Environment]::ProcessorCount
 $a = @{}
-Get-Process | Sort-Object WorkingSet64 -Descending | Select-Object -First 60 | ForEach-Object { $a[$_.Id] = $_.CPU }
+Get-Process | ForEach-Object { $a[$_.Id] = $_.CPU }
 Start-Sleep -Milliseconds 400
-Get-Process | Sort-Object WorkingSet64 -Descending | Select-Object -First 60 | ForEach-Object {
+Get-Process | ForEach-Object {
   $p = $a[$_.Id]
   if ($null -ne $p -and $null -ne $_.CPU) {
     $pct = [math]::Round((($_.CPU - $p) / 0.4 / $cores) * 100, 1)

@@ -142,8 +142,8 @@ fn measure_category(id: &str) -> Option<u64> {
 }
 
 /// Scan with a per-category progress callback (index, total, id).
-/// Quick holds the three safe, self-renewing places only: the bin left
-/// for Deep (its deletion is permanent, review first).
+/// Quick holds the three safe, self-renewing places only: the bin is left
+/// for Deep because its deletion is permanent and needs review first.
 pub fn scan_with(progress: impl Fn(u64, u64, &str)) -> CleanupScan {
     scan_ids_with(&[USER_TEMP_ID, SYSTEM_TEMP_ID, DELIVERY_OPT_ID], progress)
 }

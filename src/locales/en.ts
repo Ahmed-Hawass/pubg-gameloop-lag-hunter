@@ -46,6 +46,7 @@ export const en = {
     GAMELOOP_NOT_RUNNING: "PUBG Mobile isn't running inside GameLoop. Start the game first.",
     SESSION_ALREADY_RUNNING: "A scan is already running.",
     SESSION_STOPPING: "The previous scan is still being saved. Try again in a moment.",
+    SESSION_RUNNING: "The active scan cannot be deleted.",
     SESSION_SAVE_FAILED: "The session report couldn't be saved. Check free disk space and try again.",
     PF_READ_FAILED: "Could not read the page file settings.",
     PF_DRIVE_INVALID: "That drive is not available for a page file.",

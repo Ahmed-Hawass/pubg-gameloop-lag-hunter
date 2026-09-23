@@ -43,6 +43,7 @@ const RELEASES_LATEST_URL: &str =
 
 /// Hard bounds — "bounded everything" applies to downloads too.
 const MAX_DOWNLOAD_BYTES: u64 = 60 * 1024 * 1024; // 60 MB: release exe is ~5-8 MB
+const MAX_METADATA_BYTES: u64 = 2 * 1024 * 1024; // release JSON + checksum list
 const STALL_TIMEOUT: Duration = Duration::from_secs(30); // no bytes for 30s = cancel
 
 /// What the UI needs to know about a newer release.
@@ -420,11 +421,12 @@ pub fn url_allowed(url: &str) -> bool {
 }
 
 fn agent() -> ureq::Agent {
-    // redirects: GitHub release assets cross hosts; every hop is re-checked
+    // Redirects are resolved by http_get so each Location is allowlisted
+    // before the next request is made.
     let mut builder = ureq::AgentBuilder::new()
         .timeout_connect(Duration::from_secs(10))
         .timeout_read(STALL_TIMEOUT) // a stalled read becomes an error — no infinite hangs
-        .redirects(6);
+        .redirects(0);
 
     // VPN/WARP users: Cloudflare WARP and many corporate setups route via a
     // local loopback proxy (WARP's local proxy mode listens on 127.0.0.1:40000
@@ -482,23 +484,28 @@ fn windows_system_proxy() -> Option<String> {
 }
 
 fn http_get(url: &str) -> Result<ureq::Response, String> {
-    if !url_allowed(url) {
-        return Err(format!("host not allowed: {url}"));
-    }
-    let call = agent()
-        .get(url)
-        .set("User-Agent", "lag-hunter-updater")
-        .call();
-    match call {
-        Ok(resp) => {
-            // ureq already followed redirects; the FINAL url must be allowed too
-            let final_url = resp.get_url().to_string();
-            if !url_allowed(&final_url) {
-                return Err(format!("redirected to a host not allowed: {final_url}"));
-            }
-            Ok(resp)
+    let mut current = url.to_string();
+    for _ in 0..=6 {
+        if !url_allowed(&current) {
+            return Err(format!("host not allowed: {current}"));
         }
-        Err(ureq::Error::Status(code, resp)) => {
+        let call = agent()
+            .get(&current)
+            .set("User-Agent", "lag-hunter-updater")
+            .call();
+        match call {
+            Ok(resp) => return Ok(resp),
+            Err(ureq::Error::Status(code, resp)) if (300..400).contains(&code) => {
+                let Some(location) = resp.header("Location") else {
+                    return Err(format!("redirect {code} has no Location header"));
+                };
+                let next = current
+                    .parse::<url::Url>()
+                    .and_then(|base| base.join(location))
+                    .map_err(|e| format!("invalid redirect location: {e}"))?;
+                current = next.to_string();
+            }
+            Err(ureq::Error::Status(code, resp)) => {
             // 403/429 from the API: capture the reason line for the log —
             // rate limit vs UA policy vs WARP egress IPs differ here, and
             // "http 403" alone leaves us guessing in user reports
@@ -511,19 +518,25 @@ fn http_get(url: &str) -> Result<ureq::Response, String> {
                 .chars()
                 .take(160)
                 .collect::<String>();
-            Err(format!("http {code}: {reason}"))
+                return Err(format!("http {code}: {reason}"));
+            }
+            Err(other) => return Err(other.to_string()),
         }
-        Err(other) => Err(other.to_string()),
     }
+    Err("too many redirects".into())
 }
 
 fn http_get_text(url: &str) -> Result<String, String> {
-    let mut buf = String::new();
+    let mut bytes = Vec::new();
     http_get(url)?
         .into_reader()
-        .read_to_string(&mut buf)
+        .take(MAX_METADATA_BYTES + 1)
+        .read_to_end(&mut bytes)
         .map_err(|e| format!("read body: {e}"))?;
-    Ok(buf)
+    if bytes.len() as u64 > MAX_METADATA_BYTES {
+        return Err(format!("metadata exceeds the {MAX_METADATA_BYTES}-byte cap"));
+    }
+    String::from_utf8(bytes).map_err(|e| format!("metadata is not UTF-8: {e}"))
 }
 
 fn http_get_json<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, String> {
