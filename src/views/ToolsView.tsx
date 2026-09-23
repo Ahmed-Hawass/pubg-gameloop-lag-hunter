@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronDown, Database, Expand, Gamepad2, Info, Monitor, Mouse, Recycle, SlidersHorizontal, Trash2, Video, AppWindow, Zap } from "lucide-react";
 import { Button, Dialog, EmptyState, MODAL_OPEN_EVENT, APP_DIALOG_OPEN_EVENT } from "../components/components";
-import { api, type CleanupCategory, type CleanupResult, type CleanupScan, type PagefileSettings, type RowState } from "../bridge";
+import { api, notifyFeatureStateChanged, type CleanupCategory, type CleanupResult, type CleanupScan, type PagefileSettings, type RowState } from "../bridge";
 import { errorDialog } from "../errors";
 import { useLang } from "../i18n";
 import spotTweaksDark from "../assets/spot-system-tweaks-dark.svg?url";
@@ -94,8 +94,10 @@ export function ToolsView(props: {
       landing finishes — same contract as the Reports openId */
   toolOpenId: string | null;
   onToolOpened: () => void;
+  /** reports cleanup activity to the shell (the exit confirm needs it) */
+  onCleaningChange?: (active: boolean) => void;
 }) {
-  const { active, toolOpenId, onToolOpened } = props;
+  const { active, toolOpenId, onToolOpened, onCleaningChange } = props;
   const { t } = useLang();
   /** which card's details are open (the landing cards need no data) */
   const [openCard, setOpenCard] = useState<"gaming" | "storage" | null>(null);
@@ -358,18 +360,23 @@ export function ToolsView(props: {
   }, [notice, hint]);
 
   // one modal surface, app-wide: if the App-level dialog (gameloop
-  // closed, an advice) opens while our failed-write notice is up, ours
-  // yields instead of stacking two overlays where one Escape closes both.
-  // The notice is informational; the App dialog is not re-askable.
+  // closed, an advice, the exit confirm) opens while one of ours is up,
+  // ours yields instead of stacking two overlays where one Escape closes
+  // both. The notice and hint are informational; the pre-write confirms
+  // (pagefile, clean) and the reboot offer are re-askable: yielding them
+  // cancels nothing already written (Later stays the reboot default).
   useEffect(() => {
-    if (!notice && !hint) return;
+    if (!notice && !hint && !pfConfirm && !clConfirm && !rebootModal) return;
     const onAppDialog = () => {
       setNotice(null);
       setHint(null);
+      setPfConfirm(null);
+      setClConfirm(false);
+      setRebootModal(false);
     };
     window.addEventListener(APP_DIALOG_OPEN_EVENT, onAppDialog);
     return () => window.removeEventListener(APP_DIALOG_OPEN_EVENT, onAppDialog);
-  }, [notice, hint]);
+  }, [notice, hint, pfConfirm, clConfirm, rebootModal]);
 
   /** every toggle in one table: how to read the switch from the live
       statuses, how to move it, and the registry value each direction
@@ -450,6 +457,7 @@ export function ToolsView(props: {
         setNotice(t.tweakFailed);
         return;
       }
+      notifyFeatureStateChanged();
       // verified: the switch stays where the optimistic move put it —
       // the engine confirmed the registry holds exactly this state now
     } catch (e) {
@@ -574,6 +582,7 @@ export function ToolsView(props: {
     setClConfirm(false);
     clBusyRef.current = true;
     setClBusy(true);
+    onCleaningChange?.(true);
     setClProg(null);
     setClPhase("clean");
     try {
@@ -582,10 +591,19 @@ export function ToolsView(props: {
       // re-measure so the list shows the verified live truth, not hope
       // (both groups when both were scanned)
       try {
-        setClScan(await api.storageScan(clProgress("scan")));
+        const freshScan = await api.storageScan(clProgress("scan"));
+        setClScan(freshScan);
+        let freshCategories = [...freshScan.categories];
         if (clDeep !== null) {
-          setClDeep(await api.storageDeepScan(clProgress("scan")));
+          const freshDeep = await api.storageDeepScan(clProgress("scan"));
+          setClDeep(freshDeep);
+          freshCategories = [...freshCategories, ...freshDeep.categories];
         }
+        setClChecked((prev) =>
+          prev.filter((id) =>
+            freshCategories.some((c) => c.id === id && (c.bytes ?? 0) > 0),
+          ),
+        );
       } catch {
         // the clean already verified by re-measure inside; a failed
         // refresh only leaves the old sizes painted, never wrong data
@@ -599,6 +617,7 @@ export function ToolsView(props: {
     } finally {
       clBusyRef.current = false;
       setClBusy(false);
+      onCleaningChange?.(false);
       setClProg(null);
       setClPhase(null);
     }
@@ -623,14 +642,15 @@ export function ToolsView(props: {
       measurable junk above the floor, neutral = unscanned or unreadable.
       Both groups count once scanned. */
   const clEdge = (() => {
-    const all = [
-      ...(clScan?.categories ?? []),
-      ...(clDeep?.categories ?? []),
-    ];
+    const byId = new Map<string, number | null>();
+    for (const category of [...(clScan?.categories ?? []), ...(clDeep?.categories ?? [])]) {
+      byId.set(category.id, category.bytes);
+    }
+    const all = [...byId.values()];
     if (all.length === 0) return "";
-    const measured = all.filter((c) => c.bytes != null);
+    const measured = all.filter((bytes) => bytes != null);
     if (measured.length === 0) return "";
-    const total = measured.reduce((s, c) => s + (c.bytes ?? 0), 0);
+    const total = measured.reduce((s, bytes) => s + (bytes ?? 0), 0);
     return total >= CLEAN_WORTHY_BYTES ? "off" : "on";
   })();
   /** one row per measured place (shared by both groups so the two lists
@@ -643,9 +663,10 @@ export function ToolsView(props: {
       // an honest freed number)
       const empty = (c.bytes ?? 0) <= 0;
       return (
-        <label key={c.id} className={`cleanup-row${empty ? " is-empty" : ""}`}>
+        <div key={c.id} className={`cleanup-row${empty ? " is-empty" : ""}`}>
           <input
             type="checkbox"
+            aria-label={clName(c.id)}
             checked={clChecked.includes(c.id)}
             disabled={clBusy || empty}
             onChange={(e) =>
@@ -663,8 +684,7 @@ export function ToolsView(props: {
                 type="button"
                 className="switch-hint"
                 aria-label={clName(c.id)}
-                onClick={(e) => {
-                  e.preventDefault();
+                onClick={() => {
                   showHint(clName(c.id), clHintBody(c.id));
                 }}
               >
@@ -673,7 +693,7 @@ export function ToolsView(props: {
             </span>
           </span>
           <span className="cleanup-size">{clSize(c.bytes)}</span>
-        </label>
+        </div>
       );
     });
   /** visible rows (the mode): the toggle below acts on these only,
@@ -794,6 +814,7 @@ export function ToolsView(props: {
         setNotice(t.tweakFailed);
         return;
       }
+      notifyFeatureStateChanged();
       dirtyRef.current = false;
       setPfConfirm(null);
       setRebootModal(true);
@@ -1177,7 +1198,7 @@ export function ToolsView(props: {
               onFlip={(next) => void flipTweak("storagesense", next)}
             />
           ) : null}
-          {/* manual sweep: scan four safe places, delete only the ticked
+          {/* manual sweep: scan the quick safe places, delete only the ticked
               ones. No auto-delete, no estimates: sizes are measured, the
               freed number is before-minus-after, locked files are skipped.
               Collapses under its summary row like the page file editor. */}

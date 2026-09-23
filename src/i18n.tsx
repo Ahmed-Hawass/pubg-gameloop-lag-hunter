@@ -64,8 +64,11 @@ export function LanguageProvider(props: { children: ReactNode }) {
   }, [t]);
 
   const setLanguage = (s: LangSetting) => {
+    const previous = setting;
     setSetting(s);
-    void api.setLanguage(s).catch(() => {});
+    void api.setLanguage(s).catch(() => {
+      setSetting(previous);
+    });
   };
 
   // don't render until the persisted language arrives — avoids a visible flip

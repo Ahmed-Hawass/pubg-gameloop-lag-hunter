@@ -1,7 +1,7 @@
 // ReportsView.tsx –” saved sessions list + in-app friendly report reader.
 // Content comes from the engine (keys + English fallbacks); the UI translates.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, ChevronLeft, Clock, FileText, FileWarning, Folder, Gauge, Trash2 } from "lucide-react";
 import { Button, Dialog, EmptyState, Hint, NoteCard, Tip, APP_DIALOG_OPEN_EVENT } from "../components/components";
 import { api, type FriendlyReport, type SessionEntry } from "../bridge";
@@ -91,10 +91,26 @@ export function ReportsView(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
-  // deep-link: "Open full report" on the Monitor tab jumps here + opens the session
+  // deep-link: "Open full report" on the Monitor tab jumps here + opens the session.
+  // The link can arrive with a STALE list (the tab refreshes on visibility,
+  // so a just-finished session is never in it yet): a first miss triggers
+  // one fresh re-read and resolves on it. Only a miss on the fresh list
+  // reports "no longer saved".
+  const linkRetriedRef = useRef(false);
+  useEffect(() => {
+    if (!openId) linkRetriedRef.current = false;
+  }, [openId]);
+
   useEffect(() => {
     if (openId && entries) {
       if (!entries.some((e) => e.id === openId)) {
+        if (!linkRetriedRef.current) {
+          linkRetriedRef.current = true;
+          setLoadingId(openId);
+          refresh();
+          return;
+        }
+        setLoadingId(null);
         // the linked session is gone (deleted meanwhile): say so instead
         // of silently opening somebody else's report. An empty list with
         // the "latest" fallback link is not an error - just clear it.

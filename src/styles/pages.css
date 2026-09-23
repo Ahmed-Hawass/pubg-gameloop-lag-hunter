@@ -48,7 +48,6 @@
   display: flex;
   flex-direction: column;
   gap: 18px;
-  max-width: min(100%, 680px);
 }
 .sys-section {
   display: flex;
@@ -140,7 +139,6 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  max-width: min(100%, 680px);
 }
 .procs-head {
   display: flex;
@@ -234,7 +232,6 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  max-width: min(100%, 680px);
 }
 .checks-hint {
   font-size: 12.5px;
@@ -255,20 +252,8 @@
   flex-direction: column;
   gap: 8px;
 }
-/* wide windows show MORE data, not just air (reflow): two columns once the
-   viewport comfortably fits them. Scoped to System health's list ONLY:
-   the Tools tweaks list shares the class but must stay a single column
-   (its group headers would break across columns). */
-@media (min-width: 1500px) {
-  .checks {
-    max-width: min(100%, 1100px);
-  }
-  .checks .check-list {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: start;
-  }
-}
+/* System health stays a single readable column at every width. The shared
+  fullscreen rail gives it breathing room without splitting related cards. */
 .check-row {
   display: flex;
   flex-direction: column;
@@ -375,22 +360,20 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  max-width: min(100%, 680px);
 }
 .tools-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
-/* reference card proportions: a fixed comfortable size (not a stretched
-   full-width tile), so the illustration reads as a scene with the copy
-   under it. The grid is two columns at every window size; only the
-   container widens on truly large windows. */
-@media (min-width: 1500px) {
-  .tools {
-    max-width: min(100%, 1100px);
+@media (max-width: 760px) {
+  .tools-grid {
+    grid-template-columns: 1fr;
   }
 }
+/* reference card proportions: a fixed comfortable size (not a stretched
+   full-width tile), so the illustration reads as a scene with the copy
+   under it. */
 .tool-card {
   display: flex;
   flex-direction: column;
@@ -917,9 +900,9 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-width: min(100%, 620px);
 }
 .about-card {
+  width: 100%;
   background: var(--elev-1);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -1082,7 +1065,6 @@
   display: flex;
   flex-direction: column;
   gap: 18px;
-  max-width: min(100%, 560px);
   width: 100%;
 }
 .settings-group {

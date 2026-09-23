@@ -21,9 +21,11 @@ export function SystemView() {
       setInfo(await api.systemInfo());
       setError(null);
     } catch (e) {
-      // localized unknown-error copy, raw message as the technical line
+      // known backend keys render their locale copy, novel failures fall
+      // back to the generic copy with the raw message as technical line
       const raw = typeof e === "string" ? e : String(e);
-      setError(t.dialog.unknownErrorBody(raw));
+      const keyed = (t.errors as Record<string, string | undefined>)[raw];
+      setError(keyed ?? t.dialog.unknownErrorBody(raw));
     } finally {
       busyRef.current = false;
       setBusy(false);

@@ -39,6 +39,11 @@ export const en = {
     backgroundAdviceTitle: "Stay in the game while scanning",
     backgroundAdviceBody:
       "The game window was in the background during this scan. GPU analysis pauses while the window is minimized, and other measurements continue. For the most complete results, stay inside the game until the scan finishes.",
+    exitTitle: "Exit before finishing?",
+    exitBodyScan: "A scan is running. It will stop and its report will be saved.",
+    exitBodyDownload: "An update is downloading. It will be cancelled.",
+    exitBodyCleaning: "A cleanup is running. It will stop.",
+    exitConfirm: "Exit",
   },
 
   // ---- error codes from the backend ----
@@ -48,6 +53,7 @@ export const en = {
     SESSION_STOPPING: "The previous scan is still being saved. Try again in a moment.",
     SESSION_RUNNING: "The active scan cannot be deleted.",
     SESSION_SAVE_FAILED: "The session report couldn't be saved. Check free disk space and try again.",
+    APP_SHUTTING_DOWN: "The app is closing. Please try again.",
     PF_READ_FAILED: "Could not read the page file settings.",
     PF_DRIVE_INVALID: "That drive is not available for a page file.",
     PF_MODE_INVALID: "That page file mode is not valid.",
@@ -55,6 +61,7 @@ export const en = {
     PF_INITIAL_INVALID: "The initial size is not valid for that drive.",
     PF_MAX_INVALID: "The maximum size is not valid for that drive.",
     PF_WRITE_FAILED: "Windows refused the page file change.",
+    POWERSHELL_TIMEOUT: "Checking the system took too long. Try again.",
   } as Record<string, string>,
 
   // ---- report highlights (composed in the UI from event kinds) ----
@@ -124,19 +131,19 @@ export const en = {
   welcomeBegin: "Let's start",
 
   // ---- system tab ----
-  yourRig: "Your machine",
+  yourRig: "Your device",
   whatWeSee: "What this tool can see",
   whatWeSeeHint:
     "The counters the engine actually reads. Anything missing appears as \"--\" instead of wrong numbers.",
   seeCpu: "CPU / RAM / Disk counters",
   seeGpu: "GPU counters (NVIDIA)",
   seeGame: "PUBG Mobile detection (GameLoop)",
-  gpuCountersOff: "Not available on this machine. GPU shows \"--\" during scans.",
+  gpuCountersOff: "Not available on this device. GPU shows \"--\" during scans.",
   seePs: "System fine-tuning (PowerShell)",
-  seePsOff: "Unavailable. Scans still work, but machine tuning and clock correction are skipped.",
+  seePsOff: "Unavailable. Scans still work, but device tuning and clock correction are skipped.",
   psLimitedTitle: "Running in limited mode",
   psLimitedBody:
-    "PowerShell is unavailable, so some checks run on safe defaults: machine tuning is skipped, clock times may read in UTC, and GPU pause/resume detection is muted. Scans still work; the core counters are native Windows.",
+    "PowerShell is unavailable, so some checks run on safe defaults: device tuning is skipped, clock times may read in UTC, and GPU pause/resume detection is muted. Scans still work; the core counters are native Windows.",
 
   // ---- top processes tab ----
   topProcessesHint:
@@ -151,7 +158,7 @@ export const en = {
 
   // ---- system checks tab ----
   checksHint:
-    "Your machine's most important settings in one place: what helps your game and what quietly slows it down. Every card explains itself, and help is one click away.",
+    "Your device's most important settings in one place: what helps your game and what quietly slows it down. Every card explains itself, and help is one click away.",
   checkPower: "Power plan",
   checkPowerDesc:
     "Controls whether the processor runs at full speed. Saver plans lower the CPU and cause stutters in fights.",
@@ -179,7 +186,7 @@ export const en = {
   pagefileManual: (mb: number) => `${(mb / 1024).toFixed(0)} GB fixed. Below 8 GB can cause stutters`,
   pagefileOff: "Disabled, a classic cause of heavy lag",
   chargerOk: "Plugged in",
-  chargerWarn: "On battery: the machine throttles and results become unreliable",
+  chargerWarn: "On battery: the device throttles and results become unreliable",
   openSettings: "Open setting",
   /** health-card button whose fix lives inside Tools (DVR today): same
       promise as openSettings, but the destination is in-app */
@@ -192,11 +199,11 @@ export const en = {
   checkPowerHint:
     "The power plan decides whether your processor may run at full speed. Saver plans slow the CPU down to save battery, and that shows up as stutters in fights. The fix is one switch in Windows Settings.",
   checkPagefileHint:
-    "The pagefile is backup memory on disk for moments when RAM fills up. Too small or disabled means hitches while maps and textures load. Letting Windows manage it automatically suits most machines.",
+    "The pagefile is backup memory on disk for moments when RAM fills up. Too small or disabled means hitches while maps and textures load. Letting Windows manage it automatically suits most devices.",
   checkVtHint:
     "Virtualization lets GameLoop use your CPU directly instead of slow software emulation. Only you can change it, from the BIOS before Windows starts. One enable, no maintenance afterwards.",
   checkChargerHint:
-    "Laptops slow themselves down on battery to protect it. A scan on battery measures a throttled machine, so its results mislead. Plug in before playing or scanning.",
+    "Laptops slow themselves down on battery to protect it. A scan on battery measures a throttled device, so its results mislead. Plug in before playing or scanning.",
 
   // ---- tools tab ----
   tools: "Tools",
@@ -219,7 +226,7 @@ export const en = {
     "Automatically frees drive space by removing unneeded temporary files when the drive runs low.",
   tweakGameModeTitle: "Turn on Game Mode",
   tweakGameModeDesc:
-    "Lets Windows prioritize the game and hold update interruptions. Helps 1% lows on machines with background load; a few CPU-maxed titles prefer it off, so test both states.",
+    "Lets Windows prioritize the game and hold update interruptions. Helps 1% lows on devices with background load; a few CPU-maxed titles prefer it off, so test both states.",
   tweakGpuTitle: "Run GameLoop on high-performance GPU",
   tweakGpuDesc:
     "Forces GameLoop to use your powerful graphics card instead of the built-in one. Close and reopen the game to apply. Only matters on laptops with two graphics cards.",
@@ -240,9 +247,9 @@ export const en = {
   tweakSsHint:
     "Windows deletes temporary files on its own when the drive runs low. It prevents a full drive, it does not free a drive that is already full. Turning it off stops future cleanups with one tap.",
   tweakGameModeHint:
-    "Asks Windows to favor the game with CPU time and to hold update interruptions while you play. Independent frame-time tests show it mainly smooths sudden dips on machines running browsers or chat apps next to the game; a few CPU-maxed titles run better with it off. Leave it on unless a specific game stutters, switching back takes one tap.",
+    "Asks Windows to favor the game with CPU time and to hold update interruptions while you play. Independent frame-time tests show it mainly smooths sudden dips on devices running browsers or chat apps next to the game; a few CPU-maxed titles run better with it off. Leave it on unless a specific game stutters, switching back takes one tap.",
   tweakGpuHint:
-    "On laptops with two graphics cards, Windows may run the game on the weaker built-in card to save power. This pins GameLoop to the powerful card instead. It changes nothing on single-GPU machines, and turning it off hands the choice back to Windows.",
+    "On laptops with two graphics cards, Windows may run the game on the weaker built-in card to save power. This pins GameLoop to the powerful card instead. It changes nothing on single-GPU devices, and turning it off hands the choice back to Windows.",
   tweakFsoHint:
     "Some titles pace their frames worse under the Windows fullscreen handling and feel smoother without it. The effect differs per game, so this is a per-title experiment, not a universal win. Turning it back on takes one tap.",
   tweakMouseHint:
@@ -271,7 +278,7 @@ export const en = {
     `Without a page file on ${drive}, out-of-memory crashes are likely under load. This takes effect after you restart Windows.`,
   tweakPfWarnSmallTitle: "Small page file?",
   tweakPfWarnSmallBody: (drive: string, max: number) =>
-    `Below 8 GB has caused stutters on real machines. Set ${max} MB on ${drive} anyway?`,
+    `Below 8 GB has caused stutters on real devices. Set ${max} MB on ${drive} anyway?`,
   tweakPfPending: "Restart Windows to apply the page file change.",
   tweakPfPendingBadge: "Restart needed",
   rebootTitle: "Restart Windows?",
@@ -283,7 +290,7 @@ export const en = {
   tweakPowerDesc:
     "Switches Windows to the High performance plan. Takes effect immediately; turning it off brings back the plan you had.",
   tweakPowerHint:
-    "Puts the processor on full speed by switching to the High performance plan. If the plan is missing it is restored first with Windows' own command, then switched on. Turning it off brings back the plan you had; machines locked to Balanced-only mode hide this row instead.",
+    "Puts the processor on full speed by switching to the High performance plan. If the plan is missing it is restored first with Windows' own command, then switched on. Turning it off brings back the plan you had; devices locked to Balanced-only mode hide this row instead.",
   /** reason line under a greyed-out row whose precondition the user can
       fix (GameLoop exes not resolved) — never shown for rows that can
       never work here (those hide instead) */
@@ -319,7 +326,7 @@ export const en = {
     "Leftovers your apps left in your own temp folder. Safe to delete, apps rebuild what they still need.",
   cleanupCatSystemTemp: "Windows temporary files",
   cleanupCatSystemTempHint:
-    "Leftovers Windows services and installers left behind. Safe to delete, files in use are skipped.",
+    "Leftovers Windows services and installers left behind. Safe to delete.",
   cleanupCatRecycle: "Recycle Bin",
   cleanupCatRecycleHint:
     "Files you already deleted that still occupy drive space. Emptying it is permanent, check it first.",
@@ -350,7 +357,7 @@ export const en = {
   aboutTitle: "PUBG GameLoop Lag Hunter",
   aboutWhat:
     "Analyze your PUBG Mobile performance on GameLoop, detect stutters, and uncover exactly what's causing them.",
-  aboutImpact: "What it costs your machine",
+  aboutImpact: "What it costs your device",
   aboutImpactItems: [
     "Under 1% CPU while scanning: it measures, it doesn't compete",
     "~25 MB of RAM, less than one browser tab",

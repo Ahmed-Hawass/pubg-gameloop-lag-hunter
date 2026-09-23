@@ -7,7 +7,6 @@
 import { useEffect, useState } from "react";
 import { Copy, Minus, Square, X } from "lucide-react";
 import {
-  closeWindow,
   isWindowMaximized,
   minimizeWindow,
   onWindowResized,
@@ -17,9 +16,9 @@ import { Tip } from "./components";
 import { useLang } from "../i18n";
 import appIcon from "../assets/app-icon.png";
 
-export function TitleBar(props: { version: string }) {
+export function TitleBar(props: { version: string; onRequestExit: () => void }) {
   const { t } = useLang();
-  const { version } = props;
+  const { version, onRequestExit } = props;
   const [maximized, setMaximized] = useState(false);
 
   // track the maximized state for the toggle's tooltip and icon
@@ -86,7 +85,7 @@ export function TitleBar(props: { version: string }) {
             className="close"
             aria-label={t.close}
             onClick={() => {
-              void closeWindow();
+              onRequestExit();
             }}
           >
             <X size={14} />

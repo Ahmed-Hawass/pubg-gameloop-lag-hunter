@@ -43,6 +43,11 @@ export const ar: Locale = {
     backgroundAdviceTitle: "ابقَ داخل اللعبة أثناء الفحص",
     backgroundAdviceBody:
       "كانت نافذة اللعبة في الخلفية أثناء هذا الفحص. يتوقف تحليل كرت الشاشة ما دامت النافذة مصغّرة، وتستمر بقية القياسات كالمعتاد. وللحصول على نتائج كاملة، ابقَ داخل اللعبة حتى ينتهي الفحص.",
+    exitTitle: "الخروج قبل الانتهاء؟",
+    exitBodyScan: "يوجد فحص جار. سيتوقف وسيحفظ تقريره.",
+    exitBodyDownload: "يوجد تحديث قيد التنزيل. سيلغى التنزيل.",
+    exitBodyCleaning: "يوجد تنظيف جار. سيتوقف.",
+    exitConfirm: "خروج",
   },
 
   // ---- error codes from the backend ----
@@ -52,6 +57,7 @@ export const ar: Locale = {
     SESSION_STOPPING: "الفحص السابق لا يزال قيد الحفظ، حاول مرة أخرى بعد قليل.",
     SESSION_RUNNING: "لا يمكن حذف الفحص النشط.",
     SESSION_SAVE_FAILED: "تعذّر حفظ تقرير الجلسة. تحقق من توفر مساحة كافية على القرص، ثم حاول مرة أخرى.",
+    APP_SHUTTING_DOWN: "التطبيق يغلق الآن. حاول مرة أخرى.",
     PF_READ_FAILED: "تعذّر قراءة إعدادات page file.",
     PF_DRIVE_INVALID: "هذا القرص غير متاح لـ page file.",
     PF_MODE_INVALID: "وضع page file هذا غير صالح.",
@@ -59,6 +65,7 @@ export const ar: Locale = {
     PF_INITIAL_INVALID: "الحجم الأولي غير صالح لهذا القرص.",
     PF_MAX_INVALID: "الحجم الأقصى غير صالح لهذا القرص.",
     PF_WRITE_FAILED: "رفض ويندوز تغيير page file.",
+    POWERSHELL_TIMEOUT: "استغرق فحص النظام وقتا طويلا. حاول مرة أخرى.",
   } as Record<string, string>,
 
   // ---- report highlights (composed in the UI from event kinds) ----
@@ -324,7 +331,7 @@ export const ar: Locale = {
     "بقايا تركتها تطبيقاتك في مجلدك المؤقت. حذفها آمن، والتطبيقات تعيد بناء ما تحتاجه.",
   cleanupCatSystemTemp: "ملفات ويندوز المؤقتة",
   cleanupCatSystemTempHint:
-    "بقايا تركتها خدمات ويندوز وبرامج التثبيت. حذفها آمن، والملفات المستخدمة تُتخطى.",
+    "بقايا تركتها خدمات ويندوز وبرامج التثبيت. حذفها آمن.",
   cleanupCatRecycle: "سلة المحذوفات",
   cleanupCatRecycleHint:
     "ملفات حذفتها بنفسك وما زالت تشغل مساحة. إفراغها نهائي، راجعها أولًا.",

@@ -24,7 +24,7 @@ import { ToolsView } from "./views/ToolsView";
 import { AboutView } from "./views/AboutView";
 import { SettingsView } from "./views/SettingsView";
 import { WelcomeView } from "./views/WelcomeView";
-import { api, onEngineState, type StatusPayload, type UpdateInfo } from "./bridge";
+import { api, closeWindow, onEngineState, type StatusPayload, type UpdateInfo } from "./bridge";
 import { useLang } from "./i18n";
 import { errorDialog } from "./errors";
 import { shouldShowUpdateModal } from "./updateFlow";
@@ -86,6 +86,45 @@ export default function App() {
   const [appVersion, setAppVersion] = useState<string>("");
   /** the update modal: shown at startup (once per version) or via manual check */
   const [updateModal, setUpdateModal] = useState(false);
+  /** exit confirm (null = no request): which in-flight work the X press
+      found (scan, download, cleaning). Empty = closeWindow directly. */
+  const [exitConfirm, setExitConfirm] = useState<{
+    scan: boolean;
+    download: boolean;
+    cleaning: boolean;
+  } | null>(null);
+  /** live mirrors for the exit gate (refs: the request reads them without
+      re-subscribing; running/stopping both count as an active scan) */
+  const statusRef = useRef(status);
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+  const downloadActiveRef = useRef(false);
+  const cleaningActiveRef = useRef(false);
+  const onDownloadActivity = useCallback((active: boolean) => {
+    downloadActiveRef.current = active;
+  }, []);
+  const onCleaningActivity = useCallback((active: boolean) => {
+    cleaningActiveRef.current = active;
+  }, []);
+  /** the X button path: quiet work closes straight away; a running scan,
+      an active download, or a running cleanup names itself in one confirm
+      instead. Cancelling is non-destructive (nothing was ever requested
+      at OS level); confirming rides the normal close path, so the
+      backend safety net (cancel download, stop + save the session) runs. */
+  const requestExit = useCallback(() => {
+    const blockers = {
+      scan: statusRef.current.status === "running" || statusRef.current.status === "stopping",
+      download: downloadActiveRef.current,
+      cleaning: cleaningActiveRef.current,
+    };
+    if (!blockers.scan && !blockers.download && !blockers.cleaning) {
+      void closeWindow();
+      return;
+    }
+    setExitConfirm(blockers);
+    window.dispatchEvent(new Event(APP_DIALOG_OPEN_EVENT));
+  }, []);
   /** first-run advice is up RIGHT NOW — derived from the live toast state,
       never a sticky flag: the update modal and the one-shot advices defer
       while this dialog is on screen, and stop deferring the moment it is
@@ -96,6 +135,13 @@ export default function App() {
       document.documentElement.dataset.theme — single source of truth,
       SettingsView only sends changes through onThemeChange below */
   const [themeSetting, setThemeSetting] = useState<ThemeSetting>("auto");
+
+  const showSettingsError = (error: unknown) => {
+    const raw = typeof error === "string" ? error : String(error);
+    setToastTitle(t.dialog.somethingWrong);
+    setToastBody(t.dialog.unknownErrorBody(raw));
+    setToast("settings-write-failed");
+  };
 
   // apply the resolved theme to <html> and follow OS changes while "auto"
   useEffect(() => {
@@ -109,8 +155,12 @@ export default function App() {
   }, [themeSetting]);
 
   const onThemeChange = (v: ThemeSetting) => {
+    const previous = themeSetting;
     setThemeSetting(v);
-    void api.setTheme(v).catch(() => {});
+    void api.setTheme(v).catch((error) => {
+      setThemeSetting(previous);
+      showSettingsError(error);
+    });
   };
   /** PowerShell probe result — true = limited mode banner on the monitor */
   const [psLimited, setPsLimited] = useState(false);
@@ -247,15 +297,23 @@ export default function App() {
   }, []);
 
   const chooseDuration = (secs: number) => {
+    const previous = durationSecs;
     setDurationSecs(secs);
-    void api.setAutoStop(Math.round(secs / 60)).catch(() => {});
+    void api.setAutoStop(Math.round(secs / 60)).catch((error) => {
+      setDurationSecs(previous);
+      showSettingsError(error);
+    });
   };
 
   const toggleSidebar = () => {
     if (collapsed == null) return; // settings still loading — nothing to flip
+    const previous = collapsed;
     const next = !collapsed;
     setCollapsed(next);
-    void api.setSidebarCollapsed(next).catch(() => {});
+    void api.setSidebarCollapsed(next).catch((error) => {
+      setCollapsed(previous);
+      showSettingsError(error);
+    });
   };
 
   const toggle = async () => {
@@ -402,13 +460,13 @@ export default function App() {
   // confirm, Tools' notice): ours is the one surface they must yield to,
   // one overlay at a time, one Escape closing one thing.
   useEffect(() => {
-    if (toast || (updateModal && updateInfo)) {
+    if (toast || (updateModal && updateInfo) || exitConfirm) {
       window.dispatchEvent(new Event(MODAL_OPEN_EVENT));
     }
-    if (toast) {
+    if (toast || exitConfirm) {
       window.dispatchEvent(new Event(APP_DIALOG_OPEN_EVENT));
     }
-  }, [toast, updateModal, updateInfo]);
+  }, [toast, updateModal, updateInfo, exitConfirm]);
 
   const tabs: { id: View; icon: React.ReactNode; label: string; beta?: boolean }[] = [
     { id: "monitor", icon: <Crosshair size={17} />, label: t.monitor },
@@ -422,7 +480,7 @@ export default function App() {
 
   return (
     <div className="shell">
-      <TitleBar version={appVersion} />
+      <TitleBar version={appVersion} onRequestExit={requestExit} />
       <div className="shell-body">
         {/* null = settings still loading (IPC round-trip): show NOTHING
             decisive. The old bug rendered the main UI immediately, then
@@ -544,6 +602,7 @@ export default function App() {
                   active={view === "tools"}
                   toolOpenId={toolOpenId}
                   onToolOpened={() => setToolOpenId(null)}
+                  onCleaningChange={onCleaningActivity}
                 />
               </div>
               <div className={view === "settings" ? "" : "is-hidden-view"}>
@@ -577,9 +636,31 @@ export default function App() {
       </div>
 
       {/* the ONE modal surface — no toasts anywhere in the app.
-          Order matters: the advice/error dialog wins over the update modal;
-          the update modal (with its live download) wins over nothing else. */}
-      {toast ? (
+          Order matters: the exit confirm wins while up (the advice/error
+          dialog is stateless, so hiding it is safe and it returns on
+          Stay); the update modal stays mounted but suspended so a live
+          download survives a Stay instead of being cancelled by unmount. */}
+      {exitConfirm ? (
+        <Dialog
+          title={t.dialog.exitTitle}
+          body={[
+            exitConfirm.scan ? t.dialog.exitBodyScan : "",
+            exitConfirm.download ? t.dialog.exitBodyDownload : "",
+            exitConfirm.cleaning ? t.dialog.exitBodyCleaning : "",
+          ]
+            .filter((s) => s !== "")
+            .join(" ")}
+          kind="confirm"
+          danger
+          neutralBorder
+          confirmLabel={t.dialog.exitConfirm}
+          cancelLabel={t.dialog.cancel}
+          onConfirm={() => {
+            void closeWindow();
+          }}
+          onClose={() => setExitConfirm(null)}
+        />
+      ) : toast ? (
         <Dialog
           title={toastTitle ?? t.dialog.somethingWrong}
           body={toastBody ?? toast}
@@ -601,8 +682,14 @@ export default function App() {
             setToastBody(null);
           }}
         />
-      ) : updateModal && updateInfo ? (
-        <UpdateModal info={updateInfo} onClose={() => setUpdateModal(false)} />
+      ) : null}
+      {updateModal && updateInfo && (!toast || exitConfirm) ? (
+        <UpdateModal
+          info={updateInfo}
+          onClose={() => setUpdateModal(false)}
+          onDownloadingChange={onDownloadActivity}
+          suspended={exitConfirm !== null}
+        />
       ) : null}
     </div>
   );

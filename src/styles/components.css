@@ -41,16 +41,6 @@
 .btn-danger-filled:hover {
   background: var(--danger-hover);
 }
-/* the quiet danger OUTLINE (dark fill, red text) — currently unused; kept
-   as the variant's design language for future "destructive but calm" spots */
-.btn-danger {
-  background: var(--elev-1);
-  color: var(--danger);
-  border-color: var(--danger-dim);
-}
-.btn-danger:hover {
-  background: var(--elev-2);
-}
 .btn-ghost {
   background: var(--elev-3);
   border-color: var(--border);
@@ -207,7 +197,7 @@
 .timeline-fill {
   position: absolute;
   inset: 0;
-  background: var(--primary-dim);
+  background: var(--primary-dim-2);
   transition: width 1s linear;
 }
 .tl-marker {

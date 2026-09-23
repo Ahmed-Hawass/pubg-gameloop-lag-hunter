@@ -22,8 +22,13 @@ function fmtMB(bytes: number): string {
 export function UpdateModal(props: {
   info: UpdateInfo;
   onClose: () => void;
+  /** reports download activity to the shell (the exit confirm needs it) */
+  onDownloadingChange?: (active: boolean) => void;
+  /** hidden but mounted under the exit confirm: keeps the download alive
+      (unmounting would cancel it) while hiding the offer/progress UI */
+  suspended?: boolean;
 }) {
-  const { info, onClose } = props;
+  const { info, onClose, onDownloadingChange, suspended } = props;
   const { t } = useLang();
   const [phase, setPhase] = useState<Phase>({ kind: "offer" });
   // true while the offer's Download action is in flight (the OS save
@@ -41,8 +46,11 @@ export function UpdateModal(props: {
   };
 
   // Escape closes the offer; while downloading it CANCELS (closing the modal
-  // mid-download must never leave an orphaned stream — cancel kills it)
+  // mid-download must never leave an orphaned stream — cancel kills it).
+  // Suspended (under the exit confirm) the modal owns no keys: Escape
+  // belongs to the confirm alone, or it would cancel the download behind it.
   useEffect(() => {
+    if (suspended) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         if (phase.kind === "downloading") {
@@ -56,7 +64,12 @@ export function UpdateModal(props: {
     // close is a stable-once wrapper (closedRef guards the double call);
     // re-running the effect on its identity would re-arm a fired Escape
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onClose, phase.kind]);
+  }, [onClose, phase.kind, suspended]);
+
+  // report download activity to the shell (ref-stable callback from App)
+  useEffect(() => {
+    onDownloadingChange?.(phase.kind === "downloading");
+  }, [phase.kind, onDownloadingChange]);
 
   // UNMOUNT mid-download = the same orphan the Escape path guards against:
   // App can swap this modal out for the advice/error dialog while the
@@ -138,6 +151,10 @@ export function UpdateModal(props: {
   };
 
   // ---- render per phase -----------------------------------------------
+
+  // suspended under the exit confirm: mounted (so the download survives)
+  // but painting nothing, with keys already yielded above
+  if (suspended) return null;
 
   let title = t.updateAvailableTitle;
   // declared with a definite null and reassigned in every branch below —

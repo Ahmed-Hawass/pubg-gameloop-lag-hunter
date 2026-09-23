@@ -16,7 +16,7 @@ import {
   Zap,
 } from "lucide-react";
 import { Button, Dialog, EmptyState, MODAL_OPEN_EVENT, APP_DIALOG_OPEN_EVENT } from "../components/components";
-import { api, type SystemChecks } from "../bridge";
+import { api, FEATURE_STATE_CHANGED_EVENT, type SystemChecks } from "../bridge";
 import { useLang } from "../i18n";
 
 const LIVE_INTERVAL_MS = 30000;
@@ -53,12 +53,12 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
       setChecks(await api.systemChecks(force));
       setError(null);
     } catch (e) {
-      // the localized unknown-error copy, with the raw message riding
-      // along as a technical line — never a bare English string in an
-      // Arabic UI
+      // the locale copy for known backend keys, with the raw message riding
+      // along as a technical line only for novel failures
       if (!silent) {
         const raw = typeof e === "string" ? e : String(e);
-        setError(t.dialog.unknownErrorBody(raw));
+        const keyed = (t.errors as Record<string, string | undefined>)[raw];
+        setError(keyed ?? t.dialog.unknownErrorBody(raw));
       }
     } finally {
       busyRef.current = false;
@@ -80,14 +80,18 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
 
   useEffect(() => {
     if (!active) return;
+    void load(true, true);
     const timer = window.setInterval(() => void load(true), LIVE_INTERVAL_MS);
     // returning from Windows Settings (after flipping a toggle) refreshes
     // immediately: force pays one PowerShell spawn, skipped while busy
     const onFocus = () => void load(true, true);
+    const onFeatureStateChanged = () => void load(true, true);
     window.addEventListener("focus", onFocus);
+    window.addEventListener(FEATURE_STATE_CHANGED_EVENT, onFeatureStateChanged);
     return () => {
       window.clearInterval(timer);
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener(FEATURE_STATE_CHANGED_EVENT, onFeatureStateChanged);
     };
     // load reads busyRef/pendingManualRef (refs) and queues itself; its
     // identity is not part of the subscription contract

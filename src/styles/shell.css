@@ -275,21 +275,29 @@
      screens, full width down to the 1024px minimum — centered, not stuck
      to the reading-start edge */
   width: 100%;
-  max-width: min(100%, 760px);
+  max-width: min(100%, 1100px);
   margin-inline: auto;
   padding-inline-end: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-2) transparent;
+  scrollbar-gutter: stable;
+}
+
+.content > div > .reports::-webkit-scrollbar,
+.content > div > .sys::-webkit-scrollbar,
+.content > div > .procs::-webkit-scrollbar,
+.content > div > .checks::-webkit-scrollbar,
+.content > div > .tools::-webkit-scrollbar,
+.content > div > .about::-webkit-scrollbar,
+.content > div > .settings-page::-webkit-scrollbar,
+.content > div > .monitor::-webkit-scrollbar,
+.feed-list::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
 
 .content > div > .monitor {
   max-width: none;
-}
-
-/* wide viewport: let the checks container grow into the two-column reflow
-   (pages.css) instead of capping it at the single-column measure */
-@media (min-width: 1500px) {
-  .content > div > .checks {
-    max-width: min(100%, 1100px);
-  }
 }
 
 /* HIDDEN beats the flex layout above — same specificity class + element
@@ -315,13 +323,22 @@
   100% { transform: scale(1); }
 }
 
-/* clean scrollbars: thin, theme-matched — About/Reports scroll without the
-   always-on gray bar. One :is() list covers both layouts (the direct child
-   and the keep-alive wrapper div) — the old three 15-selector blocks were
-   copy-pasted per property. */
+/* Thin theme-matched scrollbars: 6px, thumb-only on a transparent track,
+   hover lightens via the hover token. Becomes visible only when the page
+   actually overflows (overflow-y: auto above), so roomy screens stay clean. */
 :is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::-webkit-scrollbar,
 :is(.monitor, .feed-list)::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
+  height: 6px;
+}
+:is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::-webkit-scrollbar-thumb,
+:is(.monitor, .feed-list)::-webkit-scrollbar-thumb {
+  background: var(--border-2);
+  border-radius: 3px;
+}
+:is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::-webkit-scrollbar-thumb:hover,
+:is(.monitor, .feed-list)::-webkit-scrollbar-thumb:hover {
+  background: var(--hover-border);
 }
 :is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::-webkit-scrollbar-thumb,
 :is(.monitor, .feed-list)::-webkit-scrollbar-thumb {

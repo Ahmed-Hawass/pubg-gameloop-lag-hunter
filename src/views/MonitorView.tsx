@@ -129,7 +129,7 @@ export function MonitorView(props: {
             spikes={ui!.spikes.map((s) => ({ offsetMs: s.offset_ms, kind: s.kind }))}
             hasData={ui!.samples_count > 0}
             kindLabel={(k) => t.feed[k] ?? k}
-            headLabel={ui!.auto_stop_sec ? t.timelineAutoStop : t.timelineDuration}
+            headLabel={t.timelineDuration}
           />
           <div className="timeline-hint">
             <Hint text={t.timelineHint} />

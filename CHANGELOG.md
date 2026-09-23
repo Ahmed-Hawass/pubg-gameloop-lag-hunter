@@ -156,6 +156,15 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   a storageWriteFailed flag, and the autosave cadence ticks on every
   sample even while writes fail (a frozen counter used to turn it into a
   per-tick storm).
+- Settings flips roll back visibly: theme, auto-stop, sidebar, and
+  language revert on a failed write (the first three through the dialog,
+  language silently), and Tools notifies Checks through a local
+  feature-state event so the health cards refresh right after a flip.
+- Closing the window asks first when work is in flight: the X button
+  opens an exit confirm naming the running scan (stops, report saved),
+  the active download (cancelled), or the running cleanup, on the one
+  modal surface with a red Exit button on the standard frame. Cancelling
+  is non-destructive and quiet work still closes straight away.
 
 ### Fixed
 - Power ON no longer clones a new plan every flip: duplicatescheme mints
@@ -356,6 +365,20 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   overwritten by the marginally older snapshot; the app version is asked
   once and shared by the title bar and About (it used to be two IPC
   calls).
+- The Monitor report card no longer opens a dead "no longer saved" error
+  for a just-finished session: the deep link arrived with the stale
+  Reports list (the tab only refreshes on visibility) and the one-shot
+  link cleared itself on the first miss. A first miss now triggers one
+  fresh re-read and resolves on it, so only a miss on the fresh list
+  reports.
+- Cleanup rows are real rows, not labels: the hint (?) button nested
+  inside the row label used to toggle the checkbox as a side effect. Rows
+  are divs with aria labels now, and the System/Processes/Checks load
+  failures prefer the locale copy for known backend keys (raw English
+  only for genuinely novel failures).
+- Tools confirms yield to the app dialog like the notices already did:
+  the pagefile, clean, and reboot offers no longer stack under the exit
+  confirm (all three are re-askable, and Later stays the reboot default).
 
 ### Changed
 - The Tools tab's details page reads only the two switches it displays,
@@ -407,6 +430,19 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   fields (thresholds are computed per device each session), and the
   PowerShell poll budget const is platform-independent so non-Windows
   targets keep compiling.
+- The window opens at 1180x760 (min 960x620): content pages breathe at a
+  1100px measure, System health stays one readable column at every width,
+  the Tools grid collapses to one column under 760px, and the unused
+  quiet-danger button variant is gone.
+- Scrollbars are thin and themed (6px, thumb-only on a transparent track,
+  hover lightens, stable gutter so pages never shift): the hidden-bar
+  experiment removed every scroll affordance on data pages whose lists
+  are unbounded by nature.
+- "machine" reads "device" across the English copy (laptops included by
+  definition; the Arabic copy already said device), and the
+  Windows-temp hint drops the skipped-files clause.
+- The scan timeline fill is one step heavier and its header always reads
+  the session duration (the auto-stop word is gone).
 
 ### Removed
 - The System health disk-space card is gone (measurement only, no in-app

@@ -244,10 +244,13 @@ export function Dialog(props: {
   confirmLabel?: string;
   cancelLabel?: string;
   danger?: boolean;
+  /** red confirm button on the standard frame (no danger border): for
+      expected-action confirms like Exit, where the frame must not restyle */
+  neutralBorder?: boolean;
   onConfirm?: () => void;
   onClose: () => void;
 }) {
-  const { title, body, kind, okLabel, confirmLabel, cancelLabel, danger, onConfirm, onClose } = props;
+  const { title, body, kind, okLabel, confirmLabel, cancelLabel, danger, neutralBorder, onConfirm, onClose } = props;
 
   // focus trap: a keyboard user must never Tab out of a modal into the
   // dead page behind it. Tab cycles between the dialog's own buttons; the
@@ -285,7 +288,7 @@ export function Dialog(props: {
     >
       <div
         ref={boxRef}
-        className={`dialog-box ${danger ? "dialog-danger" : ""}`}
+        className={`dialog-box ${danger && !neutralBorder ? "dialog-danger" : ""}`}
         role="alertdialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}

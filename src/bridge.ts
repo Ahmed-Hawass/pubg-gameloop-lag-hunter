@@ -5,6 +5,13 @@ import { listen } from "@tauri-apps/api/event";
 import { Channel } from "@tauri-apps/api/core";
 import type { EventCallback } from "@tauri-apps/api/event";
 
+/** Browser-local invalidation event for feature state shared by Checks/Tools. */
+export const FEATURE_STATE_CHANGED_EVENT = "laghunter:feature-state-changed";
+
+export function notifyFeatureStateChanged(): void {
+  window.dispatchEvent(new Event(FEATURE_STATE_CHANGED_EVENT));
+}
+
 // ---- types mirroring Rust ------------------------------------------------
 
 /** event severity — mirrors engine types.rs Severity (as_str) */
@@ -252,7 +259,7 @@ export const api = {
     }),
   /** immediate reboot (page file changes apply at boot) */
   scheduleReboot: () => invoke<void>("schedule_reboot"),
-  /** the Storage sweep's read-only scan (four safe places + memory),
+  /** the Storage sweep's read-only scan (three quick places + memory),
       with per-category progress over the channel */
   storageScan: (onEvent: (ev: CleanupProgress) => void) =>
     invoke<CleanupScan>("storage_scan", {

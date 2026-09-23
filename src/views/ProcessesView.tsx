@@ -38,11 +38,12 @@ export function ProcessesView(props: { active: boolean }) {
       setProcs(await api.topProcesses(force));
       setError(null);
     } catch (e) {
-      // polling failures stay quiet; manual failures show the localized
-      // unknown-error copy with the raw message as a technical line
+      // polling failures stay quiet; manual failures prefer the locale copy
+      // for known backend keys, novel failures keep the raw technical line
       if (!silent) {
         const raw = typeof e === "string" ? e : String(e);
-        setError(t.dialog.unknownErrorBody(raw));
+        const keyed = (t.errors as Record<string, string | undefined>)[raw];
+        setError(keyed ?? t.dialog.unknownErrorBody(raw));
       }
     } finally {
       busyRef.current = false;

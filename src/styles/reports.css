@@ -3,7 +3,6 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-width: min(100%, 760px);
 }
 
 .reports-title-row {
