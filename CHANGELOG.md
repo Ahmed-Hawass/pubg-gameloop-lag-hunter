@@ -135,6 +135,27 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   npm run lint and a CI step before the tests: the repo had no lint
   anywhere, the exact gap the summary-timer bug slipped through. The
   deliberate fire-once effects carry documented suppress comments.
+- Single-session delete is guarded at the engine level: deleting the live
+  session is refused with a SESSION_RUNNING key (en + ar) no matter what
+  the frontend passes, under the same filesystem guard as start and bulk
+  delete.
+- Shutdown is a gate, not a hope: closing the window marks shutdown first
+  (plus a generation bump retiring guard threads), and a start racing the
+  close is retired with an APP_SHUTTING_DOWN key (en + ar) instead of
+  spawning samplers mid-exit. A stop that finishes with no report behind
+  it surfaces SESSION_SAVE_FAILED instead of going quiet.
+- Slow system queries speak keys, not English: a PowerShell timeout in the
+  rig inventory, top processes, or health checks returns
+  POWERSHELL_TIMEOUT (en + ar) on the existing inline EmptyState with its
+  retry path. The one-time hardware inventory gets a 30s bound (then
+  disk-cached); polls stay at 15s, and every probe (typeperf, nvidia-smi,
+  tasklist, visibility, clocks, RAM, disks, powercfg) runs under a tracked
+  deadline inside the kill-on-close job.
+- Storage writes are honest end to end: append, flush, autosave, and
+  finalize return errors instead of swallowing them, the summary carries
+  a storageWriteFailed flag, and the autosave cadence ticks on every
+  sample even while writes fail (a frozen counter used to turn it into a
+  per-tick storm).
 
 ### Fixed
 - Power ON no longer clones a new plan every flip: duplicatescheme mints
@@ -301,6 +322,35 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   delete_all_sessions, open_download_folder, download_update): the
   open_path os-error-2 shipped for weeks as a user-visible dialog with
   zero log lines.
+- New-format settings files are recognized by version, not by content: a
+  v3 file without the legacy sensitivity key used to be misclassified as
+  legacy and reset every pref (language, theme, onboarding) on the next
+  launch, then saved back over the real file. Version 3+ is current by
+  definition now, pinned by regression tests.
+- The updater follows redirects by hand: each hop is allowlisted before
+  the next request (the library used to follow six hops internally and
+  only the final URL was checked), and release metadata is capped at 2MB
+  with a UTF-8 check so a hostile feed cannot OOM the parse.
+- Pagefile writes are atomic with rollback: the previous automatic flag
+  is read first and restored if the entries write fails, so a failure
+  can never leave automatic off with stale entries behind it. Reads are
+  strict too (a missing automatic flag is unknown, a missing list is
+  empty, any other error is unknown).
+- The Recycle Bin is measured user-scoped through PowerShell (walking
+  every SID could count other users' items that the clean would never
+  remove for this user), and a clean re-measures only the selected ids
+  (the full-map re-read is gone); ticked rows that come back empty are
+  pruned, and the summary edge dedupes quick/deep overlap by id.
+- Top-processes and health-checks queries are serialized per source (one
+  query lock each, reused by warm-up): rapid tab flips past the TTL could
+  spawn unbounded parallel powershell.exe bursts. The rig disk cache
+  expires after 30 days instead of living forever, with a logged warning
+  when its write fails.
+- Finalize is best-effort: a failing disk still leaves a listable partial
+  session (summary.json is the commit point everything else degrades
+  toward) instead of an invisible directory the summary card points at,
+  and storageWriteFailed maps to the partial outcome in both the list
+  and the reader.
 - The engine state subscription registers before the cold-boot snapshot
   resolves, so a push landing between the two can no longer be
   overwritten by the marginally older snapshot; the app version is asked
@@ -353,6 +403,10 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   promises one-click help. The product docs (README, SPEC,
   ARCHITECTURE, CONTRIBUTING) now describe settings changes the same
   way the app behaves: only by the user's hand, verified by re-read.
+- The settings file no longer stores the dead sensitivity/thresholds
+  fields (thresholds are computed per device each session), and the
+  PowerShell poll budget const is platform-independent so non-Windows
+  targets keep compiling.
 
 ### Removed
 - The System health disk-space card is gone (measurement only, no in-app

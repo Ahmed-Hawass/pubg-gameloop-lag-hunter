@@ -144,6 +144,31 @@ pub(crate) fn spawn_tracked(cmd: &mut Command) -> std::io::Result<std::process::
     Ok(child)
 }
 
+/// Run a short-lived child inside the kill-on-close job with a hard deadline.
+/// All probe commands use this path so a wedged Windows utility cannot block
+/// a session forever or outlive the app.
+pub(crate) fn output_tracked(
+    cmd: &mut Command,
+    timeout: Duration,
+) -> std::io::Result<std::process::Output> {
+    let mut child = spawn_tracked(cmd)?;
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        match child.try_wait()? {
+            Some(_) => return child.wait_with_output(),
+            None if std::time::Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "child process timed out",
+                ));
+            }
+            None => thread::sleep(Duration::from_millis(50)),
+        }
+    }
+}
+
 /// Handle for a spawned streaming source. Kill on drop.
 struct SpawnedProcess {
     child: Child,
@@ -238,7 +263,8 @@ pub fn english_counters_work() -> bool {
         _ => {}
     }
     let ok = {
-        let out = Command::new("typeperf")
+        let out = output_tracked(
+            Command::new("typeperf")
             .args([
                 COUNTER_PATHS[0],
                 "-si",
@@ -248,8 +274,9 @@ pub fn english_counters_work() -> bool {
             ])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .creation_flags(NO_WINDOW)
-            .output();
+            .creation_flags(NO_WINDOW),
+            Duration::from_secs(5),
+        );
         match out {
             Ok(o) => {
                 // exit 0 = the path resolved; nonzero = "cannot find counter"
@@ -592,13 +619,12 @@ where
     F: Fn(GpuSample) + Send + Sync + 'static,
 {
     // check availability quickly first
-    let probe = Command::new("nvidia-smi")
+    let probe = output_tracked(Command::new("nvidia-smi")
         .arg("--query-gpu=clocks.max.gr")
         .arg("--format=csv,noheader")
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
-        .creation_flags(NO_WINDOW)
-        .output();
+        .creation_flags(NO_WINDOW), Duration::from_secs(5));
     let Ok(out) = probe else { return Ok(false) };
     if !out.status.success() {
         return Ok(false);
@@ -676,12 +702,11 @@ where
 /// zero resident cost — unlike spawning a full PowerShell every probe).
 /// PUBG Mobile on GameLoop only: the tool's entire identity.
 pub fn query_emulator_procs() -> Result<Vec<ProcInfo>, String> {
-    let out = Command::new("tasklist")
+    let out = output_tracked(Command::new("tasklist")
         .args(["/FO", "CSV", "/NH"])
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
-        .creation_flags(NO_WINDOW)
-        .output()
+        .creation_flags(NO_WINDOW), Duration::from_secs(5))
         .map_err(|e| format!("tasklist spawn failed: {e}"))?;
     if !out.status.success() {
         return Ok(Vec::new());
@@ -800,12 +825,11 @@ pub fn query_game_visible() -> Option<bool> {
          }}\n\
          \"visible|$vis\"\n"
     );
-    let out = Command::new("powershell.exe")
+    let out = super::sampler::output_tracked(Command::new("powershell.exe")
         .args(["-NoProfile", "-NonInteractive", "-Command", &script])
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
-        .creation_flags(NO_WINDOW)
-        .output()
+        .creation_flags(NO_WINDOW), Duration::from_secs(10))
         .ok()?;
     let text = String::from_utf8_lossy(&out.stdout);
     for line in text.lines() {
@@ -828,15 +852,14 @@ pub fn query_game_visible() -> Option<bool> {
 
 /// GPU max clocks (gr, mem) — called once at session start.
 pub fn query_gpu_max_clocks() -> Option<(f64, f64)> {
-    let out = Command::new("nvidia-smi")
+    let out = super::sampler::output_tracked(Command::new("nvidia-smi")
         .args([
             "--query-gpu=clocks.max.gr,clocks.max.mem",
             "--format=csv,noheader,nounits",
         ])
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
-        .creation_flags(NO_WINDOW)
-        .output()
+        .creation_flags(NO_WINDOW), Duration::from_secs(5))
         .ok()?;
     let text = String::from_utf8_lossy(&out.stdout);
     let mut it = text.trim().split(',');
@@ -893,12 +916,11 @@ fn local_utc_offset_secs() -> i64 {
         // DST-aware, no registry parsing — the same source .NET uses.
         const SCRIPT: &str =
             "[int][TimeZoneInfo]::Local.GetUtcOffset([DateTimeOffset]::Now).TotalSeconds";
-        let out = Command::new("powershell.exe")
+        let out = output_tracked(Command::new("powershell.exe")
             .args(["-NoProfile", "-NonInteractive", "-Command", SCRIPT])
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
-            .creation_flags(NO_WINDOW)
-            .output();
+            .creation_flags(NO_WINDOW), Duration::from_secs(5));
         if let Ok(o) = out {
             if let Ok(v) = String::from_utf8_lossy(&o.stdout).trim().parse::<i64>() {
                 if v.abs() <= 14 * 3600 {

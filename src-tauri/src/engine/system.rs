@@ -16,35 +16,47 @@ const NO_WINDOW: u32 = 0x0800_0000;
 /// blocking the caller forever (only the availability probe had a
 /// deadline before; every other query waited indefinitely). stderr is
 /// captured for the error message only, never shown to the user.
-#[cfg(windows)]
+/// PowerShell poll budget (platform-independent bound).
 const PS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+/// Hardware inventory runs four CIM providers at once and is paid once per
+/// machine (then disk-cached): a longer bound than the 15s poll budget.
+const PS_INVENTORY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+/// Machine key surfaced to the UI when a PowerShell query exceeds its
+/// deadline (keys, not sentences: the locales turn this into language).
+pub const POWERSHELL_TIMEOUT: &str = "POWERSHELL_TIMEOUT";
+/// A PowerShell timeout becomes the machine key above (logged by the caller
+/// first, so the log keeps the original detail); any other error passes
+/// through untouched.
+fn map_ps_timeout(err: String) -> String {
+    if err.contains("timed out") {
+        POWERSHELL_TIMEOUT.into()
+    } else {
+        err
+    }
+}
 pub(crate) fn ps(script: &str) -> Result<String, String> {
+    ps_with_timeout(script, PS_TIMEOUT)
+}
+pub(crate) fn ps_with_timeout(
+    script: &str,
+    timeout: std::time::Duration,
+) -> Result<String, String> {
     #[cfg(windows)]
-    let mut child = Command::new("powershell.exe")
+    let mut child = super::sampler::spawn_tracked(
+        Command::new("powershell.exe")
         .args(["-NoProfile", "-NonInteractive", "-Command", script])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .creation_flags(NO_WINDOW)
-        .spawn()
+        .creation_flags(NO_WINDOW))
         .map_err(|e| format!("powershell spawn failed: {e}"))?;
     #[cfg(not(windows))]
-    let mut child = Command::new("powershell.exe")
+    let mut child = super::sampler::spawn_tracked(
+        Command::new("powershell.exe")
         .args(["-NoProfile", "-NonInteractive", "-Command", script])
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
+        .stderr(Stdio::piped()))
         .map_err(|e| format!("powershell spawn failed: {e}"))?;
-    let deadline = std::time::Instant::now()
-        + {
-            #[cfg(windows)]
-            {
-                PS_TIMEOUT
-            }
-            #[cfg(not(windows))]
-            {
-                std::time::Duration::from_secs(15)
-            }
-        };
+    let deadline = std::time::Instant::now() + timeout;
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
@@ -112,12 +124,11 @@ fn probe_powershell() -> bool {
     {
         use std::io::Read;
         use std::os::windows::process::CommandExt;
-        let Ok(mut child) = Command::new("powershell.exe")
+        let Ok(mut child) = super::sampler::spawn_tracked(Command::new("powershell.exe")
             .args(["-NoProfile", "-NonInteractive", "-Command", "Write-Output ok"])
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
-            .creation_flags(NO_WINDOW)
-            .spawn()
+            .creation_flags(NO_WINDOW))
         else {
             return false;
         };
@@ -168,6 +179,7 @@ fn probe_powershell() -> bool {
 use std::sync::{Mutex, OnceLock};
 
 static SYSTEM_CACHE: OnceLock<SystemInfo> = OnceLock::new();
+const SYSTEM_CACHE_MAX_AGE: std::time::Duration = std::time::Duration::from_secs(30 * 86_400);
 /// one query in flight at a time — a second caller waits for the first
 /// result instead of racing a second 20s inventory. Held INSIDE the
 /// blocking task (see system_info_async): the std Mutex guard lives and
@@ -184,7 +196,13 @@ fn system_cache_path() -> std::path::PathBuf {
 /// back to a live query. Corrupt = silently ignored (fail-soft, like the
 /// settings store).
 fn load_system_cache() -> Option<SystemInfo> {
-    let text = fs::read_to_string(system_cache_path()).ok()?;
+    let path = system_cache_path();
+    let modified = fs::metadata(&path).ok()?.modified().ok()?;
+    if modified.elapsed().ok()? > SYSTEM_CACHE_MAX_AGE {
+        super::logging::info("rig profile disk cache expired");
+        return None;
+    }
+    let text = fs::read_to_string(path).ok()?;
     serde_json::from_str(&text).ok()
 }
 
@@ -194,7 +212,9 @@ fn load_system_cache() -> Option<SystemInfo> {
 fn save_system_cache(info: &SystemInfo) {
     let _ = fs::create_dir_all(super::storage::app_dir());
     if let Ok(body) = serde_json::to_string(info) {
-        let _ = super::storage::write_file_atomic(&system_cache_path(), body.as_bytes());
+        if let Err(e) = super::storage::write_file_atomic(&system_cache_path(), body.as_bytes()) {
+            super::logging::warn(&format!("rig profile cache write failed: {e}"));
+        }
     }
 }
 
@@ -316,6 +336,18 @@ const SYSTEM_CHECKS_TTL: std::time::Duration = std::time::Duration::from_secs(30
 /// processes. A skipped spawn just serves the stale copy once more.
 static TOP_REFRESHING: AtomicBool = AtomicBool::new(false);
 static CHECKS_REFRESHING: AtomicBool = AtomicBool::new(false);
+static TOP_QUERY_LOCK: Mutex<()> = Mutex::new(());
+static CHECKS_QUERY_LOCK: Mutex<()> = Mutex::new(());
+
+fn query_top_processes_serialized() -> Result<Vec<TopProcess>, String> {
+    let _guard = TOP_QUERY_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    query_top_processes()
+}
+
+fn query_system_checks_serialized() -> Result<SystemChecks, String> {
+    let _guard = CHECKS_QUERY_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    query_system_checks()
+}
 /// top processes with TTL: returns the cached copy immediately when one
 /// exists (even stale) and refreshes in the background past the TTL.
 pub fn top_processes_cached() -> Result<Vec<TopProcess>, String> {
@@ -327,7 +359,7 @@ pub fn top_processes_cached() -> Result<Vec<TopProcess>, String> {
                 .is_ok()
         {
             std::thread::spawn(|| {
-                if let Ok(fresh) = query_top_processes() {
+                if let Ok(fresh) = query_top_processes_serialized() {
                     TOP_PROCESSES_CACHE.set(fresh);
                 }
                 TOP_REFRESHING.store(false, Ordering::Relaxed);
@@ -336,7 +368,7 @@ pub fn top_processes_cached() -> Result<Vec<TopProcess>, String> {
         return Ok(cached);
     }
     // first call on this run: pay the cost once, synchronously
-    let fresh = query_top_processes()?;
+    let fresh = query_top_processes_serialized()?;
     TOP_PROCESSES_CACHE.set(fresh.clone());
     Ok(fresh)
 }
@@ -346,7 +378,7 @@ pub fn top_processes_cached() -> Result<Vec<TopProcess>, String> {
 /// the silent poll already shows). Warms the cache so the next silent
 /// poll doesn't flash older numbers right after a manual refresh.
 pub fn top_processes_fresh() -> Result<Vec<TopProcess>, String> {
-    let fresh = query_top_processes()?;
+    let fresh = query_top_processes_serialized()?;
     TOP_PROCESSES_CACHE.set(fresh.clone());
     Ok(fresh)
 }
@@ -360,7 +392,7 @@ pub fn system_checks_cached() -> Result<SystemChecks, String> {
                 .is_ok()
         {
             std::thread::spawn(|| {
-                if let Ok(fresh) = query_system_checks() {
+                if let Ok(fresh) = query_system_checks_serialized() {
                     SYSTEM_CHECKS_CACHE.set(fresh);
                 }
                 CHECKS_REFRESHING.store(false, Ordering::Relaxed);
@@ -368,7 +400,7 @@ pub fn system_checks_cached() -> Result<SystemChecks, String> {
         }
         return Ok(cached);
     }
-    let fresh = query_system_checks()?;
+    let fresh = query_system_checks_serialized()?;
     SYSTEM_CHECKS_CACHE.set(fresh.clone());
     Ok(fresh)
 }
@@ -376,7 +408,7 @@ pub fn system_checks_cached() -> Result<SystemChecks, String> {
 /// System checks, bypassing the cache: a synchronous fresh read for the
 /// manual refresh button (same contract as top_processes_fresh).
 pub fn system_checks_fresh() -> Result<SystemChecks, String> {
-    let fresh = query_system_checks()?;
+    let fresh = query_system_checks_serialized()?;
     SYSTEM_CHECKS_CACHE.set(fresh.clone());
     Ok(fresh)
 }
@@ -436,8 +468,8 @@ pub async fn warm_system_caches() {
         Err(e) => super::logging::warn(&format!("rig warm-up failed: {e}")),
     }
     // checks + top processes: off-thread refreshes, results land in caches
-    let checks = tauri::async_runtime::spawn_blocking(query_system_checks);
-    let procs = tauri::async_runtime::spawn_blocking(query_top_processes);
+    let checks = tauri::async_runtime::spawn_blocking(query_system_checks_serialized);
+    let procs = tauri::async_runtime::spawn_blocking(query_top_processes_serialized);
     match checks.await {
         Ok(Ok(c)) => SYSTEM_CHECKS_CACHE.set(c),
         _ => super::logging::warn("system checks warm-up failed"),
@@ -480,12 +512,11 @@ pub struct SystemInfo {
 /// truth; CIM stays as the fallback for non-NVIDIA machines.
 fn nvidia_vram_mb() -> Option<f64> {
     #[cfg(windows)]
-    let out = Command::new("nvidia-smi")
+    let out = super::sampler::output_tracked(Command::new("nvidia-smi")
         .args(["--query-gpu=memory.total", "--format=csv,noheader,nounits"])
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
-        .creation_flags(NO_WINDOW)
-        .output()
+        .creation_flags(NO_WINDOW), std::time::Duration::from_secs(5))
         .ok()?;
     #[cfg(not(windows))]
     return None;
@@ -500,13 +531,20 @@ fn nvidia_vram_mb() -> Option<f64> {
 }
 
 pub fn query_system_info() -> Result<SystemInfo, String> {
-    let text = ps(r#"
+    let text = ps_with_timeout(
+        r#"
 $cpu = (Get-CimInstance Win32_Processor | Select-Object -First 1).Name
 "cpu|$cpu"
 Get-CimInstance Win32_VideoController | ForEach-Object { "gpu|$($_.Name)|$([math]::Round($_.AdapterRAM/1GB,1))" }
 "ram|$([math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB,1))"
 Get-PhysicalDisk | ForEach-Object { "disk|$($_.FriendlyName)|$($_.MediaType)|$($_.BusType)|$([math]::Round($_.Size/1GB,0))" }
-"#)?;
+"#,
+        PS_INVENTORY_TIMEOUT,
+    )
+    .map_err(|e| {
+        super::logging::warn(&format!("system inventory failed: {e}"));
+        map_ps_timeout(e)
+    })?;
     let mut info = SystemInfo {
         cpu: "Unknown".into(),
         gpus: Vec::new(),
@@ -592,7 +630,12 @@ Get-Process | ForEach-Object {
     "{0}|{1}|{2}|{3}" -f $_.ProcessName, $_.Id, $pct, [math]::Round($_.WorkingSet64/1MB,0)
   }
 }
-"#)?;
+"#,
+    )
+    .map_err(|e| {
+        super::logging::warn(&format!("top processes query failed: {e}"));
+        map_ps_timeout(e)
+    })?;
     let mut out: Vec<TopProcess> = Vec::new();
     for line in text.lines().map(|l| l.trim()).filter(|l| !l.is_empty()) {
         let mut parts = line.split('|');
@@ -821,7 +864,12 @@ $bat = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue
 if ($bat) { $ac = ($bat.BatteryStatus -contains 2); "battery|yes|$ac" } else { "battery|none|" }
 $vt = (Get-CimInstance Win32_Processor | Select-Object -First 1).VirtualizationFirmwareEnabled
 "vt|$vt"
-"#)?;
+"#,
+    )
+    .map_err(|e| {
+        super::logging::warn(&format!("system checks query failed: {e}"));
+        map_ps_timeout(e)
+    })?;
     let mut c = SystemChecks {
         power_name: "Unknown".into(),
         power_ok: false,
@@ -964,12 +1012,11 @@ fn looks_like_guid(s: &str) -> bool {
 /// fresh GUID every time, so GUID-only matching can never see it — the
 /// name fallback in is_performance_plan is what recognizes it.
 pub fn power_list() -> Vec<(String, String)> {
-    let out = Command::new("powercfg")
+    let out = super::sampler::output_tracked(Command::new("powercfg")
         .arg("/list")
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
-        .creation_flags(NO_WINDOW)
-        .output();
+        .creation_flags(NO_WINDOW), std::time::Duration::from_secs(5));
     let Ok(out) = out else { return Vec::new() };
     let text = String::from_utf8_lossy(&out.stdout);
     text.lines()
@@ -998,12 +1045,11 @@ pub fn power_active_guid() -> String {
 /// Active scheme as (guid, display name): the verify step needs both
 /// (performance-class by GUID or by name fallback, like the row read).
 pub fn power_active_scheme() -> (String, String) {
-    let out = Command::new("powercfg")
+    let out = super::sampler::output_tracked(Command::new("powercfg")
         .arg("/getactivescheme")
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
-        .creation_flags(NO_WINDOW)
-        .output();
+        .creation_flags(NO_WINDOW), std::time::Duration::from_secs(5));
     let Ok(out) = out else {
         return (String::new(), String::new());
     };
@@ -1020,12 +1066,11 @@ pub fn power_active_scheme() -> (String, String) {
 /// that cannot work fails honestly at verify time instead of hiding a
 /// working feature). Powercfg output is native-fast, no PowerShell.
 pub fn s0_standby_present() -> bool {
-    let out = Command::new("powercfg")
+    let out = super::sampler::output_tracked(Command::new("powercfg")
         .arg("/a")
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
-        .creation_flags(NO_WINDOW)
-        .output();
+        .creation_flags(NO_WINDOW), std::time::Duration::from_secs(5));
     let Ok(out) = out else { return false };
     let text = String::from_utf8_lossy(&out.stdout);
     s0_available_in(&text)
@@ -1144,8 +1189,12 @@ pub(crate) fn read_pagefile_flag_and_entries() -> Option<(bool, Vec<String>)> {
     let mem = hklm
         .open_subkey(r"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management")
         .ok()?;
-    let auto: u32 = mem.get_value("AutomaticManagedPagefile").unwrap_or(0);
-    let entries: Vec<String> = mem.get_value("PagingFiles").unwrap_or_default();
+    let auto: u32 = mem.get_value("AutomaticManagedPagefile").ok()?;
+    let entries: Vec<String> = match mem.get_value("PagingFiles") {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(_) => return None,
+    };
     Some((auto == 1, entries))
 }
 
@@ -1708,12 +1757,11 @@ pub fn query_tweak_states() -> TweakStates {
     // fixed args — the batch's 0.5-2s PowerShell cost stays untouched).
     // Active scheme line carries "GUID (Name)": the same parse the health
     // batch uses, so the row and the card can never disagree on what is on.
-    let power_active_raw = Command::new("powercfg")
+    let power_active_raw = super::sampler::output_tracked(Command::new("powercfg")
         .arg("/getactivescheme")
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
-        .creation_flags(NO_WINDOW)
-        .output()
+        .creation_flags(NO_WINDOW), std::time::Duration::from_secs(5))
         .ok()
         .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
         .unwrap_or_default();
@@ -1791,6 +1839,18 @@ pub fn open_windows_panel(panel: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ps_timeout_maps_to_machine_key() {
+        assert_eq!(
+            map_ps_timeout("powershell timed out".into()),
+            POWERSHELL_TIMEOUT
+        );
+        assert_eq!(
+            map_ps_timeout("powershell spawn failed: boom".into()),
+            "powershell spawn failed: boom"
+        );
+    }
 
     #[test]
     fn powershell_probe_matches_availability() {

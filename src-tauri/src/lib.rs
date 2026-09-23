@@ -394,9 +394,12 @@ async fn session_stop(app: tauri::AppHandle) -> Result<StatusPayload, String> {
     // disk — genuinely blocking work, parked on the blocking pool so the
     // async runtime never stalls (the UI keeps breathing meanwhile)
     let eng = session::init_global();
-    let _report = tauri::async_runtime::spawn_blocking(move || eng.stop())
+    let report = tauri::async_runtime::spawn_blocking(move || eng.stop())
         .await
         .map_err(|e| format!("stop task failed: {e}"))??;
+    if report.is_none() && session::init_global().status() == SessionStatus::Finished {
+        return Err("SESSION_SAVE_FAILED".into());
+    }
     // the report path is intentionally unread here: the UI loads the
     // finished session's report via load_report when the user opens it
     let _ = push_state(&app);
@@ -848,6 +851,7 @@ pub fn run() {
                 // file removed — nothing half-written outlives the app
                 engine::update::cancel_active();
                 if let Some(eng) = session::global() {
+                    eng.request_shutdown();
                     if eng.status() == engine::types::SessionStatus::Running {
                         let _ = eng.stop();
                     }

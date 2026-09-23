@@ -34,6 +34,9 @@ pub struct Engine {
     /// bumped on every start(): guard/timer threads capture it and die as
     /// soon as it's no longer current — no duplicate guards can ever run.
     generation: AtomicU32,
+    /// Set when the window begins closing. A start already in its slow gate
+    /// path observes this before creating a writer or spawning samplers.
+    shutdown_requested: AtomicBool,
 }
 
 struct SessionInner {
@@ -45,6 +48,10 @@ struct SessionInner {
     samples: Vec<Sample>,
     /// total samples written this session (never reset by the window)
     samples_total: u64,
+    /// every tick seen (never frozen by write failures): drives the
+    /// autosave cadence and the first-sample signal
+    ticks_total: u64,
+    storage_write_failed: bool,
     events: Vec<EngineEvent>,
     detector: Detector,
     started_at: Option<String>,
@@ -76,6 +83,8 @@ impl Engine {
                 writer: None,
                 samples: Vec::new(),
                 samples_total: 0,
+                ticks_total: 0,
+                storage_write_failed: false,
                 events: Vec::new(),
                 detector: Detector::new(settings.thresholds.clone()),
                 started_at: None,
@@ -91,6 +100,17 @@ impl Engine {
             fs_guard: std::sync::Mutex::new(()),
             gameloop_misses: AtomicU32::new(0),
             generation: AtomicU32::new(0),
+            shutdown_requested: AtomicBool::new(false),
+        }
+    }
+
+    pub fn request_shutdown(&self) {
+        self.shutdown_requested.store(true, Ordering::SeqCst);
+        // retire any guard/timer threads gated on the current generation,
+        // including ones a racing start() is about to spawn
+        self.generation.fetch_add(1, Ordering::SeqCst);
+        if let Ok(current) = self.running_flag.read() {
+            current.store(false, Ordering::SeqCst);
         }
     }
 
@@ -169,6 +189,9 @@ impl Engine {
     /// Requires GameLoop to be running — the tool measures the game, not the desktop.
     pub fn start(&self, auto_stop_secs: Option<u64>) -> Result<u32, String> {
         let _t = super::logging::timed("session start");
+        if self.shutdown_requested.load(Ordering::SeqCst) {
+            return Err("APP_SHUTTING_DOWN".into());
+        }
         {
             let st = self.state.lock().unwrap_or_else(|p| p.into_inner());
             if st.status == SessionStatus::Running {
@@ -210,6 +233,9 @@ impl Engine {
             disk_count,
         };
         let thresholds = Thresholds::for_machine(profile);
+        if self.shutdown_requested.load(Ordering::SeqCst) {
+            return Err("APP_SHUTTING_DOWN".into());
+        }
         if let Ok(mut t) = self.total_mem_mb.write() {
             *t = total_mem;
         }
@@ -230,9 +256,14 @@ impl Engine {
         if st.status == SessionStatus::Stopping {
             return Err("SESSION_STOPPING".into());
         }
+        if self.shutdown_requested.load(Ordering::SeqCst) {
+            return Err("APP_SHUTTING_DOWN".into());
+        }
         // reset per-session state
         st.samples.clear();
         st.samples_total = 0;
+        st.ticks_total = 0;
+        st.storage_write_failed = false;
         st.events.clear();
         st.stop_reason = None;
         st.thresholds = thresholds.clone();
@@ -325,6 +356,18 @@ impl Engine {
             Err(e) => super::logging::error(&format!("nvidia-smi dmon sampler: SPAWN FAILED: {e}")),
         }
 
+        // Final gate: request_shutdown only sets an atomic, so it can land
+        // after the locked check above while samplers were spawning. Retire
+        // the just-born session here so no writer/samplers outlive the
+        // window (lib.rs spawns guards only on Ok, so Err spawns nothing).
+        if self.shutdown_requested.load(Ordering::SeqCst) {
+            running.store(false, Ordering::SeqCst);
+            drop(st);
+            drop(_fs_guard);
+            let _ = self.stop_with_reason(StopReason::Manual);
+            return Err("APP_SHUTTING_DOWN".into());
+        }
+
         Ok(gen)
     }
 
@@ -384,11 +427,18 @@ impl Engine {
                 let started = st.started_at.clone().unwrap_or_default();
                 let th = st.thresholds.clone();
                 let total = st.samples_total;
+                let storage_write_failed = st.storage_write_failed;
                 super::logging::info(&format!(
                     "session stopping: {total} samples, {} events",
                     events.len()
                 ));
-                let path = w.finalize_from_disk(&events, &started, &th, total);
+                let path = w.finalize_from_disk(
+                    &events,
+                    &started,
+                    &th,
+                    total,
+                    storage_write_failed,
+                );
                 match &path {
                     Ok(p) => super::logging::info(&format!("report written: {}", p.display())),
                     Err(e) => super::logging::error(&format!("finalize failed: {e}")),
@@ -442,12 +492,25 @@ impl Engine {
         }
 
         st.game_running = !s.emu.is_empty();
+        // tick cadence never freezes: write failures must not turn the
+        // periodic autosave below into a per-tick storm
+        st.ticks_total += 1;
 
         // every sample hits disk immediately — the file is the source of truth
-        if let Some(w) = st.writer.as_mut() {
-            w.append_sample(&s);
+        let sample_result = st
+            .writer
+            .as_mut()
+            .map(|w| w.append_sample(&s))
+            .unwrap_or_else(|| Err("session writer missing".into()));
+        match sample_result {
+            Ok(()) => st.samples_total += 1,
+            Err(e) => {
+                if !st.storage_write_failed {
+                    super::logging::error(&format!("sample persistence failed: {e}"));
+                }
+                st.storage_write_failed = true;
+            }
         }
-        st.samples_total += 1;
 
         // rolling RAM window: detector needs ~30 recent ticks, UI needs 60 — keep 300 max
         st.samples.push(s.clone());
@@ -457,7 +520,7 @@ impl Engine {
         }
 
         // first sample arriving is the health signal of the whole pipeline
-        if st.samples_total == 1 {
+        if st.ticks_total == 1 {
             let slot = FIRST_SAMPLE_AT.lock().unwrap_or_else(|p| p.into_inner());
             if let Some(at) = slot.as_ref() {
                 super::logging::perf("pipeline: first sample", at.elapsed().as_millis());
@@ -468,13 +531,18 @@ impl Engine {
         st.events.extend(evs);
 
         // autosave every ~50 ticks (crash safety for the events file)
-        if st.samples_total % 50 == 0 {
+        if st.ticks_total % 50 == 0 {
             if let Some(w) = st.writer.as_ref() {
-                w.autosave(
+                if let Err(e) = w.autosave(
                     &st.events,
                     &st.thresholds,
                     st.started_at.as_deref().unwrap_or(""),
-                );
+                ) {
+                    if !st.storage_write_failed {
+                        super::logging::error(&format!("session autosave failed: {e}"));
+                    }
+                    st.storage_write_failed = true;
+                }
             }
         }
 
@@ -672,7 +740,7 @@ static FIRST_SAMPLE_AT: Mutex<Option<std::time::Instant>> = Mutex::new(None);
 
 fn total_ram_mb() -> f64 {
     use std::os::windows::process::CommandExt;
-    let out = std::process::Command::new("powershell.exe")
+    let out = super::sampler::output_tracked(std::process::Command::new("powershell.exe")
         .args([
             "-NoProfile",
             "-NonInteractive",
@@ -681,8 +749,7 @@ fn total_ram_mb() -> f64 {
         ])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
-        .creation_flags(0x0800_0000)
-        .output();
+        .creation_flags(0x0800_0000), std::time::Duration::from_secs(10));
     match out {
         Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
             .trim()
@@ -696,7 +763,7 @@ fn total_ram_mb() -> f64 {
 /// threshold: each device can legitimately serve ~1 parallel request.
 fn physical_disk_count() -> u32 {
     use std::os::windows::process::CommandExt;
-    let out = std::process::Command::new("powershell.exe")
+    let out = super::sampler::output_tracked(std::process::Command::new("powershell.exe")
         .args([
             "-NoProfile",
             "-NonInteractive",
@@ -705,8 +772,7 @@ fn physical_disk_count() -> u32 {
         ])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
-        .creation_flags(0x0800_0000)
-        .output();
+        .creation_flags(0x0800_0000), std::time::Duration::from_secs(10));
     match out {
         Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
             .trim()

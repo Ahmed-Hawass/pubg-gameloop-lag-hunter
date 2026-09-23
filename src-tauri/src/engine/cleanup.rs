@@ -216,7 +216,10 @@ pub fn clean_selected_with(
             return Err(format!("unknown cleanup category: {id}"));
         }
     }
-    let before = scan_map();
+    let before: std::collections::HashMap<String, Option<u64>> = ids
+        .iter()
+        .map(|id| (id.clone(), measure_category(id)))
+        .collect();
     // admin categories first, through one UAC prompt for the whole click.
     // The parent often cannot re-read admin places itself (denied
     // listing), so the elevated child measures them with ITS eyes and
@@ -241,7 +244,10 @@ pub fn clean_selected_with(
             clean_one_unprivileged(id);
         }
     }
-    let after = scan_map();
+    let after: std::collections::HashMap<String, Option<u64>> = ids
+        .iter()
+        .map(|id| (id.clone(), measure_category(id)))
+        .collect();
     let results: Vec<CleanupResult> = ids
         .iter()
         .map(|id| {
@@ -425,10 +431,6 @@ fn remove_old_files(dir: &Path, keep_ms: i64) {
             let _ = std::fs::remove_file(&path);
         }
     }
-}
-
-fn scan_map() -> std::collections::HashMap<String, Option<u64>> {
-    scan().categories.into_iter().map(|c| (c.id, c.bytes)).collect()
 }
 
 // ---- sweep memory (numbers only, bounded) --------------------------------
@@ -828,46 +830,18 @@ fn dir_size_capped(root: PathBuf) -> Option<u64> {
     if seen_any { Some(total) } else { None }
 }
 
-/// Recycle bin size by walking `$Recycle.Bin` on every fixed drive with
-/// the same recursive walker as the temp categories (one measuring
-/// engine everywhere). The old Shell-COM probe summed only the visible
-/// items' `Size` property, which folders do not carry: a 5GB folder in
-/// the bin read as a fraction of itself. Missing bin dirs count 0;
-/// denied entries are skipped like everywhere else.
-/// Every fixed drive's bin root (shared by measure and display, so the
-/// shown path can never drift from the measured one).
-#[cfg(windows)]
-fn recycle_roots() -> Vec<PathBuf> {
-    super::system::fixed_drives()
-        .iter()
-        .map(|d| PathBuf::from(format!("{d}\\")) .join("$Recycle.Bin"))
-        .collect()
-}
-
-#[cfg(not(windows))]
-fn recycle_roots() -> Vec<PathBuf> {
-    Vec::new()
-}
-
 #[cfg(windows)]
 fn recycle_bin_bytes() -> Option<u64> {
-    if super::system::fixed_drives().is_empty() {
-        return None;
-    }
-    recycle_bin_bytes_in(&recycle_roots())
-}
-
-/// Sum helper, roots injected for tests (a fake bin tree with nested
-/// folders and known sizes proves folders are counted, the COM bug).
-/// Missing roots count 0 (no bin on that drive); an existing but
-/// denied root poisons the whole answer to None (same rule as the
-/// walker: a short sum must never parade as exact).
-fn recycle_bin_bytes_in(roots: &[PathBuf]) -> Option<u64> {
-    let mut total = 0u64;
-    for root in roots.iter().filter(|r| r.is_dir()) {
-        total = total.saturating_add(dir_size_capped(root.clone())?);
-    }
-    Some(total)
+    // Measure through the same user-scoped PowerShell API used for deletion.
+    // Walking every SID under $Recycle.Bin could count other users' items
+    // that Clear-RecycleBin will not remove for this user.
+    let text = super::system::ps(
+        r#"$sum = (Get-RecycleBin -Force | Measure-Object -Property Size -Sum).Sum
+if ($null -eq $sum) { "0" } else { [math]::Floor($sum).ToString([Globalization.CultureInfo]::InvariantCulture) }"#,
+    )
+    .ok()?;
+    let bytes = text.trim().parse::<f64>().ok()?;
+    (bytes >= 0.0 && bytes.is_finite()).then_some(bytes as u64)
 }
 
 #[cfg(not(windows))]
@@ -1027,31 +1001,6 @@ mod tests {
         assert!(clean_admin(&[USER_TEMP_ID.to_string()]).is_err());
         assert!(clean_admin(&[RECYCLE_BIN_ID.to_string()]).is_err());
         assert!(clean_admin(&["nope".to_string()]).is_err());
-    }
-
-    #[test]
-    fn recycle_bin_counts_nested_folders_not_just_files() {
-        // the COM-probe bug: folders carry no `Size`, so a bin holding a
-        // 5GB folder read as a fraction of itself. The walker must count
-        // every nested byte. Fake bin tree with known sizes:
-        // root/<SID>/loose.bin (100) + root/<SID>/folder/deep.bin (50).
-        let root = temp_workdir("bin").join("$Recycle.Bin");
-        let sid = root.join("S-1-5-21-1");
-        std::fs::create_dir_all(sid.join("folder")).unwrap();
-        std::fs::write(sid.join("loose.bin"), vec![0u8; 100]).unwrap();
-        std::fs::write(sid.join("folder").join("deep.bin"), vec![0u8; 50]).unwrap();
-        let probe = root.clone();
-        assert_eq!(
-            recycle_bin_bytes_in(std::slice::from_ref(&probe)),
-            Some(150)
-        );
-        // missing roots count 0, never an error
-        let missing = root.join("no-such-drive-root");
-        assert_eq!(
-            recycle_bin_bytes_in(std::slice::from_ref(&missing)),
-            Some(0)
-        );
-        let _ = std::fs::remove_dir_all(root.parent().unwrap());
     }
 
     #[test]

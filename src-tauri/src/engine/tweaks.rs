@@ -812,9 +812,12 @@ fn write_pagefile_raw(valid: &ValidatedPagefileApply) -> Result<(), String> {
             winreg::enums::KEY_SET_VALUE | winreg::enums::KEY_QUERY_VALUE,
         )
         .map_err(|_| "PF_WRITE_FAILED".to_string())?;
-    key.set_value("AutomaticManagedPagefile", &(valid.automatic as u32))
+    let previous_auto: u32 = key
+        .get_value("AutomaticManagedPagefile")
         .map_err(|_| "PF_WRITE_FAILED".to_string())?;
     if valid.automatic {
+        key.set_value("AutomaticManagedPagefile", &(valid.automatic as u32))
+            .map_err(|_| "PF_WRITE_FAILED".to_string())?;
         return Ok(());
     }
     let drive = drive_id_string(valid.drive);
@@ -834,8 +837,12 @@ fn write_pagefile_raw(valid: &ValidatedPagefileApply) -> Result<(), String> {
         valid.min_mb,
         valid.max_mb,
     );
-    key.set_value("PagingFiles", &entries)
+    key.set_value("AutomaticManagedPagefile", &(valid.automatic as u32))
         .map_err(|_| "PF_WRITE_FAILED".to_string())?;
+    if key.set_value("PagingFiles", &entries).is_err() {
+        let _ = key.set_value("AutomaticManagedPagefile", &previous_auto);
+        return Err("PF_WRITE_FAILED".into());
+    }
     Ok(())
 }
 

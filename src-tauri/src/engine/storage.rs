@@ -86,24 +86,23 @@ impl SessionWriter {
         &self.dir
     }
 
-    pub fn append_sample(&mut self, s: &Sample) {
-        if let Ok(line) = serde_json::to_string(s) {
-            let _ = writeln!(self.samples, "{line}");
-        }
+    pub fn append_sample(&mut self, s: &Sample) -> Result<(), String> {
+        let line = serde_json::to_string(s).map_err(|e| format!("serialize sample: {e}"))?;
+        writeln!(self.samples, "{line}").map_err(|e| format!("write sample: {e}"))
     }
 
-    pub fn flush(&mut self) {
-        let _ = self.samples.flush();
+    pub fn flush(&mut self) -> Result<(), String> {
+        self.samples.flush().map_err(|e| format!("flush samples: {e}"))
     }
 
     /// Autosafe: rewrite events + summary-lite periodically so a crash never loses data.
-    pub fn autosave(&self, events: &[EngineEvent], thresholds: &Thresholds, started_at: &str) {
-        let _ = write_file_atomic(
+    pub fn autosave(&self, events: &[EngineEvent], thresholds: &Thresholds, started_at: &str) -> Result<(), String> {
+        write_file_atomic(
             &self.dir.join("events.json"),
             serde_json::to_string_pretty(events)
                 .unwrap_or_default()
                 .as_bytes(),
-        );
+        ).map_err(|e| format!("autosave events: {e}"))?;
         let summary = serde_json::json!({
             "session": self.dir.file_name().and_then(|s| s.to_str()).unwrap_or(""),
             "startedAt": started_at,
@@ -111,45 +110,60 @@ impl SessionWriter {
             "thresholds": thresholds,
             "eventsCount": events.len(),
         });
-        let _ = write_file_atomic(
+        write_file_atomic(
             &self.dir.join("summary.json"),
             serde_json::to_string_pretty(&summary)
                 .unwrap_or_default()
                 .as_bytes(),
-        );
+        ).map_err(|e| format!("autosave summary: {e}"))?;
+        Ok(())
     }
 
     /// Final write: events, summary, CSV, Markdown report.
     /// Reads samples back from the jsonl file (the RAM window may have trimmed them).
+    /// Best-effort by design: a failing disk must still leave a listable
+    /// partial session behind instead of an invisible directory the summary
+    /// card points at. summary.json is the one hard requirement (the list
+    /// and the reader both key off it); everything else degrades to the
+    /// storageWriteFailed flag the outcome readers map to partial.
     pub fn finalize_from_disk(
         &mut self,
         events: &[EngineEvent],
         started_at: &str,
         thresholds: &Thresholds,
         samples_total: u64,
+        storage_write_failed: bool,
     ) -> Result<PathBuf, String> {
-        self.flush();
+        let _ = self.flush();
 
-        // read all samples from disk — the file is the source of truth
+        // read all samples from disk — the file is the source of truth;
+        // an unreadable file finalizes as an empty (partial) session
         let samples: Vec<Sample> = fs::read_to_string(self.dir.join("samples.jsonl"))
-            .map_err(|e| format!("cannot read samples: {e}"))?
-            .lines()
-            .filter_map(|l| {
-                if l.trim().is_empty() {
-                    None
-                } else {
-                    serde_json::from_str(l).ok()
-                }
+            .map(|text| {
+                text.lines()
+                    .filter_map(|l| {
+                        if l.trim().is_empty() {
+                            None
+                        } else {
+                            serde_json::from_str(l).ok()
+                        }
+                    })
+                    .collect()
             })
-            .collect();
+            .unwrap_or_default();
 
+        let mut failed = storage_write_failed;
         // events.json
-        let _ = write_file_atomic(
+        if write_file_atomic(
             &self.dir.join("events.json"),
             serde_json::to_string_pretty(events)
                 .unwrap_or_default()
                 .as_bytes(),
-        );
+        )
+        .is_err()
+        {
+            failed = true;
+        }
 
         // samples.csv
         let mut csv = String::from("time,cpu_pct,proc_perf_pct,avail_mb,pages_in_ps,disk_queue,disk_busy_pct,gpu_sm_pct,gpu_clk_mhz,gpu_temp_c\n");
@@ -169,10 +183,19 @@ impl SessionWriter {
                 fmt(g.and_then(|g| g.temp)),
             ));
         }
-        let _ = write_file_atomic(&self.dir.join("samples.csv"), csv.as_bytes());
+        if write_file_atomic(&self.dir.join("samples.csv"), csv.as_bytes()).is_err() {
+            failed = true;
+        }
 
-        // summary.json + report.md
+        // report.md before the summary so the flag below covers every write
         let stats = SessionStats::from(&samples);
+        let report = build_report(&stats, events, samples.len() as u64);
+        let rp = self.dir.join("report.md");
+        if write_file_atomic(&rp, report.as_bytes()).is_err() {
+            failed = true;
+        }
+
+        // summary.json last: the commit point the list and reader key off
         let summary = serde_json::json!({
             "session": self.dir.file_name().and_then(|s| s.to_str()).unwrap_or(""),
             "startedAt": started_at,
@@ -180,6 +203,7 @@ impl SessionWriter {
             "durationSec": stats.duration_sec,
             "samplesCount": samples.len(),
             "samplesTotal": samples_total,
+            "storageWriteFailed": failed,
             "thresholds": thresholds,
             "stats": {
                 "cpuAvg": stats.cpu_avg, "cpuP95": stats.cpu_p95,
@@ -188,17 +212,13 @@ impl SessionWriter {
                 "backgroundPct": stats.background_pct,
             },
         });
-        let _ = write_file_atomic(
+        write_file_atomic(
             &self.dir.join("summary.json"),
             serde_json::to_string_pretty(&summary)
                 .unwrap_or_default()
                 .as_bytes(),
-        );
-
-        let report = build_report(&stats, events, samples.len() as u64);
-        let rp = self.dir.join("report.md");
-        write_file_atomic(&rp, report.as_bytes())
-            .map_err(|e| format!("cannot write report: {e}"))?;
+        )
+        .map_err(|e| format!("write summary: {e}"))?;
         Ok(rp)
     }
 }
@@ -469,9 +489,13 @@ pub fn session_entries(live_id: Option<&str>) -> Vec<SessionEntry> {
             Ok(text) => match serde_json::from_str::<serde_json::Value>(&text) {
                 Ok(v) => {
                     let partial = v.get("partial").and_then(|p| p.as_bool()).unwrap_or(false);
+                    let write_failed = v
+                        .get("storageWriteFailed")
+                        .and_then(|w| w.as_bool())
+                        .unwrap_or(false);
                     let dur = v.get("durationSec").and_then(|d| d.as_u64()).unwrap_or(0);
                     let (spikes, distinct_issues) = classify_events(&dir);
-                    let outcome = if partial {
+                    let outcome = if partial || write_failed {
                         "partial".to_string()
                     } else {
                         honest_outcome(spikes, distinct_issues)
@@ -677,7 +701,11 @@ pub fn friendly_report(id: &str) -> Result<FriendlyReport, String> {
         .get("partial")
         .and_then(|p| p.as_bool())
         .unwrap_or(false);
-    let outcome = if partial {
+    let write_failed = summary
+        .get("storageWriteFailed")
+        .and_then(|w| w.as_bool())
+        .unwrap_or(false);
+    let outcome = if partial || write_failed {
         "partial".to_string()
     } else {
         honest_outcome(spikes, distinct_issues)

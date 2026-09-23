@@ -24,6 +24,7 @@ pub struct Settings {
     pub version: u32,
     /// legacy from v2 — ignored by the engine (thresholds are dynamic now),
     /// kept only so old files migrate without surprises.
+    #[serde(skip_serializing)]
     pub sensitivity: String,
     /// default auto-stop in minutes (bounded 5..=60 by the UI/engine);
     /// 5 = the lightest scan, the default for every new user
@@ -65,6 +66,7 @@ pub struct Settings {
     #[serde(default)]
     pub pending_restart: Option<PendingRestart>,
     /// schema-compat placeholder — recomputed per session, never read back
+    #[serde(skip_serializing)]
     pub thresholds: Thresholds,
 }
 
@@ -121,13 +123,16 @@ enum MigrationKind {
 
 fn migration_kind(text: &str) -> MigrationKind {
     if let Ok(v) = serde_json::from_str::<serde_json::Value>(text) {
-        let has_sens = v.get("sensitivity").is_some();
         let version = v.get("version").and_then(|x| x.as_u64()).unwrap_or(0);
-        if has_sens && version >= 2 {
-            if version < SETTINGS_VERSION as u64 {
-                return MigrationKind::BumpV2;
-            }
+        // New-format files (v3+: sensitivity/thresholds omitted via
+        // skip_serializing) are current by version alone — requiring the
+        // legacy key here misclassified every file we write as Legacy and
+        // reset all prefs on the next launch.
+        if version >= SETTINGS_VERSION as u64 {
             return MigrationKind::Current;
+        }
+        if v.get("sensitivity").is_some() && version >= 2 {
+            return MigrationKind::BumpV2;
         }
     }
     MigrationKind::Legacy
@@ -267,6 +272,14 @@ mod tests {
             migration_kind(r#"{"version":2,"sensitivity":"high"}"#),
             MigrationKind::BumpV2
         );
+        // new-format v3 (sensitivity/thresholds omitted by skip_serializing):
+        // current by version alone — this is what save() writes now
+        assert_eq!(
+            migration_kind(
+                r#"{"version":3,"auto_stop_minutes":10,"language":"ar","theme":"dark","sidebar_collapsed":true,"onboarding_done":true,"game_advice_done":true,"background_advice_done":true,"announced_update_version":null,"previous_power_guid":null,"pending_restart":null}"#
+            ),
+            MigrationKind::Current
+        );
         // bare thresholds and garbage: full legacy merge
         assert_eq!(
             migration_kind(r#"{"cpu_saturation_pct":90.0}"#),
@@ -274,6 +287,39 @@ mod tests {
         );
         assert_eq!(migration_kind("{ this is not json !!!"), MigrationKind::Legacy);
         assert_eq!(migration_kind(""), MigrationKind::Legacy);
+    }
+
+    #[test]
+    fn new_format_file_upgrades_without_losing_prefs() {
+        // what save() writes today: v3 with no sensitivity/thresholds keys.
+        // upgrade_text must keep every pref (the old content-based detector
+        // reset all of these to defaults on every launch).
+        let s = Settings {
+            version: SETTINGS_VERSION,
+            sensitivity: "standard".into(),
+            auto_stop_minutes: 10,
+            language: "ar".into(),
+            theme: "dark".into(),
+            sidebar_collapsed: true,
+            onboarding_done: true,
+            game_advice_done: true,
+            background_advice_done: true,
+            announced_update_version: None,
+            previous_power_guid: None,
+            pending_restart: None,
+            thresholds: Thresholds::default(),
+        };
+        let text = serde_json::to_string(&s).unwrap();
+        assert!(!text.contains("sensitivity"));
+        let (back, retire) = upgrade_text(&text);
+        assert!(!retire);
+        assert_eq!(back.language, "ar");
+        assert_eq!(back.theme, "dark");
+        assert_eq!(back.auto_stop_minutes, 10);
+        assert!(back.onboarding_done);
+        assert!(back.game_advice_done);
+        assert!(back.background_advice_done);
+        assert!(back.sidebar_collapsed);
     }
 
     #[test]
