@@ -70,7 +70,7 @@ export function AboutView(props: {
   return (
     <div className="about">
       {/* block 1: identity — icon, name, version, one honest sentence */}
-      <div className="about-card about-identity">
+      <div className="card about-card about-identity">
         <img className="about-mark-img" src={appIcon} alt="" width={44} height={44} draggable={false} />
         <div className="about-id-text">
           <h2 className="about-title">{t.aboutTitle}</h2>
@@ -80,7 +80,7 @@ export function AboutView(props: {
       </div>
 
       {/* block 2: cost — the five honest numbers */}
-      <div className="about-card">
+      <div className="card about-card">
         <h3 className="about-h">
           <Leaf size={13} />
           {t.aboutImpact}
@@ -94,7 +94,7 @@ export function AboutView(props: {
 
       {/* block 3: updates — the dot sits on the heading when a newer
           release exists; it is not dismissible and matches the sidebar's */}
-      <div className="about-card">
+      <div className="card about-card">
         <h3 className="about-h">
           <Download size={13} />
           {t.aboutUpdate}

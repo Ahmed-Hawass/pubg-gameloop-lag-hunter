@@ -74,13 +74,9 @@
 [dir="rtl"] .sb-collapse svg {
   transform: scaleX(-1);
 }
-/* RTL: the reports back-arrow is a direction-aware chevron too — in Arabic
-   "back" points right, same rule as the sidebar collapse chevron */
-[dir="rtl"] .reports-back svg {
-  transform: scaleX(-1);
-}
-
-[dir="rtl"] .tools-back svg {
+/* RTL: back-arrow chevrons are direction-aware (in Arabic "back" points
+   right, same rule as the sidebar collapse chevron) */
+[dir="rtl"] .back-btn svg {
   transform: scaleX(-1);
 }
 
@@ -283,6 +279,12 @@
   scrollbar-gutter: stable;
 }
 
+/* Thin theme-matched scrollbars: 6px, thumb-only on a transparent track,
+   hover lightens via the hover token. One definition for every scrollable
+   view; visible only when the page actually overflows (overflow-y: auto
+   above), so roomy screens stay clean. */
+:is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::-webkit-scrollbar,
+:is(.monitor, .feed-list)::-webkit-scrollbar,
 .content > div > .reports::-webkit-scrollbar,
 .content > div > .sys::-webkit-scrollbar,
 .content > div > .procs::-webkit-scrollbar,
@@ -294,6 +296,19 @@
 .feed-list::-webkit-scrollbar {
   width: 6px;
   height: 6px;
+}
+:is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::-webkit-scrollbar-thumb,
+:is(.monitor, .feed-list)::-webkit-scrollbar-thumb {
+  background: var(--border-2);
+  border-radius: 4px;
+}
+:is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::-webkit-scrollbar-thumb:hover,
+:is(.monitor, .feed-list)::-webkit-scrollbar-thumb:hover {
+  background: var(--hover-border);
+}
+:is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::-webkit-scrollbar-track,
+:is(.monitor, .feed-list)::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .content > div > .monitor {
@@ -321,31 +336,4 @@
   0% { transform: scale(0.7); }
   60% { transform: scale(1.28); }
   100% { transform: scale(1); }
-}
-
-/* Thin theme-matched scrollbars: 6px, thumb-only on a transparent track,
-   hover lightens via the hover token. Becomes visible only when the page
-   actually overflows (overflow-y: auto above), so roomy screens stay clean. */
-:is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::-webkit-scrollbar,
-:is(.monitor, .feed-list)::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-:is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::-webkit-scrollbar-thumb,
-:is(.monitor, .feed-list)::-webkit-scrollbar-thumb {
-  background: var(--border-2);
-  border-radius: 3px;
-}
-:is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::-webkit-scrollbar-thumb:hover,
-:is(.monitor, .feed-list)::-webkit-scrollbar-thumb:hover {
-  background: var(--hover-border);
-}
-:is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::-webkit-scrollbar-thumb,
-:is(.monitor, .feed-list)::-webkit-scrollbar-thumb {
-  background: var(--border-2);
-  border-radius: 4px;
-}
-:is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::-webkit-scrollbar-track,
-:is(.monitor, .feed-list)::-webkit-scrollbar-track {
-  background: transparent;
 }

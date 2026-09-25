@@ -66,9 +66,9 @@ function SwitchRow(props: {
   return (
     <div
       data-tweak={tweakId}
-      className={`switch-row ${on ? "on" : "off"}${disabled ? " is-disabled" : ""}${linked ? " is-linked" : ""}`}
+      className={`card-sm verdict switch-row ${on ? "verdict-ok" : "verdict-warn"}${disabled ? " is-disabled" : ""}${linked ? " is-linked" : ""}`}
     >
-      <span className="check-func">{func}</span>
+      <span className="icon-tile check-func">{func}</span>
       <div className="switch-body">
         <span className="switch-name">
           {name}
@@ -86,7 +86,7 @@ function SwitchRow(props: {
           <span className="switch-reason">{disabledHint}</span>
         ) : null}
       </div>
-      <span className={`check-badge ${on ? "ok" : "warn"}`}>
+      <span className={`badge check-badge ${on ? "ok" : "warn"}`}>
         {on ? t.checkOkBadge : t.checkWarnBadge}
       </span>
       <button
@@ -669,7 +669,7 @@ export function ToolsView(props: {
     const measured = all.filter((bytes) => bytes != null);
     if (measured.length === 0) return "";
     const total = measured.reduce((s, bytes) => s + (bytes ?? 0), 0);
-    return total >= CLEAN_WORTHY_BYTES ? "off" : "on";
+    return total >= CLEAN_WORTHY_BYTES ? "verdict-warn" : "verdict-ok";
   })();
   /** one row per measured place (shared by both groups so the two lists
       can never drift apart in behavior) */
@@ -881,7 +881,7 @@ export function ToolsView(props: {
       // that spins forever (the window-focus retry is the rescue)
       return (
         <div className="tools">
-          <button className="tools-back" onClick={() => setOpenCard(null)}>
+          <button className="back-btn" onClick={() => setOpenCard(null)}>
             <ChevronLeft size={16} />
             {t.toolsBack}
           </button>
@@ -896,7 +896,7 @@ export function ToolsView(props: {
     const gaming = openCard === "gaming";
     return (
       <div className="tools">
-        <button className="tools-back" onClick={() => setOpenCard(null)}>
+        <button className="back-btn" onClick={() => setOpenCard(null)}>
           <ChevronLeft size={16} />
           {t.toolsBack}
         </button>
@@ -1023,13 +1023,13 @@ export function ToolsView(props: {
           {pfSettings ? (
             <div
               data-tweak="pagefile"
-              className={`pf-summary${pfHealthy ? " on" : " off"}${linkedId === "pagefile" ? " is-linked" : ""}`}
+              className={`card-sm verdict pf-summary${pfHealthy ? " verdict-ok" : " verdict-warn"}${linkedId === "pagefile" ? " is-linked" : ""}`}
             >
               {/* same row language as every SwitchRow (tile, texts with
                   the (?) inside the name line, badge, chevron): the title
                   and desc are text-styled buttons so the (?) can sit next
                   to the title without nesting a button inside a button */}
-              <span className="check-func">
+              <span className="icon-tile check-func">
                 <Database size={15} />
               </span>
               <div className="switch-body">
@@ -1064,7 +1064,7 @@ export function ToolsView(props: {
                   the expanded card, this badge keeps the collapsed row
                   honest */}
               {pfSettings.pending ? (
-                <span className="check-badge warn">{t.tweakPfPendingBadge}</span>
+                <span className="badge check-badge warn">{t.tweakPfPendingBadge}</span>
               ) : null}
               {/* its own toggle button (a button cannot nest): title-area
                   and chevron expand the same editor, matching the row
@@ -1106,7 +1106,7 @@ export function ToolsView(props: {
             </div>
           ) : null}
           {pfSettings && pfOpen ? (
-            <div className="pf-form">
+            <div className="card-sm pf-form">
               {/* the (?) lives on the summary row (always visible); no
                   second copy in here */}
               <label className="pf-auto">
@@ -1220,10 +1220,10 @@ export function ToolsView(props: {
               ones. No auto-delete, no estimates: sizes are measured, the
               freed number is before-minus-after, locked files are skipped.
               Collapses under its summary row like the page file editor. */}
-          <div className={`pf-summary ${clEdge}`} data-tweak="cleanup">
+          <div className={`card-sm verdict pf-summary ${clEdge}`} data-tweak="cleanup">
             {/* same row language as the page file summary above: the (?)
                 sits inside the name line, like every SwitchRow */}
-            <span className="check-func">
+            <span className="icon-tile check-func">
               <Trash2 size={15} />
             </span>
             <div className="switch-body">
@@ -1272,7 +1272,7 @@ export function ToolsView(props: {
             </button>
           </div>
           {clOpen ? (
-            <div className="cleanup">
+            <div className="card-sm cleanup">
               {clScanError ? <p className="tool-note">{clScanError}</p> : null}
               {clDeepError ? <p className="tool-note">{clDeepError}</p> : null}
               {/* one toggle for the visible list only (the flip hides a
@@ -1491,7 +1491,7 @@ export function ToolsView(props: {
       {/* no intro paragraph: it duplicated the card description below
           almost verbatim — the card carries the meaning alone */}
       <div className="tools-grid">
-        <button className="tool-card" onClick={() => setOpenCard("gaming")}>
+        <button className="card tool-card" onClick={() => setOpenCard("gaming")}>
           <img
             className="tool-spot"
             src={spotTheme === "light" ? spotTweaksLight : spotTweaksDark}
@@ -1504,7 +1504,7 @@ export function ToolsView(props: {
           </span>
           <span className="tool-desc">{t.toolGamingTweaksDesc}</span>
         </button>
-        <button className="tool-card" onClick={() => setOpenCard("storage")}>
+        <button className="card tool-card" onClick={() => setOpenCard("storage")}>
           <img
             className="tool-spot"
             src={spotTheme === "light" ? spotStorageLight : spotStorageDark}

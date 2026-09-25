@@ -80,9 +80,6 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  background: var(--elev-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
   padding: 12px 16px;
   color: var(--text-2);
   font-size: 12.5px;
@@ -155,17 +152,4 @@
   background: var(--primary);
 }
 
-/* the two entrance keyframes this view uses (kept here, self-contained).
-   rise-in enters from ABOVE — never extends the scroll area (no scrollbar flash). */
-@keyframes rise-in {
-  from {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-}
-@keyframes settle-in {
-  from {
-    opacity: 0;
-    transform: scale(0.85) rotate(-4deg);
-  }
-}
+/* entrance keyframes (rise-in, settle-in) live once in components.css */

@@ -161,7 +161,7 @@ export function MonitorView(props: {
           <Hint text={t.activityHint} />
         </h3>
         {liveUi && liveUi.feed.length > 0 ? (
-          <ul className="feed-list">
+          <ul className="card feed-list">
             {liveUi.feed.map((f, i) => (
               // content-prefixed key with an index tiebreaker: rows are
               // static text, so index shifting on prepend only repaints text

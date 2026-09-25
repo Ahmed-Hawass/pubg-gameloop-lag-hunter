@@ -56,11 +56,107 @@
   pointer-events: none;
 }
 
-/* MetricCard */
-.metric {
+/* Shared primitives — single source of truth for surfaces, verdict
+   edges, pills, icon tiles, back buttons and row actions. Domain classes
+   keep only layout and padding; materials live here. Load order
+   (components before views/reports/pages) plus equal specificity keeps
+   these authoritative wherever they are combined. */
+.card {
   background: var(--elev-1);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+}
+.card-sm {
+  background: var(--elev-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+/* verdict edge: the inline-start accent shared by health cards, Tools
+   rows and the pagefile summary. Tones below; components keep no accent
+   of their own. */
+.verdict {
+  border-inline-start: 3px solid var(--border);
+}
+.verdict-ok {
+  border-inline-start-color: var(--primary);
+}
+.verdict-warn {
+  border-inline-start-color: var(--warn);
+}
+.verdict-bad {
+  border-inline-start-color: var(--danger);
+}
+/* pill: layout only (font size/padding stay per component, tones stay
+   per component); every badge in the app shares this shape */
+.badge {
+  flex: none;
+  font-weight: 700;
+  border-radius: 999px;
+}
+/* 32px function tile shared by Tools rows and the storage/pagefile cards */
+.icon-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--elev-3);
+  color: var(--text-2);
+}
+/* unstyled back button shared by the report reader and Tools details */
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+.back-btn:hover {
+  color: var(--text-1);
+}
+/* row action: ghost materials in a compact footprint, shared by the
+   session-row delete and the health-card open buttons */
+.row-act {
+  background: var(--elev-3);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+.row-act:hover {
+  color: var(--hover-text);
+  border-color: var(--hover-border);
+  background: var(--hover-bg);
+}
+
+/* Entrance keyframes shared by every view (single definition: @keyframes
+   is global, so duplicates in page stylesheets silently win by load order).
+   rise-in enters from ABOVE: a positive offset would extend the scroll area
+   for the animation's duration and flash a scrollbar in scrollable pages. */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@keyframes settle-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85) rotate(-4deg);
+  }
+}
+
+/* MetricCard */
+/* MetricCard — surface comes from .card, layout only below */
+.metric {
   padding: 14px;
   display: flex;
   flex-direction: column;
@@ -212,11 +308,10 @@
 }
 
 /* NoteCard */
+/* NoteCard — surface and verdict edge come from .card-sm + .verdict,
+   tones (note-high/medium/low) carry only the accent color */
 .note {
-  border: 1px solid var(--border);
-  border-inline-start-width: 3px;
   border-radius: var(--radius-sm);
-  background: var(--elev-1);
   padding: 14px 16px;
   display: flex;
   flex-direction: column;
@@ -308,10 +403,8 @@
 }
 
 /* SummaryCard */
+/* SummaryCard — surface comes from .card, layout only below */
 .summary {
-  background: var(--elev-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
   padding: 20px;
   display: flex;
   align-items: center;
@@ -406,6 +499,14 @@
 }
 .dialog-box.dialog-danger {
   border-color: var(--danger-dim);
+}
+/* light theme: the modal scrim stays dark (standard dim over light UI) but
+   lighter, and the heavy black dialog shadow softens to paper elevation */
+[data-theme="light"] .dialog-overlay {
+  background: rgba(20, 24, 20, 0.4);
+}
+[data-theme="light"] .dialog-box {
+  box-shadow: 0 30px 60px -20px rgba(20, 30, 20, 0.35);
 }
 .dialog-title {
   font-size: 15.5px;
@@ -587,6 +688,10 @@
   pointer-events: none;
   box-shadow: 0 10px 30px -8px rgba(0, 0, 0, 0.7);
   animation: tooltip-in 0.15s ease;
+}
+/* light theme: soften the heavy black tooltip shadow to paper elevation */
+[data-theme="light"] .hint-tooltip {
+  box-shadow: 0 10px 30px -8px rgba(20, 30, 20, 0.3);
 }
 @keyframes tooltip-in {
   from {

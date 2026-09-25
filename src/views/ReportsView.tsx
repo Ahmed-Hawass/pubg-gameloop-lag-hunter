@@ -208,19 +208,19 @@ export function ReportsView(props: {
     // findings carry keys –” translate; fall back to the backend's English text
     return (
       <div className="reports">
-        <button className="reports-back" onClick={() => setReport(null)}>
+        <button className="back-btn" onClick={() => setReport(null)}>
           <ChevronLeft size={16} />
           {t.allSessions}
         </button>
 
-        <div className="report-head">
+        <div className="card report-head">
           <div className="report-head-title">
             <h2>{t.sessionReport}</h2>
             <p>
               {report.date} · {fmtDur(report.duration_sec, { m: t.minUnit, s: t.secUnit })} · {report.samples} {t.samples}
             </p>
           </div>
-          <div className={`report-badge badge-${meta.tone}`}>
+          <div className={`badge report-badge badge-${meta.tone}`}>
             {report.lag_spikes > 0 ? t.spikeCount(report.lag_spikes) : meta.label}
           </div>
         </div>
@@ -257,7 +257,7 @@ export function ReportsView(props: {
         {/* key moments –” composed in the user's language from raw facts */}
         <section className="report-section">
           <h3>{t.keyMoments}</h3>
-          <ul className="report-moments">
+          <ul className="card report-moments">
             {report.highlights.map((h, i) => {
               const base = t.highlights[h.kind] ?? h.kind;
               const clock = h.clock ? ` (${h.clock})` : "";
@@ -271,7 +271,7 @@ export function ReportsView(props: {
         {report.metrics_summary.length > 0 ? (
           <section className="report-section">
             <h3>{t.theNumbers}</h3>
-            <ul className="report-metrics">
+            <ul className="card report-metrics">
               {report.metrics_summary.map((m, i) => {
                 const fmt = t.metrics[m.key];
                 return (
@@ -330,7 +330,7 @@ export function ReportsView(props: {
           {entries.map((e) => {
             const meta = outcomeMeta[e.outcome] ?? outcomeMeta.partial;
             return (
-              <li key={e.id} className={loadingId === e.id ? "is-loading" : ""}>
+              <li key={e.id} className={`card ${loadingId === e.id ? "is-loading" : ""}`}>
                 {/* accessible row: a dedicated open button plus a delete
                     button, never nested interactives inside a clickable li */}
                 <button
@@ -354,7 +354,7 @@ export function ReportsView(props: {
                       {fmtDur(e.duration_sec, { m: t.minUnit, s: t.secUnit })} · {e.samples} {t.samples}
                     </span>
                   </span>
-                  <span className={`sl-badge sl-badge-${meta.tone}`}>
+                  <span className={`badge sl-badge sl-badge-${meta.tone}`}>
                     {e.lag_spikes > 0 ? t.spikeCount(e.lag_spikes) : meta.label}
                   </span>
                 </button>
@@ -362,7 +362,7 @@ export function ReportsView(props: {
                   <Tip text={t.deleteSession}>
                     <button
                       type="button"
-                      className="sl-act sl-act-danger"
+                      className="row-act sl-act sl-act-danger"
                       aria-label={t.deleteSession}
                       onClick={() => setConfirmDelete(e.id)}
                     >

@@ -111,7 +111,7 @@ export function ProcessesView(props: { active: boolean }) {
       ) : (
         <ul className="proc-list">
           {procs.map((p) => (
-            <li key={p.pid} className="proc-row">
+            <li key={p.pid} className="card-sm proc-row">
               <span className="proc-name">{p.name}</span>
               <span className="proc-bar">
                 <span

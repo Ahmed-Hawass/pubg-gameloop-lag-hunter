@@ -187,7 +187,7 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
 
       <div className="check-list">
         {/* power plan */}
-        <div className={`check-row ${checks.power_ok ? "ok" : "warn"}`}>
+        <div className={`card-sm verdict check-row ${checks.power_ok ? "verdict-ok" : "verdict-warn"}`}>
           <div className="check-top">
             <span className="check-icon">
               {checks.power_ok ? <CheckCircle2 size={17} /> : <XCircle size={17} />}
@@ -204,7 +204,7 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
             >
               <Info size={13} />
             </button>
-            <span className={`check-badge ${checks.power_ok ? "ok" : "warn"}`}>
+            <span className={`badge check-badge ${checks.power_ok ? "ok" : "warn"}`}>
               {checks.power_ok ? t.checkOkBadge : t.checkWarnBadge}
             </span>
           </div>
@@ -214,7 +214,7 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
               {checks.power_ok ? t.powerOk(checks.power_name) : t.powerWarn(checks.power_name)}
             </span>
             <button
-              className="check-open"
+              className="row-act check-open"
               onClick={() => {
                 // High Performance has an in-app row now: stay inside the
                 // app and land on it. Without the link (tests), keep the
@@ -229,7 +229,7 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
         </div>
 
         {/* virtualization (VT) — read-only, BIOS change is manual by the user */}
-        <div className={`check-row ${checks.vt_enabled ? "ok" : "warn"}`}>
+        <div className={`card-sm verdict check-row ${checks.vt_enabled ? "verdict-ok" : "verdict-warn"}`}>
           <div className="check-top">
             <span className="check-icon">
               {checks.vt_enabled ? <CheckCircle2 size={17} /> : <XCircle size={17} />}
@@ -246,7 +246,7 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
             >
               <Info size={13} />
             </button>
-            <span className={`check-badge ${checks.vt_enabled ? "ok" : "warn"}`}>
+            <span className={`badge check-badge ${checks.vt_enabled ? "ok" : "warn"}`}>
               {checks.vt_enabled ? t.checkOkBadge : t.checkWarnBadge}
             </span>
           </div>
@@ -257,7 +257,7 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
         </div>
 
         {/* background recording (Game DVR) */}
-        <div className={`check-row ${checks.game_dvr_enabled ? "warn" : "ok"}`}>
+        <div className={`card-sm verdict check-row ${checks.game_dvr_enabled ? "verdict-warn" : "verdict-ok"}`}>
           <div className="check-top">
             <span className="check-icon">
               {checks.game_dvr_enabled ? <XCircle size={17} /> : <CheckCircle2 size={17} />}
@@ -274,7 +274,7 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
             >
               <Info size={13} />
             </button>
-            <span className={`check-badge ${checks.game_dvr_enabled ? "warn" : "ok"}`}>
+            <span className={`badge check-badge ${checks.game_dvr_enabled ? "warn" : "ok"}`}>
               {checks.game_dvr_enabled ? t.checkWarnBadge : t.checkOkBadge}
             </span>
           </div>
@@ -282,7 +282,7 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
           <div className="check-foot">
             <span className="check-state">{checks.game_dvr_enabled ? t.dvrWarn : t.dvrOk}</span>
             <button
-              className="check-open"
+              className="row-act check-open"
               onClick={() => {
                 // DVR has an in-app fix (the Tools row): stay inside the
                 // app and land on the row itself. Every other card keeps
@@ -297,7 +297,7 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
         </div>
 
         {/* pagefile */}
-        <div className={`check-row ${checks.pagefile_ok ? "ok" : "warn"}`}>
+        <div className={`card-sm verdict check-row ${checks.pagefile_ok ? "verdict-ok" : "verdict-warn"}`}>
           <div className="check-top">
             <span className="check-icon">
               {checks.pagefile_ok ? <CheckCircle2 size={17} /> : <XCircle size={17} />}
@@ -314,7 +314,7 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
             >
               <Info size={13} />
             </button>
-            <span className={`check-badge ${checks.pagefile_ok ? "ok" : "warn"}`}>
+            <span className={`badge check-badge ${checks.pagefile_ok ? "ok" : "warn"}`}>
               {checks.pagefile_ok ? t.checkOkBadge : t.checkWarnBadge}
             </span>
           </div>
@@ -322,7 +322,7 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
           <div className="check-foot">
             <span className="check-state">{pagefileText}</span>
             <button
-              className="check-open"
+              className="row-act check-open"
               onClick={() => {
                 // the page file has an in-app editor (the Storage
                 // section): stay inside the app and land on it, like DVR
@@ -337,7 +337,7 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
 
         {/* charger (laptops only — hidden on desktops) */}
         {checks.laptop ? (
-          <div className={`check-row ${chargerBad ? "warn" : "ok"}`}>
+          <div className={`card-sm verdict check-row ${chargerBad ? "verdict-warn" : "verdict-ok"}`}>
             <div className="check-top">
               <span className="check-icon">
                 {chargerBad ? <XCircle size={17} /> : <CheckCircle2 size={17} />}
@@ -354,7 +354,7 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
             >
               <Info size={13} />
             </button>
-            <span className={`check-badge ${chargerBad ? "warn" : "ok"}`}>
+            <span className={`badge check-badge ${chargerBad ? "warn" : "ok"}`}>
                 {chargerBad ? t.checkWarnBadge : t.checkOkBadge}
               </span>
             </div>

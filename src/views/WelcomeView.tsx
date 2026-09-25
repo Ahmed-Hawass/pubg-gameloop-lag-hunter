@@ -37,15 +37,15 @@ export function WelcomeView(props: { onDone: () => void }) {
           <p className="welcome-what">{t.welcomeWhat}</p>
 
           <div className="welcome-cards">
-            <div className="welcome-card">
+            <div className="card-sm welcome-card">
               <HardDrive size={20} />
               <span>{t.welcomeCardDisk}</span>
             </div>
-            <div className="welcome-card">
+            <div className="card-sm welcome-card">
               <Cpu size={20} />
               <span>{t.welcomeCardCpu}</span>
             </div>
-            <div className="welcome-card">
+            <div className="card-sm welcome-card">
               <Gauge size={20} />
               <span>{t.welcomeCardGpu}</span>
             </div>

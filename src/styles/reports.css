@@ -17,35 +17,15 @@
   letter-spacing: -0.01em;
 }
 
-/* back button */
-.reports-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: none;
-  border: none;
-  color: var(--text-2);
-  font: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 0;
-  align-self: flex-start;
-}
-.reports-back:hover {
-  color: var(--text-1);
-}
+/* back button — shared .back-btn primitive, nothing page-specific left */
 
-/* report header */
+/* report header — surface comes from .card, layout only below */
 .report-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 18px 20px;
-  background: var(--elev-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
 }
 .report-head-title h2 {
   font-size: 17px;
@@ -58,10 +38,7 @@
 }
 .report-badge {
   font-size: 12px;
-  font-weight: 700;
   padding: 7px 12px;
-  border-radius: 999px;
-  flex: none;
 }
 .badge-ok {
   background: var(--primary-dim);
@@ -97,9 +74,6 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  background: var(--elev-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
   padding: 14px 16px;
 }
 .report-moments li,
@@ -151,8 +125,8 @@
   gap: 6px;
   flex: none;
 }
-/* an icon-sized ghost button: the same materials as .btn-ghost (elev-3 fill,
-   border, unified hover) in the compact 28px row-action footprint */
+/* an icon-sized row action: .row-act carries the ghost materials and
+   hover, only the compact 28px footprint stays here */
 .sl-act {
   display: flex;
   align-items: center;
@@ -160,16 +134,7 @@
   width: 28px;
   height: 28px;
   border-radius: 7px;
-  border: 1px solid var(--border);
-  background: var(--elev-3);
   color: var(--text-3);
-  cursor: pointer;
-  transition: color 0.12s, border-color 0.12s, background 0.12s;
-}
-.sl-act:hover {
-  color: var(--hover-text);
-  border-color: var(--hover-border);
-  background: var(--hover-bg);
 }
 .sl-act-danger:hover {
   color: var(--danger);
@@ -195,9 +160,6 @@
   display: flex;
   align-items: center;
   gap: 13px;
-  background: var(--elev-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
   padding: 13px 16px;
   transition: border-color 0.12s, background 0.12s;
 }
@@ -249,11 +211,8 @@
 }
 .sl-badge {
   margin-inline-start: auto;
-  flex: none;
   font-size: 11px;
-  font-weight: 700;
   padding: 4px 10px;
-  border-radius: 999px;
 }
 .sl-badge-ok {
   background: var(--primary-dim);

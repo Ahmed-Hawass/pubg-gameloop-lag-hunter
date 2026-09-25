@@ -91,7 +91,7 @@ export function SystemView() {
       {/* the rig */}
       <section className="sys-section">
         <h3 className="sys-title">{t.yourRig}</h3>
-        <div className="sys-grid">
+        <div className="card sys-grid">
           <div className="sys-kv">
             <Cpu size={15} />
             <span className="sys-k">{info.cpu}</span>
@@ -128,7 +128,7 @@ export function SystemView() {
           {t.whatWeSee}
           <Hint text={t.whatWeSeeHint} />
         </h3>
-        <ul className="sys-see">
+        <ul className="card sys-see">
           <li className="ok">
             <span className="see-dot ok" />
             {t.seeCpu}

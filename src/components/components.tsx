@@ -56,7 +56,7 @@ export function MetricCard(props: {
   const v = value ?? 0;
   const tone = v >= 85 ? "danger" : v >= 60 ? "warn" : "ok";
   return (
-    <div className={`metric ${dim ? "dim" : ""}`}>
+    <div className={`card metric ${dim ? "dim" : ""}`}>
       <div className="metric-top">
         <div className={`metric-name metric-name-${dim ? "off" : tone}`}>
           {icon}
@@ -172,7 +172,7 @@ export function NoteCard(props: {
 }) {
   const { title, simple, fix, severity, fixLabel } = props;
   return (
-    <div className={`note note-${severity}`}>
+    <div className={`card-sm verdict note note-${severity}`}>
       <div className="note-title">
         <span className={`note-dot note-dot-${severity}`} />
         {title}
@@ -213,7 +213,7 @@ export function SummaryCard(props: {
 }) {
   const { title, hint, reportLabel, dismissLabel, onReport, onDismiss } = props;
   return (
-    <div className="summary">
+    <div className="card summary">
       <div className="summary-ico">
         <Check size={18} strokeWidth={2.2} />
       </div>

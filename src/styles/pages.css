@@ -75,9 +75,6 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  background: var(--elev-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
   padding: 14px 16px;
 }
 .sys-kv {
@@ -104,9 +101,6 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  background: var(--elev-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
   padding: 12px 16px;
 }
 .sys-see li {
@@ -162,9 +156,6 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  background: var(--elev-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
   padding: 10px 14px;
 }
 .proc-name {
@@ -258,17 +249,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: var(--elev-1);
-  border: 1px solid var(--border);
-  border-inline-start: 3px solid var(--border);
-  border-radius: var(--radius-sm);
   padding: 13px 16px;
-}
-.check-row.ok {
-  border-inline-start-color: var(--primary);
-}
-.check-row.warn {
-  border-inline-start-color: var(--warn);
 }
 .check-icon {
   display: flex;
@@ -291,11 +272,8 @@
 }
 .check-badge {
   margin-inline-start: auto;
-  flex: none;
   font-size: 11px;
-  font-weight: 700;
   padding: 4px 10px;
-  border-radius: 999px;
 }
 .check-badge.ok {
   background: var(--primary-dim);
@@ -319,11 +297,11 @@
   flex: 1;
   min-width: 0;
 }
-.check-row.ok .check-icon {
+.check-row.verdict-ok .check-icon {
   background: var(--primary-dim);
   color: var(--primary);
 }
-.check-row.warn .check-icon {
+.check-row.verdict-warn .check-icon {
   background: var(--warn-dim);
   color: var(--warn);
 }
@@ -336,23 +314,16 @@
   color: var(--text-2);
   line-height: 1.45;
 }
+/* health-card action: .row-act carries the ghost materials and hover,
+   only the labeled-button sizing and type stay here */
 .check-open {
   flex: none;
-  background: var(--elev-3);
-  border: 1px solid var(--border);
   border-radius: 7px;
   color: var(--text-2);
   font: inherit;
   font-size: 11.5px;
   font-weight: 600;
   padding: 7px 12px;
-  cursor: pointer;
-  transition: color 0.12s, background 0.12s, border-color 0.12s;
-}
-.check-open:hover {
-  color: var(--hover-text);
-  background: var(--hover-bg);
-  border-color: var(--hover-border);
 }
 
 /* ---- tools tab: area landing grid + read-only section details ---- */
@@ -379,9 +350,6 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 6px;
-  background: var(--elev-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
   padding: 24px;
   cursor: pointer;
   font: inherit;
@@ -438,26 +406,12 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  background: var(--elev-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
   padding: 14px 16px;
 }
 .cleanup-head {
   display: flex;
   align-items: center;
   gap: 12px;
-}
-.cleanup-head .check-func {
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
-  background: var(--elev-3);
-  color: var(--text-2);
-  display: flex;
 }
 .cleanup-row {
   display: flex;
@@ -556,9 +510,6 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  background: var(--elev-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
   padding: 14px 16px;
 }
 .pf-form .switch-hint {
@@ -574,17 +525,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  background: var(--elev-1);
-  border: 1px solid var(--border);
-  border-inline-start: 3px solid var(--border);
-  border-radius: var(--radius-sm);
   padding: 14px 16px;
-}
-.pf-summary.on {
-  border-inline-start-color: var(--primary);
-}
-.pf-summary.off {
-  border-inline-start-color: var(--warn);
 }
 /* deep-link landing (health page file card): the same temporary primary
    ring the rows get, cleared with the link itself */
@@ -616,18 +557,6 @@
   text-align: start;
   cursor: pointer;
 }
-.pf-summary .check-func {
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
-  background: var(--elev-3);
-  color: var(--text-2);
-  display: flex;
-}
-
 .pf-chev {
   flex: none;
   color: var(--text-3);
@@ -742,23 +671,7 @@
   box-shadow: 0 0 0 3px var(--primary-dim);
   outline: none;
 }
-.tools-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  align-self: flex-start;
-  background: transparent;
-  border: none;
-  color: var(--text-2);
-  font: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 4px 0;
-}
-.tools-back:hover {
-  color: var(--hover-text);
-}
+/* Tools back button uses the shared .back-btn primitive (see components.css) */
 
 /* ---- switch rows (Tools details): icon + title + desc + badge + switch.
     Same verdict language as health cards (accent edge + badge, driven by
@@ -768,17 +681,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  background: var(--elev-1);
-  border: 1px solid var(--border);
-  border-inline-start: 3px solid var(--border);
-  border-radius: var(--radius-sm);
   padding: 14px 16px;
-}
-.switch-row.on {
-  border-inline-start-color: var(--primary);
-}
-.switch-row.off {
-  border-inline-start-color: var(--warn);
 }
 /* deep-link landing (health DVR card): a temporary primary ring so the
    eye finds the row the card promised. Cleared with the link itself. */
@@ -786,17 +689,9 @@
   border-color: var(--primary);
   box-shadow: 0 0 0 3px var(--primary-dim);
 }
-/* icon tile, scoped to tools rows only (System health keeps the bare glyph) */
-.switch-row .check-func {
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
-  background: var(--elev-3);
-  color: var(--text-2);
-}
-.switch-row.on .check-func {
+/* icon tile inside Tools rows comes from .icon-tile; only the
+   optimistic-on tint stays here */
+.switch-row.verdict-ok .icon-tile {
   background: var(--primary-dim);
   color: var(--primary);
 }
@@ -903,9 +798,6 @@
 }
 .about-card {
   width: 100%;
-  background: var(--elev-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
   padding: 18px 20px;
   display: flex;
   flex-direction: column;
@@ -1166,23 +1058,8 @@
   animation: rise-in 0.3s var(--ease) both;
 }
 
-@keyframes rise-in {
-  from {
-    opacity: 0;
-    /* entrance comes from ABOVE: a positive offset would extend the scroll
-       area for the animation's duration and flash a scrollbar in every
-       scrollable page (settings, system, processes, checks) */
-    transform: translateY(-6px);
-  }
-}
 @keyframes bar-grow {
   from {
     transform: scaleX(0);
-  }
-}
-@keyframes settle-in {
-  from {
-    opacity: 0;
-    transform: scale(0.85) rotate(-4deg);
   }
 }
