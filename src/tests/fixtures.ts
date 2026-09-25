@@ -1,0 +1,80 @@
+// tests/fixtures.ts — canned backend answers shared by component tests.
+// Every value mirrors a bridge.ts contract; the mocks below only feed the
+// UI, they never reimplement engine logic.
+
+import type {
+  CleanupScan,
+  PagefileSettings,
+  Settings,
+  Thresholds,
+  TweakStates,
+} from "../bridge";
+
+export const thresholds: Thresholds = {
+  cpu_saturation_pct: 90,
+  proc_perf_floor_pct: 50,
+  proc_perf_load_gate: 70,
+  avail_mem_floor_mb: 512,
+  hard_faults_per_sec: 100,
+  disk_queue_len: 2,
+  disk_busy_pct: 90,
+  gpu_clock_floor_pct: 50,
+  gpu_temp_warn_c: 80,
+  gpu_temp_crit_c: 90,
+  spike_cpu_drop_pct: 20,
+  spike_sustained_sec: 3,
+};
+
+export function settings(over: Partial<Settings> = {}): Settings {
+  return {
+    version: 3,
+    sensitivity: "normal",
+    auto_stop_minutes: 5,
+    language: "en",
+    theme: "dark",
+    sidebar_collapsed: false,
+    onboarding_done: true,
+    game_advice_done: true,
+    background_advice_done: true,
+    thresholds,
+    ...over,
+  };
+}
+
+export function tweakStates(over: Partial<TweakStates> = {}): TweakStates {
+  return {
+    game_dvr_enabled: true,
+    storage_sense: false,
+    game_mode: false,
+    gpu_high_perf: "hidden",
+    fso_disabled: "hidden",
+    mouse_accel_off: false,
+    windowed_game_opt: null,
+    power_high_perf: "hidden",
+    ...over,
+  };
+}
+
+export function pagefileSettings(
+  over: Partial<PagefileSettings> = {},
+): PagefileSettings {
+  return {
+    automatic: false,
+    drives: [
+      { drive: "C:", free_mb: 50000, mode: "system", min_mb: null, max_mb: null },
+    ],
+    pending: false,
+    ...over,
+  };
+}
+
+export function cleanupScan(): CleanupScan {
+  return {
+    categories: [
+      { id: "user_temp", bytes: 10485760 },
+      { id: "system_temp", bytes: 0 },
+      { id: "recycle_bin", bytes: null },
+    ],
+    history: { last_freed_bytes: 0, last_at: null, last_30d_bytes: 0 },
+  };
+}

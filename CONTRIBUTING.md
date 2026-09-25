@@ -71,3 +71,23 @@ Make sure:
 * New engine operations log what happened: spawn results, durations
   (`logging::timed`), failures, the log is how we diagnose user machines
 * New IPC commands are added to `capabilities/default.json` **only if the UI truly needs them**
+
+## Testing Contract
+
+Every user-facing behavior ships with its test, at the same level as the
+existing suite (`src/tests`, run with `npm test -- --coverage`):
+
+* Pure logic: unit test (`errors.test.ts` pattern).
+* Component behavior: component test with a mocked `bridge` (`toolsGaming.test.tsx`
+  pattern, fixtures in `tests/fixtures.ts`).
+* Rust: unit test inside the module (`#[cfg(test)]`).
+* Critical contracts (silent UAC refusal, one modal surface, deep-links,
+  once-ever advice) get a test named after the contract.
+* Coverage thresholds in `vite.config.ts` fail the suite on any drop:
+  grow them, never lower them to make a PR pass.
+* Deliberately manual (never mocked as covered): real UAC prompts, the real
+  backend, and visual appearance. A PR touching those lists its manual
+  checklist instead of claiming coverage.
+* Stopping line (documented, not accidental): static one-shot screens such
+  as `WelcomeView` and pure display branches carry no tests; everything
+  behavioral does.

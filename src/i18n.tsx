@@ -12,8 +12,10 @@ export type LangSetting = LangCode | "auto";
 
 const LOCALES: Record<LangCode, Locale> = { en, ar };
 
-/** OS locale → our languages. Windows Arabic variants all map to "ar". */
-function osLanguage(): LangCode {
+/** OS locale → our languages. Windows Arabic variants all map to "ar".
+    Exported for tests: the mapping is pure logic, the provider around it
+    needs the engine. */
+export function osLanguage(): LangCode {
   const langs = typeof navigator !== "undefined" ? navigator.languages ?? [navigator.language] : [];
   for (const l of langs) {
     const lower = (l ?? "").toLowerCase();

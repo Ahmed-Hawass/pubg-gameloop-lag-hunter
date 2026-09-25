@@ -63,7 +63,7 @@ export default function App() {
   const [backgroundAdviceUp, setBackgroundAdviceUp] = useState(false);
   /** the first-run advice dialog: shows ONCE, only right after the user
       finishes the welcome flow (loaded-true users never see it) */
-  const [adviceShown, setAdviceShown] = useState(false);
+  const [firstRunAdviceShown, setFirstRunAdviceShown] = useState(false);
   /** the GameLoop-closed notice: once per session, never on manual/auto stops */
   const [closedNoticeShown, setClosedNoticeShown] = useState(false);
   /** whether onboarding was ALREADY done when the app loaded (distinguishes
@@ -129,7 +129,7 @@ export default function App() {
       never a sticky flag: the update modal and the one-shot advices defer
       while this dialog is on screen, and stop deferring the moment it is
       dismissed (a sticky boolean once deferred them for the whole launch) */
-  const adviceUp = dialogKey === "first_run_advice";
+  const firstRunAdviceUp = dialogKey === "first_run_advice";
   /** theme setting ("auto" follows the OS — also the default for a fresh
       install); the resolved value drives
       document.documentElement.dataset.theme — single source of truth,
@@ -193,7 +193,7 @@ export default function App() {
         if (
           shouldShowUpdateModal(
             updateInfo,
-            adviceUp || gameAdviceUp || backgroundAdviceUp,
+            firstRunAdviceUp || gameAdviceUp || backgroundAdviceUp,
             announced ? updateInfo.version : null,
           )
         ) {
@@ -202,7 +202,7 @@ export default function App() {
         }
       })
       .catch(() => {});
-  }, [updateInfo, adviceUp, gameAdviceUp, backgroundAdviceUp, onboardingDone]);
+  }, [updateInfo, firstRunAdviceUp, gameAdviceUp, backgroundAdviceUp, onboardingDone]);
 
   // state pushes land here (live + final): a finished session caused by
   // GameLoop dying gets its explanation dialog — once per session, never
@@ -230,11 +230,9 @@ export default function App() {
 
   // initial state + live pushes + saved preferences + gameloop watcher
   useEffect(() => {
-    // the subscription registers FIRST, the snapshot second: an engine
-    // push landing between the two used to be overwritten by the (marginally
-    // older) snapshot when its promise resolved later. The subscriber is
-    // attached for the whole flight, so the last write is always the newest
-    // truth; the snapshot only fills whatever arrived before it.
+    // subscribe first, snapshot second: the subscriber stays attached for
+    // the whole flight, so the last write wins and the snapshot only fills
+    // whatever arrived before it.
     const un = onEngineState((ev) => {
       handleStateRef.current(ev.payload);
     }).catch(() => null);
@@ -288,11 +286,9 @@ export default function App() {
     return () => {
       un.then((f) => f?.());
     };
-    // deliberate: mount-once bootstrap (state + preferences + watcher).
-    // The getState failure dialog reads t.dialog through the CLOSURE —
-    // re-running the bootstrap on a language switch would re-fire every
-    // startup query. The localized copy at catch-time is the locale the
-    // app booted with; a mid-session language change re-renders normally.
+    // mount-once bootstrap: re-running on a language switch would re-fire
+    // every startup query (the getState failure copy reads the boot locale
+    // through the closure, which is fine).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -345,39 +341,30 @@ export default function App() {
     setView("reports");
   };
 
-  // useCallback: a new function identity per render (passed into
-  // MonitorView's effect deps) restarted the summary's 12s auto-dismiss
-  // timer on every App re-render — switching tabs kept the summary alive
-  // forever. The identity must stay stable for the whole session.
+  // stable identity: MonitorView's auto-dismiss timer depends on this
+  // callback, so a new identity per render would restart it forever.
   const dismissSummary = useCallback((session: string) => {
     setDismissedSession(session);
   }, []);
 
-  // the FIRST-RUN advice: appears exactly once — in the same launch where
-  // the user completed the welcome flow. Users who onboarded in a previous
-  // launch never see it. (adviceUp is derived from the live dialog above, so
-  // no reset logic is needed here — dismissing the dialog unblocks the rest.)
+  // FIRST-RUN advice: once, in the launch where the welcome flow completes
+  // (previous launches never see it; dismissing unblocks the rest).
   useEffect(() => {
-    if (onboardingDone && !adviceShown && !wasOnboardedRef.current) {
-      setAdviceShown(true);
+    if (onboardingDone && !firstRunAdviceShown && !wasOnboardedRef.current) {
+      setFirstRunAdviceShown(true);
       setDialogTitle(t.dialog.firstRunAdvice);
       setDialogBody(t.dialog.firstRunAdviceBody);
       setDialogKey("first_run_advice");
     }
-    // deliberate fire-once: adviceShown guards the second run in state,
+    // deliberate fire-once: firstRunAdviceShown guards the second run in state,
     // wasOnboardedRef guards it within the same render cycle; adding the
     // copy deps would re-arm the dialog on a mid-session language switch
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onboardingDone]);
 
-  // the PRE-SCAN advice: the first time EVER a session actually STARTS
-  // (status flips idle -> running = the user pressed Start and the engine
-  // gate confirmed the game), show the close-background-apps tip once.
-  // Never blocks Start: the session is already running while the dialog
-  // waits for a click. One-modal rule: not over the welcome, not over the
-  // first-run advice (then it defers to the NEXT session start, not lost).
-  // Persisted AT SHOW, not at close: closing the app with the dialog open
-  // must not resurrect it next launch.
+  // PRE-SCAN advice: once ever, on the first real session start. Never
+  // blocks Start; defers behind other one-shot dialogs; persisted at show
+  // (closing mid-dialog must not resurrect it) rather than at close.
   const wasRunningRef = useRef(false);
   /** the window was seen VISIBLE at least once in the current session —
       the background advice only fires on a visible→background TRANSITION,
@@ -392,7 +379,7 @@ export default function App() {
       !justStarted ||
       onboardingDone !== true ||
       gameAdviceDone !== false ||
-      adviceUp ||
+      firstRunAdviceUp ||
       backgroundAdviceUp
     ) {
       return;
@@ -406,14 +393,11 @@ export default function App() {
     // deliberate: the transition flags live in refs, and the copy deps
     // would re-fire the (already persisted) advice on language switches
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, onboardingDone, gameAdviceDone, adviceUp, backgroundAdviceUp]);
+  }, [status, onboardingDone, gameAdviceDone, firstRunAdviceUp, backgroundAdviceUp]);
 
-  // the STAY-IN-GAME advice: the first time EVER a RUNNING session measures
-  // the game window in the background, show the "stay inside the game" tip.
-  // Fires only on a MEASURED false (never on null = probe not back yet) and
-  // only mid-session. Waits for its turn behind the other one-shot dialogs —
-  // if another advice is up when the moment arrives, this one skips: all of
-  // these are one-forever, and the pre-scan advice already covers the topic.
+  // STAY-IN-GAME advice: once ever, on a measured visible-to-background
+  // transition mid-session (never on the starting state). Skips if another
+  // one-shot dialog owns the moment instead of queueing behind it.
   useEffect(() => {
     // track the transition, not the state: reset on session end so a new
     // session starts clean and can never inherit an old session's sighting
@@ -429,7 +413,7 @@ export default function App() {
       status.ui?.game_visible !== false ||
       onboardingDone !== true ||
       backgroundAdviceDone !== false ||
-      adviceUp ||
+      firstRunAdviceUp ||
       gameAdviceUp ||
       !sawVisibleRef.current
     ) {
@@ -443,7 +427,7 @@ export default function App() {
     setDialogKey("background_advice");
     // deliberate: same fire-once discipline as the game-advice effect
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, onboardingDone, backgroundAdviceDone, adviceUp, gameAdviceUp]);
+  }, [status, onboardingDone, backgroundAdviceDone, firstRunAdviceUp, gameAdviceUp]);
 
   // a session deleted from Reports must not linger as a "finished" state
   const effectiveStatus: StatusPayload =
@@ -451,14 +435,9 @@ export default function App() {
       ? { status: "idle", ui: null }
       : status;
 
-  // tell every tooltip to hide the moment the modal surface opens: a dialog
-  // mounting under a parked cursor never fires mouseleave, which used to
-  // leave its bubble stuck above the modal (and after it closed) until the
-  // user hovered the trigger again. Click-opened dialogs need no signal —
-  // the hook already hides on pointerdown.
-  // The APP_DIALOG signal is for VIEW-LEVEL dialogs (Reports' delete
-  // confirm, Tools' notice): ours is the one surface they must yield to,
-  // one overlay at a time, one Escape closing one thing.
+  // hide every tooltip the moment the modal surface opens (a dialog
+  // mounting under a parked cursor never fires mouseleave, leaving its
+  // bubble stuck). APP_DIALOG additionally yields view-level dialogs.
   useEffect(() => {
     if (dialogKey || (updateModal && updateInfo) || exitConfirm) {
       window.dispatchEvent(new Event(MODAL_OPEN_EVENT));
