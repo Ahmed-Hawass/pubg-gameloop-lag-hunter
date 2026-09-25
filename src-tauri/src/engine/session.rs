@@ -63,6 +63,21 @@ struct SessionInner {
     thresholds: Thresholds,
 }
 
+/// Owned snapshot for the unlocked UI build: everything build_ui_off_lock
+/// needs, cloned under the state lock so clock reads and the diagnoser run
+/// without holding it.
+struct UiSnapshot {
+    started_at: Option<String>,
+    session_id: Option<String>,
+    samples: Vec<Sample>,
+    samples_total: u64,
+    events: Vec<EngineEvent>,
+    game_running: bool,
+    emulator: Option<String>,
+    auto_stop_at: Option<Instant>,
+    total_mem_mb: f64,
+}
+
 impl Default for Engine {
     /// Same as `Engine::new` — thresholds come from the settings store.
     fn default() -> Self {
@@ -453,104 +468,137 @@ impl Engine {
     }
 
     /// Called by the typeperf thread for each CPU/RAM/disk tick.
+    /// Lock discipline: the state lock covers only the fast in-memory update
+    /// plus the single-line file append. Clock reads (which can spawn
+    /// powershell on cache expiry) and the diagnoser build run OFF the lock
+    /// so stop()/status()/tick_auto_stop() never block behind them.
     fn on_sample(&self, raw: Sample) {
-        let mut st = self.state.lock().unwrap_or_else(|p| p.into_inner());
-        if st.status != SessionStatus::Running {
-            return;
-        }
+        // snapshot the freshest GPU + emulator + visibility WITHOUT holding
+        // the session lock (each has its own short lock, never nested inside
+        // the session critical section below).
+        let gpu = LATEST_GPU
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .as_ref()
+            .and_then(|t| t.get())
+            .cloned();
+        let emu = LATEST_EMU
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .as_ref()
+            .and_then(|t| t.get())
+            .cloned();
+        let vis = LATEST_VISIBLE
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .as_ref()
+            .and_then(|t| t.get())
+            .copied();
 
-        // attach the freshest GPU + emulator + window-visibility snapshot —
+        // attach the freshest snapshots —
         // freshness-gated: a snapshot older than SNAPSHOT_TTL is dropped to
         // None instead of being worn as fresh evidence (stale attribution)
         let mut s = raw;
-        if let Some(g) = LATEST_GPU
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .as_ref()
-            .and_then(|t| t.get())
-            .cloned()
-        {
+        if let Some(g) = gpu {
             s.gpu = Some(g);
         }
-        if let Some(emu) = LATEST_EMU
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .as_ref()
-            .and_then(|t| t.get())
-            .cloned()
-        {
-            s.emu = emu;
+        if let Some(e) = emu {
+            s.emu = e;
         }
-        if let Some(vis) = LATEST_VISIBLE
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .as_ref()
-            .and_then(|t| t.get())
-            .copied()
-        {
-            s.game_visible = Some(vis);
+        if let Some(v) = vis {
+            s.game_visible = Some(v);
         }
 
-        st.game_running = !s.emu.is_empty();
-        // tick cadence never freezes: write failures must not turn the
-        // periodic autosave below into a per-tick storm
-        st.ticks_total += 1;
-
-        // every sample hits disk immediately — the file is the source of truth
-        let sample_result = st
-            .writer
-            .as_mut()
-            .map(|w| w.append_sample(&s))
-            .unwrap_or_else(|| Err("session writer missing".into()));
-        match sample_result {
-            Ok(()) => st.samples_total += 1,
-            Err(e) => {
-                if !st.storage_write_failed {
-                    super::logging::error(&format!("sample persistence failed: {e}"));
-                }
-                st.storage_write_failed = true;
+        let total_mem = self.total_mem_mb.read().map(|v| *v).unwrap_or(8_192.0);
+        let ui_inputs: Option<UiSnapshot> = {
+            let mut st = self.state.lock().unwrap_or_else(|p| p.into_inner());
+            if st.status != SessionStatus::Running {
+                return;
             }
-        }
 
-        // rolling RAM window: detector needs ~30 recent ticks, UI needs 60 — keep 300 max
-        st.samples.push(s.clone());
-        let overflow = st.samples.len().saturating_sub(300);
-        if overflow > 0 {
-            st.samples.drain(0..overflow);
-        }
+            st.game_running = !s.emu.is_empty();
+            // tick cadence never freezes: write failures must not turn the
+            // periodic autosave below into a per-tick storm
+            st.ticks_total += 1;
 
-        // first sample arriving is the health signal of the whole pipeline
-        if st.ticks_total == 1 {
-            let slot = FIRST_SAMPLE_AT.lock().unwrap_or_else(|p| p.into_inner());
-            if let Some(at) = slot.as_ref() {
-                super::logging::perf("pipeline: first sample", at.elapsed().as_millis());
-            }
-        }
-
-        let evs = st.detector.feed(&s);
-        st.events.extend(evs);
-
-        // autosave every ~50 ticks (crash safety for the events file)
-        if st.ticks_total % 50 == 0 {
-            if let Some(w) = st.writer.as_ref() {
-                if let Err(e) = w.autosave(
-                    &st.events,
-                    &st.thresholds,
-                    st.started_at.as_deref().unwrap_or(""),
-                ) {
+            // every sample hits disk immediately — the file is the source of truth
+            let sample_result = st
+                .writer
+                .as_mut()
+                .map(|w| w.append_sample(&s))
+                .unwrap_or_else(|| Err("session writer missing".into()));
+            match sample_result {
+                Ok(()) => st.samples_total += 1,
+                Err(e) => {
                     if !st.storage_write_failed {
-                        super::logging::error(&format!("session autosave failed: {e}"));
+                        super::logging::error(&format!("sample persistence failed: {e}"));
                     }
                     st.storage_write_failed = true;
                 }
             }
-        }
 
-        self.build_and_cache_ui(&mut st, s);
+            // rolling RAM window: detector needs ~30 recent ticks, UI needs 60 — keep 300 max
+            st.samples.push(s.clone());
+            let overflow = st.samples.len().saturating_sub(300);
+            if overflow > 0 {
+                st.samples.drain(0..overflow);
+            }
+
+            // first sample arriving is the health signal of the whole pipeline
+            if st.ticks_total == 1 {
+                let slot = FIRST_SAMPLE_AT.lock().unwrap_or_else(|p| p.into_inner());
+                if let Some(at) = slot.as_ref() {
+                    super::logging::perf("pipeline: first sample", at.elapsed().as_millis());
+                }
+            }
+
+            let evs = st.detector.feed(&s);
+            st.events.extend(evs);
+
+            // autosave every ~50 ticks (crash safety for the events file)
+            if st.ticks_total % 50 == 0 {
+                if let Some(w) = st.writer.as_ref() {
+                    if let Err(e) = w.autosave(
+                        &st.events,
+                        &st.thresholds,
+                        st.started_at.as_deref().unwrap_or(""),
+                    ) {
+                        if !st.storage_write_failed {
+                            super::logging::error(&format!("session autosave failed: {e}"));
+                        }
+                        st.storage_write_failed = true;
+                    }
+                }
+            }
+
+            Some(UiSnapshot {
+                started_at: st.started_at.clone(),
+                session_id: st.session_id.clone(),
+                samples: st.samples.clone(),
+                samples_total: st.samples_total,
+                events: st.events.clone(),
+                game_running: st.game_running,
+                emulator: st.emulator.clone(),
+                auto_stop_at: st.auto_stop_at,
+                total_mem_mb: total_mem,
+            })
+        }; // state lock released here — clock + diagnoser run unlocked
+
+        if let Some(inputs) = ui_inputs {
+            let session_id = inputs.session_id.clone();
+            let ui = Self::build_ui_off_lock(inputs);
+            // store only while the same session is still running: a stop (or
+            // a stop/start) racing the unlocked build must not paint live UI
+            // over the finished state or over the new session.
+            let mut st = self.state.lock().unwrap_or_else(|p| p.into_inner());
+            if st.status == SessionStatus::Running && st.session_id == session_id {
+                st.last_ui = Some(ui);
+            }
+        }
     }
 
-    fn build_and_cache_ui(&self, st: &mut SessionInner, _latest: Sample) {
-        let elapsed_sec: u64 = st
+    fn build_ui_off_lock(inputs: UiSnapshot) -> UiState {
+        let elapsed_sec: u64 = inputs
             .started_at
             .as_deref()
             .and_then(|s| {
@@ -559,7 +607,7 @@ impl Engine {
                 Some((now.saturating_sub(start) / 1000).max(0) as u64)
             })
             .unwrap_or(0);
-        let auto_stop_sec: Option<u64> = st
+        let auto_stop_sec: Option<u64> = inputs
             .auto_stop_at
             .and_then(|at| at.checked_duration_since(Instant::now()))
             .map(|rem| elapsed_sec + rem.as_secs());
@@ -569,23 +617,22 @@ impl Engine {
         // A sustained paging storm (one instant per second, hours long)
         // grew the per-tick walk without bound. The view below trims to
         // what the windows can still see + one window of slack, WITHOUT
-        // touching st.events itself: the full history stays the source of
-        // truth for autosave, finalize, and the saved report.
-        let view_events = diagnosis_window(&st.events);
-        let ui = build_ui_state(super::diagnoser::UiStateInput {
-            session: st.session_id.as_deref(),
-            started_at: st.started_at.as_deref(),
-            samples: &st.samples,
-            samples_total: st.samples_total,
+        // touching the stored events themselves: the full history stays the
+        // source of truth for autosave, finalize, and the saved report.
+        let view_events = diagnosis_window(&inputs.events);
+        build_ui_state(super::diagnoser::UiStateInput {
+            session: inputs.session_id.as_deref(),
+            started_at: inputs.started_at.as_deref(),
+            samples: &inputs.samples,
+            samples_total: inputs.samples_total,
             events: &view_events,
-            active_count: active_conditions(&st.events),
-            game_running: st.game_running,
-            emulator: st.emulator.as_deref(),
-            total_mem_mb: self.total_mem_mb.read().map(|v| *v).unwrap_or(8_192.0),
+            active_count: active_conditions(&inputs.events),
+            game_running: inputs.game_running,
+            emulator: inputs.emulator.as_deref(),
+            total_mem_mb: inputs.total_mem_mb,
             session_secs: elapsed_sec,
             auto_stop_sec,
-        });
-        st.last_ui = Some(ui);
+        })
     }
 
     /// Called by the dmon thread for each GPU tick.

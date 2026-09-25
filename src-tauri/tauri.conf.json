@@ -31,13 +31,13 @@
         "script-src": "'self'",
         "style-src": "'self' 'unsafe-inline'",
         "img-src": "'self' data:",
-        "font-src": "'self' data:'"
+        "font-src": "'self' data:"
       }
     }
   },
   "bundle": {
-    "active": true,
-    "targets": ["nsis"],
+    "active": false,
+    "targets": [],
     "publisher": "Ahmed Hawass",
     "copyright": "Copyright (c) 2026 Ahmed Hawass. MIT License.",
     "category": "Utility",

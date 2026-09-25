@@ -107,7 +107,8 @@ mod windows_sys_job {
                         handle: std::ptr::null_mut(),
                     };
                 }
-                let mut info: ExtendedLimitInformation = std::mem::zeroed();
+                let mut info: ExtendedLimitInformation =
+                    std::mem::MaybeUninit::zeroed().assume_init();
                 // the ONE limit that matters: when our process handle is
                 // gone (even via abort), the kernel reaps every child.
                 info.basic.limit_flags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;

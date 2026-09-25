@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { Button, Dialog, EmptyState, MODAL_OPEN_EVENT, APP_DIALOG_OPEN_EVENT } from "../components/components";
 import { api, FEATURE_STATE_CHANGED_EVENT, type SystemChecks } from "../bridge";
+import { errorDialog } from "../errors";
 import { useLang } from "../i18n";
 
 const LIVE_INTERVAL_MS = 30000;
@@ -57,8 +58,14 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
       // along as a technical line only for novel failures
       if (!silent) {
         const raw = typeof e === "string" ? e : String(e);
-        const keyed = (t.errors as Record<string, string | undefined>)[raw];
-        setError(keyed ?? t.dialog.unknownErrorBody(raw));
+        setError(
+          errorDialog(raw, t.errors, {
+            somethingWrong: t.dialog.somethingWrong,
+            scanNeedsGame: t.dialog.scanNeedsGame,
+            scanNeedsGameBody: t.dialog.scanNeedsGameBody,
+            unknownErrorBody: t.dialog.unknownErrorBody,
+          }).body,
+        );
       }
     } finally {
       busyRef.current = false;

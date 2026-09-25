@@ -16,6 +16,23 @@ import spotTweaksLight from "../assets/spot-system-tweaks-light.svg?url";
 import spotStorageDark from "../assets/spot-storage-dark.svg?url";
 import spotStorageLight from "../assets/spot-storage-light.svg?url";
 
+/** resolved theme for spot art: subscribes to the shell's data-theme so a
+    theme flip while on the Tools landing swaps art without another render */
+function useSpotTheme(): string {
+  const [theme, setTheme] = useState(
+    () => document.documentElement.dataset.theme ?? "dark",
+  );
+  useEffect(() => {
+    const el = document.documentElement;
+    const obs = new MutationObserver(() => {
+      setTheme(el.dataset.theme ?? "dark");
+    });
+    obs.observe(el, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => obs.disconnect();
+  }, []);
+  return theme;
+}
+
 /** one switch row. The switch mirrors the live RESULT of the named action
     (ON = the action holds right now). The label names the action itself
     ("Turn off X"), so ON is always the recommended state by construction:
@@ -99,6 +116,7 @@ export function ToolsView(props: {
 }) {
   const { active, toolOpenId, onToolOpened, onCleaningChange } = props;
   const { t } = useLang();
+  const spotTheme = useSpotTheme();
   /** which card's details are open (the landing cards need no data) */
   const [openCard, setOpenCard] = useState<"gaming" | "storage" | null>(null);
   /** optimistic switch positions: flip instantly on click; restored to the
@@ -1476,7 +1494,7 @@ export function ToolsView(props: {
         <button className="tool-card" onClick={() => setOpenCard("gaming")}>
           <img
             className="tool-spot"
-            src={document.documentElement.dataset.theme === "light" ? spotTweaksLight : spotTweaksDark}
+            src={spotTheme === "light" ? spotTweaksLight : spotTweaksDark}
             alt=""
             aria-hidden="true"
             draggable={false}
@@ -1489,7 +1507,7 @@ export function ToolsView(props: {
         <button className="tool-card" onClick={() => setOpenCard("storage")}>
           <img
             className="tool-spot"
-            src={document.documentElement.dataset.theme === "light" ? spotStorageLight : spotStorageDark}
+            src={spotTheme === "light" ? spotStorageLight : spotStorageDark}
             alt=""
             aria-hidden="true"
             draggable={false}

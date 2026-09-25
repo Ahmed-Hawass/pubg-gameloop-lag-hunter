@@ -66,6 +66,10 @@ export function LanguageProvider(props: { children: ReactNode }) {
   const setLanguage = (s: LangSetting) => {
     const previous = setting;
     setSetting(s);
+    // silent rollback is intentional: the UI visibly stays in the previous
+    // language, so a modal would add noise to a self-evident state. Theme
+    // and other settings use the app dialog because their failure is not
+    // self-evident.
     void api.setLanguage(s).catch(() => {
       setSetting(previous);
     });

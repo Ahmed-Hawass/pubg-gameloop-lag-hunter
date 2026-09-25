@@ -12,7 +12,10 @@ use super::types::{iso_ms, EngineEvent, Sample, Thresholds};
 pub fn app_dir() -> PathBuf {
     let base = std::env::var("LOCALAPPDATA")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("."));
+        // LOCALAPPDATA is always set on Windows; a missing value must never
+        // land writes in the current directory (often read-only or the wrong
+        // drive). Fall back to the OS temp dir, still under our own folder.
+        .unwrap_or_else(|_| std::env::temp_dir());
     base.join("LagHunter")
 }
 

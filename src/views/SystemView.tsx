@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Cpu, Gauge, HardDrive, MemoryStick, RefreshCw } from "lucide-react";
 import { Button, EmptyState, Hint } from "../components/components";
 import { api, type SystemInfo } from "../bridge";
+import { errorDialog } from "../errors";
 import { useLang } from "../i18n";
 
 export function SystemView() {
@@ -21,11 +22,18 @@ export function SystemView() {
       setInfo(await api.systemInfo());
       setError(null);
     } catch (e) {
-      // known backend keys render their locale copy, novel failures fall
+      // known backend keys render their locale copy (substring match, so an
+      // "engine error: CODE" wrapper still resolves); novel failures fall
       // back to the generic copy with the raw message as technical line
       const raw = typeof e === "string" ? e : String(e);
-      const keyed = (t.errors as Record<string, string | undefined>)[raw];
-      setError(keyed ?? t.dialog.unknownErrorBody(raw));
+      setError(
+        errorDialog(raw, t.errors, {
+          somethingWrong: t.dialog.somethingWrong,
+          scanNeedsGame: t.dialog.scanNeedsGame,
+          scanNeedsGameBody: t.dialog.scanNeedsGameBody,
+          unknownErrorBody: t.dialog.unknownErrorBody,
+        }).body,
+      );
     } finally {
       busyRef.current = false;
       setBusy(false);

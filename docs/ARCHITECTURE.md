@@ -53,7 +53,7 @@ They meet in exactly one place: a JSON state contract pushed over Tauri events.
 │             dest-validated paths (v1.3+)          │
 │                                                   │
 │  version    the update-order comparison           │
-│             (the single copy — the UI              │
+│             (the single copy: the UI              │
 │             asks the engine, never its own)        │
 │                                                   │
 │  settings   schema v3, atomic writes, migration   │

@@ -3,7 +3,7 @@
 // Scope contract (engine/update.rs): no self-replace, no restart — the most
 // this modal does is put a VERIFIED file next to the user and open its folder.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { FolderOpen, ShieldCheck, TriangleAlert } from "lucide-react";
 import { api, saveDialog, type UpdateInfo } from "../bridge";
 import { useLang } from "../i18n";
@@ -30,15 +30,18 @@ export function UpdateModal(props: {
 }) {
   const { info, onClose, onDownloadingChange, suspended } = props;
   const { t } = useLang();
-  const [phase, setPhase] = useState<Phase>({ kind: "offer" });
   // true while the offer's Download action is in flight (the OS save
   // dialog does not block the WebView — without the gate a second click
   // opened a second dialog and raced two downloads)
+  const [phase, setPhase] = useState<Phase>({ kind: "offer" });
   const [offerBusy, setOfferBusy] = useState(false);
   // closes exactly once: Escape-during-download closes the modal, then the
   // cancelled download's promise rejects LATER and would call onClose again
   // (on an unmounted component) — the ref keeps the second call a no-op
   const closedRef = useRef(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const bodyId = useId();
   const close = () => {
     if (closedRef.current) return;
     closedRef.current = true;
@@ -65,6 +68,30 @@ export function UpdateModal(props: {
     // re-running the effect on its identity would re-arm a fired Escape
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onClose, phase.kind, suspended]);
+
+  // focus trap: same contract as Dialog, a keyboard user must never Tab
+  // out of the update modal into the dead page behind it.
+  useEffect(() => {
+    if (suspended) return;
+    const onTab = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const box = boxRef.current;
+      if (!box) return;
+      const focusables = box.querySelectorAll<HTMLElement>("button:not([disabled])");
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onTab);
+    return () => document.removeEventListener("keydown", onTab);
+  }, [suspended]);
 
   // report download activity to the shell (ref-stable callback from App)
   useEffect(() => {
@@ -260,9 +287,16 @@ export function UpdateModal(props: {
 
   return (
     <div className="dialog-overlay" onClick={(e) => e.stopPropagation()}>
-      <div className="dialog-box um-box" role="alertdialog" aria-modal="true">
-        <h3 className="dialog-title">{title}</h3>
-        {body}
+      <div
+        ref={boxRef}
+        className="dialog-box um-box"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={bodyId}
+      >
+        <h3 id={titleId} className="dialog-title">{title}</h3>
+        <div id={bodyId}>{body}</div>
         <div className="dialog-actions">{actions}</div>
       </div>
     </div>

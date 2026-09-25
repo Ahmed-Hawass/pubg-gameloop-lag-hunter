@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { Activity, RefreshCw } from "lucide-react";
 import { Button, EmptyState } from "../components/components";
 import { api, type TopProcess } from "../bridge";
+import { errorDialog } from "../errors";
 import { useLang } from "../i18n";
 
 /** live refresh cadence while the tab is visible */
@@ -42,8 +43,14 @@ export function ProcessesView(props: { active: boolean }) {
       // for known backend keys, novel failures keep the raw technical line
       if (!silent) {
         const raw = typeof e === "string" ? e : String(e);
-        const keyed = (t.errors as Record<string, string | undefined>)[raw];
-        setError(keyed ?? t.dialog.unknownErrorBody(raw));
+        setError(
+          errorDialog(raw, t.errors, {
+            somethingWrong: t.dialog.somethingWrong,
+            scanNeedsGame: t.dialog.scanNeedsGame,
+            scanNeedsGameBody: t.dialog.scanNeedsGameBody,
+            unknownErrorBody: t.dialog.unknownErrorBody,
+          }).body,
+        );
       }
     } finally {
       busyRef.current = false;

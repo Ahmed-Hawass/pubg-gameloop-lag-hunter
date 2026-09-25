@@ -20,15 +20,16 @@ We aim to respond within **72 hours**.
 
 ### 👤 Runs as a normal user
 
-The tool never requests administrator privileges.
+The tool runs as a normal user and never requires running the app itself as administrator. Specific writes that Windows restricts (power plan switch, page file settings, storage cleanup of protected locations) use a same-binary elevated helper (`--laghunter-elevated`) with a whitelisted action id per operation and one UAC prompt per action. Refusing the prompt rolls back quietly with no change applied.
 
 ### 🪟 Whitelisted Windows panels
 
 The tool opens only:
 
 ```text
-sysdm.cpl
-powercfg.cpl
+powercfg.cpl (power plan)
+sysdm.cpl,,3 (system performance)
+ms-settings:gaming-gamedvr via explorer.exe (background recording)
 ```
 
 ### 🗂️ Safe session deletion
@@ -41,4 +42,4 @@ Logs rotate after **7 days**.
 
 The updater reads the public GitHub releases feed over **HTTPS**.
 
-It never downloads or runs anything itself, it links you to the release page.
+It downloads the release exe only to a location you choose in a save dialog, verifies it against `SHA256SUMS.txt` (64 hex chars, exact asset-name match) before writing, and never auto-installs, replaces itself, or restarts. Integrity is hash-based only (no code signature or TUF): if release assets are compromised, the hash check passes with them, so this is an accepted risk documented here. It never runs the downloaded file itself, it offers to open its folder.

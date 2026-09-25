@@ -49,9 +49,9 @@ export function MonitorView(props: {
   }, [summaryAllowed, sessionId, onDismissSummary]);
 
   // live values, or the neutral resting state for every card
-  const live = running && ui;
-  const bars = ui?.bars;
-  const hist = ui?.history;
+  const liveUi = running ? ui : null;
+  const bars = liveUi?.bars;
+  const hist = liveUi?.history;
 
   return (
     <div className="monitor">
@@ -83,7 +83,7 @@ export function MonitorView(props: {
         </div>
         <div className="session-clock">
           <span className="timer-label">{t.time}</span>
-          <span className="timer-val num">{fmtDur(live ? ui!.elapsed_sec : 0)}</span>
+          <span className="timer-val num">{fmtDur(liveUi?.elapsed_sec ?? 0)}</span>
         </div>
       </div>
 
@@ -93,41 +93,41 @@ export function MonitorView(props: {
         <MetricCard
           label={t.cpu}
           icon={<Cpu size={14} />}
-          value={live ? bars!.cpu : null}
-          history={live ? hist!.cpu : null}
+          value={bars?.cpu ?? null}
+          history={hist?.cpu ?? null}
           hint={t.cpuHint}
         />
         <MetricCard
           label={t.ram}
           icon={<Activity size={14} />}
-          value={live ? bars!.ram : null}
-          history={live ? hist!.ram : null}
+          value={bars?.ram ?? null}
+          history={hist?.ram ?? null}
           hint={t.ramHint}
         />
         <MetricCard
           label={t.gpu}
           icon={<Gauge size={14} />}
-          value={live ? bars!.gpu : null}
-          history={live && bars!.gpu !== null ? hist!.gpu : null}
+          value={bars?.gpu ?? null}
+          history={bars?.gpu != null ? (hist?.gpu ?? null) : null}
           hint={t.gpuHint}
         />
         <MetricCard
           label={t.disk}
           icon={<HardDrive size={14} />}
-          value={live ? bars!.disk : null}
-          history={live ? hist!.disk : null}
+          value={bars?.disk ?? null}
+          history={hist?.disk ?? null}
           hint={t.diskHint}
         />
       </div>
 
       {/* timeline — always present */}
-      {live ? (
+      {liveUi ? (
         <>
           <Timeline
-            elapsedSec={ui!.elapsed_sec}
-            autoStopSec={ui!.auto_stop_sec}
-            spikes={ui!.spikes.map((s) => ({ offsetMs: s.offset_ms, kind: s.kind }))}
-            hasData={ui!.samples_count > 0}
+            elapsedSec={liveUi.elapsed_sec}
+            autoStopSec={liveUi.auto_stop_sec}
+            spikes={liveUi.spikes.map((s) => ({ offsetMs: s.offset_ms, kind: s.kind }))}
+            hasData={liveUi.samples_count > 0}
             kindLabel={(k) => t.feed[k] ?? k}
             headLabel={t.timelineDuration}
           />
@@ -160,12 +160,13 @@ export function MonitorView(props: {
           {t.activity}
           <Hint text={t.activityHint} />
         </h3>
-        {live && ui!.feed.length > 0 ? (
+        {liveUi && liveUi.feed.length > 0 ? (
           <ul className="feed-list">
-            {ui!.feed.map((f, i) => (
-              // stable composite key: the feed re-renders every live tick and
-              // index keys would make React reuse the wrong rows after a shift
-              <li key={`${f.clock}-${f.kind}-${i}`} className={`feed-item feed-${f.sev}`}>
+            {liveUi.feed.map((f, i) => (
+              // content-prefixed key with an index tiebreaker: rows are
+              // static text, so index shifting on prepend only repaints text
+              // while duplicates (same clock+kind+severity) stay unique
+              <li key={`${f.clock}-${f.kind}-${f.sev}-${i}`} className={`feed-item feed-${f.sev}`}>
                 <span className="feed-clock num">{f.clock}</span>
                 <span className="feed-text">{t.feed[f.kind] ?? f.kind}</span>
               </li>
@@ -173,15 +174,15 @@ export function MonitorView(props: {
           </ul>
         ) : (
           <div className="feed-empty">
-            {live ? (ui!.game_running ? t.nothingUnusual : t.waitingGameloopFeed) : ""}
+            {liveUi ? (liveUi.game_running ? t.nothingUnusual : t.waitingGameloopFeed) : ""}
           </div>
         )}
       </section>
 
       {/* confirmed diagnosis cards — only while the engine confirms them */}
-      {live && ui!.diagnoses.length > 0 ? (
+      {liveUi && liveUi.diagnoses.length > 0 ? (
         <div className="notes">
-          {ui!.diagnoses.map((d) => {
+          {liveUi.diagnoses.map((d) => {
             const copy = t.diagnoses[d.key] ?? { title: d.title, simple: d.simple, fix: d.fix };
             return (
               <NoteCard
@@ -204,7 +205,7 @@ export function MonitorView(props: {
             title={ui!.lag_count > 0 ? t.spikesCaptured(ui!.lag_count) : t.sessionClean}
             hint={t.summaryHint(ui!.samples_count)}
             reportLabel={t.openReportBtn}
-            dismissLabel={t.dialog.cancel}
+            dismissLabel={t.dialog.dismiss}
             onReport={onOpenReport}
             onDismiss={() => onDismissSummary(sessionId!)}
           />

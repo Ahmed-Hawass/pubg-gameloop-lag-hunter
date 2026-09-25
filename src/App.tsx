@@ -38,9 +38,9 @@ export default function App() {
   const [status, setStatus] = useState<StatusPayload>({ status: "idle", ui: null });
   const [busy, setBusy] = useState(false);
   const [durationSecs, setDurationSecs] = useState<number>(300);
-  const [toast, setToast] = useState<string | null>(null);
-  const [toastTitle, setToastTitle] = useState<string | null>(null);
-  const [toastBody, setToastBody] = useState<string | null>(null);
+  const [dialogKey, setDialogKey] = useState<string | null>(null);
+  const [dialogTitle, setDialogTitle] = useState<string | null>(null);
+  const [dialogBody, setDialogBody] = useState<string | null>(null);
   const [view, setView] = useState<View>("monitor");
   const [reportOpenId, setReportOpenId] = useState<string | null>(null);
   /** Tools deep-link target row id (the health DVR card jumps to its row):
@@ -125,11 +125,11 @@ export default function App() {
     setExitConfirm(blockers);
     window.dispatchEvent(new Event(APP_DIALOG_OPEN_EVENT));
   }, []);
-  /** first-run advice is up RIGHT NOW — derived from the live toast state,
+  /** first-run advice is up RIGHT NOW — derived from the live dialog state,
       never a sticky flag: the update modal and the one-shot advices defer
       while this dialog is on screen, and stop deferring the moment it is
       dismissed (a sticky boolean once deferred them for the whole launch) */
-  const adviceUp = toast === "first_run_advice";
+  const adviceUp = dialogKey === "first_run_advice";
   /** theme setting ("auto" follows the OS — also the default for a fresh
       install); the resolved value drives
       document.documentElement.dataset.theme — single source of truth,
@@ -138,9 +138,9 @@ export default function App() {
 
   const showSettingsError = (error: unknown) => {
     const raw = typeof error === "string" ? error : String(error);
-    setToastTitle(t.dialog.somethingWrong);
-    setToastBody(t.dialog.unknownErrorBody(raw));
-    setToast("settings-write-failed");
+    setDialogTitle(t.dialog.somethingWrong);
+    setDialogBody(t.dialog.unknownErrorBody(raw));
+    setDialogKey("settings-write-failed");
   };
 
   // apply the resolved theme to <html> and follow OS changes while "auto"
@@ -218,9 +218,9 @@ export default function App() {
       payload.stop_reason === "gameloop_closed" &&
       !closedNoticeShown
     ) {
-      setToastTitle(t.dialog.gameloopClosed);
-      setToastBody(t.dialog.gameloopClosedBody);
-      setToast("gameloop_closed");
+      setDialogTitle(t.dialog.gameloopClosed);
+      setDialogBody(t.dialog.gameloopClosedBody);
+      setDialogKey("gameloop_closed");
       setClosedNoticeShown(true);
     }
   };
@@ -245,9 +245,9 @@ export default function App() {
         // a novel failure gets the localized unknown-error dialog, never
         // a raw English string inside an Arabic UI
         const raw = typeof e === "string" ? e : String(e);
-        setToastTitle(t.dialog.somethingWrong);
-        setToastBody(t.dialog.unknownErrorBody(raw));
-        setToast(`state:${raw}`);
+        setDialogTitle(t.dialog.somethingWrong);
+        setDialogBody(t.dialog.unknownErrorBody(raw));
+        setDialogKey(`state:${raw}`);
       });
     api
       .getSettings()
@@ -332,9 +332,9 @@ export default function App() {
         scanNeedsGameBody: t.dialog.scanNeedsGameBody,
         unknownErrorBody: t.dialog.unknownErrorBody,
       });
-      setToastTitle(d.title);
-      setToastBody(d.body);
-      setToast(d.key);
+      setDialogTitle(d.title);
+      setDialogBody(d.body);
+      setDialogKey(d.key);
     } finally {
       setBusy(false);
     }
@@ -355,14 +355,14 @@ export default function App() {
 
   // the FIRST-RUN advice: appears exactly once — in the same launch where
   // the user completed the welcome flow. Users who onboarded in a previous
-  // launch never see it. (adviceUp is derived from the live toast above, so
+  // launch never see it. (adviceUp is derived from the live dialog above, so
   // no reset logic is needed here — dismissing the dialog unblocks the rest.)
   useEffect(() => {
     if (onboardingDone && !adviceShown && !wasOnboardedRef.current) {
       setAdviceShown(true);
-      setToastTitle(t.dialog.firstRunAdvice);
-      setToastBody(t.dialog.firstRunAdviceBody);
-      setToast("first_run_advice");
+      setDialogTitle(t.dialog.firstRunAdvice);
+      setDialogBody(t.dialog.firstRunAdviceBody);
+      setDialogKey("first_run_advice");
     }
     // deliberate fire-once: adviceShown guards the second run in state,
     // wasOnboardedRef guards it within the same render cycle; adding the
@@ -400,9 +400,9 @@ export default function App() {
     setGameAdviceDone(true); // never again
     void api.finishGameAdvice().catch(() => {});
     setGameAdviceUp(true);
-    setToastTitle(t.dialog.gameAdviceTitle);
-    setToastBody(t.dialog.gameAdviceBody);
-    setToast("game_advice");
+    setDialogTitle(t.dialog.gameAdviceTitle);
+    setDialogBody(t.dialog.gameAdviceBody);
+    setDialogKey("game_advice");
     // deliberate: the transition flags live in refs, and the copy deps
     // would re-fire the (already persisted) advice on language switches
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -438,9 +438,9 @@ export default function App() {
     setBackgroundAdviceDone(true); // never again
     void api.finishBackgroundAdvice().catch(() => {});
     setBackgroundAdviceUp(true);
-    setToastTitle(t.dialog.backgroundAdviceTitle);
-    setToastBody(t.dialog.backgroundAdviceBody);
-    setToast("background_advice");
+    setDialogTitle(t.dialog.backgroundAdviceTitle);
+    setDialogBody(t.dialog.backgroundAdviceBody);
+    setDialogKey("background_advice");
     // deliberate: same fire-once discipline as the game-advice effect
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, onboardingDone, backgroundAdviceDone, adviceUp, gameAdviceUp]);
@@ -460,13 +460,13 @@ export default function App() {
   // confirm, Tools' notice): ours is the one surface they must yield to,
   // one overlay at a time, one Escape closing one thing.
   useEffect(() => {
-    if (toast || (updateModal && updateInfo) || exitConfirm) {
+    if (dialogKey || (updateModal && updateInfo) || exitConfirm) {
       window.dispatchEvent(new Event(MODAL_OPEN_EVENT));
     }
-    if (toast || exitConfirm) {
+    if (dialogKey || exitConfirm) {
       window.dispatchEvent(new Event(APP_DIALOG_OPEN_EVENT));
     }
-  }, [toast, updateModal, updateInfo, exitConfirm]);
+  }, [dialogKey, updateModal, updateInfo, exitConfirm]);
 
   const tabs: { id: View; icon: React.ReactNode; label: string; beta?: boolean }[] = [
     { id: "monitor", icon: <Crosshair size={17} />, label: t.monitor },
@@ -635,11 +635,12 @@ export default function App() {
         )}
       </div>
 
-      {/* the ONE modal surface — no toasts anywhere in the app.
+      {/* the ONE modal surface — no toast system anywhere in the app.
           Order matters: the exit confirm wins while up (the advice/error
           dialog is stateless, so hiding it is safe and it returns on
           Stay); the update modal stays mounted but suspended so a live
-          download survives a Stay instead of being cancelled by unmount. */}
+          download survives a Stay or an advice/error dialog instead of
+          being cancelled by unmount. */}
       {exitConfirm ? (
         <Dialog
           title={t.dialog.exitTitle}
@@ -660,35 +661,35 @@ export default function App() {
           }}
           onClose={() => setExitConfirm(null)}
         />
-      ) : toast ? (
+      ) : dialogKey ? (
         <Dialog
-          title={toastTitle ?? t.dialog.somethingWrong}
-          body={toastBody ?? toast}
+          title={dialogTitle ?? t.dialog.somethingWrong}
+          body={dialogBody ?? dialogKey}
           kind="notice"
           okLabel={t.dialog.ok}
           onClose={() => {
             // the one-forever advice dialogs were already persisted AT SHOW
             // (closing the app with the dialog open must not resurrect them
             // next launch) — closing only clears the modal surface here.
-            // Reset by the FLAG, not by the current toast value: a
-            // gameloop_closed push can overwrite the toast while an advice
+            // Reset by the FLAG, not by the current dialog value: a
+            // gameloop_closed push can overwrite the dialog key while an advice
             // dialog is up, and a value-matched reset would leave the flag
             // stuck high for the whole launch, silently suppressing the
             // update modal (the deferral feeds on these flags).
             if (gameAdviceUp) setGameAdviceUp(false);
             if (backgroundAdviceUp) setBackgroundAdviceUp(false);
-            setToast(null);
-            setToastTitle(null);
-            setToastBody(null);
+            setDialogKey(null);
+            setDialogTitle(null);
+            setDialogBody(null);
           }}
         />
       ) : null}
-      {updateModal && updateInfo && (!toast || exitConfirm) ? (
+      {updateModal && updateInfo ? (
         <UpdateModal
           info={updateInfo}
           onClose={() => setUpdateModal(false)}
           onDownloadingChange={onDownloadActivity}
-          suspended={exitConfirm !== null}
+          suspended={exitConfirm !== null || dialogKey !== null}
         />
       ) : null}
     </div>

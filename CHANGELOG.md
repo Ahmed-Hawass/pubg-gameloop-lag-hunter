@@ -96,8 +96,8 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   from Tencent's own InstallPath values plus the stock location, writes
   touch only our own token/flag (sibling tokens and foreign flags are
   preserved), and turning a row off reverts to Windows decides instead of
-  ever forcing power-saving — except windowed-games off, which writes
-  `=0` exactly like the Settings toggle itself does (verified live).
+  ever forcing power-saving (except windowed-games off, which writes
+  `=0` exactly like the Settings toggle itself does, verified live).
   Row copy states the function plus the required action (close and reopen
   the game), never bare mechanics; the mouse row states plainly that it
   is a feel preference with no FPS claim. The windowed row hides below

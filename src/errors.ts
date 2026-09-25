@@ -8,7 +8,7 @@ export interface ErrorDialog {
   title: string;
   /** dialog body */
   body: string;
-  /** toast identity key */
+  /** dialog identity key (single modal surface, never a toast) */
   key: string;
 }
 

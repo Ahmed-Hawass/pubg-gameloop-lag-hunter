@@ -199,7 +199,6 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 13px 16px;
-  cursor: pointer;
   transition: border-color 0.12s, background 0.12s;
 }
 .session-list li:hover {
@@ -208,6 +207,22 @@
 }
 .session-list li.is-loading {
   opacity: 0.5;
+}
+/* the row's open action: unstyled button filling the row, so the layout
+   stays identical while keyboard and screen-reader users get a real button */
+.sl-open {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
 }
 .sl-icon {
   display: flex;

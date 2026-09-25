@@ -233,7 +233,7 @@ export function SummaryCard(props: {
 
 // ---------------------------------------------------------------------------
 // Dialog — the ONE modal surface for anything that needs the user's eyes:
-// errors, confirmations, notices. Replaces every toast. Native-window feel:
+// errors, confirmations, notices. Replaces every toast system. Native-window feel:
 // centered, dimmed backdrop, Escape to dismiss, click-outside for notices.
 // ---------------------------------------------------------------------------
 export function Dialog(props: {
@@ -337,7 +337,7 @@ export function Dialog(props: {
 // ---------------------------------------------------------------------------
 /**
  * Global signal: App dispatches it whenever the single modal surface opens
- * (toast dialog or update modal). A dialog mounting under a parked cursor
+ * (dialog or update modal). A dialog mounting under a parked cursor
  * never fires mouseleave — without this the bubble stuck above the modal
  * (and stayed after it closed) until the user hovered the trigger again.
  */
@@ -345,7 +345,7 @@ export const MODAL_OPEN_EVENT = "laghunter:modal-open";
 
 /**
  * Global signal for VIEW-LEVEL dialogs: App dispatches it when ITS dialog
- * (the toast surface) opens on top of a view's own confirm/notice dialog.
+ * (the dialog surface) opens on top of a view's own confirm/notice dialog.
  * The view dialog yields (closes itself) instead of stacking two overlays
  * where one Escape keydown would close both. Deliberately a SEPARATE event
  * from MODAL_OPEN_EVENT: a view dispatches that one for its OWN dialog,

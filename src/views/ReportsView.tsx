@@ -261,7 +261,7 @@ export function ReportsView(props: {
             {report.highlights.map((h, i) => {
               const base = t.highlights[h.kind] ?? h.kind;
               const clock = h.clock ? ` (${h.clock})` : "";
-              const dur = h.dur_sec ? ` –” ${Math.round(h.dur_sec)}s` : "";
+              const dur = h.dur_sec ? ` - ${fmtDur(Math.round(h.dur_sec), { m: t.minUnit, s: t.secUnit })}` : "";
               return <li key={i}>{`${base}${dur}${clock}`}</li>;
             })}
           </ul>
@@ -330,50 +330,41 @@ export function ReportsView(props: {
           {entries.map((e) => {
             const meta = outcomeMeta[e.outcome] ?? outcomeMeta.partial;
             return (
-              <li
-                key={e.id}
-                className={loadingId === e.id ? "is-loading" : ""}
-                // keyboard users could never open a report: a clickable li
-                // is invisible to tab order and screen readers. The row
-                // is a listitem button now - Enter/Space open it, and the
-                // announceable name is the report's own summary line.
-                role="button"
-                tabIndex={0}
-                aria-label={`${e.date}, ${meta.label}`}
-                onClick={() => openReport(e.id)}
-                onKeyDown={(ev) => {
-                  if (ev.key === "Enter" || ev.key === " ") {
-                    ev.preventDefault();
-                    openReport(e.id);
-                  }
-                }}
-              >
-                <span className={`sl-icon sl-icon-${meta.tone}`}>
-                  {meta.tone === "ok" ? (
-                    <CheckCircle2 size={17} />
-                  ) : meta.tone === "bad" ? (
-                    <AlertTriangle size={17} />
-                  ) : (
-                    <Clock size={17} />
-                  )}
-                </span>
-                <span className="sl-main">
-                  <span className="sl-date">{e.date}</span>
-                  <span className="sl-sub">
-                    {fmtDur(e.duration_sec, { m: t.minUnit, s: t.secUnit })} · {e.samples} {t.samples}
+              <li key={e.id} className={loadingId === e.id ? "is-loading" : ""}>
+                {/* accessible row: a dedicated open button plus a delete
+                    button, never nested interactives inside a clickable li */}
+                <button
+                  type="button"
+                  className="sl-open"
+                  aria-label={`${e.date}, ${meta.label}`}
+                  onClick={() => openReport(e.id)}
+                >
+                  <span className={`sl-icon sl-icon-${meta.tone}`}>
+                    {meta.tone === "ok" ? (
+                      <CheckCircle2 size={17} />
+                    ) : meta.tone === "bad" ? (
+                      <AlertTriangle size={17} />
+                    ) : (
+                      <Clock size={17} />
+                    )}
                   </span>
-                </span>
-                <span className={`sl-badge sl-badge-${meta.tone}`}>
-                  {e.lag_spikes > 0 ? t.spikeCount(e.lag_spikes) : meta.label}
-                </span>
+                  <span className="sl-main">
+                    <span className="sl-date">{e.date}</span>
+                    <span className="sl-sub">
+                      {fmtDur(e.duration_sec, { m: t.minUnit, s: t.secUnit })} · {e.samples} {t.samples}
+                    </span>
+                  </span>
+                  <span className={`sl-badge sl-badge-${meta.tone}`}>
+                    {e.lag_spikes > 0 ? t.spikeCount(e.lag_spikes) : meta.label}
+                  </span>
+                </button>
                 <span className="sl-actions">
                   <Tip text={t.deleteSession}>
                     <button
+                      type="button"
                       className="sl-act sl-act-danger"
-                      onClick={(ev) => {
-                        ev.stopPropagation();
-                        setConfirmDelete(e.id);
-                      }}
+                      aria-label={t.deleteSession}
+                      onClick={() => setConfirmDelete(e.id)}
                     >
                       <Trash2 size={14} />
                     </button>

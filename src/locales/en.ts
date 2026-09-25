@@ -14,6 +14,7 @@ export const en = {
   dialog: {
     ok: "OK",
     cancel: "Cancel",
+    dismiss: "Dismiss",
     delete: "Delete",
     deleteTitle: "Delete this session?",
     deleteBody: "Its samples and report will be permanently removed from your PC.",
