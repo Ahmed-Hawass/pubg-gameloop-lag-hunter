@@ -219,10 +219,20 @@ impl Engine {
             }
         }
 
-        // GATE: no GameLoop, no scan. The numbers only mean something in-game.
-        if sampler::detect_emulator().is_none() {
-            super::logging::info("start blocked: game not running in GameLoop");
-            return Err("GAMELOOP_NOT_RUNNING".into());
+        // GATE: no game, no scan. The numbers only mean something in-game.
+        // v6: an emulator process IS the game (per-game runtime). v7: the
+        // client idles with no game, so RunningAppInfo decides. Unknown
+        // builds get their own honest key, never the "not running" lie.
+        match sampler::presence() {
+            sampler::Presence::GameRunning => {}
+            sampler::Presence::UnknownVersion => {
+                super::logging::info("start blocked: unrecognized emulator build");
+                return Err("EMULATOR_UNKNOWN".into());
+            }
+            sampler::Presence::ClientIdle | sampler::Presence::Absent => {
+                super::logging::info("start blocked: game not running in GameLoop");
+                return Err("GAMELOOP_NOT_RUNNING".into());
+            }
         }
 
         // machine profile per session → dynamic thresholds. RAM + disk count
@@ -683,12 +693,23 @@ impl Engine {
         // running on ghost evidence after the probe thread itself died —
         // the same TTL gate on_sample applies. A snapshot past its TTL
         // reads as a miss, never as alive.
-        let alive = LATEST_EMU
+        let emu: Vec<super::types::ProcInfo> = LATEST_EMU
             .lock()
             .unwrap_or_else(|p| p.into_inner())
             .as_ref()
             .and_then(|t| t.get())
-            .is_some_and(|emu| !emu.is_empty());
+            .cloned()
+            .unwrap_or_default();
+        let mut alive = !emu.is_empty();
+        if alive {
+            // v7 has no per-game process (closing PUBG leaves the emulator
+            // up): the VM's own app counter decides. v6 world has no such
+            // key — process presence stays the whole truth there.
+            // A None verdict (not a v7 snapshot) keeps the old answer.
+            if let Some(game) = super::emulator::v7_game_active(&emu) {
+                alive = game;
+            }
+        }
         if !alive {
             // first miss → arm the counter; 3 consecutive misses (~15s) → stop
             self.gameloop_misses.fetch_add(1, Ordering::SeqCst)

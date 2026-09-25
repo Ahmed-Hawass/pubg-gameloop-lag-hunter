@@ -12,9 +12,10 @@ import {
   type RowState,
 } from "../../bridge";
 import { errorDialog } from "../../errors";
+import type { Notice } from "../../errors";
 import { useLang } from "../../i18n";
 
-export function useTweaks(failNotice: (body: string | null) => void) {
+export function useTweaks(failNotice: (notice: Notice | null) => void) {
   const { t } = useLang();
   /** optimistic switch positions: flip instantly on click; restored to the
       verified live truth after the write settles (and on every fresh read) */
@@ -126,6 +127,14 @@ export function useTweaks(failNotice: (body: string | null) => void) {
       setPowerState(s.power_high_perf);
       setMouseOn(s.mouse_accel_off);
       setLoadError(null);
+      // one-time client-update notice (the engine persists on this very
+      // read, so the sibling section's read stays quiet — one dialog max)
+      if (s.emulator_updated) {
+        failNotice({
+          title: t.dialog.emulatorUpdatedTitle,
+          body: t.dialog.emulatorUpdatedBody(s.emulator_version),
+        });
+      }
     } catch (e) {
       // same staleness rule for the error surface: a failed pre-flip read
       // must not raise an error page over a flip that already settled
@@ -157,7 +166,7 @@ export function useTweaks(failNotice: (body: string | null) => void) {
       const res = await api.setTweak(id, tweak.goal(on));
       if (!res.verified) {
         tweak.set(before); // roll back to the truth we knew
-        failNotice(t.tweakFailed);
+        failNotice({ title: t.dialog.somethingWrong, body: t.tweakFailed });
         return;
       }
       notifyFeatureStateChanged();
@@ -170,14 +179,15 @@ export function useTweaks(failNotice: (body: string | null) => void) {
       // (same exact-"cancelled" contract as the update flow — a message
       // merely containing the word still counts as a real error)
       if (raw === "cancelled") return;
-      failNotice(
-        errorDialog(raw, t.errors, {
+      failNotice({
+        title: t.dialog.somethingWrong,
+        body: errorDialog(raw, t.errors, {
           somethingWrong: t.dialog.somethingWrong,
           scanNeedsGame: t.dialog.scanNeedsGame,
           scanNeedsGameBody: t.dialog.scanNeedsGameBody,
           unknownErrorBody: t.dialog.unknownErrorBody,
         }).body,
-      );
+      });
     } finally {
       tweakBusyRef.current = false;
       setTweakBusy(false);

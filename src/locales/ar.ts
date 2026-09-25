@@ -49,6 +49,9 @@ export const ar: Locale = {
     exitBodyDownload: "يوجد تحديث قيد التنزيل. سيلغى التنزيل.",
     exitBodyCleaning: "يوجد تنظيف جار. سيتوقف.",
     exitConfirm: "خروج",
+    emulatorUpdatedTitle: "تم تحديث GameLoop",
+    emulatorUpdatedBody: (v: string) =>
+      `أصبح GameLoop على الإصدار ${v}. يربط ويندوز إعدادات الرسومات بمكان التثبيت، فراجع مفاتيح الأدوات وأعد تفعيل ما أوقفه التحديث.`,
   },
 
   // ---- error codes from the backend ----
@@ -67,6 +70,8 @@ export const ar: Locale = {
     PF_MAX_INVALID: "الحجم الأقصى غير صالح لهذا القرص.",
     PF_WRITE_FAILED: "رفض ويندوز تغيير page file.",
     POWERSHELL_TIMEOUT: "استغرق فحص النظام وقتا طويلا. حاول مرة أخرى.",
+    EMULATOR_UNKNOWN:
+      "يبدو أن GameLoop يعمل بنسخة لا تعرفها هذه الأداة بعد. إذا كانت اللعبة قيد التشغيل، حدّث Lag Hunter إلى آخر إصدار.",
   } as Record<string, string>,
 
   // ---- report highlights (composed in the UI from event kinds) ----

@@ -7,12 +7,13 @@ import { useCallback, useRef, useState } from "react";
 import { ChevronDown, Info, Trash2 } from "lucide-react";
 import { Button, Dialog } from "../../components/components";
 import { api, type CleanupCategory, type CleanupResult, type CleanupScan } from "../../bridge";
+import type { Notice } from "../../errors";
 import { useLang } from "../../i18n";
 import { useModalSignal, useYieldToAppDialog } from "./useModalSignals";
 
 export function SweepSection(props: {
   showHint: (title: string, body: string) => void;
-  failNotice: (body: string | null) => void;
+  failNotice: (notice: Notice | null) => void;
   /** reports cleanup activity to the shell (the exit confirm needs it) */
   onCleaningChange?: (active: boolean) => void;
 }) {
@@ -171,7 +172,7 @@ export function SweepSection(props: {
       // a refused elevation is a choice, not a failure (same
       // exact-"cancelled" contract as the switch flips above)
       if (raw === "cancelled") return;
-      failNotice(t.dialog.unknownErrorBody(raw));
+      failNotice({ title: t.dialog.somethingWrong, body: t.dialog.unknownErrorBody(raw) });
     } finally {
       clBusyRef.current = false;
       setClBusy(false);

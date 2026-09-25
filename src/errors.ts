@@ -12,6 +12,12 @@ export interface ErrorDialog {
   key: string;
 }
 
+/** an informational or failure notice on the single modal surface */
+export interface Notice {
+  title: string;
+  body: string;
+}
+
 /**
  * Decide which dialog a thrown backend error maps to.
  * `raw` is the error as string; `errors` is the locale's error-code table;

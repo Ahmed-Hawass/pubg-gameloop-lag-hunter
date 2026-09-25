@@ -54,6 +54,12 @@ pub struct Settings {
     /// only signal until the next version lands)
     #[serde(default)]
     pub announced_update_version: Option<String>,
+    /// the GameLoop client version seen at the last Tools read
+    /// (e.g. "7.0.19.05"). Compared on every tweak_states read: a change
+    /// fires the one-time re-flip notice (client updates orphan path-keyed
+    /// GPU/FSO prefs). serde default keeps old files valid, no migration.
+    #[serde(default)]
+    pub last_seen_gameloop_version: Option<String>,
     /// the power plan active before the user first enabled High
     /// Performance through Tools (GUID string). OFF restores exactly this,
     /// never a hardcoded plan. None = never enabled (or enabled while
@@ -84,6 +90,7 @@ impl Default for Settings {
             game_advice_done: false,
             background_advice_done: false,
             announced_update_version: None,
+            last_seen_gameloop_version: None,
             previous_power_guid: None,
             pending_restart: None,
             thresholds: Thresholds::default(),
@@ -305,6 +312,7 @@ mod tests {
             game_advice_done: true,
             background_advice_done: true,
             announced_update_version: None,
+            last_seen_gameloop_version: None,
             previous_power_guid: None,
             pending_restart: None,
             thresholds: Thresholds::default(),
@@ -364,6 +372,7 @@ mod tests {
             game_advice_done: true,
             background_advice_done: true,
             announced_update_version: Some("1.3.0".into()),
+            last_seen_gameloop_version: Some("7.0.19.05".into()),
             previous_power_guid: None,
             pending_restart: None,
             thresholds: Thresholds::default(),
@@ -375,6 +384,7 @@ mod tests {
         assert_eq!(back.auto_stop_minutes, 60);
         assert_eq!(back.version, 3);
         assert_eq!(back.announced_update_version.as_deref(), Some("1.3.0"));
+        assert_eq!(back.last_seen_gameloop_version.as_deref(), Some("7.0.19.05"));
         assert!(back.game_advice_done);
         assert!(back.background_advice_done);
     }

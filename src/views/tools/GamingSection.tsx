@@ -14,6 +14,7 @@ import {
   Zap,
 } from "lucide-react";
 import { EmptyState } from "../../components/components";
+import type { Notice } from "../../errors";
 import { useLang } from "../../i18n";
 import { SwitchRow } from "./SwitchRow";
 import { useTweaks } from "./useTweaks";
@@ -24,7 +25,7 @@ export function GamingSection(props: {
   linkTarget: string | null;
   onLinkDone: () => void;
   showHint: (title: string, body: string) => void;
-  failNotice: (body: string | null) => void;
+  failNotice: (notice: Notice | null) => void;
 }) {
   const { active, linkTarget, onLinkDone, showHint, failNotice } = props;
   const { t } = useLang();

@@ -45,6 +45,9 @@ export const en = {
     exitBodyDownload: "An update is downloading. It will be cancelled.",
     exitBodyCleaning: "A cleanup is running. It will stop.",
     exitConfirm: "Exit",
+    emulatorUpdatedTitle: "GameLoop was updated",
+    emulatorUpdatedBody: (v: string) =>
+      `GameLoop is now on ${v}. Windows ties graphics settings to each install location, so re-check the Tools switches and flip back anything the update switched off.`,
   },
 
   // ---- error codes from the backend ----
@@ -63,6 +66,8 @@ export const en = {
     PF_MAX_INVALID: "The maximum size is not valid for that drive.",
     PF_WRITE_FAILED: "Windows refused the page file change.",
     POWERSHELL_TIMEOUT: "Checking the system took too long. Try again.",
+    EMULATOR_UNKNOWN:
+      "GameLoop seems to be running a build this tool does not recognize yet. If the game is running, update Lag Hunter to the latest version.",
   } as Record<string, string>,
 
   // ---- report highlights (composed in the UI from event kinds) ----

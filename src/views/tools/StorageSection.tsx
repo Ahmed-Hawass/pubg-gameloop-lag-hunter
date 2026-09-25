@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Recycle, SlidersHorizontal } from "lucide-react";
 import { EmptyState } from "../../components/components";
+import type { Notice } from "../../errors";
 import { useLang } from "../../i18n";
 import { PagefileEditor } from "./PagefileEditor";
 import { SweepSection } from "./SweepSection";
@@ -20,7 +21,7 @@ export function StorageSection(props: {
   linkTarget: string | null;
   onLinkDone: () => void;
   showHint: (title: string, body: string) => void;
-  failNotice: (body: string | null) => void;
+  failNotice: (notice: Notice | null) => void;
   /** reports cleanup activity to the shell (the exit confirm needs it) */
   onCleaningChange?: (active: boolean) => void;
 }) {

@@ -34,6 +34,15 @@ describe("errorDialog", () => {
     expect(d.body).toBe(en.errors.SESSION_STOPPING);
   });
 
+  it("maps an unrecognized emulator build to its honest copy, never the game gate", () => {
+    // EMULATOR_UNKNOWN must not collapse into GAMELOOP_NOT_RUNNING: the
+    // game may well be running under a build we have no card for
+    const d = errorDialog("EMULATOR_UNKNOWN", en.errors, COPY);
+    expect(d.title).toBe(en.dialog.somethingWrong);
+    expect(d.body).toBe(en.errors.EMULATOR_UNKNOWN);
+    expect(d.key).toBe("EMULATOR_UNKNOWN");
+  });
+
   it("unknown errors show the localized unknown-error body under the generic title", () => {
     // a novel backend message must never ship raw English into an Arabic
     // dialog: the locale explains and the raw string rides along as a

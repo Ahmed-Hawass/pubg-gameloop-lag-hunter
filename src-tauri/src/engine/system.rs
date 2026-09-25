@@ -732,6 +732,13 @@ pub struct TweakStates {
     /// active; Off = present or restorable; Hidden = Ultimate active or
     /// S0-only firmware (forcing plans there fights the design)
     pub power_high_perf: RowState,
+    /// one-time client-update notice: the GameLoop build changed since the
+    /// last Tools read (path-keyed GPU/FSO prefs orphan on client updates,
+    /// so the user re-flips). The engine persists the new version on the
+    /// notifying read — later reads are quiet until the next change.
+    pub emulator_updated: bool,
+    /// detected GameLoop client version ("7.0.19.05"), "" when unknown
+    pub emulator_version: String,
 }
 
 /// Visibility of a Tools row whose availability depends on the machine.
@@ -1569,58 +1576,36 @@ pub(crate) fn unanimous_state(states: &[bool]) -> Option<bool> {
     }
 }
 
-/// GameLoop rendering executables, resolved live (never spawned, never
-/// recursed): install roots come from Tencent's own InstallPath values
-/// (any component subkey, either registry view) plus the stock location;
-/// each root contributes only `<root>\ui\<exe>` and `<root>\<exe>` when
-/// the file actually exists. A bounded handful of exists() checks —
-/// microseconds, no process enumeration, no PowerShell.
+/// GameLoop rendering executables, resolved live across BOTH client
+/// generations (never spawned, never recursed): roots come from the
+/// emulator snapshot — Uninstall dirs (any build), the v7 direct value,
+/// v6 subkey values, then stock locations — crossed with legacy `ui\`,
+/// `Application\`, and versioned `Application\<build>\` layouts (client
+/// updates bump the build number; a fixed path would rot every release).
+/// Each candidate contributes only when the file actually exists: a
+/// bounded handful of exists() checks — microseconds, no process
+/// enumeration, no PowerShell.
 pub(crate) fn gameloop_exe_paths() -> Vec<std::path::PathBuf> {
-    const BASES: [&str; 2] = [
-        r"SOFTWARE\Tencent\MobileGamePC",
-        r"SOFTWARE\WOW6432Node\Tencent\MobileGamePC",
-    ];
-    const EXES: [&str; 2] = ["aow_exe.exe", "AndroidEmulatorEn.exe"];
-    let hklm = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE);
-    let mut roots: Vec<std::path::PathBuf> = Vec::new();
-    for base in BASES {
-        let Ok(key) = hklm.open_subkey(base) else {
-            continue;
-        };
-        // EnumKeys yields per-item Results (infallible constructor):
-        // flatten skips unreadable subkeys, fail-soft like every probe
-        for sub in key.enum_keys().flatten() {
-            let path = format!("{base}\\{sub}");
-            if let Ok(subkey) = hklm.open_subkey(&path) {
-                if let Ok(install) = subkey.get_value::<String, _>("InstallPath") {
-                    let install = install.trim();
-                    if !install.is_empty() {
-                        let dir = std::path::PathBuf::from(install);
-                        roots.push(dir.clone());
-                        if let Some(parent) = dir.parent() {
-                            roots.push(parent.to_path_buf());
-                        }
-                    }
-                }
-            }
-        }
-    }
-    roots.push(std::path::PathBuf::from(
-        r"C:\Program Files\TxGameAssistant",
-    ));
+    use super::emulator;
+    let reg = emulator::read_snapshot();
+    let roots = emulator::resolve_roots(&reg);
+    let exes: Vec<&str> = emulator::V6
+        .exe_names
+        .iter()
+        .chain(emulator::V7.exe_names.iter())
+        .copied()
+        .collect::<Vec<_>>();
+    let versioned: Vec<Vec<String>> =
+        roots.iter().map(|r| emulator::application_versions(r)).collect();
     let mut out: Vec<std::path::PathBuf> = Vec::new();
-    for root in &roots {
-        for exe in EXES {
-            for cand in [root.join("ui").join(exe), root.join(exe)] {
-                // case-insensitive dedup: `UI\aow_exe.exe` and
-                // `ui\aow_exe.exe` are the SAME file on Windows, but
-                // PathBuf equality is byte-wise — without this the same
-                // exe resolves twice (live-proven: exes=4 for 2 files)
-                // and every write/verify runs doubled with a lying count
-                if cand.is_file() && !contains_case_insensitive(&out, &cand) {
-                    out.push(cand);
-                }
-            }
+    for cand in emulator::candidate_paths(&roots, &exes, &versioned) {
+        // case-insensitive dedup: `UI\aow_exe.exe` and
+        // `ui\aow_exe.exe` are the SAME file on Windows, but
+        // PathBuf equality is byte-wise — without this the same
+        // exe resolves twice (live-proven: exes=4 for 2 files)
+        // and every write/verify runs doubled with a lying count
+        if cand.is_file() && !contains_case_insensitive(&out, &cand) {
+            out.push(cand);
         }
     }
     out.sort();
@@ -1773,6 +1758,25 @@ pub fn query_tweak_states() -> TweakStates {
         &power_list(),
         s0_standby_present(),
     );
+    // GameLoop client-update notice (point 6 of the v7 study): GPU/FSO
+    // prefs are path-keyed, so a client update orphans them silently.
+    // First sighting stores quietly (fresh installs never nag); a change
+    // fires once and persists on this read — the UI shows one dialog.
+    let (emulator_updated, emulator_version) = {
+        let current = super::emulator::read_snapshot().v7_version;
+        let stored = current.as_ref().and_then(|_| {
+            super::settings::load()
+                .last_seen_gameloop_version
+        });
+        let (fire, version) =
+            super::emulator::version_notice(stored.as_deref(), current.as_deref());
+        if fire || (stored.is_none() && current.is_some()) {
+            let _ = super::settings::update(|s| {
+                s.last_seen_gameloop_version = current.clone();
+            });
+        }
+        (fire, version)
+    };
     TweakStates {
         game_dvr_enabled: gamedvr_armed_winreg(dvr_historical, dvr_policy),
         storage_sense: storage_sense_state(ss_exists, ss_value),
@@ -1782,6 +1786,8 @@ pub fn query_tweak_states() -> TweakStates {
         mouse_accel_off: mouse_accel_off(mouse_speed, mouse_t1, mouse_t2),
         windowed_game_opt,
         power_high_perf,
+        emulator_updated,
+        emulator_version,
     }
 }
 
@@ -1858,6 +1864,32 @@ mod tests {
         // says, and the cached flag must agree with a fresh probe result.
         // (On dev machines PS exists; the point is the two paths agree.)
         assert_eq!(powershell_available(), probe_powershell());
+    }
+
+    #[test]
+    fn live_resolver_stays_consistent() {
+        // runs everywhere (CI included): with no GameLoop installed the
+        // resolver returns nothing without touching anything scary; on a
+        // real install every resolved path exists and is unique. Either
+        // way the all-or-nothing row contract below holds.
+        let paths = gameloop_exe_paths();
+        for p in &paths {
+            assert!(p.is_file(), "resolved non-file: {}", p.display());
+        }
+        let mut seen = Vec::new();
+        for p in &paths {
+            let n = p.to_string_lossy().to_lowercase();
+            assert!(!seen.contains(&n), "duplicate resolved exe");
+            seen.push(n);
+        }
+        // on a v7 machine the new home resolves (live-proven 7.0.19.05)
+        let reg = super::super::emulator::read_snapshot();
+        if reg.v7_install.is_some() {
+            assert!(
+                !paths.is_empty(),
+                "v7 installed but no renderer exe resolved"
+            );
+        }
     }
 
     #[test]

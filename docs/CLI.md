@@ -31,8 +31,9 @@ Reading the output:
 - `samples=0` → the sampling pipeline is broken on this machine
   (look at `logs/laghunter-<date>.log` for spawn errors).
 - `game_seen=false` → GameLoop detection failed, check that
-  `aow_exe`/`TBS`/`TxGameAssistant`/`AndroidEmulatorEn` appear in
-  `tasklist` output on that machine.
+  a GameLoop process family appears in `tasklist` output on that machine
+  (v6: `aow_exe`/`TBS`/`TxGameAssistant`/`AndroidEmulatorEn`; v7 Androws:
+  `GameLoop*`/`GLABox*`).
 
 Exit codes: `0` healthy, `2` engine broken, other non-zero = start failure
 (including `GAMELOOP_NOT_RUNNING`, the gate applies headless too).

@@ -3,6 +3,7 @@ pub mod cleanup;
 pub mod detector;
 pub mod diagnoser;
 pub mod elevate;
+pub mod emulator;
 pub mod logging;
 pub mod sampler;
 pub mod session;

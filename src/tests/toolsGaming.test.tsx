@@ -56,6 +56,31 @@ describe("ToolsView gaming switches", () => {
     expect(apiMock.pagefileSettings).not.toHaveBeenCalled();
   });
 
+  it("a client update raises the re-flip notice once, with its version", async () => {
+    const user = userEvent.setup();
+    apiMock.tweakStates.mockResolvedValue(
+      tweakStates({
+        game_dvr_enabled: false,
+        emulator_updated: true,
+        emulator_version: "7.0.19.05",
+      }),
+    );
+    apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
+    render(
+      React.createElement(ToolsView, {
+        active: true,
+        toolOpenId: null,
+        onToolOpened: vi.fn(),
+      }),
+    );
+    await user.click(screen.getByText(en.toolGamingTweaks));
+    await screen.findByText(en.dialog.emulatorUpdatedTitle);
+    expect(screen.getByText(en.dialog.emulatorUpdatedBody("7.0.19.05"))).toBeTruthy();
+    // dismissing clears a notice like any other: one dialog, then gone
+    await user.click(screen.getByText(en.dialog.ok));
+    expect(screen.queryByText(en.dialog.emulatorUpdatedTitle)).toBeNull();
+  });
+
   it("hides rows the Windows build lacks instead of a dead switch", async () => {
     const user = userEvent.setup();
     openGaming();

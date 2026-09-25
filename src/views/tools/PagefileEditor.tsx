@@ -13,7 +13,7 @@ import {
   notifyFeatureStateChanged,
   type PagefileSettings,
 } from "../../bridge";
-import { errorDialog } from "../../errors";
+import { errorDialog, type Notice } from "../../errors";
 import { useLang } from "../../i18n";
 import { useModalSignal, useYieldToAppDialog } from "./useModalSignals";
 
@@ -26,7 +26,7 @@ export function PagefileEditor(props: {
   /** first read settled (mount or retry): failed = inline error territory */
   onPfSettled: (failed: boolean) => void;
   showHint: (title: string, body: string) => void;
-  failNotice: (body: string | null) => void;
+  failNotice: (notice: Notice | null) => void;
 }) {
   const { active, linkedId, linkActive, onPfSettled, showHint, failNotice } = props;
   const { t } = useLang();
@@ -235,7 +235,7 @@ export function PagefileEditor(props: {
     try {
       const res = await api.applyPagefileSettings(pfAutomatic, pfDrive, pfMode, minInput, maxInput);
       if (!res.verified) {
-        failNotice(t.tweakFailed);
+        failNotice({ title: t.dialog.somethingWrong, body: t.tweakFailed });
         return;
       }
       notifyFeatureStateChanged();
@@ -247,7 +247,7 @@ export function PagefileEditor(props: {
       const raw = typeof e === "string" ? e : String(e);
       // a refused elevation is a choice, not a failure: silent, like flips
       if (raw === "cancelled") return;
-      failNotice(pfErrorBody(raw));
+      failNotice({ title: t.dialog.somethingWrong, body: pfErrorBody(raw) });
     } finally {
       writeBusyRef.current = false;
       setWriteBusy(false);
@@ -274,7 +274,7 @@ export function PagefileEditor(props: {
     } catch (e) {
       const raw = typeof e === "string" ? e : String(e);
       if (raw === "cancelled") return;
-      failNotice(pfErrorBody(raw));
+      failNotice({ title: t.dialog.somethingWrong, body: pfErrorBody(raw) });
       return;
     }
     void runPfApply();
@@ -512,7 +512,7 @@ export function PagefileEditor(props: {
             setRebootModal(false);
             void api
               .scheduleReboot()
-              .catch(() => failNotice(t.tweakFailed));
+              .catch(() => failNotice({ title: t.dialog.somethingWrong, body: t.tweakFailed }));
           }}
           onClose={() => setRebootModal(false)}
         />

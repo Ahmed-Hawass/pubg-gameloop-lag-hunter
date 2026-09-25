@@ -7,6 +7,20 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- GameLoop v7 (Androws) support alongside v6, as integration profiles:
+  the v7 process family, registry home, versioned install layout, and
+  render executables are detected live, while v6 paths keep working
+  untouched. The v7 gate reads the emulator's own running-app counter
+  (the client idles with no game and no per-game process exists
+  anymore), game close mid-session auto-stops from the same counter,
+  unrecognized builds get an honest dedicated message instead of the
+  not-running one, and a client update raises a one-time re-flip notice
+  (path-keyed GPU/FSO prefs orphan on client updates).
+- Component test harness: jsdom plus Testing Library plus a mocked
+  bridge, with a v8 coverage floor that fails the suite on drops. The
+  suite pins the load-bearing UI contracts (optimistic flips with
+  rollback, sweep honesty, page file validate-write-reboot, one modal
+  surface, deep-links both directions, one-shot advice, exit gate).
 - Storage sweep in the Storage card: a Scan button measures four safe
   places (user temp, Windows temp, Recycle Bin, update sharing cache),
   checkboxes select what to delete, and one Clean button removes only
@@ -167,6 +181,23 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   is non-destructive and quiet work still closes straight away.
 
 ### Fixed
+- The session tick no longer holds the state lock across clock reads and
+  the diagnoser build (a periodic PowerShell spawn could stall stop and
+  status behind it). The lock covers the fast update plus the file
+  append only; the UI builds off-lock and stores only into its own
+  session, so a racing stop or start can never be painted over.
+- An in-flight update download survives advice and error dialogs: the
+  update modal used to unmount for any dialog and cancel the stream with
+  it. It stays mounted but suspended now, and only an explicit cancel or
+  close ends the download.
+- Report session rows are real buttons (keyboard and screen-reader
+  accessible) instead of a clickable list item with a nested delete
+  button, and the key-moments durations use the locale units instead of
+  a hardcoded Latin suffix.
+- The post-session summary dismiss tooltip reads Dismiss, not Cancel.
+- Error bodies in System, Processes, and Checks resolve embedded backend
+  codes (an "engine error: CODE" wrapper shows the code's copy instead
+  of the generic unknown body), matching the scan path.
 - Power ON no longer clones a new plan every flip: duplicatescheme mints
   a fresh GUID on each run, so "builtin missing" as presence check
   re-created forever. Presence is any performance-class plan now, the
@@ -443,6 +474,16 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   Windows-temp hint drops the skipped-files clause.
 - The scan timeline fill is one step heavier and its header always reads
   the session duration (the auto-stop word is gone).
+- Shared CSS primitives (card, verdict edge, badge, icon tile, back
+  button, row action) replace some fifteen repeated surface, pill, and
+  tile declarations; keyframes, scrollbars, and the base reset each live
+  in exactly one place now. No visual change by construction (same
+  values, same specificity).
+- The Tools tab is composed of owned sections (gaming switches, page
+  file editor, storage sweep) instead of one 1400-line component, each
+  with its own reads and guards. No visual or behavior change except
+  one: the gaming page no longer pays the page file read (one fewer IPC
+  round-trip, same pixels).
 
 ### Removed
 - The System health disk-space card is gone (measurement only, no in-app

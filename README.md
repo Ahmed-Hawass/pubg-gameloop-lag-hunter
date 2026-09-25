@@ -73,7 +73,7 @@ The **Reports** tab keeps every finished session with its full report. **System*
 ## Requirements
 
 * **Windows 10 or 11 (64-bit)**
-* **GameLoop with PUBG Mobile**
+* **GameLoop with PUBG Mobile** (classic v6 and Androws v7 clients, 32-bit and 64-bit)
 * **NVIDIA GPU** for GPU counters
 
 On AMD/Intel, GPU counter availability is limited. The tool reports this honestly and continues measuring everything else.

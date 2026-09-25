@@ -9,6 +9,7 @@
 import { useEffect, useState } from "react";
 import { ChevronLeft } from "lucide-react";
 import { Dialog, MODAL_OPEN_EVENT, APP_DIALOG_OPEN_EVENT } from "../components/components";
+import type { Notice } from "../errors";
 import { useLang } from "../i18n";
 import { GamingSection } from "./tools/GamingSection";
 import { StorageSection } from "./tools/StorageSection";
@@ -33,8 +34,8 @@ export function ToolsView(props: {
   const spotTheme = useSpotTheme();
   /** which card's details are open (the landing cards need no data) */
   const [openCard, setOpenCard] = useState<"gaming" | "storage" | null>(null);
-  /** failed-write notice body (null = no notice) */
-  const [notice, setNotice] = useState<string | null>(null);
+  /** failed-write notice (null = no notice) */
+  const [notice, setNotice] = useState<Notice | null>(null);
   /** background-note dialog behind a row's (?) button (null = closed).
       The same unified Dialog as the failed-write notice: one modal surface,
       so the two can never stack (a flip needs a click, impossible behind
@@ -119,8 +120,8 @@ export function ToolsView(props: {
             is the consent, there is no confirm step) */}
         {notice ? (
           <Dialog
-            title={t.dialog.somethingWrong}
-            body={notice}
+            title={notice.title}
+            body={notice.body}
             kind="notice"
             okLabel={t.dialog.ok}
             onClose={() => setNotice(null)}

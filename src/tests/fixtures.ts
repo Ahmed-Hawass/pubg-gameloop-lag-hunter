@@ -51,6 +51,8 @@ export function tweakStates(over: Partial<TweakStates> = {}): TweakStates {
     mouse_accel_off: false,
     windowed_game_opt: null,
     power_high_perf: "hidden",
+    emulator_updated: false,
+    emulator_version: "",
     ...over,
   };
 }

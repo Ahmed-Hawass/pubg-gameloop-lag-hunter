@@ -352,6 +352,12 @@ export interface TweakStates {
   /** High Performance row state: on/off/disabled-with-reason/hidden,
       same contract as the per-exe rows */
   power_high_perf: RowState;
+  /** one-time client-update notice: the GameLoop build changed since the
+      last Tools read (path-keyed GPU/FSO prefs orphan on client updates).
+      The engine persists on the notifying read — later reads stay quiet. */
+  emulator_updated: boolean;
+  /** detected GameLoop client version ("7.0.19.05"), "" when unknown */
+  emulator_version: string;
 }
 
 /** one fixed drive's page file state (mirrors PagefileDriveState in

@@ -754,13 +754,30 @@ pub fn query_emulator_procs() -> Result<Vec<ProcInfo>, String> {
 }
 
 /// GameLoop-only process match — the tool exists for PUBG Mobile on GameLoop.
-/// aow_exe = the game runtime, TBS = GameLoop's UI engine, TxGameAssistant = launcher,
-/// AndroidEmulatorEn = GameLoop's engine host. Public: system.rs uses it to
-/// keep all GameLoop processes off the "top processes" suspects list.
-/// ONE list, TWO consumers: this matcher AND the visibility probe's process
-/// name filter below — the names can never drift apart.
-pub const GAMELOOP_PROC_NAMES: [&str; 4] =
-    ["aow_exe", "TBS", "TxGameAssistant", "AndroidEmulatorEn"];
+/// v6: aow_exe = the game runtime, TBS = UI engine, TxGameAssistant =
+/// launcher, AndroidEmulatorEn = engine host. v7 (Androws): the GameLoop
+/// family and GLABox VM hosts (CefRendererProcess embeds in unrelated
+/// apps, so the UI renderers stay OUT of the gate — they match nothing).
+/// ONE list, THREE consumers: this matcher, the visibility probe's process
+/// name filter below, and the top-process suspects exclusion in system.rs —
+/// the names can never drift apart.
+///
+/// The set MUST equal the union of the emulator.rs profile families (the
+/// `union_matches_profiles` test enforces it): profiles own the knowledge,
+/// this const keeps the hot scan zero-cost.
+pub const GAMELOOP_PROC_NAMES: [&str; 11] = [
+    "aow_exe",
+    "TBS",
+    "TxGameAssistant",
+    "AndroidEmulatorEn",
+    "GameLoop",
+    "GameLoopEmulator",
+    "GameLoopAssistant",
+    "GameLoopService",
+    "GameLoopDldSvr",
+    "GLABoxSVC",
+    "GLABoxHeadless",
+];
 
 pub fn is_gameloop_process(name: &str) -> bool {
     let base = name.trim_end_matches(".exe");
@@ -780,15 +797,79 @@ pub fn is_self_process(name: &str) -> bool {
     lower.starts_with("pubg-gameloop-lag-hunter") || lower.starts_with("lag-hunter")
 }
 
-/// GameLoop detection: Some("GameLoop") when its processes exist.
+/// GameLoop detection: Some("GameLoop") when a game is actually running.
+/// v6: an aow-family process IS the game (per-game runtime). v7: the
+/// emulator idles with no game, so RunningAppInfo decides (an emulator
+/// with an empty VM reads as idle, honestly).
+/// What the live machine looks like, for callers that distinguish idle
+/// from absent (the start gate's messages differ).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Presence {
+    /// a game is running inside the emulator (either generation)
+    GameRunning,
+    /// v7 client up, VM empty: "start the game" is the honest message
+    ClientIdle,
+    /// GameLoop-ish evidence matching no profile (a future rename):
+    /// never mistaken for absent, never trusted for writes
+    UnknownVersion,
+    /// nothing GameLoop at all
+    Absent,
+}
+
+/// Presence from live evidence: one tasklist + one registry snapshot.
+/// Thin I/O edge; the decision itself is the pure emulator::detect.
+pub fn presence() -> Presence {
+    let names = query_all_proc_names().unwrap_or_default();
+    let reg = super::emulator::read_snapshot();
+    match super::emulator::detect(&names, &reg) {
+        super::emulator::Detected::V6Game | super::emulator::Detected::V7Game { .. } => {
+            Presence::GameRunning
+        }
+        super::emulator::Detected::V7Idle { .. } => Presence::ClientIdle,
+        super::emulator::Detected::Unknown => Presence::UnknownVersion,
+        super::emulator::Detected::Absent => Presence::Absent,
+    }
+}
+
+/// Every process name on the box (unfiltered): the presence scan above.
+/// Fail-soft like the filtered query — an unreadable table reads as empty.
+pub fn query_all_proc_names() -> Result<Vec<String>, String> {
+    let out = output_tracked(Command::new("tasklist")
+        .args(["/FO", "CSV", "/NH"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .creation_flags(NO_WINDOW), Duration::from_secs(5))
+        .map_err(|e| format!("tasklist spawn failed: {e}"))?;
+    if !out.status.success() {
+        return Ok(Vec::new());
+    }
+    Ok(parse_tasklist_names(&String::from_utf8_lossy(&out.stdout)))
+}
+
+/// Pure CSV first-column parse (the filtered query shares it): quoted
+/// names, any locale — only the name column is ever read here.
+fn parse_tasklist_names(text: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let mut parts = line.split("\",\"");
+        if let Some(name_raw) = parts.next() {
+            let name = name_raw.trim_matches('"');
+            if !name.is_empty() {
+                names.push(name.to_string());
+            }
+        }
+    }
+    names
+}
+
 pub fn detect_emulator() -> Option<String> {
-    let Ok(procs) = query_emulator_procs() else {
-        return None;
-    };
-    if procs.is_empty() {
-        None
-    } else {
-        Some("GameLoop".into())
+    match presence() {
+        Presence::GameRunning => Some("GameLoop".into()),
+        _ => None,
     }
 }
 
@@ -1031,10 +1112,51 @@ mod tests {
         assert!(is_gameloop_process("TxGameAssistant"));
         assert!(is_gameloop_process("AndroidEmulatorEn"));
         assert!(is_gameloop_process("AndroidEmulatorEn.exe"));
+        // v7 (Androws) family: client, emulator host, helpers, VM hosts
+        assert!(is_gameloop_process("GameLoop.exe"));
+        assert!(is_gameloop_process("GameLoopEmulator.exe"));
+        assert!(is_gameloop_process("GameLoopAssistant.exe"));
+        assert!(is_gameloop_process("GameLoopService.exe"));
+        assert!(is_gameloop_process("GameLoopDldSvr.exe"));
+        assert!(is_gameloop_process("GLABoxSVC.exe"));
+        assert!(is_gameloop_process("GLABoxHeadless.exe"));
         assert!(!is_gameloop_process("explorer"));
         assert!(!is_gameloop_process("chrome"));
         assert!(!is_gameloop_process("dnplayer")); // other emulators are out of scope
         assert!(!is_gameloop_process("HD-Player"));
+        // CEF embeds in unrelated apps: never a gate signal by itself
+        assert!(!is_gameloop_process("CefRendererProcess.exe"));
+        assert!(!is_gameloop_process("QQ.exe"));
+    }
+
+    #[test]
+    fn union_matches_profiles() {
+        // the hot-scan const and the profile cards must name the same
+        // families: a name added to one and missed by the other silently
+        // blinds either the scan or the attribution. CefRendererProcess is
+        // deliberately scan-only-excluded (see above), so it is absent here.
+        let mut from_const = GAMELOOP_PROC_NAMES.to_vec();
+        from_const.sort_unstable();
+        let mut from_profiles = super::super::emulator::all_proc_names();
+        from_profiles.sort_unstable();
+        assert_eq!(from_const, from_profiles);
+    }
+
+    #[test]
+    fn tasklist_names_parsed() {
+        let text = "\"GameLoopEmulator.exe\",\"8692\",\"Console\",\"1\",\"170,928 K\"\n\
+                    \"explorer.exe\",\"8616\",\"Console\",\"1\",\"431,604 K\"\n\
+                    \"GLABoxHeadless.exe\",\"9048\",\"Console\",\"1\",\"637,124 K\"\n";
+        let names = parse_tasklist_names(text);
+        assert_eq!(
+            names,
+            vec![
+                "GameLoopEmulator.exe".to_string(),
+                "explorer.exe".to_string(),
+                "GLABoxHeadless.exe".to_string()
+            ]
+        );
+        assert!(names.iter().any(|n| is_gameloop_process(n)));
     }
 
     #[test]
