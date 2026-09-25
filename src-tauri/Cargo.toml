@@ -13,6 +13,13 @@ default-run = "pubg-gameloop-lag-hunter"
 name = "lag_hunter_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+# user-facing console companion to the GUI exe (same release, same engine,
+# own console subsystem so its output reaches the parent terminal — the GUI
+# binary is windows-subsystem and cannot print there in release builds)
+[[bin]]
+name = "laghunter-cli"
+path = "src/bin/laghunter-cli.rs"
+
 [build-dependencies]
 tauri-build = { version = "2.6.3", features = [] }
 
@@ -29,6 +36,9 @@ ureq = { version = "2.12", default-features = false, features = ["tls"] }
 sha2 = "0.10"
 url = "2.5"
 winreg = "0.55"
+# user CLI signal handling: Ctrl+C stops the scan and finalizes the
+# partial report instead of abandoning it (single-purpose micro-dep)
+ctrlc = "3"
 
 [profile.release]
 codegen-units = 1

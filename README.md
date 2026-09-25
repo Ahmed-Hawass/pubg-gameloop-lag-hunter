@@ -96,6 +96,10 @@ pubg-gameloop-lag-hunter-1.5.0.exe
 
 Every release includes `SHA256SUMS.txt` so you can verify the downloaded file.
 
+Prefer the terminal? Every release also ships `laghunter-cli.exe` (same
+engine, scanning only) with a stable `laghunter.cmd` alias beside it.
+See [CLI and headless testing](docs/CLI.md).
+
 The app also checks for updates itself and offers new releases from inside the About tab, same hash-verified files (SHA-256, no code signature), no auto-install, no restart.
 
 ### First Run on Windows 10

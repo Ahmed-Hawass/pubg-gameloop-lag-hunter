@@ -131,6 +131,11 @@ jobs:
       - name: Build release exe
         run: npx tauri build --no-bundle
 
+      # the CLI companion shares the release folder (tauri builds all bins,
+      # but this pins the contract explicitly: no cli exe, no release)
+      - name: Build release CLI
+        run: cargo build --release --bin laghunter-cli --manifest-path src-tauri/Cargo.toml
+
       # SHA256SUMS.txt is part of the update contract (the engine verifies
       # downloads against it), generate it in the same job that builds the
       # exe, so every manually-triggered release run produces a pair that
@@ -139,11 +144,12 @@ jobs:
         shell: pwsh
         run: ./scripts/checksum.ps1
 
-      - name: Upload release exe + checksums
+      - name: Upload release exes + checksums + CLI alias
         uses: actions/upload-artifact@v4
         with:
           name: lag-hunter-release
           path: |
             src-tauri/target/release/*.exe
             src-tauri/target/release/SHA256SUMS.txt
+            laghunter.cmd
           if-no-files-found: error

@@ -21,6 +21,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   suite pins the load-bearing UI contracts (optimistic flips with
   rollback, sweep honesty, page file validate-write-reboot, one modal
   surface, deep-links both directions, one-shot advice, exit gate).
+- Headless CLI companion (`laghunter-cli.exe` plus a stable
+  `laghunter.cmd` alias in every release): `scan [minutes]`, `sessions`,
+  `report <id|latest> [--json]`, same engine and same sessions folder as
+  the GUI (a CLI scan shows up in Reports and vice versa). Ctrl+C stops
+  and saves the partial report; colors switch off when piped or under
+  `NO_COLOR`; output is English only.
 - Storage sweep in the Storage card: a Scan button measures four safe
   places (user temp, Windows temp, Recycle Bin, update sharing cache),
   checkboxes select what to delete, and one Clean button removes only
