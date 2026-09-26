@@ -32,10 +32,16 @@ fn main() {
     let eng = session::init_global();
 
     println!("[1] starting session (no auto-stop)...");
-    if let Err(e) = eng.start(None) {
-        println!("    START FAILED: {e}");
-        std::process::exit(1);
-    }
+    let gen = match eng.start(None) {
+        Ok(gen) => gen,
+        Err(e) => {
+            println!("    START FAILED: {e}");
+            std::process::exit(1);
+        }
+    };
+    // same guards as every other entry point (probes + liveness): without
+    // them a closed game never stops a headless session and snapshots rot
+    session::spawn_session_guards(gen, || {});
     println!(
         "    started ok (generation {}), status = {:?}",
         eng.current_generation(),
@@ -45,7 +51,9 @@ fn main() {
     let start = Instant::now();
     let mut last_count = 0u64;
     let mut saw_game = false;
-    while start.elapsed() < Duration::from_secs(secs) {
+    while start.elapsed() < Duration::from_secs(secs)
+        && eng.status() == lag_hunter_lib::engine::types::SessionStatus::Running
+    {
         std::thread::sleep(Duration::from_millis(1000));
         let ui = eng.last_ui();
         if let Some(ui) = &ui {

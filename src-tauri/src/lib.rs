@@ -350,39 +350,11 @@ async fn session_start(
     // stale enough to misread desktop activity as in-game.
     // Generation-gated: a quick restart spawns a new guard; THIS one notices
     // it's superseded and exits instead of running in parallel with it.
+    // Shared starter (engine::session): the headless bins run the same
+    // guards instead of a private copy that would rot.
     let app_guard = app.clone();
-    std::thread::spawn(move || {
-        let mut cycle: u32 = 0;
-        while let Some(e) = session::global() {
-            if !e.generation_is_current(gen) || e.status() != SessionStatus::Running {
-                break;
-            }
-            e.probe_emulator();
-            if cycle % 2 == 0 {
-                e.probe_visibility();
-            }
-            cycle += 1;
-            let alive = e.check_gameloop_alive();
-            if !alive {
-                let _ = push_state(&app_guard);
-                break;
-            }
-            std::thread::sleep(Duration::from_secs(5));
-        }
-    });
-    // auto-stop timer (same generation gate — only the current session's
-    // timer can stop it; orphans exit on their first 1s tick)
-    std::thread::spawn(move || loop {
-        std::thread::sleep(Duration::from_secs(1));
-        let Some(e) = session::global() else { break };
-        if !e.generation_is_current(gen) || e.status() != SessionStatus::Running {
-            break;
-        }
-        if e.tick_auto_stop() {
-            // stopped: push final state
-            let _ = push_state(&app);
-            break;
-        }
+    session::spawn_session_guards(gen, move || {
+        let _ = push_state(&app_guard);
     });
     Ok(current_status(eng))
 }

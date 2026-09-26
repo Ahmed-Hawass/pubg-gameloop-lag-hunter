@@ -339,24 +339,30 @@ fn cmd_scan(minutes: u64, quiet: bool, no_color: bool) -> i32 {
         );
     }
     let eng = session::init_global();
-    if let Err(e) = eng.start(Some(minutes * 60)) {
-        // the gate speaks machine keys; the CLI is English-only by design
-        // (console code pages mangle Arabic), so map the known ones here.
-        let msg = match e.as_str() {
-            "GAMELOOP_NOT_RUNNING" => {
-                "Game is not running inside GameLoop. Start PUBG Mobile, then scan again.".to_string()
+    let gen = match eng.start(Some(minutes * 60)) {
+        Ok(gen) => gen,
+        Err(e) => {
+            // the gate speaks machine keys; the CLI is English-only by design
+            // (console code pages mangle Arabic), so map the known ones here.
+            let msg = match e.as_str() {
+                "GAMELOOP_NOT_RUNNING" => {
+                    "Game is not running inside GameLoop. Start PUBG Mobile, then scan again.".to_string()
+                }
+                "EMULATOR_UNKNOWN" => {
+                    "GameLoop runs a build this tool does not recognize yet. Update laghunter to the latest version.".to_string()
+                }
+                other => format!("Start failed: {other}"),
+            };
+            eprintln!("{msg}");
+            if !quiet {
+                eprintln!("(log: %LOCALAPPDATA%\\LagHunter\\logs)");
             }
-            "EMULATOR_UNKNOWN" => {
-                "GameLoop runs a build this tool does not recognize yet. Update laghunter to the latest version.".to_string()
-            }
-            other => format!("Start failed: {other}"),
-        };
-        eprintln!("{msg}");
-        if !quiet {
-            eprintln!("(log: %LOCALAPPDATA%\\LagHunter\\logs)");
+            return 1;
         }
-        return 1;
-    }
+    };
+    // same guard threads as the GUI session (probes + liveness + auto-stop):
+    // without them a closed game never stops a headless scan and snapshots rot
+    session::spawn_session_guards(gen, || {});
     if !quiet {
         println!("measuring — play normally, minimizing pauses GPU monitoring");
     }
@@ -371,6 +377,12 @@ fn cmd_scan(minutes: u64, quiet: bool, no_color: bool) -> i32 {
     let deadline = std::time::Instant::now() + Duration::from_secs(minutes * 60);
     let mut last_count = 0u64;
     loop {
+        // a guard-triggered stop (game closed, auto-stop) ends the scan
+        // early like the GUI: spinning to the deadline on a dead session
+        // would only sample the desktop
+        if eng.status() != lag_hunter_lib::engine::types::SessionStatus::Running {
+            break;
+        }
         if stop_flag.load(Ordering::SeqCst) || std::time::Instant::now() >= deadline {
             break;
         }
@@ -398,6 +410,17 @@ fn cmd_scan(minutes: u64, quiet: bool, no_color: bool) -> i32 {
             }
         }
         Err(e) => eprintln!("stop failed: {e}"),
+    }
+    if !quiet {
+        match eng.stop_reason() {
+            Some(lag_hunter_lib::engine::types::StopReason::GameLoopClosed) => {
+                println!("ended early: the game closed mid-scan — report saved");
+            }
+            Some(lag_hunter_lib::engine::types::StopReason::AutoStop) => {
+                println!("ended: auto-stop time reached");
+            }
+            _ => {}
+        }
     }
     let final_ui = eng.last_ui();
     let samples = final_ui.as_ref().map(|u| u.samples_count).unwrap_or(0);

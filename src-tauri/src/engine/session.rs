@@ -943,6 +943,48 @@ pub fn route_on_gpu(g: GpuSample) {
     }
 }
 
+/// Spawn the session guard threads: emulator probe + liveness guard +
+/// window-visibility probe every ~5s, and the 1s auto-stop timer.
+/// ONE implementation for every entry point (GUI command, CLI, probe):
+/// per-entry copies used to drift (the headless bins spawned none, so a
+/// closed game never stopped their sessions and snapshots rotted).
+/// Generation-gated like everything else: a restart retires old guards.
+/// `on_stop` runs after any guard-triggered stop (the GUI pushes state;
+/// headless callers observe status themselves and pass a no-op).
+pub fn spawn_session_guards(gen: u32, on_stop: impl Fn() + Send + Sync + 'static) {
+    let on_stop = Arc::new(on_stop);
+    let tick_stop = Arc::clone(&on_stop);
+    std::thread::spawn(move || {
+        let mut cycle: u32 = 0;
+        while let Some(e) = global() {
+            if !e.generation_is_current(gen) || e.status() != SessionStatus::Running {
+                break;
+            }
+            e.probe_emulator();
+            if cycle % 2 == 0 {
+                e.probe_visibility();
+            }
+            cycle += 1;
+            if !e.check_gameloop_alive() {
+                tick_stop();
+                break;
+            }
+            std::thread::sleep(Duration::from_secs(5));
+        }
+    });
+    std::thread::spawn(move || loop {
+        std::thread::sleep(Duration::from_secs(1));
+        let Some(e) = global() else { break };
+        if !e.generation_is_current(gen) || e.status() != SessionStatus::Running {
+            break;
+        }
+        if e.tick_auto_stop() {
+            on_stop();
+            break;
+        }
+    });
+}
+
 impl Engine {
     fn on_sample_via_global(&self, s: Sample) {
         self.on_sample(s);
@@ -983,6 +1025,23 @@ mod tests {
             },
         ];
         assert_eq!(active_conditions(&evs), 1);
+    }
+
+    #[test]
+    fn session_guards_exit_immediately_when_idle() {
+        // the shared guard starter must never hang the caller: with no
+        // global engine (unit tests never init one) both threads find
+        // nothing to guard and exit on their first check. The callback
+        // must not fire — nothing stopped.
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+        let fired = Arc::new(AtomicBool::new(false));
+        let flag = Arc::clone(&fired);
+        super::spawn_session_guards(0, move || {
+            flag.store(true, Ordering::SeqCst);
+        });
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        assert!(!fired.load(Ordering::SeqCst));
     }
 
     /// The red-banner-with-zero-cards bug: a correlation-gated condition
