@@ -284,6 +284,7 @@ export const api = {
 export interface GpuInfo {
   name: string;
   vram_gb: number | null;
+  driver: string | null;
 }
 
 export interface DiskInfo {
@@ -293,11 +294,42 @@ export interface DiskInfo {
   size_gb: number;
 }
 
+export interface CpuInfo {
+  name: string;
+  mhz: number | null;
+  cores: number | null;
+  threads: number | null;
+}
+
+export interface RamInfo {
+  total_gb: number;
+  mem_type: string | null;
+  speed_mhz: number | null;
+}
+
+export interface DisplayInfo {
+  width: number | null;
+  height: number | null;
+  refresh_hz: number | null;
+  scale_pct: number | null;
+}
+
+export interface SystemIdentity {
+  manufacturer: string;
+  model: string;
+  os_caption: string;
+  os_release: string;
+  directx: string;
+}
+
 export interface SystemInfo {
-  cpu: string;
+  cpu: CpuInfo;
   gpus: GpuInfo[];
-  ram_gb: number;
+  ram: RamInfo;
   disks: DiskInfo[];
+  display: DisplayInfo;
+  system: SystemIdentity;
+  ram_gb: number;
   /** can the tool read NVIDIA GPU counters? */
   gpu_counters: boolean;
   /** is PowerShell usable? false = limited mode (defaults, muted GPU checks) */

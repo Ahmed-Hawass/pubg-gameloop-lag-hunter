@@ -138,6 +138,30 @@ export const en = {
 
   // ---- system tab ----
   yourRig: "Your device",
+  storageTitle: "Storage",
+  deviceSystemTitle: "Device and system",
+  /** spec card labels */
+  specCpu: "CPU",
+  specGpu: "GPU",
+  specRam: "Memory",
+  specDisplay: "Display",
+  /** spec value labels (label: value lines, MSA-safe for every count) */
+  specBase: "base",
+  specCores: "Cores",
+  specThreads: "Threads",
+  specDedicated: "dedicated",
+  specDriver: "Driver",
+  specResolution: "Resolution",
+  specRefresh: "Refresh",
+  specScale: "Scale",
+  /** device and system row labels */
+  specModel: "Model",
+  specOs: "OS",
+  specDirectx: "DirectX",
+  /** copy-all button + its transient confirmation */
+  copySpecs: "Copy all specs",
+  copiedSpecs: "Copied",
+  copySpecsFailed: "Could not copy. Select the text manually.",
   whatWeSee: "What this tool can see",
   whatWeSeeHint:
     "The counters the engine actually reads. Anything missing appears as \"--\" instead of wrong numbers.",

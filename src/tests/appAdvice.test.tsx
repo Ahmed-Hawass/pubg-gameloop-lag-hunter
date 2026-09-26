@@ -11,7 +11,7 @@ import React from "react";
 import { en } from "../locales/en";
 import App from "../App";
 import type { StatusPayload, UiState } from "../bridge";
-import { settings } from "./fixtures";
+import { settings, systemInfo } from "./fixtures";
 
 const apiMock = vi.hoisted(() => ({
   getState: vi.fn(),
@@ -90,13 +90,7 @@ function boot(options: { advice?: "game" | "background" | "done"; onboarding?: b
   apiMock.getVersion.mockResolvedValue("1.6.0");
   apiMock.watchGameloop.mockResolvedValue(undefined);
   apiMock.checkUpdate.mockResolvedValue(null);
-  apiMock.systemInfo.mockResolvedValue({
-    cpu: "x",
-    gpus: [],
-    disks: [],
-    ram_gb: 16,
-    counters: { cpu: true, gpu: false, game: true, ps: true },
-  });
+  apiMock.systemInfo.mockResolvedValue(systemInfo());
   apiMock.topProcesses.mockResolvedValue([]);
   apiMock.systemChecks.mockResolvedValue({
     power: "ok",

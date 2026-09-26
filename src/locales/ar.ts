@@ -144,6 +144,30 @@ export const ar: Locale = {
 
   // ---- system tab ----
   yourRig: "جهازك",
+  storageTitle: "وحدات التخزين",
+  deviceSystemTitle: "الجهاز والنظام",
+  /** spec card labels */
+  specCpu: "المعالج",
+  specGpu: "كرت الشاشة",
+  specRam: "الذاكرة",
+  specDisplay: "الشاشة",
+  /** spec value labels (label: value lines, MSA-safe for every count) */
+  specBase: "أساسي",
+  specCores: "الأنوية",
+  specThreads: "الخيوط",
+  specDedicated: "مخصصة",
+  specDriver: "درايفر",
+  specResolution: "الدقة",
+  specRefresh: "التحديث",
+  specScale: "مقياس",
+  /** device and system row labels */
+  specModel: "الموديل",
+  specOs: "نظام التشغيل",
+  specDirectx: "DirectX",
+  /** copy-all button + its transient confirmation */
+  copySpecs: "نسخ كل المواصفات",
+  copiedSpecs: "تم النسخ",
+  copySpecsFailed: "تعذّر النسخ. حدد النص يدويًا.",
   whatWeSee: "ما تستطيع الأداة رؤيته",
   whatWeSeeHint: "هذه هي العدادات التي يقرأها التطبيق فعليًا. أي بيانات غير متاحة تظهر كـ \"--\" بدلًا من أرقام غير دقيقة.",
   seeCpu: "عدادات المعالج والذاكرة والقرص",

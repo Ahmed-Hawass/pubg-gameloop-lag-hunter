@@ -1,17 +1,37 @@
-// SystemView.tsx — the gamer's rig page: what you have + what we can see.
+// SystemView.tsx — the gamer's rig page: spec cards, storage, device and
+// system, one copy-all button, then what the tool can see. Every missing
+// value renders "--", never a guess; the copy sheet reuses the exact
+// strings on screen (locale-aware, plain text for support pastes).
 
 import { useEffect, useRef, useState } from "react";
-import { Cpu, Gauge, HardDrive, MemoryStick, RefreshCw } from "lucide-react";
-import { Button, EmptyState, Hint } from "../components/components";
+import {
+  Copy,
+  Cpu,
+  Gamepad2,
+  HardDrive,
+  MemoryStick,
+  Monitor,
+  RefreshCw,
+} from "lucide-react";
+import { Button, Dialog, EmptyState, Hint } from "../components/components";
 import { api, type SystemInfo } from "../bridge";
 import { errorDialog } from "../errors";
 import { useLang } from "../i18n";
+import type { Locale } from "../locales/en";
+
+/** empty backend strings read as the honest placeholder */
+function text(v: string): string | null {
+  const s = v.trim();
+  return s === "" ? null : s;
+}
 
 export function SystemView() {
   const { t } = useLang();
   const [info, setInfo] = useState<SystemInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
   const busyRef = useRef(false);
 
   const load = async () => {
@@ -62,6 +82,19 @@ export function SystemView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [errorNow]);
 
+  // copy-all: the exact on-screen strings as plain lines (locale-aware),
+  // clipboard first with a notice fallback (never a silent dead button)
+  const copyAll = async () => {
+    if (!info) return;
+    try {
+      await navigator.clipboard.writeText(specSheet(info, t));
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopyFailed(true);
+    }
+  };
+
   if (error) {
     return (
       <div className="sys">
@@ -86,41 +119,139 @@ export function SystemView() {
     );
   }
 
+  const gpu = info.gpus[0] ?? null;
+
   return (
     <div className="sys">
-      {/* the rig */}
+      {/* the rig: four spec cards */}
       <section className="sys-section">
         <h3 className="sys-title">{t.yourRig}</h3>
-        <div className="card sys-grid">
-          <div className="sys-kv">
-            <Cpu size={15} />
-            <span className="sys-k">{info.cpu}</span>
-          </div>
-          {info.gpus.map((g, i) => (
-            <div key={i} className="sys-kv">
-              <Gauge size={15} />
-              <span className="sys-k">
-                {g.name}
-                {g.vram_gb ? ` · ${g.vram_gb} ${t.gbUnit}` : ""}
-              </span>
-            </div>
-          ))}
-          <div className="sys-kv">
-            <MemoryStick size={15} />
-            <span className="sys-k">
-              {info.ram_gb} {t.gbUnit} {t.ramUnit}
+        <div className="spec-grid">
+          <div className="card spec-card">
+            <span className="spec-head">
+              <Cpu size={15} />
+              {t.specCpu}
+            </span>
+            <span className="spec-name">{text(info.cpu.name) ?? "--"}</span>
+            <span className="spec-sub">
+              {info.cpu.mhz ? `${(info.cpu.mhz / 1000).toFixed(2)} GHz ${t.specBase}` : "--"}
+            </span>
+            <span className="spec-sub">
+              {info.cpu.cores != null && info.cpu.threads != null
+                ? `${info.cpu.cores} ${t.specCores} · ${info.cpu.threads} ${t.specThreads}`
+                : "--"}
             </span>
           </div>
-          {info.disks.map((d, i) => (
-            <div key={i} className="sys-kv">
-              <HardDrive size={15} />
-              <span className="sys-k">
-                {d.name} · {d.size_gb} {t.gbUnit} · {d.media}/{d.bus}
-              </span>
-            </div>
-          ))}
+          <div className="card spec-card">
+            <span className="spec-head">
+              <Gamepad2 size={15} />
+              {t.specGpu}
+            </span>
+            <span className="spec-name">{gpu && text(gpu.name) ? gpu.name : "--"}</span>
+            <span className="spec-sub">
+              {gpu?.vram_gb ? `${gpu.vram_gb} ${t.gbUnit} ${t.specDedicated}` : "--"}
+            </span>
+            <span className="spec-sub">
+              {gpu?.driver ? `${t.specDriver} ${gpu.driver}` : "--"}
+            </span>
+          </div>
+          <div className="card spec-card">
+            <span className="spec-head">
+              <MemoryStick size={15} />
+              {t.specRam}
+            </span>
+            <span className="spec-name">
+              {info.ram.total_gb > 0 ? `${info.ram.total_gb} ${t.gbUnit}` : "--"}
+            </span>
+            <span className="spec-sub">
+              {info.ram.mem_type ?? "--"}
+              {info.ram.speed_mhz ? ` · ${info.ram.speed_mhz} MHz` : ""}
+            </span>
+          </div>
+          <div className="card spec-card">
+            <span className="spec-head">
+              <Monitor size={15} />
+              {t.specDisplay}
+            </span>
+            <span className="spec-name">
+              {info.display.width && info.display.height
+                ? `${info.display.width}x${info.display.height}`
+                : "--"}
+            </span>
+            <span className="spec-sub">
+              {info.display.refresh_hz ? `${info.display.refresh_hz} Hz` : "--"}
+            </span>
+            <span className="spec-sub">
+              {info.display.scale_pct ? `${info.display.scale_pct}% ${t.specScale}` : "--"}
+            </span>
+          </div>
         </div>
       </section>
+
+      {/* storage units */}
+      <section className="sys-section">
+        <h3 className="sys-title">{t.storageTitle}</h3>
+        <ul className="card spec-list">
+          {info.disks.length > 0 ? (
+            info.disks.map((d, i) => (
+              <li key={i} className="spec-row">
+                <span className="spec-row-main">
+                  <HardDrive size={15} />
+                  <span className="spec-row-text">
+                    <span className="spec-row-name">{d.name}</span>
+                    <span className="spec-row-sub">
+                      {d.media}/{d.bus}
+                    </span>
+                  </span>
+                </span>
+                <span className="spec-row-val num">
+                  {d.size_gb} {t.gbUnit}
+                </span>
+              </li>
+            ))
+          ) : (
+            <li className="spec-row">
+              <span className="spec-row-main">--</span>
+            </li>
+          )}
+        </ul>
+      </section>
+
+      {/* device and system */}
+      <section className="sys-section">
+        <h3 className="sys-title">{t.deviceSystemTitle}</h3>
+        <ul className="card spec-list">
+          <li className="spec-row">
+            <span className="spec-row-main">{t.specModel}</span>
+            <span className="spec-row-val">
+              {[info.system.manufacturer, info.system.model]
+                .map((s) => s.trim())
+                .filter((s) => s !== "")
+                .join(" ") || "--"}
+            </span>
+          </li>
+          <li className="spec-row">
+            <span className="spec-row-main">{t.specOs}</span>
+            <span className="spec-row-val">
+              {text(info.system.os_caption) ?? "--"}
+              {info.system.os_release ? ` · ${info.system.os_release}` : ""}
+            </span>
+          </li>
+          <li className="spec-row">
+            <span className="spec-row-main">{t.specDirectx}</span>
+            <span className="spec-row-val">{info.system.directx}</span>
+          </li>
+        </ul>
+      </section>
+
+      <div className="sys-actions">
+        <Button
+          label={copied ? t.copiedSpecs : t.copySpecs}
+          icon={<Copy size={15} />}
+          variant="ghost"
+          onClick={() => void copyAll()}
+        />
+      </div>
 
       {/* what we can see */}
       <section className="sys-section">
@@ -147,6 +278,64 @@ export function SystemView() {
           </li>
         </ul>
       </section>
+
+      {copyFailed ? (
+        <Dialog
+          title={t.dialog.somethingWrong}
+          body={t.copySpecsFailed}
+          kind="notice"
+          okLabel={t.dialog.ok}
+          onClose={() => setCopyFailed(false)}
+        />
+      ) : null}
     </div>
   );
+}
+
+/** the copy-all sheet: the exact on-screen spec strings as plain lines.
+    Pure (same inputs as the render above), so the test pins parity with
+    what the user sees instead of a second hand-written copy. */
+export function specSheet(info: SystemInfo, t: Locale): string {
+  const dash = "--";
+  const gpu = info.gpus[0] ?? null;
+  const lines = [
+    `${t.specCpu}: ${text(info.cpu.name) ?? dash} | ${
+      info.cpu.mhz ? `${(info.cpu.mhz / 1000).toFixed(2)} GHz ${t.specBase}` : dash
+    } | ${
+      info.cpu.cores != null && info.cpu.threads != null
+        ? `${info.cpu.cores} ${t.specCores} · ${info.cpu.threads} ${t.specThreads}`
+        : dash
+    }`,
+    `${t.specGpu}: ${gpu && text(gpu.name) ? gpu.name : dash} | ${
+      gpu?.vram_gb ? `${gpu.vram_gb} ${t.gbUnit} ${t.specDedicated}` : dash
+    } | ${gpu?.driver ? `${t.specDriver} ${gpu.driver}` : dash}`,
+    `${t.specRam}: ${
+      info.ram.total_gb > 0 ? `${info.ram.total_gb} ${t.gbUnit}` : dash
+    } | ${info.ram.mem_type ?? dash}${
+      info.ram.speed_mhz ? ` · ${info.ram.speed_mhz} MHz` : ""
+    }`,
+    `${t.specDisplay}: ${
+      info.display.width && info.display.height
+        ? `${info.display.width}x${info.display.height}`
+        : dash
+    } | ${info.display.refresh_hz ? `${info.display.refresh_hz} Hz` : dash} | ${
+      info.display.scale_pct ? `${info.display.scale_pct}% ${t.specScale}` : dash
+    }`,
+    `${t.storageTitle}: ${
+      info.disks.length > 0
+        ? info.disks.map((d) => `${d.name} (${d.media}/${d.bus}, ${d.size_gb} ${t.gbUnit})`).join("; ")
+        : dash
+    }`,
+    `${t.specModel}: ${
+      [info.system.manufacturer, info.system.model]
+        .map((s) => s.trim())
+        .filter((s) => s !== "")
+        .join(" ") || dash
+    }`,
+    `${t.specOs}: ${text(info.system.os_caption) ?? dash}${
+      info.system.os_release ? ` · ${info.system.os_release}` : ""
+    }`,
+    `${t.specDirectx}: ${info.system.directx}`,
+  ];
+  return lines.join("\n");
 }

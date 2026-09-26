@@ -484,6 +484,8 @@ pub async fn warm_system_caches() {
 pub struct GpuInfo {
     pub name: String,
     pub vram_gb: Option<f64>,
+    /// driver version string (Win32_VideoController), shown when present
+    pub driver: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -496,15 +498,58 @@ pub struct DiskInfo {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SystemInfo {
-    pub cpu: String,
+    pub cpu: CpuInfo,
     pub gpus: Vec<GpuInfo>,
-    pub ram_gb: f64,
+    pub ram: RamInfo,
     pub disks: Vec<DiskInfo>,
+    pub display: DisplayInfo,
+    pub system: SystemIdentity,
+    /// RAM GB kept flat for the machine profile (same number as ram.total_gb)
+    pub ram_gb: f64,
     /// can the tool read NVIDIA GPU counters? (false on AMD/Intel-only machines)
     pub gpu_counters: bool,
     /// is PowerShell usable? (false = limited mode: defaults, UTC-ish timestamps,
     /// muted GPU window checks — the UI surfaces this honestly)
     pub powershell_available: bool,
+}
+
+/// Processor identity: name plus the spec lines the rig card shows.
+/// Anything unreadable is None and renders as "--", never a guess.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CpuInfo {
+    pub name: String,
+    pub mhz: Option<u32>,
+    pub cores: Option<u32>,
+    pub threads: Option<u32>,
+}
+
+/// Memory: total plus the spec lines (first stick wins — mixed kits are
+/// rare, and the total is what sizing decisions use).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RamInfo {
+    pub total_gb: f64,
+    pub mem_type: Option<String>,
+    pub speed_mhz: Option<u32>,
+}
+
+/// Primary display: bounds plus refresh and DPI scale. All optional —
+/// headless sessions and exotic drivers omit freely.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DisplayInfo {
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+    pub refresh_hz: Option<u32>,
+    pub scale_pct: Option<u32>,
+}
+
+/// Machine identity for the device-and-system card.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SystemIdentity {
+    pub manufacturer: String,
+    pub model: String,
+    pub os_caption: String,
+    pub os_release: String,
+    pub directx: String,
 }
 
 /// NVIDIA VRAM in MB via nvidia-smi. Win32_VideoController.AdapterRAM is a
@@ -530,14 +575,66 @@ fn nvidia_vram_mb() -> Option<f64> {
     }
 }
 
+/// SMBIOS memory-device type codes to marketing names (only the
+/// well-documented values — anything else reads as unknown, never a guess).
+fn memory_type_name(code: u32) -> Option<&'static str> {
+    match code {
+        24 => Some("DDR3"),
+        26 => Some("DDR4"),
+        28 => Some("LPDDR"),
+        30 => Some("LPDDR3"),
+        31 => Some("LPDDR4"),
+        34 => Some("DDR5"),
+        35 => Some("LPDDR5"),
+        _ => None,
+    }
+}
+
+/// Primary-display DPI scale from the logon value (96 = 100%).
+/// Per-monitor awareness may differ; missing reads as unknown.
+fn display_scale_pct() -> Option<u32> {
+    let px: u32 = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
+        .open_subkey(r"Control Panel\Desktop")
+        .ok()?
+        .get_value("LogPixels")
+        .ok()?;
+    if px == 0 {
+        return None;
+    }
+    Some((px * 100).div_ceil(96))
+}
+
+/// DirectX support level: the D3D12 runtime ships with Windows 10+ as an
+/// OS component, so its presence honestly reads as DirectX 12 capable
+/// (no feature-level claim is made). File check, microseconds.
+fn directx_level() -> &'static str {
+    let system32 = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
+    if std::path::Path::new(&system32).join("System32").join("d3d12.dll").is_file() {
+        "DirectX 12"
+    } else {
+        "DirectX 11"
+    }
+}
+
 pub fn query_system_info() -> Result<SystemInfo, String> {
     let text = ps_with_timeout(
         r#"
-$cpu = (Get-CimInstance Win32_Processor | Select-Object -First 1).Name
-"cpu|$cpu"
-Get-CimInstance Win32_VideoController | ForEach-Object { "gpu|$($_.Name)|$([math]::Round($_.AdapterRAM/1GB,1))" }
+$pr = Get-CimInstance Win32_Processor | Select-Object -First 1
+"cpu|$($pr.Name)|$($pr.MaxClockSpeed)|$($pr.NumberOfCores)|$($pr.NumberOfLogicalProcessors)"
+Get-CimInstance Win32_VideoController | ForEach-Object { "gpu|$($_.Name)|$([math]::Round($_.AdapterRAM/1GB,1))|$($_.DriverVersion)" }
 "ram|$([math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB,1))"
+$pm = Get-CimInstance Win32_PhysicalMemory | Select-Object -First 1
+"rammod|$($pm.SMBIOSMemoryType)|$($pm.Speed)"
 Get-PhysicalDisk | ForEach-Object { "disk|$($_.FriendlyName)|$($_.MediaType)|$($_.BusType)|$([math]::Round($_.Size/1GB,0))" }
+$cs = Get-CimInstance Win32_ComputerSystem
+"sys|$($cs.Manufacturer)|$($cs.Model)"
+$os = Get-CimInstance Win32_OperatingSystem
+"os|$($os.Caption)|$($os.BuildNumber)"
+Add-Type -AssemblyName System.Windows.Forms
+$s = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+"disp|$($s.Width)|$($s.Height)"
+$vr = (Get-CimInstance Win32_VideoController | Where-Object { $_.CurrentRefreshRate -gt 0 } | Select-Object -First 1).CurrentRefreshRate
+"refr|$vr"
 "#,
         PS_INVENTORY_TIMEOUT,
     )
@@ -546,10 +643,33 @@ Get-PhysicalDisk | ForEach-Object { "disk|$($_.FriendlyName)|$($_.MediaType)|$($
         map_ps_timeout(e)
     })?;
     let mut info = SystemInfo {
-        cpu: "Unknown".into(),
+        cpu: CpuInfo {
+            name: String::new(),
+            mhz: None,
+            cores: None,
+            threads: None,
+        },
         gpus: Vec::new(),
-        ram_gb: 0.0,
+        ram: RamInfo {
+            total_gb: 0.0,
+            mem_type: None,
+            speed_mhz: None,
+        },
         disks: Vec::new(),
+        display: DisplayInfo {
+            width: None,
+            height: None,
+            refresh_hz: None,
+            scale_pct: display_scale_pct(),
+        },
+        system: SystemIdentity {
+            manufacturer: String::new(),
+            model: String::new(),
+            os_caption: "Windows".into(),
+            os_release: String::new(),
+            directx: directx_level().into(),
+        },
+        ram_gb: 0.0,
         gpu_counters: super::sampler::query_gpu_max_clocks().is_some(),
         powershell_available: powershell_available(),
     };
@@ -558,10 +678,19 @@ Get-PhysicalDisk | ForEach-Object { "disk|$($_.FriendlyName)|$($_.MediaType)|$($
     for line in text.lines().map(|l| l.trim()).filter(|l| !l.is_empty()) {
         let mut parts = line.split('|');
         match parts.next() {
-            Some("cpu") => info.cpu = parts.next().unwrap_or("Unknown").trim().to_string(),
+            Some("cpu") => {
+                info.cpu.name = parts.next().unwrap_or("Unknown").trim().to_string();
+                info.cpu.mhz = parts.next().and_then(|v| v.trim().parse().ok());
+                info.cpu.cores = parts.next().and_then(|v| v.trim().parse().ok());
+                info.cpu.threads = parts.next().and_then(|v| v.trim().parse().ok());
+            }
             Some("gpu") => {
                 let name = parts.next().unwrap_or("").trim().to_string();
                 let cim_vram = parts.next().and_then(|v| v.trim().parse::<f64>().ok());
+                let driver = parts
+                    .next()
+                    .map(|v| v.trim().to_string())
+                    .filter(|s| !s.is_empty());
                 // NVIDIA + a truthful nvidia-smi reading beats the 32-bit cap
                 let vram = match (name.to_lowercase().contains("nvidia"), nv_vram_mb) {
                     (true, Some(mb)) => Some(mb / 1024.0),
@@ -570,13 +699,24 @@ Get-PhysicalDisk | ForEach-Object { "disk|$($_.FriendlyName)|$($_.MediaType)|$($
                 info.gpus.push(GpuInfo {
                     name,
                     vram_gb: vram,
+                    driver,
                 });
             }
             Some("ram") => {
-                info.ram_gb = parts
+                let total = parts
                     .next()
                     .and_then(|v| v.trim().parse().ok())
                     .unwrap_or(0.0);
+                info.ram.total_gb = total;
+                info.ram_gb = total;
+            }
+            Some("rammod") => {
+                info.ram.mem_type = parts
+                    .next()
+                    .and_then(|v| v.trim().parse::<u32>().ok())
+                    .and_then(memory_type_name)
+                    .map(str::to_string);
+                info.ram.speed_mhz = parts.next().and_then(|v| v.trim().parse().ok());
             }
             Some("disk") => {
                 let name = parts.next().unwrap_or("").trim().to_string();
@@ -595,10 +735,53 @@ Get-PhysicalDisk | ForEach-Object { "disk|$($_.FriendlyName)|$($_.MediaType)|$($
                     });
                 }
             }
+            Some("sys") => {
+                let manu = parts.next().unwrap_or("").trim().to_string();
+                let model = parts.next().unwrap_or("").trim().to_string();
+                if !manu.is_empty() {
+                    info.system.manufacturer = manu;
+                }
+                if !model.is_empty() {
+                    info.system.model = model;
+                }
+            }
+            Some("os") => {
+                let caption = parts.next().unwrap_or("").trim().to_string();
+                if !caption.is_empty() {
+                    // "Microsoft Windows 11 Pro" → compact display form
+                    info.system.os_caption =
+                        caption.strip_prefix("Microsoft ").unwrap_or(&caption).to_string();
+                }
+                let build = parts.next().unwrap_or("").trim().to_string();
+                info.system.os_release = os_release_name(&build);
+            }
+            Some("disp") => {
+                info.display.width = parts.next().and_then(|v| v.trim().parse().ok());
+                info.display.height = parts.next().and_then(|v| v.trim().parse().ok());
+            }
+            Some("refr") => {
+                info.display.refresh_hz = parts.next().and_then(|v| v.trim().parse().ok());
+            }
             _ => {}
         }
     }
     Ok(info)
+}
+
+/// OS release line: marketing DisplayVersion when present (25H2),
+/// otherwise the build number (never blank, never guessed).
+fn os_release_name(build: &str) -> String {
+    let display: Option<String> = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE)
+        .open_subkey(r"SOFTWARE\Microsoft\Windows NT\CurrentVersion")
+        .ok()
+        .and_then(|k| k.get_value::<String, _>("DisplayVersion").ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    match display {
+        Some(d) => d,
+        None if build.is_empty() => String::new(),
+        None => format!("build {build}"),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1845,6 +2028,50 @@ pub fn open_windows_panel(panel: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn memory_type_names_cover_common_modules() {
+        // live-proven DDR3 on the dev machine, plus the modern standards
+        assert_eq!(memory_type_name(24), Some("DDR3"));
+        assert_eq!(memory_type_name(26), Some("DDR4"));
+        assert_eq!(memory_type_name(34), Some("DDR5"));
+        assert_eq!(memory_type_name(31), Some("LPDDR4"));
+        // unknown codes read as unknown, never a guessed generation
+        assert_eq!(memory_type_name(0), None);
+        assert_eq!(memory_type_name(99), None);
+    }
+
+    #[test]
+    fn os_release_prefers_marketing_name() {
+        // DisplayVersion comes from the real registry here: either way the
+        // result is never blank and never invented
+        let named = os_release_name("22631");
+        assert!(!named.is_empty());
+        assert!(named.contains("build") || named.chars().any(|c| c == 'H'));
+    }
+
+    #[test]
+    fn directx_level_is_one_of_two() {
+        assert!(matches!(directx_level(), "DirectX 12" | "DirectX 11"));
+    }
+
+    #[test]
+    fn live_system_info_shapes() {
+        // runs everywhere Windows (CI included): the extended inventory
+        // must parse on any machine — core identity never blank, RAM
+        // consistent between the flat legacy field and the new struct.
+        let info = match query_system_info() {
+            Ok(info) => info,
+            Err(e) => {
+                assert_eq!(e, POWERSHELL_TIMEOUT);
+                return;
+            }
+        };
+        assert!(!info.cpu.name.is_empty());
+        assert!(info.ram.total_gb > 0.0);
+        assert_eq!(info.ram_gb, info.ram.total_gb);
+        assert!(matches!(info.system.directx.as_str(), "DirectX 12" | "DirectX 11"));
+    }
 
     #[test]
     fn ps_timeout_maps_to_machine_key() {

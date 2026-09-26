@@ -6,6 +6,7 @@ import type {
   CleanupScan,
   PagefileSettings,
   Settings,
+  SystemInfo,
   Thresholds,
   TweakStates,
 } from "../bridge";
@@ -78,5 +79,26 @@ export function cleanupScan(): CleanupScan {
       { id: "recycle_bin", bytes: null },
     ],
     history: { last_freed_bytes: 0, last_at: null, last_30d_bytes: 0 },
+  };
+}
+
+export function systemInfo(over: Partial<SystemInfo> = {}): SystemInfo {
+  return {
+    cpu: { name: "Core i7", mhz: 2700, cores: 4, threads: 8 },
+    gpus: [],
+    ram: { total_gb: 16, mem_type: "DDR4", speed_mhz: 3200 },
+    disks: [],
+    display: { width: 1920, height: 1080, refresh_hz: 60, scale_pct: 100 },
+    system: {
+      manufacturer: "Dell",
+      model: "Precision",
+      os_caption: "Windows 11 Pro",
+      os_release: "25H2",
+      directx: "DirectX 12",
+    },
+    ram_gb: 16,
+    gpu_counters: false,
+    powershell_available: true,
+    ...over,
   };
 }
