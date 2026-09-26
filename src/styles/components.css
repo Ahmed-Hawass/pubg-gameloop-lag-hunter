@@ -154,28 +154,27 @@
   }
 }
 
-/* MetricCard */
-/* MetricCard — surface comes from .card, layout only below */
+/* MetricCard — surface comes from .card, layout only below: centered
+   tile (icon, value, label) with the hint riding the corner */
 .metric {
-  padding: 14px;
+  position: relative;
+  padding: 16px 14px 14px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-}
-.metric-top {
-  display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
+  gap: 4px;
+  text-align: center;
+  /* square tiles like the concept (the window never drops below 960px,
+     so four squares always fit); content stays centered either way */
+  aspect-ratio: 1 / 1;
 }
-/* value + corner tooltip share the right side of the card head */
-.metric-head-right {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-/* the tiny hint glyph — same Info icon and pointer cursor as the Hint
-   button elsewhere; quiet, sits just before the value */
+/* value + corner tooltip share the card: the hint pins to the corner
+   in both directions (no physical properties) */
 .metric-hint-dot {
+  position: absolute;
+  inset-inline-end: 8px;
+  top: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -193,40 +192,40 @@
   color: var(--text-2);
   opacity: 1;
 }
-.metric-name {
+.metric-ico {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--text-1);
-  font-size: 13px;
-  font-weight: 700;
+  color: var(--text-3);
 }
-.metric-name svg {
-  width: 17px;
-  height: 17px;
-  stroke-width: 2.4;
+.metric-ico svg {
+  width: 20px;
+  height: 20px;
   flex: none;
 }
 /* the icon carries the live tone — expressive at a glance */
-.metric-name-ok svg {
+.metric-ico-ok {
   color: var(--primary);
 }
-.metric-name-warn svg {
+.metric-ico-warn {
   color: var(--warn);
 }
-.metric-name-danger svg {
+.metric-ico-danger {
   color: var(--danger);
 }
-.metric-name-off svg {
+.metric-ico-off {
   color: var(--text-3);
   opacity: 0.6;
 }
 /* metric icons nudge on card hover — expressive micro-interaction */
-.metric .metric-name svg {
+.metric .metric-ico svg {
   transition: transform 0.2s var(--ease);
 }
-.metric:hover .metric-name svg {
+.metric:hover .metric-ico svg {
   transform: scale(1.18);
+}
+.metric-name {
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 /* Start button: hover lift + icon nudge — same language as every icon */
@@ -237,37 +236,11 @@
   transform: scale(1.12);
 }
 .metric-val {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
 }
 .metric.dim .metric-val {
   color: var(--text-3);
-}
-.bar-track {
-  height: 5px;
-  border-radius: 4px;
-  background: var(--elev-3);
-  overflow: hidden;
-}
-.bar-fill {
-  height: 100%;
-  border-radius: 4px;
-  transition: width 0.6s var(--ease);
-}
-.bar-ok {
-  background: var(--primary);
-}
-.bar-warn {
-  background: var(--warn);
-}
-.bar-danger {
-  background: var(--danger);
-}
-.spark {
-  width: 100%;
-  height: 22px;
-  display: block;
-  opacity: 0.9;
 }
 
 /* Timeline */
@@ -284,8 +257,8 @@
 }
 .timeline-track {
   position: relative;
-  height: 34px;
-  border-radius: 8px;
+  height: 16px;
+  border-radius: 4px;
   background: var(--elev-1);
   border: 1px solid var(--border);
   overflow: hidden;
@@ -293,7 +266,7 @@
 .timeline-fill {
   position: absolute;
   inset: 0;
-  background: var(--primary-dim-2);
+  background: var(--primary);
   transition: width 1s linear;
 }
 .tl-marker {

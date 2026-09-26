@@ -57,13 +57,17 @@ function open(status: StatusPayload, over: Partial<React.ComponentProps<typeof M
 }
 
 describe("MonitorView", () => {
-  it("idle offers Start and duration pills", async () => {
+  it("idle offers Start and duration pills plus guidance, never a dead feed", async () => {
     const user = userEvent.setup();
     const { onToggle, onDurationChange } = open({ status: "idle", ui: null });
     await user.click(screen.getByText(en.startScanning));
     expect(onToggle).toHaveBeenCalledOnce();
     await user.click(screen.getByText(en.min10));
     expect(onDurationChange).toHaveBeenCalledWith(600);
+    // the calm state explains itself instead of an empty gap
+    expect(screen.getByText(en.idleGuideTitle)).toBeTruthy();
+    // no streaming section while stopped (guidance above says it all)
+    expect(screen.queryByText(en.activity)).toBeNull();
   });
 
   it("a busy Start is dead (no stacked sessions)", async () => {
@@ -111,5 +115,42 @@ describe("MonitorView", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("diagnoses outrank the feed and the log collapses on demand", async () => {
+    const user = userEvent.setup();
+    const live: UiState = {
+      ...ui,
+      feed: [{ phase: "instant", clock: "00:01", kind: "spike", sev: "crit" }],
+      diagnoses: [
+        {
+          key: "cpu_busy",
+          title: "backend title",
+          simple: "backend simple",
+          cause: "backend cause",
+          fix: "backend fix",
+          severity: "high",
+          at: "00:01",
+        },
+      ],
+    };
+    open({ status: "running", ui: live });
+    // translated card above the raw log in DOM order
+    const card = await screen.findByText(en.diagnoses.cpu_busy.title);    const logToggle = screen.getByText(en.hideEventLog);
+    expect(
+      card.compareDocumentPosition(logToggle) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.queryByText("backend title")).toBeNull();
+    // collapsing hides rows, expanding restores them
+    await user.click(logToggle);
+    expect(screen.queryByText(en.feed.spike)).toBeNull();
+    await user.click(screen.getByText(en.showEventLog));
+    expect(screen.getByText(en.feed.spike)).toBeTruthy();
+  });
+
+  it("the timeline reads elapsed over target", async () => {
+    open({ status: "running", ui });
+    // 65s elapsed of a 300s auto-stop: "01:05 / 05:00"
+    expect(await screen.findByText("01:05 / 05:00")).toBeTruthy();
   });
 });

@@ -39,63 +39,27 @@ export function Button(props: {
 }
 
 // ---------------------------------------------------------------------------
-// MetricCard — labeled meter with real sparkline from engine history.
-// A small corner "?" tooltip explains what this metric means.
+// MetricCard — centered tile (icon, value, label) with a corner "?"
+// tooltip explaining what this metric measures.
 // ---------------------------------------------------------------------------
 export function MetricCard(props: {
   label: string;
   icon: ReactNode;
   value: number | null;
-  /** 0-100 history, newest last; null history = dim "no data" state */
-  history: number[] | null;
   /** what this metric measures — shown as a corner tooltip */
   hint?: string;
 }) {
-  const { label, icon, value, history, hint } = props;
-  const dim = value === null || history === null;
+  const { label, icon, value, hint } = props;
+  const dim = value === null;
   const v = value ?? 0;
   const tone = v >= 85 ? "danger" : v >= 60 ? "warn" : "ok";
   return (
     <div className={`card metric ${dim ? "dim" : ""}`}>
-      <div className="metric-top">
-        <div className={`metric-name metric-name-${dim ? "off" : tone}`}>
-          {icon}
-          {label}
-        </div>
-        <div className="metric-head-right">
-          {hint ? <MetricHint text={hint} /> : null}
-          <div className="metric-val num">{dim ? "--" : `${v}%`}</div>
-        </div>
-      </div>
-      <div className="bar-track">
-        {/* clamped like the Top Processes rows: a >100 reading must never
-            overflow its track (the numeric value beside it stays truthful) */}
-        <div className={`bar-fill bar-${tone}`} style={{ width: dim ? 0 : `${Math.min(100, v)}%` }} />
-      </div>
-      <Sparkline values={history} dim={dim} />
+      {hint ? <MetricHint text={hint} /> : null}
+      <div className={`metric-ico metric-ico-${dim ? "off" : tone}`}>{icon}</div>
+      <div className="metric-val num">{dim ? "--" : `${v}%`}</div>
+      <div className="metric-name">{label}</div>
     </div>
-  );
-}
-
-/** Sparkline drawn from real history — no fake data. */
-function Sparkline(props: { values: number[] | null; dim: boolean }) {
-  const { values, dim } = props;
-  if (dim || !values || values.length < 2) {
-    return (
-      <svg className="spark" viewBox="0 0 100 22" preserveAspectRatio="none">
-        <polyline points="0,11 100,11" fill="none" stroke="var(--text-3)" strokeWidth="1.4" strokeDasharray="3 4" />
-      </svg>
-    );
-  }
-  const w = 100;
-  const h = 22;
-  const step = w / (values.length - 1);
-  const y = (v: number) => h - 2 - (v / 100) * (h - 4);
-  const pts = values.map((v, i) => `${(i * step).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
-  return (
-    <svg className="spark" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
-      <polyline points={pts} fill="none" stroke="var(--primary)" strokeWidth="1.6" opacity="0.85" />
-    </svg>
   );
 }
 
@@ -117,8 +81,10 @@ export function Timeline(props: {
   kindLabel: (kind: string) => string;
   /** the head label for the auto-stop target ("Auto-stop" / "Session duration") */
   headLabel: string;
+  /** elapsed/target readout ("00:46 / 05:00"); null hides the target side */
+  targetSec: number | null;
 }) {
-  const { elapsedSec, autoStopSec, spikes, hasData, kindLabel, headLabel } = props;
+  const { elapsedSec, autoStopSec, spikes, hasData, kindLabel, headLabel, targetSec } = props;
   const total = autoStopSec ?? Math.max(elapsedSec, 60);
   const pct = Math.min(100, (elapsedSec / Math.max(total, 1)) * 100);
   return (
@@ -127,9 +93,11 @@ export function Timeline(props: {
           (numbers are LTR even in RTL locales); pinning it avoids the marker
           drifting against the reading direction in Arabic */}
       <div className="timeline-head" dir="ltr">
-        <span className="num">00:00</span>
         <span>{headLabel}</span>
-        <span className="num">{fmtDur(elapsedSec)}</span>
+        <span className="num">
+          {fmtDur(elapsedSec)}
+          {targetSec != null ? ` / ${fmtDur(targetSec)}` : ""}
+        </span>
       </div>
       <div className="timeline-track" dir="ltr">
         {autoStopSec ? <div className="timeline-fill" style={{ width: `${pct}%` }} /> : null}

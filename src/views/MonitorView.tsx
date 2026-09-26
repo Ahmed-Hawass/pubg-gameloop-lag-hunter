@@ -2,9 +2,9 @@
 // in a neutral resting state. Live sessions fill them with real values.
 // No status card/strip — the layout itself is the state.
 
-import { useEffect } from "react";
-import { Activity, Cpu, Gauge, HardDrive, Play, Square } from "lucide-react";
-import { Hint, Button, MetricCard, NoteCard, SummaryCard, Timeline, fmtDur } from "../components/components";
+import { useEffect, useState } from "react";
+import { Brain, ChevronDown, Cpu, Database, Gamepad2, Play, Square } from "lucide-react";
+import { Hint, Button, EmptyState, MetricCard, NoteCard, SummaryCard, Timeline, fmtDur } from "../components/components";
 import type { StatusPayload } from "../bridge";
 import { useLang } from "../i18n";
 
@@ -51,7 +51,9 @@ export function MonitorView(props: {
   // live values, or the neutral resting state for every card
   const liveUi = running ? ui : null;
   const bars = liveUi?.bars;
-  const hist = liveUi?.history;
+  // the event log collapses for a calm page; the choice survives ticks
+  // (resetting it per render would yank an open log shut every second)
+  const [feedOpen, setFeedOpen] = useState(true);
 
   return (
     <div className="monitor">
@@ -94,28 +96,24 @@ export function MonitorView(props: {
           label={t.cpu}
           icon={<Cpu size={14} />}
           value={bars?.cpu ?? null}
-          history={hist?.cpu ?? null}
           hint={t.cpuHint}
         />
         <MetricCard
           label={t.ram}
-          icon={<Activity size={14} />}
+          icon={<Brain size={14} />}
           value={bars?.ram ?? null}
-          history={hist?.ram ?? null}
           hint={t.ramHint}
         />
         <MetricCard
           label={t.gpu}
-          icon={<Gauge size={14} />}
+          icon={<Gamepad2 size={14} />}
           value={bars?.gpu ?? null}
-          history={bars?.gpu != null ? (hist?.gpu ?? null) : null}
           hint={t.gpuHint}
         />
         <MetricCard
           label={t.disk}
-          icon={<HardDrive size={14} />}
+          icon={<Database size={14} />}
           value={bars?.disk ?? null}
-          history={hist?.disk ?? null}
           hint={t.diskHint}
         />
       </div>
@@ -130,6 +128,7 @@ export function MonitorView(props: {
             hasData={liveUi.samples_count > 0}
             kindLabel={(k) => t.feed[k] ?? k}
             headLabel={t.timelineDuration}
+            targetSec={liveUi.auto_stop_sec}
           />
           <div className="timeline-hint">
             <Hint text={t.timelineHint} />
@@ -143,6 +142,7 @@ export function MonitorView(props: {
           hasData={false}
           kindLabel={(k) => t.feed[k] ?? k}
           headLabel={t.timelineDuration}
+          targetSec={null}
         />
       )}
 
@@ -154,32 +154,18 @@ export function MonitorView(props: {
         </div>
       ) : null}
 
-      {/* activity feed — the flexible bottom block */}
-      <section className="feed">
-        <h3 className="feed-title">
-          {t.activity}
-          <Hint text={t.activityHint} />
-        </h3>
-        {liveUi && liveUi.feed.length > 0 ? (
-          <ul className="card feed-list">
-            {liveUi.feed.map((f, i) => (
-              // content-prefixed key with an index tiebreaker: rows are
-              // static text, so index shifting on prepend only repaints text
-              // while duplicates (same clock+kind+severity) stay unique
-              <li key={`${f.clock}-${f.kind}-${f.sev}-${i}`} className={`feed-item feed-${f.sev}`}>
-                <span className="feed-clock num">{f.clock}</span>
-                <span className="feed-text">{t.feed[f.kind] ?? f.kind}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div className="feed-empty">
-            {liveUi ? (liveUi.game_running ? t.nothingUnusual : t.waitingGameloopFeed) : ""}
-          </div>
-        )}
-      </section>
+      {/* idle guidance: an empty layout explains nothing, so the calm
+          state carries its own invitation (what to do, what happens) */}
+      {!liveUi && !summaryAllowed ? (
+        <EmptyState
+          icon={<Play size={18} />}
+          title={t.idleGuideTitle}
+          hint={t.idleGuideHint}
+        />
+      ) : null}
 
-      {/* confirmed diagnosis cards — only while the engine confirms them */}
+      {/* confirmed diagnosis cards FIRST — what happened outranks the raw
+          feed; only while the engine confirms them */}
       {liveUi && liveUi.diagnoses.length > 0 ? (
         <div className="notes">
           {liveUi.diagnoses.map((d) => {
@@ -196,6 +182,48 @@ export function MonitorView(props: {
             );
           })}
         </div>
+      ) : null}
+
+      {/* activity feed — live only. A stopped scan has nothing streaming:
+          idle shows the guidance panel above, finished shows the summary
+          below, so an empty feed shell would be a third dead block. */}
+      {liveUi ? (
+        <section className="feed">
+          <h3 className="feed-title">
+            {t.activity}
+            <Hint text={t.activityHint} />
+          </h3>
+          {liveUi.feed.length > 0 ? (
+            <>
+              <button
+                type="button"
+                className="feed-toggle"
+                aria-expanded={feedOpen}
+                onClick={() => setFeedOpen(!feedOpen)}
+              >
+                <ChevronDown size={14} />
+                {feedOpen ? t.hideEventLog : t.showEventLog}
+              </button>
+              {feedOpen ? (
+                <ul className="card feed-list">
+                  {liveUi.feed.map((f, i) => (
+                    // content-prefixed key with an index tiebreaker: rows are
+                    // static text, so index shifting on prepend only repaints text
+                    // while duplicates (same clock+kind+severity) stay unique
+                    <li key={`${f.clock}-${f.kind}-${f.sev}-${i}`} className={`feed-item feed-${f.sev}`}>
+                      <span className="feed-clock num">{f.clock}</span>
+                      <span className="feed-text">{t.feed[f.kind] ?? f.kind}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </>
+          ) : (
+            <div className="feed-empty">
+              {liveUi.game_running ? t.nothingUnusual : t.waitingGameloopFeed}
+            </div>
+          )}
+        </section>
       ) : null}
 
       {/* after finish — its own session's summary, never the dismissed one */}

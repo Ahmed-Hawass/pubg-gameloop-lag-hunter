@@ -279,6 +279,13 @@
   scrollbar-gutter: stable;
 }
 
+/* the monitor is a dashboard, not reading: it spans the full content
+   width like the concept (no centered measure), so square tiles fill
+   the row edge to edge at every window size */
+.content > div > .monitor {
+  max-width: none;
+}
+
 /* Thin theme-matched scrollbars: 6px, thumb-only on a transparent track,
    hover lightens via the hover token. One definition for every scrollable
    view; visible only when the page actually overflows (overflow-y: auto

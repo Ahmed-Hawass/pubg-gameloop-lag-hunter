@@ -75,6 +75,36 @@
   font-weight: 700;
   flex: none;
 }
+/* event-log toggle: full-width quiet button (same ghost materials as
+   row actions); the chevron turns with the expanded state */
+.feed-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px;
+  background: var(--elev-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+.feed-toggle:hover {
+  color: var(--hover-text);
+  border-color: var(--hover-border);
+  background: var(--hover-bg);
+}
+.feed-toggle svg {
+  transition: transform 0.15s var(--ease);
+}
+.feed-toggle[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
 .feed-list {
   list-style: none;
   display: flex;
@@ -141,16 +171,11 @@
   flex: none;
 }
 
-/* 4 cards on normal widths, 2 on narrow (windowed), natural stretch on wide */
+/* 4 cards on normal widths, 2 on narrow (windowed); square tiles always
+   stretch edge to edge (a width cap here would strand side gutters and
+   break edge alignment with the timeline and panels below) */
 .metrics-4 {
   grid-template-columns: repeat(4, 1fr);
-}
-
-@media (min-width: 1500px) {
-  .metrics-4 {
-    grid-template-columns: repeat(4, minmax(0, 320px));
-    justify-content: center;
-  }
 }
 
 @media (max-width: 760px) {

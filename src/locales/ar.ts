@@ -462,6 +462,13 @@ export const ar: Locale = {
     "كل ما ترصده الأداة أثناء اللعب، مرتّبًا من الأحدث إلى الأقدم. عند شعورك بأي تقطيع، راجع هذا القسم: سيوضّح لك ما حدث.",
   nothingUnusual: "لا شيء غير معتاد حتى الآن، وهذا جيد.",
   waitingGameloopFeed: "في انتظار بدء تشغيل PUBG Mobile...",
+  /** idle guidance panel (empty state before the first scan) */
+  idleGuideTitle: "اضغط زر البدء ثم العب كالمعتاد",
+  idleGuideHint:
+    "يُقاس المعالج والذاكرة وكرت الشاشة والقرص كل ثانية أثناء اللعب، وأي تقطيع يظهر هنا مشروحًا مع حله.",
+  /** collapsible event log toggle */
+  showEventLog: "عرض سجل الأحداث",
+  hideEventLog: "إخفاء سجل الأحداث",
 
   // feed lines (by engine event kind)
   feed: {

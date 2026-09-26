@@ -458,6 +458,13 @@ export const en = {
     "Everything the tool detects during play, newest first. Whenever you feel a stutter, check this section: it will explain what happened.",
   nothingUnusual: "Nothing unusual so far. That's good.",
   waitingGameloopFeed: "Waiting for PUBG Mobile to start...",
+  /** idle guidance panel (empty state before the first scan) */
+  idleGuideTitle: "Press Start, then play normally",
+  idleGuideHint:
+    "CPU, RAM, GPU, and disk are measured every second while you play. Any stutter shows up here with its explanation and fix.",
+  /** collapsible event log toggle */
+  showEventLog: "Show event log",
+  hideEventLog: "Hide event log",
 
   // feed lines (by engine event kind)
   feed: {
