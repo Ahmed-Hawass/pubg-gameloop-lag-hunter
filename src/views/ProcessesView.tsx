@@ -119,14 +119,14 @@ export function ProcessesView(props: { active: boolean }) {
         <>
           {/* background totals: the truncated list below can never show
               the whole load, so the header carries the honest sums */}
-          <div className="card procs-totals">
-            <div className="procs-total">
-              <span className="procs-total-num num">{answer!.total_cpu.toFixed(1)}%</span>
-              <span className="procs-total-label">{t.totalCpuBackground}</span>
+          <div className="card totals">
+            <div className="total">
+              <span className="total-num num">{answer!.total_cpu.toFixed(1)}%</span>
+              <span className="total-label">{t.totalCpuBackground}</span>
             </div>
-            <div className="procs-total">
-              <span className="procs-total-num num">{Math.round(answer!.total_ram_mb)} MB</span>
-              <span className="procs-total-label">{t.totalRamBackground}</span>
+            <div className="total">
+              <span className="total-num num">{Math.round(answer!.total_ram_mb)} MB</span>
+              <span className="total-label">{t.totalRamBackground}</span>
             </div>
           </div>
           {apps.length > 0 ? (
