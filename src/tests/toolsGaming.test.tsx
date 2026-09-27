@@ -45,12 +45,14 @@ function openGaming() {
 }
 
 describe("ToolsView gaming switches", () => {
-  it("landing opens the gaming details with one live read", async () => {
+  it("landing opens the gaming details with live reads", async () => {
     const user = userEvent.setup();
     openGaming();
     await user.click(screen.getByText(en.toolGamingTweaks));
     await screen.findByText(en.tweakDvrTitle);
-    expect(apiMock.tweakStates).toHaveBeenCalledTimes(1);
+    // two cheap in-process reads: the landing badge first, then the
+    // details page's own reload (it never waits on the badge)
+    expect(apiMock.tweakStates).toHaveBeenCalledTimes(2);
     // the gaming page never consumed page file data: the split stopped
     // paying its read here (one fewer IPC round-trip, same pixels)
     expect(apiMock.pagefileSettings).not.toHaveBeenCalled();

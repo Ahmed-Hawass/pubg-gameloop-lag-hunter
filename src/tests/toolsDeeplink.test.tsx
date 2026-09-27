@@ -49,10 +49,14 @@ function openLinked(toolOpenId: string | null) {
 describe("ToolsView deep-link", () => {
   it("a row link opens gaming and rings the row", async () => {
     openLinked("dvr");
-    const title = await screen.findByText(en.tweakDvrTitle);
-    const row = title.closest(".switch-row")!;
+    // DVR is off in the fixture, so it renders featured + archive: the
+    // link rings the row in both places (same row, same ring)
+    const titles = await screen.findAllByText(en.tweakDvrTitle);
+    expect(titles).toHaveLength(2);
     await waitFor(() => {
-      expect(row.classList.contains("is-linked")).toBe(true);
+      for (const title of titles) {
+        expect(title.closest(".switch-row")!.classList.contains("is-linked")).toBe(true);
+      }
     });
   });
 
@@ -69,7 +73,7 @@ describe("ToolsView deep-link", () => {
   it("a link to a missing row clears instead of nagging", async () => {
     const { onToolOpened } = openLinked("no_such_tweak");
     // routed to gaming (not the pagefile card), then cleared on the miss
-    await screen.findByText(en.tweakDvrTitle);
+    await screen.findAllByText(en.tweakDvrTitle);
     await waitFor(() => {
       expect(onToolOpened).toHaveBeenCalledOnce();
     });

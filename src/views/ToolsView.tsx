@@ -9,10 +9,12 @@
 import { useEffect, useState } from "react";
 import { ChevronLeft } from "lucide-react";
 import { Dialog, MODAL_OPEN_EVENT, APP_DIALOG_OPEN_EVENT } from "../components/components";
+import { api } from "../bridge";
 import type { Notice } from "../errors";
 import { useLang } from "../i18n";
 import { GamingSection } from "./tools/GamingSection";
 import { StorageSection } from "./tools/StorageSection";
+import { summarizeTweaks } from "./tools/summary";
 import { useSpotTheme } from "./tools/useSpotTheme";
 import spotTweaksDark from "../assets/spot-system-tweaks-dark.svg?url";
 import spotTweaksLight from "../assets/spot-system-tweaks-light.svg?url";
@@ -42,9 +44,34 @@ export function ToolsView(props: {
       an open modal). */
   const [hint, setHint] = useState<{ title: string; body: string } | null>(null);
 
+  /** landing badge math (null = unread yet or unreadable: the card
+      shows no badge rather than a guessed one; the details page owns
+      its own read and never waits on this) */
+  const [summary, setSummary] = useState<{ shown: number; on: number } | null>(null);
+
   /** background note behind a row's (?) button: title + body into the one
       shared Dialog below */
   const showHint = (title: string, body: string) => setHint({ title, body });
+
+  // landing badge: one cheap in-process read while the cards show (and a
+  // refresh every return from the details, so flips land on the badge).
+  // Silent failure: a badge that cannot be read is hidden, never an
+  // error on a page whose job is only routing.
+  useEffect(() => {
+    if (!active || openCard) return;
+    let live = true;
+    void api
+      .tweakStates()
+      .then((s) => {
+        if (live) setSummary(summarizeTweaks(s));
+      })
+      .catch(() => {
+        if (live) setSummary(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [active, openCard]);
 
   // deep-link: a health card jumps here (DVR to the GAMING page, the
   // page file to the STORAGE section). The link opens the right page
@@ -148,6 +175,11 @@ export function ToolsView(props: {
             <span className="tool-title">{t.toolGamingTweaks}</span>
           </span>
           <span className="tool-desc">{t.toolGamingTweaksDesc}</span>
+          {summary ? (
+            <span className={`badge check-badge tool-badge ${summary.on === summary.shown ? "ok" : "warn"}`}>
+              {t.toolBadgeOptimized(summary.on, summary.shown)}
+            </span>
+          ) : null}
         </button>
         <button className="card tool-card" onClick={() => setOpenCard("storage")}>
           <img

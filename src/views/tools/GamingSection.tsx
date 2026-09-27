@@ -2,9 +2,11 @@
 // switches. Owns its switch family (useTweaks), its reads, and its
 // deep-link landing; the parent only routes which page shows.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode, Fragment } from "react";
 import {
+  AlertTriangle,
   AppWindow,
+  CheckCircle2,
   Expand,
   Gamepad2,
   Monitor,
@@ -108,64 +110,86 @@ export function GamingSection(props: {
     );
   }
 
-  return (
-    <div className="check-list" ref={listRef}>
-      {/* hidden until read; a feature the Windows build lacks stays
-          hidden — a dead switch must never be shown. No area dividers:
-          every row here targets gaming, subdivision would be noise. */}
-      {tweaks.powerState !== "hidden" ? (
+  /** one row per tweak: the attention section and the full archive
+      render the SAME SwitchRow below (edit once, both follow). A row
+      counts as needing attention only when rendered AND off: hidden
+      rows do not exist, disabled rows wait on GameLoop. */
+  type TweakRow = { id: string; off: boolean; el: ReactNode };
+  const rows: TweakRow[] = [];
+  if (tweaks.powerState !== "hidden") {
+    rows.push({
+      id: "powerplan",
+      off: tweaks.powerState === "off",
+      el: (
         <SwitchRow
           tweakId="powerplan"
           linked={linkedId === "powerplan"}
           on={tweaks.powerState === "on"}
           func={<Zap size={15} />}
           name={t.tweakPowerTitle}
-          desc={t.tweakPowerDesc}
+          effect={t.tweakEffectNow}
           hintTitle={t.tweakPowerTitle}
           hintBody={t.tweakPowerHint}
           onHint={showHint}
           busy={tweaks.tweakBusy}
           onFlip={(next) => void tweaks.flipTweak("powerplan", next)}
         />
-      ) : null}
-      {tweaks.dvrOn !== null ? (
+      ),
+    });
+  }
+  if (tweaks.dvrOn !== null) {
+    rows.push({
+      id: "dvr",
+      off: !tweaks.dvrOn,
+      el: (
         <SwitchRow
           tweakId="dvr"
           linked={linkedId === "dvr"}
           on={tweaks.dvrOn}
           func={<Video size={15} />}
           name={t.tweakDvrTitle}
-          desc={t.tweakDvrDesc}
+          effect={t.tweakEffectNow}
           hintTitle={t.tweakDvrTitle}
           hintBody={t.tweakDvrHint}
           onHint={showHint}
           busy={tweaks.tweakBusy}
           onFlip={(next) => void tweaks.flipTweak("dvr", next)}
         />
-      ) : null}
-      {tweaks.gameModeOn !== null ? (
+      ),
+    });
+  }
+  if (tweaks.gameModeOn !== null) {
+    rows.push({
+      id: "gamemode",
+      off: !tweaks.gameModeOn,
+      el: (
         <SwitchRow
           tweakId="gamemode"
           linked={linkedId === "gamemode"}
           on={tweaks.gameModeOn}
           func={<Gamepad2 size={15} />}
           name={t.tweakGameModeTitle}
-          desc={t.tweakGameModeDesc}
           hintTitle={t.tweakGameModeTitle}
           hintBody={t.tweakGameModeHint}
           onHint={showHint}
           busy={tweaks.tweakBusy}
           onFlip={(next) => void tweaks.flipTweak("gamemode", next)}
         />
-      ) : null}
-      {tweaks.fsoState !== "hidden" ? (
+      ),
+    });
+  }
+  if (tweaks.fsoState !== "hidden") {
+    rows.push({
+      id: "fso",
+      off: tweaks.fsoState === "off",
+      el: (
         <SwitchRow
           tweakId="fso"
           linked={linkedId === "fso"}
           on={tweaks.fsoState === "on"}
           func={<Expand size={15} />}
           name={t.tweakFsoTitle}
-          desc={t.tweakFsoDesc}
+          effect={t.tweakEffectReopen}
           hintTitle={t.tweakFsoTitle}
           hintBody={t.tweakFsoHint}
           onHint={showHint}
@@ -174,30 +198,42 @@ export function GamingSection(props: {
           disabledHint={t.tweakNeedsGameloop}
           onFlip={(next) => void tweaks.flipTweak("fso", next)}
         />
-      ) : null}
-      {tweaks.wgcOn !== null ? (
+      ),
+    });
+  }
+  if (tweaks.wgcOn !== null) {
+    rows.push({
+      id: "windowedopt",
+      off: !tweaks.wgcOn,
+      el: (
         <SwitchRow
           tweakId="windowedopt"
           linked={linkedId === "windowedopt"}
           on={tweaks.wgcOn}
           func={<AppWindow size={15} />}
           name={t.tweakWindowedTitle}
-          desc={t.tweakWindowedDesc}
+          effect={t.tweakEffectReopen}
           hintTitle={t.tweakWindowedTitle}
           hintBody={t.tweakWindowedHint}
           onHint={showHint}
           busy={tweaks.tweakBusy}
           onFlip={(next) => void tweaks.flipTweak("windowedopt", next)}
         />
-      ) : null}
-      {tweaks.gpuState !== "hidden" ? (
+      ),
+    });
+  }
+  if (tweaks.gpuState !== "hidden") {
+    rows.push({
+      id: "gpupref",
+      off: tweaks.gpuState === "off",
+      el: (
         <SwitchRow
           tweakId="gpupref"
           linked={linkedId === "gpupref"}
           on={tweaks.gpuState === "on"}
           func={<Monitor size={15} />}
           name={t.tweakGpuTitle}
-          desc={t.tweakGpuDesc}
+          effect={t.tweakEffectReopen}
           hintTitle={t.tweakGpuTitle}
           hintBody={t.tweakGpuHint}
           onHint={showHint}
@@ -206,22 +242,71 @@ export function GamingSection(props: {
           disabledHint={t.tweakNeedsGameloop}
           onFlip={(next) => void tweaks.flipTweak("gpupref", next)}
         />
-      ) : null}
-      {tweaks.mouseOn !== null ? (
+      ),
+    });
+  }
+  if (tweaks.mouseOn !== null) {
+    rows.push({
+      id: "mouse",
+      off: !tweaks.mouseOn,
+      el: (
         <SwitchRow
           tweakId="mouse"
           linked={linkedId === "mouse"}
           on={tweaks.mouseOn}
           func={<Mouse size={15} />}
           name={t.tweakMouseTitle}
-          desc={t.tweakMouseDesc}
           hintTitle={t.tweakMouseTitle}
           hintBody={t.tweakMouseHint}
           onHint={showHint}
           busy={tweaks.tweakBusy}
           onFlip={(next) => void tweaks.flipTweak("mouse", next)}
         />
+      ),
+    });
+  }
+  const offRows = rows.filter((r) => r.off);
+
+  return (
+    <>
+      {/* one-glance verdict, same pattern as the health tab: derived
+          from the rendered rows, zero backend cost */}
+      <div className={`health-banner ${offRows.length === 0 ? "ok" : "warn"}`}>
+        {offRows.length === 0 ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
+        <div>
+          <div className="hb-title">
+            {offRows.length === 0 ? t.tweakBannerGood : t.tweakBannerNeeds(offRows.length)}
+          </div>
+          <div className="hb-sub">
+            {offRows.length === 0 ? t.tweakBannerGoodSub : t.tweakBannerNeedsSub}
+          </div>
+        </div>
+      </div>
+
+      {/* featured off-rows: the same rows as the archive below,
+          repeated deliberately (summary + archive, not instead of it) */}
+      {offRows.length > 0 ? (
+        <section>
+          <h3 className="health-section-title">{t.checkWarnBadge}</h3>
+          <div className="check-list">
+            {offRows.map((r) => (
+              <Fragment key={`${r.id}-featured`}>{r.el}</Fragment>
+            ))}
+          </div>
+        </section>
       ) : null}
-    </div>
+
+      <section>
+        <h3 className="health-section-title">{t.tweakAllTweaks}</h3>
+        <div className="check-list" ref={listRef}>
+          {/* hidden until read; a feature the Windows build lacks stays
+              hidden — a dead switch must never be shown. No area dividers:
+              every row here targets gaming, subdivision would be noise. */}
+          {rows.map((r) => (
+            <Fragment key={`${r.id}-archive`}>{r.el}</Fragment>
+          ))}
+        </div>
+      </section>
+    </>
   );
 }

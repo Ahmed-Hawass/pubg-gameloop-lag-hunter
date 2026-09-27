@@ -270,34 +270,25 @@ export const en = {
   toolsBack: "Tools",
   toolGamingTweaks: "Gaming tweaks",
   toolGamingTweaksDesc: "Every game performance switch in one place.",
+  /** landing status badge over the gaming card (on/shown optimized):
+      same rules as the details rows, via the shared summary */
+  toolBadgeOptimized: (on: number, total: number) => `${on}/${total} optimized`,
   toolStorage: "Storage",
   toolStorageDesc: "Automatic cleanup plus a manual sweep for junk files.",
 
-  // ---- tweaks (Tools tab writes — switch mirrors live state) ----
+  // ---- tweaks (Tools tab writes — switch mirrors live state).
+  // Row copy is the name alone; the definition plus the effect timing
+  // live behind the (?) button (same contract as the health cards). */
   tweakDvrTitle: "Turn off background recording (DVR)",
-  tweakDvrDesc:
-    "Keeps background recording off so it never steals GPU and disk mid-match. Takes effect immediately.",
   tweakSsTitle: "Turn on automatic cleanup",
-  tweakSsDesc:
-    "Automatically frees drive space by removing unneeded temporary files when the drive runs low.",
   tweakGameModeTitle: "Turn on Game Mode",
-  tweakGameModeDesc:
-    "Lets Windows prioritize the game and hold update interruptions. Helps 1% lows on devices with background load; a few CPU-maxed titles prefer it off, so test both states.",
   tweakGpuTitle: "Run GameLoop on high-performance GPU",
-  tweakGpuDesc:
-    "Forces GameLoop to use your powerful graphics card instead of the built-in one. Close and reopen the game to apply. Only matters on laptops with two graphics cards.",
   tweakFsoTitle: "Turn off fullscreen optimizations",
-  tweakFsoDesc:
-    "Stops Windows from forcing its own fullscreen handling on the game, which hurts frame pacing in some titles. Close and reopen the game to apply.",
   tweakMouseTitle: "Turn off mouse acceleration",
-  tweakMouseDesc:
-    "Turns off pointer acceleration, so the cursor always moves the same distance for the same hand movement. A feel preference: it won't raise FPS.",
   tweakWindowedTitle: "Turn on optimizations for windowed games",
-  tweakWindowedDesc:
-    "Upgrades windowed and borderless games to modern flip-model presentation with lower latency. Close and reopen the game to apply.",
   /** per-row background notes behind the (?) button: at most 3 sentences,
-      plain language (what it does, when it helps or hurts, one-tap revert),
-      never invented numbers */
+      plain language (what it does, when it helps or hurts, effect timing,
+      one-tap revert), never invented numbers */
   tweakDvrHint:
     "Background recording keeps the last seconds of your play saved at all times, so the encoder and the disk never rest during a match. Turning it off removes a constant thief of GPU and disk with no downside for gameplay. Switching it back on takes one tap if you miss the captures.",
   tweakSsHint:
@@ -321,6 +312,11 @@ export const en = {
   tweakPfDrivesLabel: "Drives",
   tweakPfDriveFree: (drive: string, gb: number) => `${drive} · ${gb} GB free`,
   tweakPfDriveNoSpace: (drive: string) => `${drive} · free space unknown`,
+  /** short drive-card lines (letter rides its own span, so no drive
+      prefix here): free space and mode stay separate spans */
+  tweakPfDriveFreeShort: (gb: number) => `${gb} GB free`,
+  tweakPfDriveNoSpaceShort: "free space unknown",
+  tweakPfModeLabel: "Mode",
   tweakPfModeSystem: "System managed size",
   tweakPfModeCustom: "Custom size",
   tweakPfModeOff: "No paging file",
@@ -343,10 +339,22 @@ export const en = {
   rebootNow: "Restart",
   rebootLater: "Later",
   tweakPowerTitle: "Turn on High performance",
-  tweakPowerDesc:
-    "Switches Windows to the High performance plan. Takes effect immediately; turning it off brings back the plan you had.",
+  /** visible effect timing (shared lines, verified rows only — the
+      card shows when, the (?) shows what and why) */
+  tweakEffectNow: "Takes effect immediately",
+  tweakEffectReopen: "Close and reopen the game to apply",
   tweakPowerHint:
     "Puts the processor on full speed by switching to the High performance plan. If the plan is missing it is restored first with Windows' own command, then switched on. Turning it off brings back the plan you had; devices locked to Balanced-only mode hide this row instead.",
+  /** summary banner over the gaming rows (same pattern as the health
+      tab): one-glance verdict derived from the rendered rows, zero
+      backend cost */
+  tweakBannerGood: "All optimized",
+  tweakBannerGoodSub: "Every tweak holds its recommended state",
+  tweakBannerNeeds: (n: number) => `${n} tweak${n === 1 ? "" : "s"} needs attention`,
+  tweakBannerNeedsSub: "Everything else is optimized",
+  /** header above the full archive list (attention rows repeat above it
+      as the featured summary, so this labels what follows, not a filter) */
+  tweakAllTweaks: "All tweaks",
   /** reason line under a greyed-out row whose precondition the user can
       fix (GameLoop exes not resolved) — never shown for rows that can
       never work here (those hide instead) */

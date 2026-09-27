@@ -277,34 +277,25 @@ export const ar: Locale = {
   toolsBack: "الأدوات",
   toolGamingTweaks: "تعديلات الألعاب",
   toolGamingTweaksDesc: "كل مفاتيح أداء الألعاب في مكان واحد.",
+  /** landing status badge over the gaming card (on/shown optimized):
+      same rules as the details rows, via the shared summary */
+  toolBadgeOptimized: (on: number, total: number) => `${on}/${total} محسّن`,
   toolStorage: "التخزين",
   toolStorageDesc: "تنظيف تلقائي مع فحص يدوي للملفات المؤقتة.",
 
-  // ---- tweaks (Tools tab writes — switch mirrors live state) ----
+  // ---- tweaks (Tools tab writes — switch mirrors live state).
+  // Row copy is the name alone; the definition plus the effect timing
+  // live behind the (?) button (same contract as the health cards). */
   tweakDvrTitle: "إيقاف التسجيل الخلفي (DVR)",
-  tweakDvrDesc:
-    "يُبقي التسجيل الخلفي مطفأ حتى لا يسرق كرت الشاشة والقرص أثناء المباراة. يُطبق فورًا.",
   tweakSsTitle: "تشغيل التنظيف التلقائي",
-  tweakSsDesc:
-    "يحرر مساحة القرص تلقائيا بإزالة الملفات المؤقتة غير اللازمة عند اقتراب الامتلاء.",
   tweakGameModeTitle: "تفعيل وضع الألعاب",
-  tweakGameModeDesc:
-    "يمنح اللعبة أولوية الموارد ويوقف مقاطعات التحديث أثناء اللعب. يفيد استقرار الإطارات على الأجهزة ذات الحمل الخلفي، وبعض الألعاب المستنزفة للمعالج تفضل إيقافه، فجرّب الحالتين.",
   tweakGpuTitle: "تشغيل GameLoop على كرت الأداء العالي",
-  tweakGpuDesc:
-    "يُجبر GameLoop على استخدام كرت الشاشة القوي بدل المدمج. أغلق اللعبة وأعد فتحها للتطبيق. يهم أجهزة اللابتوب ذات الكرتين فقط.",
   tweakFsoTitle: "إيقاف تحسينات ملء الشاشة",
-  tweakFsoDesc:
-    "يمنع ويندوز من فرض معالجته الخاصة لملء الشاشة على اللعبة، وهو ما يضر انتظام الإطارات في بعض الألعاب. أغلق اللعبة وأعد فتحها للتطبيق.",
   tweakMouseTitle: "إيقاف تسريع الماوس",
-  tweakMouseDesc:
-    "يوقف تسريع المؤشر، فيتحرك المؤشر نفس المسافة دائمًا لنفس حركة اليد. تفضيل شخصي للإحساس: لن يرفع عدد الإطارات.",
   tweakWindowedTitle: "تفعيل تحسينات الألعاب النافذة",
-  tweakWindowedDesc:
-    "يرقّي عرض الألعاب النافذة والتي بلا حدود لنمط حديث بزمن استجابة أقل. أغلق اللعبة وأعد فتحها للتطبيق.",
   /** per-row background notes behind the (?) button: at most 3 sentences,
-      plain language (what it does, when it helps or hurts, one-tap revert),
-      never invented numbers */
+      plain language (what it does, when it helps or hurts, effect timing,
+      one-tap revert), never invented numbers */
   tweakDvrHint:
     "يُبقي التسجيل الخلفي آخر ثوانٍ من لعبك محفوظة طوال الوقت، فيظل المشفّر والقرص بلا راحة أثناء المباراة. إيقافه يزيل سارقًا دائمًا لكرت الشاشة والقرص دون أي ضرر للعب. إعادة تشغيله ضغطة واحدة إذا افتقدت المقاطع.",
   tweakSsHint:
@@ -328,6 +319,11 @@ export const ar: Locale = {
   tweakPfDrivesLabel: "الأقراص",
   tweakPfDriveFree: (drive: string, gb: number) => `${drive} · ${gb} جيجابايت فارغة`,
   tweakPfDriveNoSpace: (drive: string) => `${drive} · المساحة الفارغة غير معروفة`,
+  /** short drive-card lines (letter rides its own span, so no drive
+      prefix here): free space and mode stay separate spans */
+  tweakPfDriveFreeShort: (gb: number) => `${gb} جيجابايت فارغة`,
+  tweakPfDriveNoSpaceShort: "المساحة الفارغة غير معروفة",
+  tweakPfModeLabel: "الوضع",
   tweakPfModeSystem: "حجم يديره النظام",
   tweakPfModeCustom: "حجم مخصص",
   tweakPfModeOff: "بدون page file",
@@ -350,10 +346,23 @@ export const ar: Locale = {
   rebootNow: "إعادة التشغيل",
   rebootLater: "لاحقًا",
   tweakPowerTitle: "تشغيل الأداء العالي",
-  tweakPowerDesc:
-    "يبدّل ويندوز إلى خطة الأداء العالي. يُطبق فورًا، وإيقافه يعيد خطتك السابقة.",
+  /** visible effect timing (shared lines, verified rows only — the
+      card shows when, the (?) shows what and why) */
+  tweakEffectNow: "يُطبق فورًا",
+  tweakEffectReopen: "أغلق اللعبة وأعد فتحها للتطبيق",
   tweakPowerHint:
     "يضع المعالج على السرعة الكاملة بالتبديل إلى خطة الأداء العالي. لو كانت الخطة مفقودة تُستعاد أولا بأمر ويندوز نفسه ثم تُفعّل. إيقافه يعيد خطتك السابقة، والأجهزة المقفلة على وضع التوازن تخفي هذا الصف.",
+  /** summary banner over the gaming rows (same pattern as the health
+      tab): one-glance verdict derived from the rendered rows, zero
+      backend cost. Arabic keeps the count as a trailing numeral so no
+      singular/dual/plural forms are ever needed. */
+  tweakBannerGood: "كل شيء مُحسّن",
+  tweakBannerGoodSub: "كل خيار على وضعه الموصى به",
+  tweakBannerNeeds: (n: number) => `خيارات تحتاج إلى ضبط: ${n}`,
+  tweakBannerNeedsSub: "كل شيء آخر محسّن",
+  /** header above the full archive list (attention rows repeat above it
+      as the featured summary, so this labels what follows, not a filter) */
+  tweakAllTweaks: "كل الخيارات",
   /** reason line under a greyed-out row whose precondition the user can
       fix (GameLoop exes not resolved) — never shown for rows that can
       never work here (those hide instead) */

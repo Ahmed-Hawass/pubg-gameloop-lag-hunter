@@ -461,6 +461,11 @@
   flex-direction: column;
   gap: 14px;
 }
+/* details sections (banner, featured, archive) stack like the health tab */
+.tools section {
+  display: flex;
+  flex-direction: column;
+}
 .tools-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -519,6 +524,13 @@
   color: var(--text-2);
   line-height: 1.55;
 }
+/* landing status badge: pinned to the card's inline start, below the
+   copy (same badge language as every row) */
+.tool-badge {
+  align-self: flex-start;
+  font-size: 11px;
+  padding: 4px 10px;
+}
 /* placeholder note under a young card's list: muted, temporary, removed
    with its key when the card's phase starts */
 .tool-note {
@@ -542,13 +554,23 @@
   align-items: center;
   gap: 12px;
 }
+/* category results on an inset surface with dividers (not bare rows
+   on the card): the list reads as one measured answer */
+.cleanup-list {
+  background: var(--elev-3);
+  border-radius: 10px;
+  overflow: hidden;
+}
 .cleanup-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding-block: 8px;
-  border-block-start: 1px solid var(--border);
+  padding: 12px 14px;
+  border-block-end: 1px solid var(--border);
   cursor: pointer;
+}
+.cleanup-row:last-child {
+  border-block-end: none;
 }
 .cleanup-row input[type="checkbox"] {
   flex: none;
@@ -621,6 +643,20 @@
 .cleanup-selected {
   font-size: 12px;
   color: var(--text-3);
+}
+/* footer: the take on the reading-start side, both actions pinned to
+   the end side (scan stays ghost, the commit action fills) */
+.cleanup-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.cleanup-foot-btns {
+  display: flex;
+  gap: 8px;
+  margin-inline-start: auto;
 }
 
 /* status readout atop the storage details: deliberately UNBOXED (plain
@@ -737,20 +773,26 @@
 }
 .pf-drives {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
+/* drive picker cards: letter over free space over mode, wrapping;
+   selection keeps the shared primary ring (never a fill: the letter
+   must stay legible in both themes) */
 .pf-drive {
+  flex: 1;
+  min-width: 120px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 2px;
   background: var(--elev-3);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 12px;
+  border-radius: 10px;
+  padding: 10px 12px;
   color: var(--text-1);
   font: inherit;
-  text-align: start;
+  text-align: center;
   cursor: pointer;
 }
 .pf-drive.is-selected {
@@ -761,11 +803,21 @@
   cursor: not-allowed;
 }
 .pf-drive-id {
+  font-size: 13px;
   font-weight: 700;
 }
-.pf-drive-state {
-  font-size: 12px;
+.pf-drive-free {
+  font-size: 11px;
   color: var(--text-2);
+}
+.pf-drive-mode {
+  font-size: 11px;
+  color: var(--text-3);
+}
+/* the commit action owns its row: full-width primary, never an inline
+   ghost beside the inputs */
+.pf-apply {
+  width: 100%;
 }
 .pf-fields {
   display: flex;
@@ -851,6 +903,13 @@
   gap: 6px;
   font-size: 12.5px;
   font-weight: 700;
+}
+/* visible effect timing under the name (same slot as the health state
+   line, same muted tone): the card shows when, the (?) shows what */
+.switch-state {
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.45;
 }
 /* (?) background-note trigger: the same Info glyph as every other Hint,
    ghost until hovered so the row stays quiet */

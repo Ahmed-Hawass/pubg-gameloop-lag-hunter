@@ -216,6 +216,15 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   state, badge, note button), the open shortcut shows on problem cards
   only, and healthy states carry the bare value while the badge alone
   says Good.
+- Tools follow the health pattern: gaming rows open with a one-glance
+  banner above a featured attention section repeating the off rows over
+  the full archive, row copy is the name plus a verified effect line
+  (timing on the card, the definition behind the (?) button), the
+  landing gaming card carries an on/shown optimized badge from one
+  shared summary, the page file editor picks drives as cards with a
+  labeled mode segment and a full-width Apply, and the sweep results sit
+  on an inset list with a Selected-plus-actions footer. No backend
+  change; validate, confirm, reboot, progress, history, and errors stay.
 
 ### Fixed
 - The session tick no longer holds the state lock across clock reads and

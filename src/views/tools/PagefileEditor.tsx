@@ -178,21 +178,24 @@ export function PagefileEditor(props: {
     setMaxInput(live?.max_mb?.toString() ?? "");
   };
 
+  /** one drive's mode label: system, custom with sizes, off, or
+      unreadable (read, never derived from the working copies) */
+  const pfModeLabel = (mode: string, min: number | null, max: number | null) =>
+    mode === "custom" && min != null && max != null
+      ? t.tweakPfDriveCustom(min, max)
+      : mode === "system"
+        ? t.tweakPfModeSystem
+        : mode === "off"
+          ? t.tweakPfModeOff
+          : t.tweakPfModeUnknown;
+
   /** one drive's status line: letter, free space, live mode (read, never
       derived from the working copies) */
   const pfDriveLine = (drive: string, freeMb: number | null, mode: string, min: number | null, max: number | null) => {
     const free = freeMb == null
       ? t.tweakPfDriveNoSpace(drive)
       : t.tweakPfDriveFree(drive, Math.round(freeMb / 1024));
-    const state =
-      mode === "custom" && min != null && max != null
-        ? t.tweakPfDriveCustom(min, max)
-        : mode === "system"
-          ? t.tweakPfModeSystem
-          : mode === "off"
-            ? t.tweakPfModeOff
-            : t.tweakPfModeUnknown;
-    return `${free} · ${state}`;
+    return `${free} · ${pfModeLabel(mode, min, max)}`;
   };
 
   /** the state fill: green means SAFE paging, not automatic (automatic
@@ -400,8 +403,13 @@ export function PagefileEditor(props: {
                   onClick={() => selectPfDrive(d.drive)}
                 >
                   <span className="pf-drive-id num">{d.drive}</span>
-                  <span className="pf-drive-state">
-                    {pfDriveLine(d.drive, d.free_mb, d.mode, d.min_mb, d.max_mb)}
+                  <span className="pf-drive-free">
+                    {d.free_mb == null
+                      ? t.tweakPfDriveNoSpaceShort
+                      : t.tweakPfDriveFreeShort(Math.round(d.free_mb / 1024))}
+                  </span>
+                  <span className="pf-drive-mode">
+                    {pfModeLabel(d.mode, d.min_mb, d.max_mb)}
                   </span>
                 </button>
               ))}
@@ -409,6 +417,7 @@ export function PagefileEditor(props: {
             {/* the mode in the app's own selection language (the same
                 segmented pills as language/theme): one tap, the active
                 segment fills */}
+            <span className="switch-desc">{t.tweakPfModeLabel}</span>
             <div className="lang-segment" role="radiogroup" aria-label={t.tweakPfTitle}>
               {(
                 [
@@ -456,13 +465,13 @@ export function PagefileEditor(props: {
                   onChange={(e) => writeDigits(e.target.value, setMaxInput)}
                 />
               </label>
-              <Button
-                label={t.tweakPfApply}
-                variant="ghost"
-                disabled={writeBusy || pfUnchanged}
-                onClick={() => void applyPf()}
-              />
             </div>
+            <Button
+              label={t.tweakPfApply}
+              className="pf-apply"
+              disabled={writeBusy || pfUnchanged}
+              onClick={() => void applyPf()}
+            />
           </div>
         </div>
       ) : null}

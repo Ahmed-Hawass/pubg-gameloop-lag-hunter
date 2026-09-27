@@ -1,7 +1,8 @@
 // SwitchRow.tsx — one Tools switch row. The switch mirrors the live RESULT
 // of its named action (ON = the action holds right now). The label names
 // the action itself ("Turn off X"), so ON is always the recommended state
-// by construction.
+// by construction. Row copy is the name alone; the definition lives
+// behind the (?) button (same contract as the health cards).
 
 import type { ReactNode } from "react";
 import { Info } from "lucide-react";
@@ -13,12 +14,16 @@ export function SwitchRow(props: {
   on: boolean;
   func: ReactNode;
   name: string;
-  desc: string;
-  /** background note behind the (?) button (plain language, never a
-      substitute for the desc above) */
+  /** background note behind the (?) button: definition plus background
+      (plain language, never invented numbers) */
   hintTitle: string;
   hintBody: string;
   onHint: (title: string, body: string) => void;
+  /** visible effect timing under the name (one shared string, only
+      where verified: immediate for power/DVR, reopen for GPU/FSO/
+      windowed; rows without a verified timing show no line rather
+      than a guessed one) */
+  effect?: string;
   /** the health-card deep-link landed on this row: temporary ring */
   linked: boolean;
   busy: boolean;
@@ -30,7 +35,7 @@ export function SwitchRow(props: {
   disabledHint?: string;
 }) {
   const { t } = useLang();
-  const { tweakId, on, func, name, desc, hintTitle, hintBody, onHint, linked, busy, onFlip, disabled, disabledHint } = props;
+  const { tweakId, on, func, name, hintTitle, hintBody, onHint, linked, busy, onFlip, disabled, disabledHint, effect } = props;
   return (
     <div
       data-tweak={tweakId}
@@ -49,7 +54,7 @@ export function SwitchRow(props: {
             <Info size={13} />
           </button>
         </span>
-        <span className="switch-desc">{desc}</span>
+        {effect ? <span className="switch-state">{effect}</span> : null}
         {disabled && disabledHint ? (
           <span className="switch-reason">{disabledHint}</span>
         ) : null}

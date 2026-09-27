@@ -378,13 +378,11 @@ export function SweepSection(props: {
               </button>
             ))}
           </div>
-          {/* one list visible: the mode's own results. Selection stays
+          {/* one list visible: the mode's own results, on an inset
+              surface with dividers. Selection stays
               shared, so Clean always acts on every ticked row. */}
-          {clModeScan ? renderClRows(clModeScan.categories) : null}
-          {(clScan ?? clDeep) && clCleanIds.length > 0 ? (
-            <p className="cleanup-selected">
-              {t.cleanupSelected(Math.round((clSelectedBytes / 1048576) * 10) / 10)}
-            </p>
+          {clModeScan ? (
+            <div className="cleanup-list">{renderClRows(clModeScan.categories)}</div>
           ) : null}
           {/* all-unreadable is a read failure, not a clean drive:
               "--" everywhere must never read as "nothing to clean".
@@ -439,31 +437,40 @@ export function SweepSection(props: {
           {clResult && clUnmeasured ? (
             <p className="tool-note">{t.cleanupUnmeasured}</p>
           ) : null}
-          <div className="cleanup-actions">
-            <Button
-              label={
-                clMode === "deep"
-                  ? clDeep
-                    ? t.cleanupRescan
-                    : t.cleanupDeepScan
-                  : clScan
-                    ? t.cleanupRescan
-                    : t.cleanupScan
-              }
-              variant="ghost"
-              disabled={clBusy}
-              onClick={() => void (clMode === "deep" ? runClDeepScan() : runClScan())}
-            />
-            {clModeScan ? (
+          {/* footer: what Clean will take on the reading-start side,
+              the two actions on the end side. The "Selected" line counts
+              the same ids Clean will take. */}
+          <div className="cleanup-foot">
+            <span className="cleanup-selected">
+              {(clScan ?? clDeep) && clCleanIds.length > 0
+                ? t.cleanupSelected(Math.round((clSelectedBytes / 1048576) * 10) / 10)
+                : ""}
+            </span>
+            <span className="cleanup-foot-btns">
               <Button
-                label={clBusy ? t.cleanupCleaning : t.cleanupClean}
+                label={
+                  clMode === "deep"
+                    ? clDeep
+                      ? t.cleanupRescan
+                      : t.cleanupDeepScan
+                    : clScan
+                      ? t.cleanupRescan
+                      : t.cleanupScan
+                }
                 variant="ghost"
-                disabled={clBusy || clCleanIds.length === 0}
-                // no empty-selection error path: the disabled gate
-                // above makes it unreachable (dead code is a lie)
-                onClick={() => setClConfirm(true)}
+                disabled={clBusy}
+                onClick={() => void (clMode === "deep" ? runClDeepScan() : runClScan())}
               />
-            ) : null}
+              {clModeScan ? (
+                <Button
+                  label={clBusy ? t.cleanupCleaning : t.cleanupClean}
+                  disabled={clBusy || clCleanIds.length === 0}
+                  // no empty-selection error path: the disabled gate
+                  // above makes it unreachable (dead code is a lie)
+                  onClick={() => setClConfirm(true)}
+                />
+              ) : null}
+            </span>
           </div>
         </div>
       ) : null}

@@ -142,7 +142,6 @@ export function StorageSection(props: {
           on={tweaks.ssOn}
           func={<Recycle size={15} />}
           name={t.tweakSsTitle}
-          desc={t.tweakSsDesc}
           hintTitle={t.tweakSsTitle}
           hintBody={t.tweakSsHint}
           onHint={showHint}
