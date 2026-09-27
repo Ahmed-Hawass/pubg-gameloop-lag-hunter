@@ -2,6 +2,7 @@
 pub mod cleanup;
 pub mod detector;
 pub mod diagnoser;
+pub mod display_names;
 pub mod elevate;
 pub mod emulator;
 pub mod logging;

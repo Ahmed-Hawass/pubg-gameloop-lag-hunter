@@ -81,7 +81,7 @@ function boot(state: StatusPayload) {
   apiMock.watchGameloop.mockResolvedValue(undefined);
   apiMock.checkUpdate.mockResolvedValue(null);
   apiMock.systemInfo.mockResolvedValue(systemInfo());
-  apiMock.topProcesses.mockResolvedValue([]);
+  apiMock.topProcesses.mockResolvedValue({ processes: [], total_cpu: 0, total_ram_mb: 0 });
   apiMock.systemChecks.mockResolvedValue({
     power: "ok",
     pagefile: "ok",

@@ -321,7 +321,7 @@ impl<T: Clone> TtlCache<T> {
 
 /// top processes: "who is eating the machine RIGHT NOW" — short TTL, still
 // long enough to cover tab-flipping; refresh happens off the click
-static TOP_PROCESSES_CACHE: TtlCache<Vec<TopProcess>> = TtlCache::new();
+static TOP_PROCESSES_CACHE: TtlCache<TopProcesses> = TtlCache::new();
 /// system checks: power plan/pagefile/battery — people don't flip these
 /// mid-session; a longer window is fine
 static SYSTEM_CHECKS_CACHE: TtlCache<SystemChecks> = TtlCache::new();
@@ -339,7 +339,7 @@ static CHECKS_REFRESHING: AtomicBool = AtomicBool::new(false);
 static TOP_QUERY_LOCK: Mutex<()> = Mutex::new(());
 static CHECKS_QUERY_LOCK: Mutex<()> = Mutex::new(());
 
-fn query_top_processes_serialized() -> Result<Vec<TopProcess>, String> {
+fn query_top_processes_serialized() -> Result<TopProcesses, String> {
     let _guard = TOP_QUERY_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     query_top_processes()
 }
@@ -350,7 +350,7 @@ fn query_system_checks_serialized() -> Result<SystemChecks, String> {
 }
 /// top processes with TTL: returns the cached copy immediately when one
 /// exists (even stale) and refreshes in the background past the TTL.
-pub fn top_processes_cached() -> Result<Vec<TopProcess>, String> {
+pub fn top_processes_cached() -> Result<TopProcesses, String> {
     if let Some(cached) = TOP_PROCESSES_CACHE.get() {
         // stale — serve the copy now, refresh in the background
         if !TOP_PROCESSES_CACHE.fresh_for(TOP_PROCESSES_TTL)
@@ -377,7 +377,7 @@ pub fn top_processes_cached() -> Result<Vec<TopProcess>, String> {
 /// manual refresh button (the cached path would return the same numbers
 /// the silent poll already shows). Warms the cache so the next silent
 /// poll doesn't flash older numbers right after a manual refresh.
-pub fn top_processes_fresh() -> Result<Vec<TopProcess>, String> {
+pub fn top_processes_fresh() -> Result<TopProcesses, String> {
     let fresh = query_top_processes_serialized()?;
     TOP_PROCESSES_CACHE.set(fresh.clone());
     Ok(fresh)
@@ -795,12 +795,55 @@ pub struct TopProcess {
     /// % of TOTAL CPU (normalized across all logical cores), 1s average
     pub cpu_pct: f64,
     pub ram_mb: f64,
+    /// "app" (user software, safe to close before playing) or "system"
+    /// (leave running) — decided by classify() below, never guessed
+    pub kind: String,
+    /// curated display key (e.g. "procPowershell") when the exe is a
+    /// known OS staple; the UI translates it, else falls back below
+    pub display_key: Option<String>,
+    /// ProductName from the exe itself, else the raw process name:
+    /// always present, never invented
+    pub display_name: String,
 }
 
-pub fn query_top_processes() -> Result<Vec<TopProcess>, String> {
+/// The top-process answer: ranked rows plus honest background totals.
+/// Totals accumulate over EVERY non-excluded process (not just the
+/// displayed top 12) in the same pass, so the header never understates
+/// the background load the truncated list cannot show.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct TopProcesses {
+    pub processes: Vec<TopProcess>,
+    pub total_cpu: f64,
+    pub total_ram_mb: f64,
+}
+
+/// App vs system, fail-safe toward system: an unidentifiable process is
+/// "leave running" guidance, never a close suggestion. Session 0 hosts
+/// services; anything under the Windows dir is OS-owned; a missing path
+/// (protected processes hide it even from admins) tells us nothing, so
+/// it also reads as system. Only a known non-system path earns "app".
+pub fn classify_process(session: Option<u32>, path: Option<&str>, windir: &str) -> &'static str {
+    if session == Some(0) {
+        return "system";
+    }
+    match path {
+        Some(p) if !p.is_empty() => {
+            if p.to_ascii_lowercase().starts_with(&windir.to_ascii_lowercase()) {
+                "system"
+            } else {
+                "app"
+            }
+        }
+        _ => "system",
+    }
+}
+
+pub fn query_top_processes() -> Result<TopProcesses, String> {
     // ONE PowerShell process: two quick snapshots 400ms apart. Capture every
     // process in both snapshots before ranking, otherwise a CPU-heavy process
     // with modest RAM usage can disappear before its CPU delta is calculated.
+    // SessionId + executable path ride the same rows (grouping needs both,
+    // and a second enumeration could never match PIDs reliably).
     let text = ps(r#"
 $cores = [Environment]::ProcessorCount
 $a = @{}
@@ -810,7 +853,9 @@ Get-Process | ForEach-Object {
   $p = $a[$_.Id]
   if ($null -ne $p -and $null -ne $_.CPU) {
     $pct = [math]::Round((($_.CPU - $p) / 0.4 / $cores) * 100, 1)
-    "{0}|{1}|{2}|{3}" -f $_.ProcessName, $_.Id, $pct, [math]::Round($_.WorkingSet64/1MB,0)
+    try { $pp = $_.Path } catch { $pp = "" }
+    if ($null -eq $pp) { $pp = "" }
+    "{0}|{1}|{2}|{3}|{4}|{5}" -f $_.ProcessName, $_.Id, $pct, [math]::Round($_.WorkingSet64/1MB,0), $_.SessionId, $pp
   }
 }
 "#,
@@ -819,14 +864,21 @@ Get-Process | ForEach-Object {
         super::logging::warn(&format!("top processes query failed: {e}"));
         map_ps_timeout(e)
     })?;
-    let mut out: Vec<TopProcess> = Vec::new();
+    let windir = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
+    // rows travel with their exe path (never leaves the engine: paths can
+    // contain the user name) until display names resolve below
+    let mut rows: Vec<(TopProcess, Option<String>)> = Vec::new();
+    let mut total_cpu = 0.0;
+    let mut total_ram_mb = 0.0;
     for line in text.lines().map(|l| l.trim()).filter(|l| !l.is_empty()) {
         let mut parts = line.split('|');
-        let (Some(name), Some(pid), Some(pct), Some(ram)) = (
+        let (Some(name), Some(pid), Some(pct), Some(ram), session, path) = (
             parts.next(),
             parts.next().and_then(|p| p.trim().parse().ok()),
             parts.next().and_then(|p| p.trim().parse().ok()),
             parts.next().and_then(|p| p.trim().parse().ok()),
+            parts.next().and_then(|p| p.trim().parse::<u32>().ok()),
+            parts.next().map(|p| p.trim().to_string()),
         ) else {
             continue;
         };
@@ -835,24 +887,63 @@ Get-Process | ForEach-Object {
         if super::sampler::is_gameloop_process(name) || super::sampler::is_self_process(name) {
             continue;
         }
+        // background totals accumulate over everything non-excluded (the
+        // 0.5% display gate below must never shrink them)
+        total_cpu += pct;
+        total_ram_mb += ram;
         // below 0.5% is noise
         if pct < 0.5 {
             continue;
         }
-        out.push(TopProcess {
-            name: name.to_string(),
-            pid,
-            cpu_pct: pct,
-            ram_mb: ram,
-        });
+        rows.push((
+            TopProcess {
+                kind: classify_process(session, path.as_deref(), &windir).into(),
+                display_key: super::display_names::curated_key(name).map(str::to_string),
+                display_name: name.to_string(),
+                name: name.to_string(),
+                pid,
+                cpu_pct: pct,
+                ram_mb: ram,
+            },
+            path.filter(|p| !p.is_empty()),
+        ));
     }
-    out.sort_by(|a, b| {
-        b.cpu_pct
-            .partial_cmp(&a.cpu_pct)
+    rows.sort_by(|a, b| {
+        b.0.cpu_pct
+            .partial_cmp(&a.0.cpu_pct)
             .unwrap_or(std::cmp::Ordering::Equal)
     });
-    out.truncate(12);
-    Ok(out)
+    rows.truncate(12);
+    // display names resolve AFTER truncation, for kept rows only: unique
+    // paths of non-curated rows, cached across polls — steady state costs
+    // zero extra spawns
+    let mut want: Vec<String> = Vec::new();
+    for (row, path) in &rows {
+        if row.display_key.is_none() {
+            if let Some(p) = path {
+                if !want.contains(p) {
+                    want.push(p.clone());
+                }
+            }
+        }
+    }
+    let resolved = super::display_names::resolve_cached(&want);
+    let mut out = Vec::with_capacity(rows.len());
+    for (mut row, path) in rows {
+        if row.display_key.is_none() {
+            if let Some(p) = path {
+                if let Some(product) = resolved.get(&p) {
+                    row.display_name = product.clone();
+                }
+            }
+        }
+        out.push(row);
+    }
+    Ok(TopProcesses {
+        processes: out,
+        total_cpu: (total_cpu * 10.0).round() / 10.0,
+        total_ram_mb: (total_ram_mb * 10.0).round() / 10.0,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -2071,6 +2162,36 @@ mod tests {
         assert!(info.ram.total_gb > 0.0);
         assert_eq!(info.ram_gb, info.ram.total_gb);
         assert!(matches!(info.system.directx.as_str(), "DirectX 12" | "DirectX 11"));
+    }
+
+    #[test]
+    fn classify_process_fails_safe_toward_system() {
+        let win = r"C:\Windows";
+        // services and OS-owned paths: leave running
+        assert_eq!(classify_process(Some(0), None, win), "system");
+        assert_eq!(
+            classify_process(Some(1), Some(r"C:\Windows\System32\dwm.exe"), win),
+            "system"
+        );
+        // case-insensitive drive prefix
+        assert_eq!(
+            classify_process(Some(1), Some(r"c:\windows\explorer.exe"), win),
+            "system"
+        );
+        // protected processes hide their path: unknown reads as system,
+        // never a close suggestion
+        assert_eq!(classify_process(Some(1), None, win), "system");
+        assert_eq!(classify_process(Some(1), Some(""), win), "system");
+        assert_eq!(classify_process(None, None, win), "system");
+        // only a known non-system path earns the app label
+        assert_eq!(
+            classify_process(Some(1), Some(r"C:\Program Files\BraveSoftware\brave.exe"), win),
+            "app"
+        );
+        assert_eq!(
+            classify_process(None, Some(r"D:\games\game.exe"), win),
+            "app"
+        );
     }
 
     #[test]

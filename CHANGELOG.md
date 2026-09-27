@@ -21,6 +21,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   suite pins the load-bearing UI contracts (optimistic flips with
   rollback, sweep honesty, page file validate-write-reboot, one modal
   surface, deep-links both directions, one-shot advice, exit gate).
+- Top Processes answers how bad the background is overall: honest CPU
+  and RAM totals over every non-excluded process (the displayed list
+  stays truncated at 12), then two groups, user apps to close before
+  playing and system tasks to leave running. Known OS processes show
+  translated names, app binaries name themselves, raw names back both.
 - Headless CLI companion (`laghunter-cli.exe` plus a stable
   `laghunter.cmd` alias in every release): `scan [minutes]`, `sessions`,
   `report <id|latest> [--json]`, same engine and same sessions folder as

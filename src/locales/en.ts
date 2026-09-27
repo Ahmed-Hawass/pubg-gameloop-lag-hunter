@@ -181,6 +181,33 @@ export const en = {
   topProcessesEmpty: "Nothing significant is running",
   topProcessesRefreshing: "Checking what's running...",
   refresh: "Refresh",
+  /** background totals header: the list below is truncated, these are not */
+  totalCpuBackground: "total CPU in background",
+  totalRamBackground: "total RAM in background",
+  /** process groups: user software versus OS-owned tasks */
+  groupAppsTitle: "Apps you opened",
+  groupAppsHint: "Safe to close before playing",
+  groupSystemTitle: "Background system tasks",
+  groupSystemHint: "Leave these running",
+  /** curated process display names (stable OS staples only; user
+      software names itself via ProductName, raw names back both) */
+  procNames: {
+    procPowershell: "PowerShell",
+    procCmd: "Command Prompt",
+    procConsoleHost: "Console Host",
+    procServiceHost: "Service Host",
+    procCsrss: "Client Server Runtime",
+    procDwm: "Desktop Window Manager",
+    procShellHost: "Shell Infrastructure Host",
+    procCtfmon: "Text Input Manager",
+    procExplorer: "File Explorer",
+    procTaskHost: "Host Process for Tasks",
+    procRuntimeBroker: "Runtime Broker",
+    procSearchHost: "Search Host",
+    procStartMenu: "Start Menu",
+    procShellExperience: "Shell Experience Host",
+    procSpooler: "Print Spooler",
+  } as Record<string, string>,
   /** generic loading line for tabs that are not Top Processes */
   loading: "Loading...",
   /** About tab: the manual update check is in flight */

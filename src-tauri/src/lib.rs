@@ -77,7 +77,7 @@ async fn system_info() -> Result<engine::system::SystemInfo, String> {
 }
 
 #[tauri::command]
-async fn top_processes(force: bool) -> Result<Vec<engine::system::TopProcess>, String> {
+async fn top_processes(force: bool) -> Result<engine::system::TopProcesses, String> {
     let _t = engine::logging::timed("ipc: top_processes");
     // first call on a run pays a PowerShell spawn — blocking pool, never the
     // async runtime. force=true (manual refresh button) pays it every time

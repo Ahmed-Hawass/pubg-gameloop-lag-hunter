@@ -68,4 +68,13 @@ describe("locale parity", () => {
     expect(["ltr", "rtl"]).toContain(ar.lang.dir);
     expect(ar.lang.code).toBe("ar");
   });
+
+  it("curated process names are present and non-empty in both locales", () => {
+    // flatKeys pins the key SETS; this pins the VALUES: a dropped
+    // translation must not hide behind an empty-string placeholder
+    for (const [key, value] of Object.entries(en.procNames)) {
+      expect(String(value).trim().length).toBeGreaterThan(0);
+      expect(String(ar.procNames[key] ?? "").trim().length).toBeGreaterThan(0);
+    }
+  });
 });

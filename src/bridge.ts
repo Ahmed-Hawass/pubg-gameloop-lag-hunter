@@ -198,7 +198,7 @@ export const api = {
   openUrl: (url: string) => invoke<void>("open_url", { url }),
   getVersion: () => invoke<string>("get_version"),
   systemInfo: () => invoke<SystemInfo>("system_info"),
-  topProcesses: (force?: boolean) => invoke<TopProcess[]>("top_processes", { force: force ?? false }),
+  topProcesses: (force?: boolean) => invoke<TopProcesses>("top_processes", { force: force ?? false }),
   systemChecks: (force?: boolean) =>
     invoke<SystemChecks>("system_checks", { force: force ?? false }),
   /** the Tools tab's switches only (microseconds, in-process) — the
@@ -341,6 +341,20 @@ export interface TopProcess {
   pid: number;
   cpu_pct: number;
   ram_mb: number;
+  /** "app" (user software) or "system" (leave running), decided by the engine */
+  kind: "app" | "system";
+  /** curated display key (e.g. "procPowershell") for known OS staples */
+  display_key: string | null;
+  /** ProductName from the exe itself, else the raw process name */
+  display_name: string;
+}
+
+/** ranked rows plus honest background totals (every non-excluded process,
+    not just the displayed top rows) */
+export interface TopProcesses {
+  processes: TopProcess[];
+  total_cpu: number;
+  total_ram_mb: number;
 }
 
 export interface SystemChecks {

@@ -186,6 +186,33 @@ export const ar: Locale = {
   topProcessesEmpty: "لا يوجد شيء ملحوظ يعمل حاليًا",
   topProcessesRefreshing: "جارٍ فحص ما يعمل الآن...",
   refresh: "تحديث",
+  /** background totals header: the list below is truncated, these are not */
+  totalCpuBackground: "إجمالي المعالج في الخلفية",
+  totalRamBackground: "إجمالي الذاكرة في الخلفية",
+  /** process groups: user software versus OS-owned tasks */
+  groupAppsTitle: "تطبيقات فتحتها",
+  groupAppsHint: "آمن إغلاقها قبل اللعب",
+  groupSystemTitle: "مهام النظام الخلفية",
+  groupSystemHint: "اتركها تعمل",
+  /** curated process display names (stable OS staples only; user
+      software names itself via ProductName, raw names back both) */
+  procNames: {
+    procPowershell: "باورشل",
+    procCmd: "موجه الأوامر",
+    procConsoleHost: "مضيف وحدة التحكم",
+    procServiceHost: "مضيف الخدمات",
+    procCsrss: "نظام تشغيل العميل",
+    procDwm: "مدير نوافذ سطح المكتب",
+    procShellHost: "مضيف البنية التحتية",
+    procCtfmon: "مدير الإدخال النصي",
+    procExplorer: "مستكشف الملفات",
+    procTaskHost: "مضيف مهام النظام",
+    procRuntimeBroker: "وسيط التشغيل",
+    procSearchHost: "البحث",
+    procStartMenu: "قائمة ابدأ",
+    procShellExperience: "واجهة النظام",
+    procSpooler: "التخزين المؤقت للطباعة",
+  } as Record<string, string>,
   /** generic loading line for tabs that are not Top Processes */
   loading: "جارٍ التحميل...",
   /** About tab: the manual update check is in flight */

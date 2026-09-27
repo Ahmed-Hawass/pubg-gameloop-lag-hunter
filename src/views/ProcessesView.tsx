@@ -1,11 +1,14 @@
 // ProcessesView.tsx — who is eating the machine (the game is never a suspect).
-// Stays live while the tab is open: silent refresh every few seconds (the
-// engine's TTL cache decides whether a real query is needed).
+// A totals card answers "how bad is the background overall", then two
+// groups: user apps (safe to close before playing) and system tasks
+// (leave running). Stays live while the tab is open: silent refresh every
+// few seconds (the engine's TTL cache decides whether a real query is
+// needed).
 
 import { useEffect, useRef, useState } from "react";
-import { Activity, RefreshCw } from "lucide-react";
+import { Activity, AppWindow, RefreshCw, Settings } from "lucide-react";
 import { Button, EmptyState } from "../components/components";
-import { api, type TopProcess } from "../bridge";
+import { api, type TopProcess, type TopProcesses } from "../bridge";
 import { errorDialog } from "../errors";
 import { useLang } from "../i18n";
 
@@ -15,14 +18,14 @@ const LIVE_INTERVAL_MS = 5000;
 export function ProcessesView(props: { active: boolean }) {
   const { active } = props;
   const { t } = useLang();
-  const [procs, setProcs] = useState<TopProcess[] | null>(null);
+  const [answer, setAnswer] = useState<TopProcesses | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   // one pending slot for a manual press that lands mid-query (the Checks
   // tab's pattern): instead of swallowing the click silently while a
   // silent poll is in flight, the button spins immediately and the press
-  // runs right after the in-flight query finishes
+  // runs right after the in-flight query finishes — one click suffices
   const pendingManualRef = useRef(false);
 
   const load = async (silent: boolean, force = false) => {
@@ -36,7 +39,7 @@ export function ProcessesView(props: { active: boolean }) {
     busyRef.current = true;
     if (!silent) setBusy(true);
     try {
-      setProcs(await api.topProcesses(force));
+      setAnswer(await api.topProcesses(force));
       setError(null);
     } catch (e) {
       // polling failures stay quiet; manual failures prefer the locale copy
@@ -81,6 +84,10 @@ export function ProcessesView(props: { active: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
+  const procs = answer?.processes ?? null;
+  const apps = procs?.filter((p) => p.kind === "app") ?? [];
+  const system = procs?.filter((p) => p.kind !== "app") ?? [];
+
   return (
     <div className="procs">
       <div className="procs-head">
@@ -109,22 +116,73 @@ export function ProcessesView(props: { active: boolean }) {
       ) : procs.length === 0 ? (
         <EmptyState icon={<Activity size={18} />} title={t.topProcessesEmpty} hint="" />
       ) : (
-        <ul className="proc-list">
-          {procs.map((p) => (
-            <li key={p.pid} className="card-sm proc-row">
-              <span className="proc-name">{p.name}</span>
-              <span className="proc-bar">
-                <span
-                  className={`proc-fill ${p.cpu_pct >= 20 ? "bad" : p.cpu_pct >= 8 ? "warn" : "ok"}`}
-                  style={{ width: `${Math.min(100, p.cpu_pct)}%` }}
-                />
-              </span>
-              <span className="proc-cpu num">{p.cpu_pct.toFixed(1)}%</span>
-              <span className="proc-ram num">{Math.round(p.ram_mb)} MB</span>
-            </li>
-          ))}
-        </ul>
+        <>
+          {/* background totals: the truncated list below can never show
+              the whole load, so the header carries the honest sums */}
+          <div className="card procs-totals">
+            <div className="procs-total">
+              <span className="procs-total-num num">{answer!.total_cpu.toFixed(1)}%</span>
+              <span className="procs-total-label">{t.totalCpuBackground}</span>
+            </div>
+            <div className="procs-total">
+              <span className="procs-total-num num">{Math.round(answer!.total_ram_mb)} MB</span>
+              <span className="procs-total-label">{t.totalRamBackground}</span>
+            </div>
+          </div>
+          {apps.length > 0 ? (
+            <section className="proc-group">
+              <h3 className="proc-group-head">
+                <AppWindow size={15} />
+                <span className="proc-group-text">
+                  <span className="proc-group-title">{t.groupAppsTitle}</span>
+                  <span className="proc-group-hint">{t.groupAppsHint}</span>
+                </span>
+              </h3>
+              <ul className="card proc-list">
+                {apps.map((p) => (
+                  <ProcRow key={p.pid} proc={p} icon={<AppWindow size={15} />} />
+                ))}
+              </ul>
+            </section>
+          ) : null}
+          {system.length > 0 ? (
+            <section className="proc-group">
+              <h3 className="proc-group-head">
+                <Settings size={15} />
+                <span className="proc-group-text">
+                  <span className="proc-group-title">{t.groupSystemTitle}</span>
+                  <span className="proc-group-hint">{t.groupSystemHint}</span>
+                </span>
+              </h3>
+              <ul className="card proc-list">
+                {system.map((p) => (
+                  <ProcRow key={p.pid} proc={p} icon={<Settings size={15} />} />
+                ))}
+              </ul>
+            </section>
+          ) : null}
+        </>
       )}
     </div>
+  );
+}
+
+/** one row: generic group tile (never brand artwork), name, numbers.
+    Curated staples translate by key, everything else shows the engine's
+    ProductName-or-raw string verbatim. */
+function ProcRow(props: { proc: TopProcess; icon: React.ReactNode }) {
+  const { proc: p, icon } = props;
+  const { t } = useLang();
+  const label =
+    (p.display_key ? t.procNames[p.display_key] : undefined) ?? p.display_name;
+  return (
+    <li className="proc-row">
+      <span className="icon-tile">{icon}</span>
+      <span className="proc-name">{label}</span>
+      <span className="proc-nums num">
+        <span className="proc-cpu">{p.cpu_pct.toFixed(1)}%</span>
+        <span className="proc-ram">{Math.round(p.ram_mb)} MB</span>
+      </span>
+    </li>
   );
 }
