@@ -225,6 +225,15 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   labeled mode segment and a full-width Apply, and the sweep results sit
   on an inset list with a Selected-plus-actions footer. No backend
   change; validate, confirm, reboot, progress, history, and errors stay.
+- Reports follow the same language: totals over the sessions list
+  (issue rows count spikes or an issue/laggy outcome, partial stays
+  out), one shared divider-list surface keeping the delete action, key
+  moments behind the monitor feed toggle, severity-colored moment dots,
+  and diagnosis cards with per-finding icons and a white fix box.
+- Theme carries named state quads (bg/text/fill/border for success,
+  warning, danger, both themes): cards, banners, badges, dots, bars,
+  and the danger dialog use them; state text rides only its own bg.
+  Card surfaces drop to hairlines, filled cards borderless.
 
 ### Fixed
 - The session tick no longer holds the state lock across clock reads and

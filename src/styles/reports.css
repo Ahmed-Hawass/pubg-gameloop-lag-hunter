@@ -41,17 +41,17 @@
   padding: 7px 12px;
 }
 .badge-ok {
-  background: var(--primary-dim);
-  color: var(--primary);
+  background: var(--bg-success);
+  color: var(--text-success);
 }
 .badge-bad {
-  background: var(--danger-dim);
-  color: var(--danger);
+  background: var(--bg-danger);
+  color: var(--text-danger);
 }
 /* the middle tone (issues / partial): warn, like the list badge below */
 .badge-mid {
-  background: var(--warn-dim);
-  color: var(--warn);
+  background: var(--bg-warning);
+  color: var(--text-warning);
 }
 
 /* report sections */
@@ -95,8 +95,13 @@
   border-radius: 50%;
   background: var(--text-3);
 }
-.report-moments li::before {
-  background: var(--danger);
+/* moment dots carry the kind severity (critical drops, warnings,
+   neutral notes): every theme pairs a readable dot with the card */
+.report-moments li.hl-bad::before {
+  background: var(--fill-danger);
+}
+.report-moments li.hl-mid::before {
+  background: var(--fill-warning);
 }
 
 .report-actions {
@@ -154,17 +159,24 @@
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  padding: 0;
+  overflow: hidden;
 }
+/* one shared surface with dividers (not a card per row): rows flush to
+   the card edges (no inner padding gap flashing around a hovered row),
+   the delete action stays pinned at each row's end */
 .session-list li {
   display: flex;
   align-items: center;
   gap: 13px;
   padding: 13px 16px;
-  transition: border-color 0.12s, background 0.12s;
+  border-block-end: 1px solid var(--border);
+  transition: background 0.12s;
+}
+.session-list li:last-child {
+  border-block-end: none;
 }
 .session-list li:hover {
-  border-color: var(--hover-border);
   background: var(--hover-bg);
 }
 .session-list li.is-loading {
@@ -215,14 +227,14 @@
   padding: 4px 10px;
 }
 .sl-badge-ok {
-  background: var(--primary-dim);
-  color: var(--primary);
+  background: var(--bg-success);
+  color: var(--text-success);
 }
 .sl-badge-bad {
-  background: var(--danger-dim);
-  color: var(--danger);
+  background: var(--bg-danger);
+  color: var(--text-danger);
 }
 .sl-badge-mid {
-  background: var(--warn-dim);
-  color: var(--warn);
+  background: var(--bg-warning);
+  color: var(--text-warning);
 }

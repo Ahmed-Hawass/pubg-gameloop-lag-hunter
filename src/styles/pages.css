@@ -203,11 +203,11 @@
   flex: none;
 }
 .see-dot.ok {
-  background: var(--primary);
+  background: var(--fill-success);
   box-shadow: 0 0 6px var(--primary-dim-2);
 }
 .see-dot.off {
-  background: var(--warn);
+  background: var(--fill-warning);
 }
 
 /* ---- top processes tab ---- */
@@ -270,25 +270,6 @@
 }
 .proc-ram {
   font-size: 11px;
-  color: var(--text-3);
-}
-/* background totals: two big honest numbers above the groups */
-.procs-totals {
-  display: flex;
-  gap: 32px;
-  padding: 16px 20px;
-}
-.procs-total {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.procs-total-num {
-  font-size: 20px;
-  font-weight: 700;
-}
-.procs-total-label {
-  font-size: 11.5px;
   color: var(--text-3);
 }
 /* process groups: title row plus the card list */
@@ -391,12 +372,12 @@
   padding: 4px 10px;
 }
 .check-badge.ok {
-  background: var(--primary-dim);
-  color: var(--primary);
+  background: var(--bg-success);
+  color: var(--text-success);
 }
 .check-badge.warn {
-  background: var(--warn-dim);
-  color: var(--warn);
+  background: var(--bg-warning);
+  color: var(--text-warning);
 }
 /* problem-only shortcut: start-aligned on its own line, never beside
    healthy rows (they own no destination) */
@@ -414,33 +395,33 @@
   font-weight: 600;
   padding: 7px 12px;
 }
-/* summary banner: one-glance verdict above the cards. Tones are the
-   shared state fills (primary/warn dims, same as every card); no side
-   edge, the fill is the signal. */
+/* summary banner: solid highlighter fills (same language as the
+   diagnosis cards) — title and sub both in the card ink. */
 .health-banner {
   display: flex;
   align-items: center;
   gap: 10px;
   border-radius: var(--radius);
-  border: 1px solid var(--border);
+  border: 0.5px solid transparent;
   padding: 14px 16px;
 }
 .health-banner.ok {
-  background: var(--primary-dim);
-  color: var(--primary);
+  background: var(--bg-success);
+  color: var(--text-success);
 }
 .health-banner.warn {
-  background: var(--warn-dim);
-  color: var(--warn);
+  background: var(--bg-warning);
+  color: var(--text-warning);
 }
 .health-banner .hb-title {
   font-size: 14px;
   font-weight: 700;
-  color: var(--text-1);
+  color: inherit;
 }
 .health-banner .hb-sub {
   font-size: 12px;
-  color: var(--text-2);
+  color: inherit;
+  opacity: 0.85;
   line-height: 1.5;
 }
 /* section labels inside the health tab (attention summary + archive) */
@@ -548,11 +529,6 @@
   flex-direction: column;
   gap: 4px;
   padding: 14px 16px;
-}
-.cleanup-head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
 }
 /* category results on an inset surface with dividers (not bare rows
    on the card): the list reads as one measured answer */
@@ -814,10 +790,12 @@
   font-size: 11px;
   color: var(--text-3);
 }
-/* the commit action owns its row: full-width primary, never an inline
-   ghost beside the inputs */
+/* the commit action owns its row: full-width primary with centered
+   label (the shared .btn never centers: it shrink-wraps everywhere
+   else, so centering stays here, not in the primitive) */
 .pf-apply {
   width: 100%;
+  justify-content: center;
 }
 .pf-fields {
   display: flex;
@@ -1077,7 +1055,7 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--warn);
+  background: var(--fill-warning);
   display: inline-block;
   margin-inline-start: 2px;
 }
@@ -1229,9 +1207,6 @@
 .proc-row:nth-child(4) { animation-delay: 0.14s; }
 .proc-row:nth-child(5) { animation-delay: 0.18s; }
 .proc-row:nth-child(6) { animation-delay: 0.22s; }
-/* .proc-fill's origin + animation live once, in the .proc-fill block
-   above — this duplicate re-declared both and drifted the day one
-   of them changed */
 
 .check-row {
   animation: rise-in 0.35s var(--ease) both;
@@ -1242,10 +1217,4 @@
 
 .lang-segment {
   animation: rise-in 0.3s var(--ease) both;
-}
-
-@keyframes bar-grow {
-  from {
-    transform: scaleX(0);
-  }
 }

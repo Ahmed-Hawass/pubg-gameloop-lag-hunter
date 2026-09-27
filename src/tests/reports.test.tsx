@@ -172,4 +172,57 @@ describe("ReportsView", () => {
     // the one modal surface stays free: no dialog chrome anywhere
     expect(document.querySelector(".dialog-overlay")).toBeNull();
   });
+
+  it("totals count sessions and issue rows, partial stays out", async () => {
+    const user = userEvent.setup();
+    apiMock.sessionEntries.mockResolvedValue([
+      ...entries,
+      { id: "session-3", date: "2026-09-25 12:00", duration_sec: 10, samples: 10, lag_spikes: 0, outcome: "partial" },
+    ]);
+    apiMock.loadReport.mockResolvedValue(report);
+    open();
+    await screen.findByText("2026-09-25 10:00");
+    // 3 saved, 1 with issues (the interrupted partial is unknown, not an issue)
+    const totals = document.querySelector(".totals") as HTMLElement;
+    expect(within(totals).getByText("3")).toBeTruthy();
+    expect(within(totals).getByText("1")).toBeTruthy();
+    expect(within(totals).getByText(en.reportTotalSessions)).toBeTruthy();
+    expect(within(totals).getByText(en.reportTotalIssues)).toBeTruthy();
+    await user.click(
+      screen.getByRole("button", { name: `2026-09-25 11:00, ${en.lagCaptured}` }),
+    );
+    await screen.findByText(en.sessionReport);
+  });
+
+  it("key moments collapse behind the shared feed toggle", async () => {
+    const user = userEvent.setup();
+    apiMock.sessionEntries.mockResolvedValue(entries);
+    apiMock.loadReport.mockResolvedValue({
+      ...report,
+      highlights: [
+        { kind: "spike", clock: "00:01", dur_sec: 5 },
+        { kind: "disk_queue", clock: "00:02", dur_sec: null },
+        { kind: "mostly_background", clock: "", dur_sec: null },
+      ],
+    });
+    open();
+    await screen.findByText("2026-09-25 10:00");
+    await user.click(
+      screen.getByRole("button", { name: `2026-09-25 11:00, ${en.lagCaptured}` }),
+    );
+    await screen.findByText(en.keyMoments);
+    // dots carry the kind severity: drops danger, load warn, notes neutral
+    const items = document.querySelectorAll(".report-moments li");
+    expect(items).toHaveLength(3);
+    expect(items[0].classList.contains("hl-bad")).toBe(true);
+    expect(items[1].classList.contains("hl-mid")).toBe(true);
+    expect(items[2].className).toBe("");
+    expect(screen.getByText(en.hideEventLog)).toBeTruthy();
+    await user.click(screen.getByText(en.hideEventLog));
+    expect(screen.getByText(en.showEventLog)).toBeTruthy();
+    // the moment list hides with the toggle (same toggle as the monitor feed)
+    expect(document.querySelector(".report-moments")).toBeNull();
+    await user.click(screen.getByText(en.showEventLog));
+    expect(screen.getByText(en.hideEventLog)).toBeTruthy();
+  });
 });

@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from "react";
 import { Brain, ChevronDown, Cpu, Database, Gamepad2, Play, Square } from "lucide-react";
-import { Hint, Button, EmptyState, MetricCard, NoteCard, SummaryCard, Timeline, fmtDur } from "../components/components";
+import { Hint, Button, EmptyState, MetricCard, NoteCard, SummaryCard, Timeline, diagnosisIcon, fmtDur } from "../components/components";
 import type { StatusPayload } from "../bridge";
 import { useLang } from "../i18n";
 
@@ -178,6 +178,7 @@ export function MonitorView(props: {
                 fix={copy.fix}
                 severity={d.severity}
                 fixLabel={t.fixLabel}
+                icon={diagnosisIcon(d.key)}
               />
             );
           })}

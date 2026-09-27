@@ -578,6 +578,10 @@ export const ar: Locale = {
   // ---- reports ----
   sessions: "الجلسات",
   sessionsHint: "كل فحص مكتمل يُحفظ على جهازك مع تقريره الكامل. اضغط على أي جلسة لقراءتها هنا.",
+  /** totals card labels (numbers ride their own lines, so no plural
+      forms are ever needed) */
+  reportTotalSessions: "الجلسات",
+  reportTotalIssues: "بها مشاكل",
   noSessions: "لا توجد جلسات بعد",
   noSessionsHint: "شغّل فحصًا من تبويب المراقبة. ستظهر الجلسات المكتملة هنا مع تقاريرها.",
   loadingSessions: "جارٍ تحميل الجلسات...",

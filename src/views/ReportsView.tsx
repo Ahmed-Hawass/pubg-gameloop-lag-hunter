@@ -2,10 +2,32 @@
 // Content comes from the engine (keys + English fallbacks); the UI translates.
 
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, ChevronLeft, Clock, FileText, FileWarning, Folder, Gauge, Trash2 } from "lucide-react";
-import { Button, Dialog, EmptyState, Hint, NoteCard, Tip, APP_DIALOG_OPEN_EVENT } from "../components/components";
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, Clock, FileText, FileWarning, Folder, Gauge, Trash2 } from "lucide-react";
+import { Button, Dialog, EmptyState, Hint, NoteCard, Tip, diagnosisIcon, APP_DIALOG_OPEN_EVENT } from "../components/components";
 import { api, type FriendlyReport, type SessionEntry } from "../bridge";
 import { useLang } from "../i18n";
+
+/** moment dot severity from the engine kind (no backend change — the
+    kinds are a closed, documented set): sustained drops read danger,
+    load warnings read warn, session notes stay neutral. Unknown future
+    kinds read warn (a highlight the engine bothered to emit is worth a
+    glance, never a muted shrug). */
+function highlightTone(kind: string): "hl-bad" | "hl-mid" | "" {
+  switch (kind) {
+    case "spike":
+    case "cpu_saturation":
+    case "gpu_activity_cliff":
+    case "gpu_activity_cliff_loaded":
+    case "hard_faults":
+      return "hl-bad";
+    case "nothing":
+    case "noSamples":
+    case "mostly_background":
+      return "";
+    default:
+      return "hl-mid";
+  }
+}
 
 /** "Xm Ys" report-row duration –” a deliberately different shape from the
  *  live session's mm:ss clock (this one reads naturally in a list row).
@@ -37,6 +59,9 @@ export function ReportsView(props: {
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  /** key moments collapse (same toggle as the monitor feed, open by
+      default: a report is a record, hiding its moments takes a tap) */
+  const [momentsOpen, setMomentsOpen] = useState(true);
 
   const outcomeMeta: Record<string, { label: string; tone: "ok" | "bad" | "mid" }> = {
     clean: { label: t.clean, tone: "ok" },
@@ -239,6 +264,7 @@ export function ReportsView(props: {
                   fix={copy.fix}
                   severity={f.severity}
                   fixLabel={t.fixLabel}
+                  icon={diagnosisIcon(f.key)}
                 />
               );
             })}
@@ -254,17 +280,34 @@ export function ReportsView(props: {
           </section>
         )}
 
-        {/* key moments –” composed in the user's language from raw facts */}
+        {/* key moments –” composed in the user's language from raw facts,
+            behind the same toggle as the monitor feed */}
         <section className="report-section">
           <h3>{t.keyMoments}</h3>
-          <ul className="card report-moments">
-            {report.highlights.map((h, i) => {
-              const base = t.highlights[h.kind] ?? h.kind;
-              const clock = h.clock ? ` (${h.clock})` : "";
-              const dur = h.dur_sec ? ` - ${fmtDur(Math.round(h.dur_sec), { m: t.minUnit, s: t.secUnit })}` : "";
-              return <li key={i}>{`${base}${dur}${clock}`}</li>;
-            })}
-          </ul>
+          <button
+            type="button"
+            className="feed-toggle"
+            aria-expanded={momentsOpen}
+            onClick={() => setMomentsOpen(!momentsOpen)}
+          >
+            <ChevronDown size={14} />
+            {momentsOpen ? t.hideEventLog : t.showEventLog}
+          </button>
+          {momentsOpen ? (
+            <ul className="card report-moments">
+              {report.highlights.map((h, i) => {
+                const base = t.highlights[h.kind] ?? h.kind;
+                const clock = h.clock ? ` (${h.clock})` : "";
+                const dur = h.dur_sec ? ` - ${fmtDur(Math.round(h.dur_sec), { m: t.minUnit, s: t.secUnit })}` : "";
+                const tone = highlightTone(h.kind);
+                return (
+                  <li key={i} className={tone === "" ? undefined : tone}>
+                    {`${base}${dur}${clock}`}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
         </section>
 
         {/* metrics in plain language –” composed from machine keys + numbers */}
@@ -326,54 +369,76 @@ export function ReportsView(props: {
           hint={t.noSessionsHint}
         />
       ) : (
-        <ul className="session-list">
-          {entries.map((e) => {
-            const meta = outcomeMeta[e.outcome] ?? outcomeMeta.partial;
-            return (
-              <li key={e.id} className={`card ${loadingId === e.id ? "is-loading" : ""}`}>
-                {/* accessible row: a dedicated open button plus a delete
-                    button, never nested interactives inside a clickable li */}
-                <button
-                  type="button"
-                  className="sl-open"
-                  aria-label={`${e.date}, ${meta.label}`}
-                  onClick={() => openReport(e.id)}
-                >
-                  <span className={`sl-icon sl-icon-${meta.tone}`}>
-                    {meta.tone === "ok" ? (
-                      <CheckCircle2 size={17} />
-                    ) : meta.tone === "bad" ? (
-                      <AlertTriangle size={17} />
-                    ) : (
-                      <Clock size={17} />
-                    )}
-                  </span>
-                  <span className="sl-main">
-                    <span className="sl-date">{e.date}</span>
-                    <span className="sl-sub">
-                      {fmtDur(e.duration_sec, { m: t.minUnit, s: t.secUnit })} · {e.samples} {t.samples}
+        <>
+          {/* one-glance totals over the saved sessions: how many, and how
+              many had issues (spikes or an issue/laggy outcome — a partial
+              scan is interrupted, not an issue, so it stays out) */}
+          <div className="card totals">
+            <div className="total">
+              <div className="total-num num">{entries.length}</div>
+              <div className="total-label">{t.reportTotalSessions}</div>
+            </div>
+            <div className="total">
+              <div className="total-num num total-warn">
+                {
+                  entries.filter(
+                    (e) =>
+                      e.lag_spikes > 0 || e.outcome === "issues" || e.outcome === "laggy",
+                  ).length
+                }
+              </div>
+              <div className="total-label">{t.reportTotalIssues}</div>
+            </div>
+          </div>
+          <ul className="card session-list">
+            {entries.map((e) => {
+              const meta = outcomeMeta[e.outcome] ?? outcomeMeta.partial;
+              return (
+                <li key={e.id} className={loadingId === e.id ? "is-loading" : ""}>
+                  {/* accessible row: a dedicated open button plus a delete
+                      button, never nested interactives inside a clickable li */}
+                  <button
+                    type="button"
+                    className="sl-open"
+                    aria-label={`${e.date}, ${meta.label}`}
+                    onClick={() => openReport(e.id)}
+                  >
+                    <span className={`sl-icon sl-icon-${meta.tone}`}>
+                      {meta.tone === "ok" ? (
+                        <CheckCircle2 size={17} />
+                      ) : meta.tone === "bad" ? (
+                        <AlertTriangle size={17} />
+                      ) : (
+                        <Clock size={17} />
+                      )}
                     </span>
+                    <span className="sl-main">
+                      <span className="sl-date">{e.date}</span>
+                      <span className="sl-sub">
+                        {fmtDur(e.duration_sec, { m: t.minUnit, s: t.secUnit })} · {e.samples} {t.samples}
+                      </span>
+                    </span>
+                    <span className={`badge sl-badge sl-badge-${meta.tone}`}>
+                      {e.lag_spikes > 0 ? t.spikeCount(e.lag_spikes) : meta.label}
+                    </span>
+                  </button>
+                  <span className="sl-actions">
+                    <Tip text={t.deleteSession}>
+                      <button
+                        type="button"
+                        className="row-act sl-act sl-act-danger"
+                        aria-label={t.deleteSession}
+                        onClick={() => setConfirmDelete(e.id)}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </Tip>
                   </span>
-                  <span className={`badge sl-badge sl-badge-${meta.tone}`}>
-                    {e.lag_spikes > 0 ? t.spikeCount(e.lag_spikes) : meta.label}
-                  </span>
-                </button>
-                <span className="sl-actions">
-                  <Tip text={t.deleteSession}>
-                    <button
-                      type="button"
-                      className="row-act sl-act sl-act-danger"
-                      aria-label={t.deleteSession}
-                      onClick={() => setConfirmDelete(e.id)}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </Tip>
-                </span>
-              </li>
-            );
-          })}
-        </ul>
+                </li>
+              );
+            })}
+          </ul>
+        </>
       )}
 
       {/* one global folder button at the bottom of the sessions list -

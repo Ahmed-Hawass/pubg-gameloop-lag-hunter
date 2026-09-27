@@ -572,6 +572,10 @@ export const en = {
   // ---- reports ----
   sessions: "Sessions",
   sessionsHint: "Every finished scan is saved on your PC with its full report. Click one to read it here.",
+  /** totals card labels (numbers ride their own lines, so no plural
+      forms are ever needed) */
+  reportTotalSessions: "sessions",
+  reportTotalIssues: "had issues",
   noSessions: "No sessions yet",
   noSessionsHint: "Run a scan from the Monitor tab. Finished sessions show up here with their reports.",
   loadingSessions: "Loading sessions...",

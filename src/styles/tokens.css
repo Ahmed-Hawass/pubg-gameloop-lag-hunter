@@ -10,21 +10,31 @@
   /* border */
   --border: #383d38;
   --border-2: #484e48;
-  /* signal */
+  /* signal — monochrome + signal green: the brand fills buttons, pills,
+     and on-switches (dark text on it); dims tint tracks, tiles, rings */
   --primary: #53fc18;
   --primary-dim: rgba(83, 252, 24, 0.1);
   --primary-dim-2: rgba(83, 252, 24, 0.2);
   --on-primary: #06210a;
-  /* status — tones consumed via var(): warn/danger only (ok states reuse
-     the signal --primary, so no --ok token exists by design).
-     dim-2 is the strong fill step (diagnosis cards); dim stays the
-     whisper step (badges, icon tiles, rings). */
-  --warn: #f5c518;
-  --warn-dim: rgba(245, 197, 24, 0.12);
-  --warn-dim-2: rgba(245, 197, 24, 0.24);
-  --danger: #ff5a52;
-  --danger-dim: rgba(255, 90, 82, 0.12);
-  --danger-dim-2: rgba(255, 90, 82, 0.24);
+  /* state quads — pale solid bg + dark ink (identical in both themes, so
+     the pair reads on either): cards, banners, and badges only. Rule:
+     state text rides its bg-* with its text-* ink; text on plain
+     surfaces keeps the vivid signal colors below. */
+  --bg-success: #b9e3b4;
+  --text-success: #0d3f14;
+  --fill-success: #53fc18;
+  --border-success: rgba(83, 252, 24, 0.3);
+  --bg-warning: #f5d6a0;
+  --text-warning: #4d3d0c;
+  --fill-warning: #f5c518;
+  --border-warning: rgba(245, 197, 24, 0.3);
+  --bg-danger: #f0b3a6;
+  --text-danger: #5c1a10;
+  --fill-danger: #ff5a52;
+  --border-danger: rgba(255, 90, 82, 0.3);
+  /* fix-box ink: the white answer box is white in both themes, so its
+     ink stays dark cocoa in both (never a theme text token) */
+  --ink-fix: #4d3d0c;
   /* hover — LIGHT, not green: the accent belongs to states, not to passing hovers */
   --hover-bg: #343a34;
   --hover-text: #edefec;
@@ -70,10 +80,25 @@
   --on-primary: #ffffff;
   --warn: #8a5f00;
   --warn-dim: rgba(138, 95, 0, 0.14);
-  --warn-dim-2: rgba(138, 95, 0, 0.2);
   --danger: #d92d20;
   --danger-dim: rgba(217, 45, 32, 0.12);
-  --danger-dim-2: rgba(217, 45, 32, 0.2);
+  /* state quads — light pairs: pale solid bg + dark ink (the finding
+     card as rendered). Fills stay vivid for dots and bars. */
+  --bg-success: #b9e3b4;
+  --text-success: #0d3f14;
+  --fill-success: #1b8737;
+  --border-success: rgba(27, 135, 55, 0.3);
+  --bg-warning: #f5d6a0;
+  --text-warning: #4d3d0c;
+  --fill-warning: #8a5f00;
+  --border-warning: rgba(138, 95, 0, 0.3);
+  --bg-danger: #f0b3a6;
+  --text-danger: #5c1a10;
+  --fill-danger: #d92d20;
+  --border-danger: rgba(217, 45, 32, 0.3);
+  /* fix-box ink: the white answer box is white in both themes, so its
+     ink stays dark cocoa in both (never a theme text token) */
+  --ink-fix: #4d3d0c;
   --hover-bg: #e4e9e2;
   --hover-text: #141815;
   --hover-border: #b9c2b7;

@@ -4,8 +4,34 @@
 
 import { useEffect, useState, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Check, FileText, Info, X } from "lucide-react";
+import { AlertTriangle, Check, Cpu, Database, FileText, Gauge, Image, Info, Layers, Lightbulb, MemoryStick, Thermometer, X, Zap } from "lucide-react";
 import type { CardSeverity } from "../bridge";
+
+/** one fitting glyph per diagnosis key (verified in the engine's key
+    set): unknown or future keys fall back to the severity triangle,
+    never a blank title. */
+export function diagnosisIcon(key: string): ReactNode {
+  switch (key) {
+    case "disk_wait":
+      return <Database size={18} aria-hidden="true" />;
+    case "cpu_busy":
+      return <Cpu size={18} aria-hidden="true" />;
+    case "cpu_throttle":
+      return <Thermometer size={18} aria-hidden="true" />;
+    case "mem_low":
+      return <MemoryStick size={18} aria-hidden="true" />;
+    case "paging_churn":
+      return <Layers size={18} aria-hidden="true" />;
+    case "gpu_wake":
+      return <Zap size={18} aria-hidden="true" />;
+    case "scene_hitch":
+      return <Image size={18} aria-hidden="true" />;
+    case "gpu_busy":
+      return <Gauge size={18} aria-hidden="true" />;
+    default:
+      return <AlertTriangle size={18} aria-hidden="true" />;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Button — every action in the app
@@ -127,26 +153,32 @@ export function fmtDur(sec: number) {
 }
 
 // ---------------------------------------------------------------------------
-// NoteCard — one diagnosis: title / explanation / fix (sev-aware colors)
+// NoteCard — one diagnosis: title / explanation / fix in a solid
+// highlighter fill (severity icon + card ink; the fix rides a white
+// inset box). Used by the monitor diagnoses and the report findings.
 // ---------------------------------------------------------------------------
 export function NoteCard(props: {
   title: string;
   simple: string;
   fix: string;
-  /** card severity ("high" | "medium" | "low") — drives the note/dot severity classes */
+  /** card severity ("high" | "medium" | "low") — drives the fill + icon */
   severity: CardSeverity;
   /** localized "Fix:" prefix for the fix block (e.g. "الحل:") */
   fixLabel?: string;
+  /** title glyph (the caller maps its diagnosis key; severity triangle
+      when omitted) */
+  icon?: ReactNode;
 }) {
-  const { title, simple, fix, severity, fixLabel } = props;
+  const { title, simple, fix, severity, fixLabel, icon } = props;
   return (
     <div className={`card-sm note note-${severity}`}>
       <div className="note-title">
-        <span className={`note-dot note-dot-${severity}`} />
+        {icon ?? (severity === "low" ? null : <AlertTriangle size={16} aria-hidden="true" />)}
         {title}
       </div>
       <div className="note-body">{simple}</div>
-      <div className="note-fix">
+      <div className="note-fix-box">
+        <Lightbulb size={14} aria-hidden="true" />
         <span className="note-fix-label">{fixLabel ?? "Fix"}</span>
         {fix}
       </div>
