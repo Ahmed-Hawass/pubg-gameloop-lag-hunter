@@ -21,7 +21,8 @@ export function SwitchRow(props: {
   onHint: (title: string, body: string) => void;
   /** visible effect timing under the name (one shared string, only
       where verified: immediate for power/DVR, reopen for GPU/FSO/
-      windowed; rows without a verified timing show no line rather
+      windowed, sign-out-and-in for mouse (registry-only write, no live
+      broadcast); rows without a verified timing show no line rather
       than a guessed one) */
   effect?: string;
   /** the health-card deep-link landed on this row: temporary ring */

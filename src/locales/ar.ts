@@ -350,6 +350,7 @@ export const ar: Locale = {
       card shows when, the (?) shows what and why) */
   tweakEffectNow: "يُطبق فورًا",
   tweakEffectReopen: "أغلق اللعبة وأعد فتحها للتطبيق",
+  tweakEffectSignin: "يسري بعد تسجيل الخروج من ويندوز والدخول مجددًا",
   tweakPowerHint:
     "يضع المعالج على السرعة الكاملة بالتبديل إلى خطة الأداء العالي. لو كانت الخطة مفقودة تُستعاد أولا بأمر ويندوز نفسه ثم تُفعّل. إيقافه يعيد خطتك السابقة، والأجهزة المقفلة على وضع التوازن تخفي هذا الصف.",
   /** summary banner over the gaming rows (same pattern as the health

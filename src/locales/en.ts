@@ -343,6 +343,7 @@ export const en = {
       card shows when, the (?) shows what and why) */
   tweakEffectNow: "Takes effect immediately",
   tweakEffectReopen: "Close and reopen the game to apply",
+  tweakEffectSignin: "Takes effect after signing out of Windows and back in",
   tweakPowerHint:
     "Puts the processor on full speed by switching to the High performance plan. If the plan is missing it is restored first with Windows' own command, then switched on. Turning it off brings back the plan you had; devices locked to Balanced-only mode hide this row instead.",
   /** summary banner over the gaming rows (same pattern as the health

@@ -256,6 +256,7 @@ export function GamingSection(props: {
           on={tweaks.mouseOn}
           func={<Mouse size={15} />}
           name={t.tweakMouseTitle}
+          effect={t.tweakEffectSignin}
           hintTitle={t.tweakMouseTitle}
           hintBody={t.tweakMouseHint}
           onHint={showHint}
