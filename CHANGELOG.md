@@ -26,6 +26,18 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   stays truncated at 12), then two groups, user apps to close before
   playing and system tasks to leave running. Known OS processes show
   translated names, app binaries name themselves, raw names back both.
+- Monitor reads calm-first: an idle guidance panel instead of an empty
+  layout, confirmed diagnoses ahead of the event feed, a live-only
+  collapsible log, square metric tiles, the target readout, and a slim
+  session progress bar.
+- System tab is a spec sheet: enriched rig inventory (CPU speed, cores
+  and threads, RAM type and speed, display bounds plus refresh, machine
+  model, OS release, DirectX level, GPU driver) with honest placeholders
+  for missing values, storage and device sections, and a copy-all sheet
+  reusing the on-screen strings.
+- One generation-gated session guard set serves every entry point (GUI
+  command, CLI, probe): headless scans auto-stop on game close with a
+  saved report instead of sampling the desktop to the deadline.
 - Headless CLI companion (`laghunter-cli.exe` plus a stable
   `laghunter.cmd` alias in every release): `scan [minutes]`, `sessions`,
   `report <id|latest> [--json]`, same engine and same sessions folder as
@@ -42,7 +54,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   of scope (rebuilding them causes the first-load hitches this tool
   diagnoses), as are the registry, RAM boosting, Downloads, and browser
   caches. Refinements: the bin is measured by walking $Recycle.Bin per
-  drive (the Shell probe undercounted folders), the summary edge reads
+  drive (the Shell probe undercounted folders), the summary state reads
   the last scan (green under 500 MB, warn above), zero rows stay visible
   but muted with disabled boxes, a per-category progress bar rides both
   scan and clean, and a numbers-only history feeds the summary
@@ -190,6 +202,20 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   the active download (cancelled), or the running cleanup, on the one
   modal surface with a red Exit button on the standard frame. Cancelling
   is non-destructive and quiet work still closes straight away.
+- Card states read from the full surface, never a side edge: healthy
+  cards stay plain, warnings fill warn, errors fill danger, from one
+  shared primitive (health, Tools rows, page file and sweep summaries,
+  Monitor and report diagnoses follow together). Diagnosis cards use a
+  stronger fill step (new warn-dim-2 and danger-dim-2 tokens, both
+  themes) with the title in the severity color; badges, icon tiles, and
+  rings keep the quiet step.
+- System health opens with a one-glance banner (all good, or how many
+  settings need attention, derived in the UI from the five checks at
+  zero backend cost) above a featured attention section that repeats the
+  warning cards over the full archive. Rows are single-line (glyph, name,
+  state, badge, note button), the open shortcut shows on problem cards
+  only, and healthy states carry the bare value while the badge alone
+  says Good.
 
 ### Fixed
 - The session tick no longer holds the state lock across clock reads and
