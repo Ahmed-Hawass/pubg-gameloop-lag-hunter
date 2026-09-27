@@ -220,31 +220,32 @@ export const ar: Locale = {
 
   // ---- system checks tab ----
   checksHint:
-    "أهم إعدادات جهازك في مكان واحد: ما يساعد لعبك وما يبطئه بصمت. كل بطاقة تشرح نفسها، والمساعدة على بعد ضغطة.",
+    "أهم إعدادات جهازك في مكان واحد: ما يساعد لعبك وما يبطئه بصمت. التفاصيل على بعد ضغطة.",
   checkPower: "خطة الطاقة",
-  checkPowerDesc:
-    "تتحكم في عمل المعالج بكامل سرعته أم لا، فخطط التوفير تخفض سرعته وتسبب تقطيعا أثناء المواجهات.",
   checkPagefile: "ملف الترحيل (Pagefile)",
-  checkPagefileDesc:
-    "ذاكرة احتياطية على القرص تعمل عند امتلاء الذاكرة، فإذا كانت صغيرة أو معطلة يحدث تقطيع عند تحميل الخريطة.",
   checkCharger: "مصدر الطاقة",
-  checkChargerDesc:
-    "تخفض الأجهزة المحمولة أداءها عند العمل على البطارية، فيصبح القياس غير دقيق والنتائج غير موثوقة.",
   checkVt: "المحاكاة الافتراضية للمعالج (VT)",
-  checkVtDesc:
-    "يحتاج GameLoop إلى المحاكاة الافتراضية للعتاد، فإذا كانت معطلة يعمل بمحاكاة برمجية بطيئة وتقطيع مستمر في المعالج.",
-  vtOk: "مفعّلة: جيد",
+  vtOk: "مفعّلة",
   vtWarn: "معطلة: فعّلها من BIOS لتشغيل سلس للمحاكي",
   checkDvr: "التسجيل في الخلفية (DVR)",
-  checkDvrDesc:
-    "التسجيل الخلفي يلتقط لعبك باستمرار، فيسرق كرت الشاشة والقرص أثناء المباراة ويخفض الإطارات في المواجهات.",
-  dvrOk: "مغلق: جيد",
+  dvrOk: "مغلق",
   dvrWarn: "يعمل: أغلق تسجيل ما حدث من إعدادات الألعاب",
   checkOkBadge: "جيد",
   checkWarnBadge: "يحتاج إلى انتباه",
-  powerOk: (name: string) => `${name}: جيد`,
+  /** summary banner: one-glance verdict above the cards, derived in the
+      UI from the five checks (no backend change — counts warn cards).
+      Arabic keeps the count as a trailing numeral (بنود...: N) so no
+      singular/dual/plural forms are ever needed. */
+  healthAllGood: "كل شيء جيد",
+  healthAllGoodSub: "لا يوجد في هذا الجهاز ما يعيق لعبك",
+  healthNeedsTitle: (n: number) => `بنود تحتاج إلى انتباه: ${n}`,
+  healthNeedsSub: "كل شيء آخر جيد",
+  /** header above the full archive list (attention cards repeat above it
+      as the featured summary, so this labels what follows, not a filter) */
+  healthAllSettings: "كل الإعدادات",
+  powerOk: (name: string) => name,
   powerWarn: (name: string) => `${name}: بدّلها إلى الأداء العالي لضمان ثبات الإطارات`,
-  pagefileAuto: "يديره ويندوز تلقائيًا: جيد",
+  pagefileAuto: "يديره ويندوز تلقائيًا",
   pagefileManual: (mb: number) => `${(mb / 1024).toFixed(0)} جيجابايت ثابت. أقل من 8 جيجابايت قد يسبب تقطيعًا`,
   pagefileOff: "معطّل، وهذا سبب شائع لحدوث تقطيع شديد",
   chargerOk: "موصول بالشاحن",

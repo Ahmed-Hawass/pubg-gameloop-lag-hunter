@@ -3,7 +3,7 @@
 // Without the link callback the same buttons fall back to Windows.
 
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { en } from "../locales/en";
@@ -48,10 +48,12 @@ describe("ChecksView deep-link senders", () => {
   it("power, DVR and page file cards route into Tools rows", async () => {
     const user = userEvent.setup();
     const { onOpen } = open();
-    await screen.findByText(en.checkPower);
-    // three in-app jumps, each to its row id (labels repeat, so scope
-    // the clicks: power card first, DVR second, page file last)
-    const buttons = screen.getAllByText(en.openInTools);
+    await screen.findAllByText(en.checkPower);
+    // warnings repeat (featured + archive): scope to the archive, whose
+    // three jumps must keep working no matter what the summary does
+    const archive = screen.getByText(en.healthAllSettings).closest("section");
+    expect(archive).toBeTruthy();
+    const buttons = within(archive as HTMLElement).getAllByText(en.openInTools);
     expect(buttons).toHaveLength(3);
     await user.click(buttons[0]);
     expect(onOpen).toHaveBeenLastCalledWith("powerplan");
@@ -66,8 +68,9 @@ describe("ChecksView deep-link senders", () => {
     const user = userEvent.setup();
     apiMock.systemChecks.mockResolvedValue(checks);
     render(React.createElement(ChecksView, { active: true }));
-    await screen.findByText(en.checkPower);
-    await user.click(screen.getAllByText(en.openSettings)[0]);
+    await screen.findAllByText(en.checkPower);
+    const archive = screen.getByText(en.healthAllSettings).closest("section");
+    await user.click(within(archive as HTMLElement).getAllByText(en.openSettings)[0]);
     expect(apiMock.openWindowsPanel).toHaveBeenCalledWith("power");
   });
 });

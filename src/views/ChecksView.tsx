@@ -2,8 +2,9 @@
 // Gently live: power plan / pagefile / battery state can change while the
 // user is on this tab (unplugging the charger is the classic case).
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
+  AlertTriangle,
   CheckCircle2,
   Cpu,
   Database,
@@ -12,7 +13,6 @@ import {
   RefreshCw,
   ShieldAlert,
   Video,
-  XCircle,
   Zap,
 } from "lucide-react";
 import { Button, Dialog, EmptyState, MODAL_OPEN_EVENT, APP_DIALOG_OPEN_EVENT } from "../components/components";
@@ -172,6 +172,81 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
 
   const chargerBad = checks.laptop && !checks.on_ac;
 
+  /** one data row per health card: the attention section and the full
+      archive render the SAME CheckCard below, so a fix can never drift
+      between summary and list (edit once, both follow). */
+  type CheckItem = {
+    id: string;
+    ok: boolean;
+    funcIcon: ReactNode;
+    name: string;
+    state: string;
+    hint: { title: string; body: string };
+    /** null = read-only card (VT, charger): state text only, no button */
+    onOpen: (() => void) | null;
+  };
+  // power/DVR/page file have an in-app Tools row: stay inside the app
+  // and land on it. Without the link, keep the Windows page.
+  const openInAppOr = (toolId: string, panel: string) => () => {
+    if (onOpenTool) onOpenTool(toolId);
+    else void api.openWindowsPanel(panel);
+  };
+  const items: CheckItem[] = [
+    {
+      id: "power",
+      ok: checks.power_ok,
+      funcIcon: <Zap size={15} />,
+      name: t.checkPower,
+      state: checks.power_ok ? t.powerOk(checks.power_name) : t.powerWarn(checks.power_name),
+      hint: { title: t.checkPower, body: t.checkPowerHint },
+      onOpen: openInAppOr("powerplan", "power"),
+    },
+    {
+      id: "vt",
+      ok: checks.vt_enabled,
+      funcIcon: <Cpu size={15} />,
+      name: t.checkVt,
+      state: checks.vt_enabled ? t.vtOk : t.vtWarn,
+      hint: { title: t.checkVt, body: t.checkVtHint },
+      onOpen: null,
+    },
+    {
+      id: "dvr",
+      ok: !checks.game_dvr_enabled,
+      funcIcon: <Video size={15} />,
+      name: t.checkDvr,
+      state: checks.game_dvr_enabled ? t.dvrWarn : t.dvrOk,
+      hint: { title: t.checkDvr, body: t.tweakDvrHint },
+      onOpen: openInAppOr("dvr", "gaming-captures"),
+    },
+    {
+      id: "pagefile",
+      ok: checks.pagefile_ok,
+      funcIcon: <Database size={15} />,
+      name: t.checkPagefile,
+      state: pagefileText,
+      hint: { title: t.checkPagefile, body: t.checkPagefileHint },
+      onOpen: openInAppOr("pagefile", "system"),
+    },
+    // charger lives on laptops only — hidden on desktops, never a
+    // placeholder row
+    ...(checks.laptop
+      ? [
+          {
+            id: "charger",
+            ok: !chargerBad,
+            funcIcon: <Plug size={15} />,
+            name: t.checkCharger,
+            state: chargerBad ? t.chargerWarn : t.chargerOk,
+            hint: { title: t.checkCharger, body: t.checkChargerHint },
+            onOpen: null,
+          } satisfies CheckItem,
+        ]
+      : []),
+  ];
+  const warnItems = items.filter((item) => !item.ok);
+  const openLabel = onOpenTool ? t.openInTools : t.openSettings;
+
   return (
     <div className="checks">
       <div className="checks-head">
@@ -185,186 +260,39 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
         />
       </div>
 
-      <div className="check-list">
-        {/* power plan */}
-        <div className={`card-sm verdict check-row ${checks.power_ok ? "verdict-ok" : "verdict-warn"}`}>
-          <div className="check-top">
-            <span className="check-icon">
-              {checks.power_ok ? <CheckCircle2 size={17} /> : <XCircle size={17} />}
-            </span>
-            <span className="check-func">
-              <Zap size={15} />
-            </span>
-            <span className="check-name">{t.checkPower}</span>
-            <button
-              type="button"
-              className="switch-hint"
-              aria-label={t.checkPower}
-              onClick={() => setHint({ title: t.checkPower, body: t.checkPowerHint })}
-            >
-              <Info size={13} />
-            </button>
-            <span className={`badge check-badge ${checks.power_ok ? "ok" : "warn"}`}>
-              {checks.power_ok ? t.checkOkBadge : t.checkWarnBadge}
-            </span>
+      {/* one-glance verdict: derived from the five checks above, zero
+          backend cost (counts warn cards, nothing more) */}
+      <div className={`health-banner ${warnItems.length === 0 ? "ok" : "warn"}`}>
+        {warnItems.length === 0 ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
+        <div>
+          <div className="hb-title">
+            {warnItems.length === 0 ? t.healthAllGood : t.healthNeedsTitle(warnItems.length)}
           </div>
-          <p className="check-desc">{t.checkPowerDesc}</p>
-          <div className="check-foot">
-            <span className="check-state">
-              {checks.power_ok ? t.powerOk(checks.power_name) : t.powerWarn(checks.power_name)}
-            </span>
-            <button
-              className="row-act check-open"
-              onClick={() => {
-                // High Performance has an in-app row now: stay inside the
-                // app and land on it. Without the link (tests), keep the
-                // Windows page — the row may still be hidden on S0/Ultimate.
-                if (onOpenTool) onOpenTool("powerplan");
-                else void api.openWindowsPanel("power");
-              }}
-            >
-              {onOpenTool ? t.openInTools : t.openSettings}
-            </button>
-          </div>
+          <div className="hb-sub">{warnItems.length === 0 ? t.healthAllGoodSub : t.healthNeedsSub}</div>
         </div>
-
-        {/* virtualization (VT) — read-only, BIOS change is manual by the user */}
-        <div className={`card-sm verdict check-row ${checks.vt_enabled ? "verdict-ok" : "verdict-warn"}`}>
-          <div className="check-top">
-            <span className="check-icon">
-              {checks.vt_enabled ? <CheckCircle2 size={17} /> : <XCircle size={17} />}
-            </span>
-            <span className="check-func">
-              <Cpu size={15} />
-            </span>
-            <span className="check-name">{t.checkVt}</span>
-            <button
-              type="button"
-              className="switch-hint"
-              aria-label={t.checkVt}
-              onClick={() => setHint({ title: t.checkVt, body: t.checkVtHint })}
-            >
-              <Info size={13} />
-            </button>
-            <span className={`badge check-badge ${checks.vt_enabled ? "ok" : "warn"}`}>
-              {checks.vt_enabled ? t.checkOkBadge : t.checkWarnBadge}
-            </span>
-          </div>
-          <p className="check-desc">{t.checkVtDesc}</p>
-          <div className="check-foot">
-            <span className="check-state">{checks.vt_enabled ? t.vtOk : t.vtWarn}</span>
-          </div>
-        </div>
-
-        {/* background recording (Game DVR) */}
-        <div className={`card-sm verdict check-row ${checks.game_dvr_enabled ? "verdict-warn" : "verdict-ok"}`}>
-          <div className="check-top">
-            <span className="check-icon">
-              {checks.game_dvr_enabled ? <XCircle size={17} /> : <CheckCircle2 size={17} />}
-            </span>
-            <span className="check-func">
-              <Video size={15} />
-            </span>
-            <span className="check-name">{t.checkDvr}</span>
-            <button
-              type="button"
-              className="switch-hint"
-              aria-label={t.checkDvr}
-              onClick={() => setHint({ title: t.checkDvr, body: t.tweakDvrHint })}
-            >
-              <Info size={13} />
-            </button>
-            <span className={`badge check-badge ${checks.game_dvr_enabled ? "warn" : "ok"}`}>
-              {checks.game_dvr_enabled ? t.checkWarnBadge : t.checkOkBadge}
-            </span>
-          </div>
-          <p className="check-desc">{t.checkDvrDesc}</p>
-          <div className="check-foot">
-            <span className="check-state">{checks.game_dvr_enabled ? t.dvrWarn : t.dvrOk}</span>
-            <button
-              className="row-act check-open"
-              onClick={() => {
-                // DVR has an in-app fix (the Tools row): stay inside the
-                // app and land on the row itself. Every other card keeps
-                // its Windows page (no in-app counterpart exists yet).
-                if (onOpenTool) onOpenTool("dvr");
-                else void api.openWindowsPanel("gaming-captures");
-              }}
-            >
-              {onOpenTool ? t.openInTools : t.openSettings}
-            </button>
-          </div>
-        </div>
-
-        {/* pagefile */}
-        <div className={`card-sm verdict check-row ${checks.pagefile_ok ? "verdict-ok" : "verdict-warn"}`}>
-          <div className="check-top">
-            <span className="check-icon">
-              {checks.pagefile_ok ? <CheckCircle2 size={17} /> : <XCircle size={17} />}
-            </span>
-            <span className="check-func">
-              <Database size={15} />
-            </span>
-            <span className="check-name">{t.checkPagefile}</span>
-            <button
-              type="button"
-              className="switch-hint"
-              aria-label={t.checkPagefile}
-              onClick={() => setHint({ title: t.checkPagefile, body: t.checkPagefileHint })}
-            >
-              <Info size={13} />
-            </button>
-            <span className={`badge check-badge ${checks.pagefile_ok ? "ok" : "warn"}`}>
-              {checks.pagefile_ok ? t.checkOkBadge : t.checkWarnBadge}
-            </span>
-          </div>
-          <p className="check-desc">{t.checkPagefileDesc}</p>
-          <div className="check-foot">
-            <span className="check-state">{pagefileText}</span>
-            <button
-              className="row-act check-open"
-              onClick={() => {
-                // the page file has an in-app editor (the Storage
-                // section): stay inside the app and land on it, like DVR
-                if (onOpenTool) onOpenTool("pagefile");
-                else void api.openWindowsPanel("system");
-              }}
-            >
-              {onOpenTool ? t.openInTools : t.openSettings}
-            </button>
-          </div>
-        </div>
-
-        {/* charger (laptops only — hidden on desktops) */}
-        {checks.laptop ? (
-          <div className={`card-sm verdict check-row ${chargerBad ? "verdict-warn" : "verdict-ok"}`}>
-            <div className="check-top">
-              <span className="check-icon">
-                {chargerBad ? <XCircle size={17} /> : <CheckCircle2 size={17} />}
-              </span>
-              <span className="check-func">
-                <Plug size={15} />
-              </span>
-              <span className="check-name">{t.checkCharger}</span>
-            <button
-              type="button"
-              className="switch-hint"
-              aria-label={t.checkCharger}
-              onClick={() => setHint({ title: t.checkCharger, body: t.checkChargerHint })}
-            >
-              <Info size={13} />
-            </button>
-            <span className={`badge check-badge ${chargerBad ? "warn" : "ok"}`}>
-                {chargerBad ? t.checkWarnBadge : t.checkOkBadge}
-              </span>
-            </div>
-            <p className="check-desc">{t.checkChargerDesc}</p>
-            <div className="check-foot">
-              <span className="check-state">{chargerBad ? t.chargerWarn : t.chargerOk}</span>
-            </div>
-          </div>
-        ) : null}
       </div>
+
+      {/* featured warnings: the same cards as the archive below, repeated
+          deliberately (summary + archive, not summary instead of it) */}
+      {warnItems.length > 0 ? (
+        <section>
+          <h3 className="health-section-title">{t.checkWarnBadge}</h3>
+          <div className="check-list">
+            {warnItems.map((item) => (
+              <CheckCard key={item.id} item={item} openLabel={openLabel} onHint={setHint} />
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <section>
+        <h3 className="health-section-title">{t.healthAllSettings}</h3>
+        <div className="check-list">
+          {items.map((item) => (
+            <CheckCard key={item.id} item={item} openLabel={openLabel} onHint={setHint} />
+          ))}
+        </div>
+      </section>
       {/* background note behind a card's (?) button — the one unified
           Dialog, notice only */}
       {hint ? (
@@ -375,6 +303,52 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
           okLabel={t.dialog.ok}
           onClose={() => setHint(null)}
         />
+      ) : null}
+    </div>
+  );
+}
+
+/** one health card: a single compact row (glyph, name, state, badge,
+    background note behind the (?) button). The open shortcut renders
+    on problem cards only — a healthy card has nowhere to send anyone.
+    Featured warnings and archive rows share this card, so the rule can
+    never drift between summary and list. */
+function CheckCard(props: {
+  item: {
+    ok: boolean;
+    funcIcon: ReactNode;
+    name: string;
+    state: string;
+    hint: { title: string; body: string };
+    onOpen: (() => void) | null;
+  };
+  openLabel: string;
+  onHint: (hint: { title: string; body: string }) => void;
+}) {
+  const { item, openLabel, onHint } = props;
+  const { t } = useLang();
+  return (
+    <div className={`card-sm check-row ${item.ok ? "verdict-ok" : "verdict-warn"}`}>
+      <div className="check-top">
+        <span className="check-func">{item.funcIcon}</span>
+        <span className="check-name">{item.name}</span>
+        <span className="check-state">{item.state}</span>
+        <span className={`badge check-badge ${item.ok ? "ok" : "warn"}`}>
+          {item.ok ? t.checkOkBadge : t.checkWarnBadge}
+        </span>
+        <button
+          type="button"
+          className="switch-hint"
+          aria-label={item.name}
+          onClick={() => onHint(item.hint)}
+        >
+          <Info size={13} />
+        </button>
+      </div>
+      {!item.ok && item.onOpen ? (
+        <button className="row-act check-open" onClick={item.onOpen}>
+          {openLabel}
+        </button>
       ) : null}
     </div>
   );

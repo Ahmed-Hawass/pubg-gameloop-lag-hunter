@@ -215,31 +215,30 @@ export const en = {
 
   // ---- system checks tab ----
   checksHint:
-    "Your device's most important settings in one place: what helps your game and what quietly slows it down. Every card explains itself, and help is one click away.",
+    "Your device's most important settings in one place: what helps your game and what quietly slows it down. Details are one click away.",
   checkPower: "Power plan",
-  checkPowerDesc:
-    "Controls whether the processor runs at full speed. Saver plans lower the CPU and cause stutters in fights.",
   checkPagefile: "Pagefile",
-  checkPagefileDesc:
-    "Backup memory on disk when RAM fills up. Too small or disabled causes hitches while the map loads.",
   checkCharger: "Power source",
-  checkChargerDesc:
-    "Laptops slow down on battery. A scan on battery throttles and gives unreliable results.",
   checkVt: "CPU virtualization (VT)",
-  checkVtDesc:
-    "GameLoop needs hardware virtualization. Disabled means slow software emulation and constant CPU stutters.",
-  vtOk: "Enabled: good",
+  vtOk: "Enabled",
   vtWarn: "Disabled: enable it in BIOS for smooth emulation",
   checkDvr: "Background recording (DVR)",
-  checkDvrDesc:
-    "Background recording captures your play continuously. It steals GPU and disk mid-match and drops frames in fights.",
-  dvrOk: "Off: good",
+  dvrOk: "Off",
   dvrWarn: "On: turn off Record what happened in Gaming settings",
   checkOkBadge: "Good",
   checkWarnBadge: "Needs attention",
-  powerOk: (name: string) => `${name}: good`,
+  /** summary banner: one-glance verdict above the cards, derived in the
+      UI from the five checks (no backend change — counts warn cards) */
+  healthAllGood: "All good",
+  healthAllGoodSub: "Nothing on this device is holding your game back",
+  healthNeedsTitle: (n: number) => `${n} setting${n === 1 ? "" : "s"} needs attention`,
+  healthNeedsSub: "Everything else looks good",
+  /** header above the full archive list (attention cards repeat above it
+      as the featured summary, so this labels what follows, not a filter) */
+  healthAllSettings: "All settings",
+  powerOk: (name: string) => name,
   powerWarn: (name: string) => `${name}: switch to High performance for stable FPS`,
-  pagefileAuto: "Managed by Windows: good",
+  pagefileAuto: "Managed by Windows",
   pagefileManual: (mb: number) => `${(mb / 1024).toFixed(0)} GB fixed. Below 8 GB can cause stutters`,
   pagefileOff: "Disabled, a classic cause of heavy lag",
   chargerOk: "Plugged in",

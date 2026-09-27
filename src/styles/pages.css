@@ -355,21 +355,14 @@
   gap: 8px;
 }
 /* System health stays a single readable column at every width. The shared
-  fullscreen rail gives it breathing room without splitting related cards. */
+  fullscreen rail gives it breathing room without splitting related cards.
+  Rows are single-line (glyph, name, state, badge, note button); the open
+  shortcut drops to a second line on problem cards only. */
 .check-row {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 13px 16px;
-}
-.check-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
+  gap: 10px;
+  padding: 11px 16px;
 }
 .check-top {
   display: flex;
@@ -381,8 +374,19 @@
   flex: none;
   color: var(--text-3);
 }
+.check-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.check-top .check-state {
+  flex: none;
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.45;
+}
 .check-badge {
-  margin-inline-start: auto;
   font-size: 11px;
   padding: 4px 10px;
 }
@@ -394,36 +398,10 @@
   background: var(--warn-dim);
   color: var(--warn);
 }
-.check-desc {
-  font-size: 12px;
-  color: var(--text-2);
-  line-height: 1.55;
-}
-.check-foot {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.check-foot .check-state {
-  flex: 1;
-  min-width: 0;
-}
-.check-row.verdict-ok .check-icon {
-  background: var(--primary-dim);
-  color: var(--primary);
-}
-.check-row.verdict-warn .check-icon {
-  background: var(--warn-dim);
-  color: var(--warn);
-}
-.check-name {
-  font-size: 12.5px;
-  font-weight: 700;
-}
-.check-state {
-  font-size: 12px;
-  color: var(--text-2);
-  line-height: 1.45;
+/* problem-only shortcut: start-aligned on its own line, never beside
+   healthy rows (they own no destination) */
+.check-row .check-open {
+  align-self: flex-start;
 }
 /* health-card action: .row-act carries the ghost materials and hover,
    only the labeled-button sizing and type stay here */
@@ -435,6 +413,46 @@
   font-size: 11.5px;
   font-weight: 600;
   padding: 7px 12px;
+}
+/* summary banner: one-glance verdict above the cards. Tones are the
+   shared state fills (primary/warn dims, same as every card); no side
+   edge, the fill is the signal. */
+.health-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  padding: 14px 16px;
+}
+.health-banner.ok {
+  background: var(--primary-dim);
+  color: var(--primary);
+}
+.health-banner.warn {
+  background: var(--warn-dim);
+  color: var(--warn);
+}
+.health-banner .hb-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-1);
+}
+.health-banner .hb-sub {
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.5;
+}
+/* section labels inside the health tab (attention summary + archive) */
+.health-section-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-2);
+  margin: 0 0 8px;
+}
+.checks section {
+  display: flex;
+  flex-direction: column;
 }
 
 /* ---- tools tab: area landing grid + read-only section details ---- */
@@ -629,8 +647,8 @@
 /* the section's face: the same row as every other Tools row (tile +
    texts + badge + control, identical metrics), only the control is a
    chevron into the editor instead of a switch. The state fill carries
-   the same language as the rows (automatic = the recommended state). Flex follows reading direction, no physical
-   properties anywhere */
+   the same language as the rows (automatic = the recommended state).
+   Flex follows reading direction, no physical properties anywhere */
 .pf-summary {
   display: flex;
   align-items: center;
