@@ -280,7 +280,7 @@
 }
 
 /* the monitor is a dashboard, not reading: it spans the full content
-   width like the concept (no centered measure), so square tiles fill
+   width (no centered measure), so square tiles fill
    the row edge to edge at every window size */
 .content > div > .monitor {
   max-width: none;

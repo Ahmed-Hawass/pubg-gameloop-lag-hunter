@@ -1,4 +1,4 @@
-/* design tokens — monochrome + signal green, from the concept direction */
+/* design tokens — monochrome + signal green */
 :root {
   color-scheme: dark;
   /* surfaces — ONE plane: the shell is a single surface split by borders.
@@ -16,11 +16,15 @@
   --primary-dim-2: rgba(83, 252, 24, 0.2);
   --on-primary: #06210a;
   /* status — tones consumed via var(): warn/danger only (ok states reuse
-     the signal --primary, so no --ok token exists by design) */
+     the signal --primary, so no --ok token exists by design).
+     dim-2 is the strong fill step (diagnosis cards); dim stays the
+     whisper step (badges, icon tiles, rings). */
   --warn: #f5c518;
   --warn-dim: rgba(245, 197, 24, 0.12);
+  --warn-dim-2: rgba(245, 197, 24, 0.24);
   --danger: #ff5a52;
   --danger-dim: rgba(255, 90, 82, 0.12);
+  --danger-dim-2: rgba(255, 90, 82, 0.24);
   /* hover — LIGHT, not green: the accent belongs to states, not to passing hovers */
   --hover-bg: #343a34;
   --hover-text: #edefec;
@@ -66,8 +70,10 @@
   --on-primary: #ffffff;
   --warn: #8a5f00;
   --warn-dim: rgba(138, 95, 0, 0.14);
+  --warn-dim-2: rgba(138, 95, 0, 0.2);
   --danger: #d92d20;
   --danger-dim: rgba(217, 45, 32, 0.12);
+  --danger-dim-2: rgba(217, 45, 32, 0.2);
   --hover-bg: #e4e9e2;
   --hover-text: #141815;
   --hover-border: #b9c2b7;

@@ -34,7 +34,7 @@ export function SwitchRow(props: {
   return (
     <div
       data-tweak={tweakId}
-      className={`card-sm verdict switch-row ${on ? "verdict-ok" : "verdict-warn"}${disabled ? " is-disabled" : ""}${linked ? " is-linked" : ""}`}
+      className={`card-sm switch-row ${on ? "verdict-ok" : "verdict-warn"}${disabled ? " is-disabled" : ""}${linked ? " is-linked" : ""}`}
     >
       <span className="icon-tile check-func">{func}</span>
       <div className="switch-body">

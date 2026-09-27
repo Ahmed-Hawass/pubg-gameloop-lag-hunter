@@ -140,7 +140,7 @@ export function NoteCard(props: {
 }) {
   const { title, simple, fix, severity, fixLabel } = props;
   return (
-    <div className={`card-sm verdict note note-${severity}`}>
+    <div className={`card-sm note note-${severity}`}>
       <div className="note-title">
         <span className={`note-dot note-dot-${severity}`} />
         {title}

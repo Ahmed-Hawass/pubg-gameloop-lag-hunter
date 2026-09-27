@@ -194,9 +194,9 @@ export function SweepSection(props: {
       : { num: (clFreedBytes / 1048576).toFixed(1), unit: "MB" };
   const clFreedMb = Math.round((clFreedBytes / 1048576) * 10) / 10;
   /** what counts as "worth cleaning": documented in one place, so the
-      edge verdict below never drifts from the copy */
+      state fill below never drifts from the copy */
   const CLEAN_WORTHY_BYTES = 500 * 1048576;
-  /** summary edge from the LAST SCAN (current truth, like every other
+  /** summary state from the LAST SCAN (current truth, like every other
       card), never from history: green = nothing worth cleaning, warn =
       measurable junk above the floor, neutral = unscanned or unreadable.
       Both groups count once scanned. */
@@ -294,7 +294,7 @@ export function SweepSection(props: {
           ones. No auto-delete, no estimates: sizes are measured, the
           freed number is before-minus-after, locked files are skipped.
           Collapses under its summary row like the page file editor. */}
-      <div className={`card-sm verdict pf-summary ${clEdge}`} data-tweak="cleanup">
+      <div className={`card-sm pf-summary ${clEdge}`} data-tweak="cleanup">
         {/* same row language as the page file summary above: the (?)
             sits inside the name line, like every SwitchRow */}
         <span className="icon-tile check-func">

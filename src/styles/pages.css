@@ -628,9 +628,8 @@
 }
 /* the section's face: the same row as every other Tools row (tile +
    texts + badge + control, identical metrics), only the control is a
-   chevron into the editor instead of a switch. The inline-start edge
-   carries the same verdict language as the rows (automatic = the
-   recommended state). Flex follows reading direction, no physical
+   chevron into the editor instead of a switch. The state fill carries
+   the same language as the rows (automatic = the recommended state). Flex follows reading direction, no physical
    properties anywhere */
 .pf-summary {
   display: flex;
@@ -785,7 +784,7 @@
 /* Tools back button uses the shared .back-btn primitive (see components.css) */
 
 /* ---- switch rows (Tools details): icon + title + desc + badge + switch.
-    Same verdict language as health cards (accent edge + badge, driven by
+    Same state language as health cards (fill + badge, driven by
     the optimistic switch state). Knob travels via flex alignment so it
     follows reading direction with no physical properties. */
 .switch-row {

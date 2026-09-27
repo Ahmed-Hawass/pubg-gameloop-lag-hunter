@@ -71,20 +71,18 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
 }
-/* verdict edge: the inline-start accent shared by health cards, Tools
-   rows and the pagefile summary. Tones below; components keep no accent
-   of their own. */
-.verdict {
-  border-inline-start: 3px solid var(--border);
-}
+/* state fill: a card carrying a state fills its whole surface with the
+   tone (healthy cards stay plain surface, warnings fill warn, errors
+   fill danger). No side edge anywhere: the surface itself speaks, so one
+   edit here re-skins every section at once. */
 .verdict-ok {
-  border-inline-start-color: var(--primary);
+  background: var(--elev-1);
 }
 .verdict-warn {
-  border-inline-start-color: var(--warn);
+  background: var(--warn-dim);
 }
 .verdict-bad {
-  border-inline-start-color: var(--danger);
+  background: var(--danger-dim);
 }
 /* pill: layout only (font size/padding stay per component, tones stay
    per component); every badge in the app shares this shape */
@@ -165,7 +163,7 @@
   justify-content: center;
   gap: 4px;
   text-align: center;
-  /* square tiles like the concept (the window never drops below 960px,
+  /* square tiles (the window never drops below 960px,
      so four squares always fit); content stays centered either way */
   aspect-ratio: 1 / 1;
 }
@@ -280,9 +278,8 @@
   box-shadow: 0 0 0 4px var(--danger-dim);
 }
 
-/* NoteCard */
-/* NoteCard — surface and verdict edge come from .card-sm + .verdict,
-   tones (note-high/medium/low) carry only the accent color */
+/* NoteCard — surface comes from .card-sm, state fill from the
+   note-high/medium/low tones below (never a side edge) */
 .note {
   border-radius: var(--radius-sm);
   padding: 14px 16px;
@@ -291,13 +288,16 @@
   gap: 8px;
 }
 .note-high {
-  border-inline-start-color: var(--danger);
+  background: var(--danger-dim-2);
 }
 .note-medium {
-  border-inline-start-color: var(--warn);
+  background: var(--warn-dim-2);
 }
-.note-low {
-  border-inline-start-color: var(--text-3);
+.note-high .note-title {
+  color: var(--danger);
+}
+.note-medium .note-title {
+  color: var(--warn);
 }
 .note-title {
   font-weight: 700;

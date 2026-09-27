@@ -195,7 +195,7 @@ export function PagefileEditor(props: {
     return `${free} · ${state}`;
   };
 
-  /** the edge verdict: green means SAFE paging, not automatic (automatic
+  /** the state fill: green means SAFE paging, not automatic (automatic
       always qualifies; otherwise a single viable file suffices — a
       healthy drive beside an off one is the normal single-file setup,
       not a warning. Small, off, and unreadable everywhere stays warn). */
@@ -288,7 +288,7 @@ export function PagefileEditor(props: {
       {pfSettings ? (
         <div
           data-tweak="pagefile"
-          className={`card-sm verdict pf-summary${pfHealthy ? " verdict-ok" : " verdict-warn"}${linkedId === "pagefile" ? " is-linked" : ""}`}
+          className={`card-sm pf-summary${pfHealthy ? " verdict-ok" : " verdict-warn"}${linkedId === "pagefile" ? " is-linked" : ""}`}
         >
           {/* same row language as every SwitchRow (tile, texts with
               the (?) inside the name line, badge, chevron): the title
