@@ -7,7 +7,7 @@
 // (manual checks ignore the once-per-version announcement on purpose).
 
 import { useEffect, useState } from "react";
-import { Coffee, Code2, Download, Heart, Leaf } from "lucide-react";
+import { Coffee, Code2, Cpu, Download, HardDrive, Heart, Leaf, MemoryStick, Square, ToggleRight } from "lucide-react";
 import { Button } from "../components/components";
 import { api, type UpdateInfo } from "../bridge";
 import { useLang } from "../i18n";
@@ -15,6 +15,10 @@ import appIcon from "../assets/app-icon.png";
 
 const REPO_URL = "https://github.com/Ahmed-Hawass/pubg-gameloop-lag-hunter";
 const SUPPORT_URL = "https://paypal.me/ahmedhawass";
+
+/** cost-row glyphs in locale-array order (texts stay the locale array:
+    zero locale churn, icons live with the layout) */
+const IMPACT_ICONS = [Cpu, MemoryStick, HardDrive, Square, ToggleRight];
 
 export function AboutView(props: {
   /** the startup check's result — dot + "download" affordance when set */
@@ -79,16 +83,23 @@ export function AboutView(props: {
         <p className="about-what">{t.aboutWhat}</p>
       </div>
 
-      {/* block 2: cost — the five honest numbers */}
+      {/* block 2: cost — the five honest numbers as icon rows on an
+          inset divider list (same language as the sweep results) */}
       <div className="card about-card">
         <h3 className="about-h">
           <Leaf size={13} />
           {t.aboutImpact}
         </h3>
-        <ul className="about-impact">
-          {t.aboutImpactItems.map((item, i) => (
-            <li key={i}>{item}</li>
-          ))}
+        <ul className="inset-list">
+          {t.aboutImpactItems.map((item, i) => {
+            const Icon = IMPACT_ICONS[i] ?? Leaf;
+            return (
+              <li key={i} className="inset-row">
+                <Icon size={15} aria-hidden="true" />
+                <span>{item}</span>
+              </li>
+            );
+          })}
         </ul>
       </div>
 
@@ -111,16 +122,21 @@ export function AboutView(props: {
             label={checking ? t.checkingUpdate : t.aboutCheckUpdate}
             icon={<Download size={14} />}
             variant="ghost"
+            className="about-update-btn"
             disabled={checking}
             onClick={() => void check()}
           />
-          {result === "latest" ? <span className="about-result ok">{t.aboutUpToDate}</span> : null}
-          {updateInfo ? (
-            <button className="about-result update" onClick={onOpenUpdateModal}>
-              {t.aboutNewVersion} (v{updateInfo.version})
-            </button>
+          {result === "latest" || updateInfo || result === "err" ? (
+            <div className="about-update-result">
+              {result === "latest" ? <span className="about-result ok">{t.aboutUpToDate}</span> : null}
+              {updateInfo ? (
+                <button className="about-result update" onClick={onOpenUpdateModal}>
+                  {t.aboutNewVersion} (v{updateInfo.version})
+                </button>
+              ) : null}
+              {result === "err" ? <span className="about-result err">{t.aboutUpdateErr}</span> : null}
+            </div>
           ) : null}
-          {result === "err" ? <span className="about-result err">{t.aboutUpdateErr}</span> : null}
         </div>
       </div>
 

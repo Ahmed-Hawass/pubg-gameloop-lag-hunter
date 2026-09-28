@@ -162,15 +162,6 @@ export const en = {
   copySpecs: "Copy all specs",
   copiedSpecs: "Copied",
   copySpecsFailed: "Could not copy. Select the text manually.",
-  whatWeSee: "What this tool can see",
-  whatWeSeeHint:
-    "The counters the engine actually reads. Anything missing appears as \"--\" instead of wrong numbers.",
-  seeCpu: "CPU / RAM / Disk counters",
-  seeGpu: "GPU counters (NVIDIA)",
-  seeGame: "PUBG Mobile detection (GameLoop)",
-  gpuCountersOff: "Not available on this device. GPU shows \"--\" during scans.",
-  seePs: "System fine-tuning (PowerShell)",
-  seePsOff: "Unavailable. Scans still work, but device tuning and clock correction are skipped.",
   psLimitedTitle: "Running in limited mode",
   psLimitedBody:
     "PowerShell is unavailable, so some checks run on safe defaults: device tuning is skipped, clock times may read in UTC, and GPU pause/resume detection is muted. Scans still work; the core counters are native Windows.",

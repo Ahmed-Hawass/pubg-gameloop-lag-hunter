@@ -178,37 +178,6 @@
   display: flex;
   align-self: flex-start;
 }
-.sys-see {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 12px 16px;
-}
-.sys-see li {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 12.5px;
-  color: var(--text-2);
-  padding: 7px 0;
-}
-.sys-see li.off {
-  color: var(--warn);
-}
-.see-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex: none;
-}
-.see-dot.ok {
-  background: var(--fill-success);
-  box-shadow: 0 0 6px var(--primary-dim-2);
-}
-.see-dot.off {
-  background: var(--fill-warning);
-}
 
 /* ---- top processes tab ---- */
 .procs {
@@ -530,23 +499,10 @@
   gap: 4px;
   padding: 14px 16px;
 }
-/* category results on an inset surface with dividers (not bare rows
-   on the card): the list reads as one measured answer */
-.cleanup-list {
-  background: var(--elev-3);
-  border-radius: 10px;
-  overflow: hidden;
-}
+/* category extras on the shared inset rows: the whole row toggles
+   (hence the pointer), zero rows mute with disabled boxes */
 .cleanup-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  border-block-end: 1px solid var(--border);
   cursor: pointer;
-}
-.cleanup-row:last-child {
-  border-block-end: none;
 }
 .cleanup-row input[type="checkbox"] {
   flex: none;
@@ -1019,34 +975,22 @@
      relative lets .about-dot anchor to it */
   position: relative;
 }
-.about-impact {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-.about-impact li {
-  font-size: 12.5px;
-  color: var(--text-2);
-  line-height: 1.5;
-  padding-inline-start: 14px;
-  position: relative;
-}
-.about-impact li::before {
-  content: "";
-  position: absolute;
-  inset-inline-start: 0;
-  top: 7px;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--primary);
-}
-
 .about-update {
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+/* full-width check button with centered label (same lesson as the
+   page file Apply: the shared .btn never centers itself) */
+.about-update-btn {
+  width: 100%;
+  justify-content: center;
+}
+.about-update-result {
+  display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 /* the dot beside the Updates heading — mirrors the sidebar's About dot:
@@ -1124,6 +1068,14 @@
   gap: 18px;
   width: 100%;
 }
+/* one card for every personal preference: the groups stack inside
+   with breathing room, like sections inside every other card */
+.settings-card {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px;
+}
 .settings-group {
   display: flex;
   flex-direction: column;
@@ -1166,6 +1118,10 @@
   color: var(--text-3);
   font: inherit;
   font-size: 12.5px;
+  /* fixed line box: Arabic glyphs run taller than Latin, so without
+     this a row holding "العربية" stands taller than an all-Latin row
+     and the two segmented rows mismatch */
+  line-height: 20px;
   font-weight: 600;
   padding: 9px 18px;
   border-radius: 6px;

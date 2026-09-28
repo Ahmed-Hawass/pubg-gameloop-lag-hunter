@@ -225,6 +225,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   labeled mode segment and a full-width Apply, and the sweep results sit
   on an inset list with a Selected-plus-actions footer. No backend
   change; validate, confirm, reboot, progress, history, and errors stay.
+- Settings share one card and both segmented rows keep identical pills
+  (fixed line box, so Arabic glyphs never stand taller than Latin ones).
+  About cost reads as icon rows on the shared inset divider list, the
+  update check is full-width with its results below, and the rarely-read
+  visibility section is gone (constants and point-of-impact duplicates).
 - Reports follow the same language: totals over the sessions list
   (issue rows count spikes or an issue/laggy outcome, partial stays
   out), one shared divider-list surface keeping the delete action, key

@@ -31,46 +31,50 @@ export function SettingsView(props: {
 
   return (
     <div className="settings-page">
-      <section className="settings-group">
-        <h3 className="settings-group-title">
-          <Languages size={13} />
-          {t.language}
-        </h3>
-        <div className="lang-segment" role="radiogroup" aria-label={t.language}>
-          {options.map((o) => (
-            <button
-              key={o.key}
-              className={`lang-seg ${setting === o.key ? "is-active" : ""}`}
-              // radio semantics for screen readers: without role/checked
-              // the group announces no selectable state at all
-              role="radio"
-              aria-checked={setting === o.key}
-              onClick={() => setLanguage(o.key)}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
-      </section>
-      <section className="settings-group">
-        <h3 className="settings-group-title">
-          <SunMoon size={13} />
-          {t.theme}
-        </h3>
-        <div className="lang-segment" role="radiogroup" aria-label={t.theme}>
-          {themeOptions.map((o) => (
-            <button
-              key={o.key}
-              className={`lang-seg ${theme === o.key ? "is-active" : ""}`}
-              role="radio"
-              aria-checked={theme === o.key}
-              onClick={() => onThemeChange(o.key)}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
-      </section>
+      {/* one card for every personal preference (today language and
+          theme, tomorrow's settings land in here too) */}
+      <div className="card settings-card">
+        <section className="settings-group">
+          <h3 className="settings-group-title">
+            <Languages size={13} />
+            {t.language}
+          </h3>
+          <div className="lang-segment" role="radiogroup" aria-label={t.language}>
+            {options.map((o) => (
+              <button
+                key={o.key}
+                className={`lang-seg ${setting === o.key ? "is-active" : ""}`}
+                // radio semantics for screen readers: without role/checked
+                // the group announces no selectable state at all
+                role="radio"
+                aria-checked={setting === o.key}
+                onClick={() => setLanguage(o.key)}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </section>
+        <section className="settings-group">
+          <h3 className="settings-group-title">
+            <SunMoon size={13} />
+            {t.theme}
+          </h3>
+          <div className="lang-segment" role="radiogroup" aria-label={t.theme}>
+            {themeOptions.map((o) => (
+              <button
+                key={o.key}
+                className={`lang-seg ${theme === o.key ? "is-active" : ""}`}
+                role="radio"
+                aria-checked={theme === o.key}
+                onClick={() => onThemeChange(o.key)}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

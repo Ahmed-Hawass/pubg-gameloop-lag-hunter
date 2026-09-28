@@ -222,7 +222,7 @@ export function SweepSection(props: {
       // an honest freed number)
       const empty = (c.bytes ?? 0) <= 0;
       return (
-        <div key={c.id} className={`cleanup-row${empty ? " is-empty" : ""}`}>
+        <div key={c.id} className={`inset-row cleanup-row${empty ? " is-empty" : ""}`}>
           <input
             type="checkbox"
             aria-label={clName(c.id)}
@@ -382,7 +382,7 @@ export function SweepSection(props: {
               surface with dividers. Selection stays
               shared, so Clean always acts on every ticked row. */}
           {clModeScan ? (
-            <div className="cleanup-list">{renderClRows(clModeScan.categories)}</div>
+            <div className="inset-list">{renderClRows(clModeScan.categories)}</div>
           ) : null}
           {/* all-unreadable is a read failure, not a clean drive:
               "--" everywhere must never read as "nothing to clean".

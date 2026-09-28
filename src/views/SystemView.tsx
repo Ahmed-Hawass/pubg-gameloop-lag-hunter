@@ -13,7 +13,7 @@ import {
   Monitor,
   RefreshCw,
 } from "lucide-react";
-import { Button, Dialog, EmptyState, Hint } from "../components/components";
+import { Button, Dialog, EmptyState } from "../components/components";
 import { api, type SystemInfo } from "../bridge";
 import { errorDialog } from "../errors";
 import { useLang } from "../i18n";
@@ -252,32 +252,6 @@ export function SystemView() {
           onClick={() => void copyAll()}
         />
       </div>
-
-      {/* what we can see */}
-      <section className="sys-section">
-        <h3 className="sys-title">
-          {t.whatWeSee}
-          <Hint text={t.whatWeSeeHint} />
-        </h3>
-        <ul className="card sys-see">
-          <li className="ok">
-            <span className="see-dot ok" />
-            {t.seeCpu}
-          </li>
-          <li className={info.gpu_counters ? "ok" : "off"}>
-            <span className={`see-dot ${info.gpu_counters ? "ok" : "off"}`} />
-            {info.gpu_counters ? t.seeGpu : t.gpuCountersOff}
-          </li>
-          <li className={info.powershell_available ? "ok" : "off"}>
-            <span className={`see-dot ${info.powershell_available ? "ok" : "off"}`} />
-            {info.powershell_available ? t.seePs : t.seePsOff}
-          </li>
-          <li className="ok">
-            <span className="see-dot ok" />
-            {t.seeGame}
-          </li>
-        </ul>
-      </section>
 
       {copyFailed ? (
         <Dialog
