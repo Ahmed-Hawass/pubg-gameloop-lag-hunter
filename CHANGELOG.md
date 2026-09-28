@@ -230,6 +230,9 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   About cost reads as icon rows on the shared inset divider list, the
   update check is full-width with its results below, and the rarely-read
   visibility section is gone (constants and point-of-impact duplicates).
+- Welcome is three slides (finds, three-step loop with a rotating real
+  sample finding, cost with disk and privacy tiles), with Skip, Back,
+  dots, and a reduced-motion freeze on the rotation.
 - Reports follow the same language: totals over the sessions list
   (issue rows count spikes or an issue/laggy outcome, partial stays
   out), one shared divider-list surface keeping the delete action, key

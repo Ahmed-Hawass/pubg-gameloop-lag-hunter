@@ -125,15 +125,42 @@ export const en = {
   minUnit: "m",
   secUnit: "s",
 
-  // ---- first-run welcome (two pages, once ever) ----
+  // ---- first-run welcome (three slides, once ever) ----
   welcomeTitle: "PUBG GameLoop Lag Hunter",
   welcomeWhat:
     "Analyze your PUBG Mobile performance on GameLoop, detect stutters, and uncover exactly what's causing them.",
+  /** slide 1: what it finds (titles reuse the short card names) */
+  welcomeFindsLabel: "What it finds",
   welcomeCardDisk: "Disk paging storms",
+  welcomeFindDiskDesc: "The game freezes while loading files",
   welcomeCardCpu: "CPU saturation & throttling",
+  welcomeFindCpuDesc: "Your processor can't keep up in big fights",
   welcomeCardGpu: "GPU power-state hitches",
-  welcomeNext: "One more thing",
+  welcomeFindGpuDesc: "Your graphics card slows down mid-match",
+  welcomeNextBtn: "Next",
+  /** slide 2: the three-step loop, then a real sample finding */
+  welcomeStepsTitle: "Three steps to the answer",
+  welcomeStepsSub: "No settings to learn, no numbers to decode",
+  welcomeStep1Title: "Press Start",
+  welcomeStep1Desc: "Pick 5 to 60 minutes",
+  welcomeStep2Title: "Play normally",
+  welcomeStep2Desc: "We measure every second",
+  welcomeStep3Title: "Get the cause",
+  welcomeStep3Desc: "With its fix included",
+  welcomeSampleLabel: "What you will see",
+  welcomeBack: "Back",
+  welcomeSkip: "Skip",
+  /** slide 3: what it costs (values stay Latin in both languages) */
   welcomeTrustTitle: "It costs you almost nothing",
+  welcomeTrustSub: "Built to measure without getting in the way of your game",
+  welcomeCostCpuVal: "<1%",
+  welcomeCostCpuLabel: "CPU while scanning",
+  welcomeCostRamVal: "25 MB",
+  welcomeCostRamLabel: "of RAM",
+  welcomeCostDiskVal: "~200 KB",
+  welcomeCostDiskLabel: "per minute on disk",
+  welcomeCostPrivacyVal: "Local",
+  welcomeCostPrivacyLabel: "reports never leave your PC",
   welcomeBegin: "Let's start",
 
   // ---- system tab ----

@@ -132,14 +132,41 @@ export const ar: Locale = {
   minUnit: "m",
   secUnit: "s",
 
-  // ---- first-run welcome (two pages, once ever) ----
+  // ---- first-run welcome (three slides, once ever) ----
   welcomeTitle: "PUBG GameLoop Lag Hunter",
   welcomeWhat: "يحلّل هذا التطبيق أداء PUBG Mobile على GameLoop، ويرصد التقطيعات، ويكشف سببها الحقيقي بدقة.",
+  /** slide 1: what it finds (titles reuse the short card names) */
+  welcomeFindsLabel: "ماذا يكتشف",
   welcomeCardDisk: "ازدحام في تحميل القرص",
+  welcomeFindDiskDesc: "تتجمد اللعبة أثناء تحميل الملفات",
   welcomeCardCpu: "إشباع المعالج وخفض تردده",
+  welcomeFindCpuDesc: "معالجك لا يلحق في المواجهات الكبيرة",
   welcomeCardGpu: "تقطيعات ناتجة عن وضع توفير الطاقة في كرت الشاشة",
-  welcomeNext: "بقيت خطوة واحدة",
+  welcomeFindGpuDesc: "كرت الشاشة يبطئ أثناء المباراة",
+  welcomeNextBtn: "التالي",
+  /** slide 2: the three-step loop, then a real sample finding */
+  welcomeStepsTitle: "ثلاث خطوات للإجابة",
+  welcomeStepsSub: "بلا إعدادات تتعلمها ولا أرقام تفك شيفرتها",
+  welcomeStep1Title: "اضغط ابدأ",
+  welcomeStep1Desc: "اختر من 5 إلى 60 دقيقة",
+  welcomeStep2Title: "العب بشكل طبيعي",
+  welcomeStep2Desc: "نقيس كل ثانية",
+  welcomeStep3Title: "اعرف السبب",
+  welcomeStep3Desc: "مع حلّه مرفقًا",
+  welcomeSampleLabel: "ما ستراه",
+  welcomeBack: "رجوع",
+  welcomeSkip: "تخطي",
+  /** slide 3: what it costs (values stay Latin in both languages) */
   welcomeTrustTitle: "استهلاكه من جهازك بسيط جدًا",
+  welcomeTrustSub: "مصمم للقياس دون إعاقة لعبك",
+  welcomeCostCpuVal: "<1%",
+  welcomeCostCpuLabel: "المعالج أثناء الفحص",
+  welcomeCostRamVal: "25 MB",
+  welcomeCostRamLabel: "من الذاكرة",
+  welcomeCostDiskVal: "~200 KB",
+  welcomeCostDiskLabel: "في الدقيقة على القرص",
+  welcomeCostPrivacyVal: "محلي",
+  welcomeCostPrivacyLabel: "التقارير لا تغادر جهازك",
   welcomeBegin: "لنبدأ",
 
   // ---- system tab ----
