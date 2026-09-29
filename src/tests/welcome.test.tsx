@@ -1,6 +1,6 @@
-// tests/welcome.test.tsx — the three-slide onboarding contract: dots
+// tests/welcome.test.tsx — the two-slide onboarding contract: dots
 // track the slide, Back returns, Skip finishes like Begin, and the
-// middle slide shows a real translated finding (never mock copy).
+// sample is a real translated finding (never mock copy).
 
 import { describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
@@ -20,20 +20,17 @@ function open(onDone?: () => void) {
 }
 
 describe("WelcomeView slides", () => {
-  it("walks identity, steps, cost with Back returning", async () => {
+  it("walks finds to how-it-works with Back returning", async () => {
     const user = userEvent.setup();
     open();
     await screen.findByText(en.welcomeFindsLabel);
     await user.click(screen.getByText(en.welcomeNextBtn));
-    await screen.findByText(en.welcomeStepsTitle);
+    await screen.findByText(en.welcomeHowTitle);
     // the sample is the real translated finding, not mock copy
     expect(screen.getByText(en.diagnoses.disk_wait.title)).toBeTruthy();
+    expect(screen.getByText(en.welcomeCostPrivacyLabel)).toBeTruthy();
     await user.click(screen.getByText(en.welcomeBack));
     await screen.findByText(en.welcomeFindsLabel);
-    await user.click(screen.getByText(en.welcomeNextBtn));
-    await user.click(screen.getByText(en.welcomeNextBtn));
-    await screen.findByText(en.welcomeTrustTitle);
-    expect(screen.getByText(en.welcomeCostPrivacyLabel)).toBeTruthy();
   });
 
   it("Skip finishes onboarding exactly like Begin", async () => {
@@ -49,8 +46,7 @@ describe("WelcomeView slides", () => {
     open();
     await screen.findByText(en.welcomeFindsLabel);
     await user.click(screen.getByText(en.welcomeNextBtn));
-    await user.click(screen.getByText(en.welcomeNextBtn));
-    await screen.findByText(en.welcomeTrustTitle);
+    await screen.findByText(en.welcomeHowTitle);
     expect(screen.queryByText(en.welcomeSkip)).toBeNull();
     expect(screen.getByText(en.welcomeBegin)).toBeTruthy();
   });
@@ -73,7 +69,7 @@ describe("WelcomeView slides", () => {
       open();
       expect(screen.getByText(en.welcomeFindsLabel)).toBeTruthy();
       fireEvent.click(screen.getByText(en.welcomeNextBtn));
-      expect(screen.getByText(en.welcomeStepsTitle)).toBeTruthy();
+      expect(screen.getByText(en.welcomeHowTitle)).toBeTruthy();
       expect(slots()).toHaveLength(3);
       // first sample: disk
       expect(slots()[0].classList.contains("sample-on")).toBe(true);
@@ -101,7 +97,7 @@ describe("WelcomeView slides", () => {
       open();
       expect(screen.getByText(en.welcomeFindsLabel)).toBeTruthy();
       fireEvent.click(screen.getByText(en.welcomeNextBtn));
-      expect(screen.getByText(en.welcomeStepsTitle)).toBeTruthy();
+      expect(screen.getByText(en.welcomeHowTitle)).toBeTruthy();
       act(() => {
         vi.advanceTimersByTime(12000);
       });

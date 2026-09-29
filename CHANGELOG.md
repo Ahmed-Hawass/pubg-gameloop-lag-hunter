@@ -233,6 +233,10 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - Welcome is three slides (finds, three-step loop with a rotating real
   sample finding, cost with disk and privacy tiles), with Skip, Back,
   dots, and a reduced-motion freeze on the rotation.
+- Welcome unified to two slides reusing in-app components (divider-list
+  finds, static-then-rotating real sample, three cost tiles with
+  privacy), and the GPU card reframed around hidden-slowdown detection
+  instead of power-saving truisms.
 - Reports follow the same language: totals over the sessions list
   (issue rows count spikes or an issue/laggy outcome, partial stays
   out), one shared divider-list surface keeping the delete action, key

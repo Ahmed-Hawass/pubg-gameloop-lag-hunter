@@ -142,11 +142,9 @@ describe("App one-shot advice", () => {
     const user = userEvent.setup();
     boot({ onboarding: false });
     await screen.findByText(en.welcomeTitle);
-    // three slides: identity, how-it-works, cost — Begin lives on the last
+    // two slides: finds, then how-it-works carrying Begin
     await user.click(screen.getByText(en.welcomeNextBtn));
-    await screen.findByText(en.welcomeStepsTitle);
-    await user.click(screen.getByText(en.welcomeNextBtn));
-    await screen.findByText(en.welcomeTrustTitle);
+    await screen.findByText(en.welcomeHowTitle);
     await user.click(screen.getByText(en.welcomeBegin));
     await waitFor(() => {
       expect(apiMock.finishOnboarding).toHaveBeenCalledOnce();
