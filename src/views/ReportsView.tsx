@@ -2,7 +2,7 @@
 // Content comes from the engine (keys + English fallbacks); the UI translates.
 
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, Clock, FileText, FileWarning, Folder, Gauge, Trash2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, Clock, FileText, FileWarning, Folder, RefreshCw, Trash2 } from "lucide-react";
 import { Button, Dialog, EmptyState, Hint, NoteCard, Tip, diagnosisIcon, APP_DIALOG_OPEN_EVENT } from "../components/components";
 import { api, type FriendlyReport, type SessionEntry } from "../bridge";
 import { useLang } from "../i18n";
@@ -12,7 +12,7 @@ import { useLang } from "../i18n";
     load warnings read warn, session notes stay neutral. Unknown future
     kinds read warn (a highlight the engine bothered to emit is worth a
     glance, never a muted shrug). */
-function highlightTone(kind: string): "hl-bad" | "hl-mid" | "" {
+function highlightTone(kind: string): "hl-bad" | "hl-warn" | "" {
   switch (kind) {
     case "spike":
     case "cpu_saturation":
@@ -25,7 +25,7 @@ function highlightTone(kind: string): "hl-bad" | "hl-mid" | "" {
     case "mostly_background":
       return "";
     default:
-      return "hl-mid";
+      return "hl-warn";
   }
 }
 
@@ -63,11 +63,11 @@ export function ReportsView(props: {
       default: a report is a record, hiding its moments takes a tap) */
   const [momentsOpen, setMomentsOpen] = useState(true);
 
-  const outcomeMeta: Record<string, { label: string; tone: "ok" | "bad" | "mid" }> = {
+  const outcomeMeta: Record<string, { label: string; tone: "ok" | "bad" | "warn" }> = {
     clean: { label: t.clean, tone: "ok" },
-    issues: { label: t.findings, tone: "mid" },
+    issues: { label: t.findings, tone: "warn" },
     laggy: { label: t.lagCaptured, tone: "bad" },
-    partial: { label: t.partial, tone: "mid" },
+    partial: { label: t.partial, tone: "warn" },
   };
 
   /** LOAD failures (the list itself) are a PAGE state: EmptyState + retry,
@@ -361,7 +361,7 @@ export function ReportsView(props: {
           hint={loadFailed}
         />
       ) : entries === null ? (
-        <EmptyState icon={<Gauge size={18} />} title={t.loadingSessions} hint="" />
+        <EmptyState icon={<RefreshCw size={20} />} title={t.loadingSessions} hint="" spin />
       ) : entries.length === 0 ? (
         <EmptyState
           icon={<FileWarning size={18} />}

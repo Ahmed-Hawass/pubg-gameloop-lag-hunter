@@ -7,7 +7,7 @@
 // (manual checks ignore the once-per-version announcement on purpose).
 
 import { useEffect, useState } from "react";
-import { Coffee, Code2, Cpu, Download, HardDrive, Heart, Leaf, MemoryStick, Square, ToggleRight } from "lucide-react";
+import { Coffee, Code2, Cpu, Download, HardDrive, Heart, Leaf, MemoryStick, ShieldCheck, ToggleRight } from "lucide-react";
 import { Button } from "../components/components";
 import { api, type UpdateInfo } from "../bridge";
 import { useLang } from "../i18n";
@@ -18,7 +18,7 @@ const SUPPORT_URL = "https://paypal.me/ahmedhawass";
 
 /** cost-row glyphs in locale-array order (texts stay the locale array:
     zero locale churn, icons live with the layout) */
-const IMPACT_ICONS = [Cpu, MemoryStick, HardDrive, Square, ToggleRight];
+const IMPACT_ICONS = [Cpu, MemoryStick, HardDrive, ShieldCheck, ToggleRight];
 
 export function AboutView(props: {
   /** the startup check's result — dot + "download" affordance when set */

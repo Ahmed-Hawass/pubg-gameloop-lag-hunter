@@ -144,18 +144,26 @@ export function WelcomeView(props: { onDone: () => void }) {
           </div>
 
           <div className="welcome-label">{t.welcomeSampleLabel}</div>
-          {/* rotating samples: the translated finding copies, exactly as
-              findings render in-app (visual demo, keyed swap re-runs a
-              quiet fade — no sliding motion anywhere) */}
-          <div className="welcome-sample" key={samples[sample]}>
-            <NoteCard
-              title={t.diagnoses[samples[sample]].title}
-              simple={t.diagnoses[samples[sample]].simple}
-              fix={t.diagnoses[samples[sample]].fix}
-              severity={sampleSev[sample]}
-              fixLabel={t.fixLabel}
-              icon={diagnosisIcon(samples[sample])}
-            />
+          {/* rotating samples: all three translated findings stacked in
+              one slot, only the active visible — the slot keeps the
+              tallest height so rotating never moves the nav below */}
+          <div className="welcome-sample">
+            {samples.map((key, i) => (
+              <div
+                key={key}
+                className={i === sample ? "sample-on" : "sample-off"}
+                aria-hidden={i === sample ? undefined : true}
+              >
+                <NoteCard
+                  title={t.diagnoses[key].title}
+                  simple={t.diagnoses[key].simple}
+                  fix={t.diagnoses[key].fix}
+                  severity={sampleSev[i]}
+                  fixLabel={t.fixLabel}
+                  icon={diagnosisIcon(key)}
+                />
+              </div>
+            ))}
           </div>
 
           <div className="welcome-nav">

@@ -159,7 +159,7 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
             onClick={() => void load(false, true)}
           />
         </div>
-        <EmptyState icon={<ShieldAlert size={18} />} title={t.loading} hint="" />
+        <EmptyState icon={<RefreshCw size={20} />} title={t.loading} hint="" spin />
       </div>
     );
   }

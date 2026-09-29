@@ -11,6 +11,7 @@ import {
   Gamepad2,
   Monitor,
   Mouse,
+  RefreshCw,
   SlidersHorizontal,
   Video,
   Zap,
@@ -102,9 +103,10 @@ export function GamingSection(props: {
     return (
       <div className="check-list">
         <EmptyState
-          icon={<SlidersHorizontal size={18} />}
+          icon={failed ? <SlidersHorizontal size={18} /> : <RefreshCw size={20} />}
           title={failed ? t.dialog.somethingWrong : t.loading}
           hint={tweaks.loadError ?? ""}
+          spin={!failed}
         />
       </div>
     );

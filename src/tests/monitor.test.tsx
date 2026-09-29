@@ -68,6 +68,8 @@ describe("MonitorView", () => {
     expect(screen.getByText(en.idleGuideTitle)).toBeTruthy();
     // no streaming section while stopped (guidance above says it all)
     expect(screen.queryByText(en.activity)).toBeNull();
+    // no session bar at idle either: 00:00 over an empty bar answers nothing
+    expect(screen.queryByText(en.timelineDuration)).toBeNull();
   });
 
   it("a busy Start is dead (no stacked sessions)", async () => {

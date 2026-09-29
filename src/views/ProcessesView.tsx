@@ -112,7 +112,7 @@ export function ProcessesView(props: { active: boolean }) {
           hint={error}
         />
       ) : procs === null ? (
-        <EmptyState icon={<Activity size={18} />} title={t.topProcessesRefreshing} hint="" />
+        <EmptyState icon={<RefreshCw size={20} />} title={t.topProcessesRefreshing} hint="" spin />
       ) : procs.length === 0 ? (
         <EmptyState icon={<Activity size={18} />} title={t.topProcessesEmpty} hint="" />
       ) : (

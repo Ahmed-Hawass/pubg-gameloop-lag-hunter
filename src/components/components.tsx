@@ -187,13 +187,15 @@ export function NoteCard(props: {
 }
 
 // ---------------------------------------------------------------------------
-// EmptyState — friendly nothing-yet (data-driven, never fake)
+// EmptyState — friendly nothing-yet (data-driven, never fake). The
+// loading moment reuses the same panel with a spinning glyph
+// (spin=true): one specimen everywhere, titles stay per-tab copy.
 // ---------------------------------------------------------------------------
-export function EmptyState(props: { icon: ReactNode; title: string; hint: string }) {
-  const { icon, title, hint } = props;
+export function EmptyState(props: { icon: ReactNode; title: string; hint: string; spin?: boolean }) {
+  const { icon, title, hint, spin } = props;
   return (
     <div className="empty">
-      <div className="empty-ico">{icon}</div>
+      <div className={`empty-ico${spin ? " spin" : ""}`}>{icon}</div>
       <div className="empty-title">{title}</div>
       <div className="empty-hint">{hint}</div>
     </div>
@@ -232,9 +234,12 @@ export function SummaryCard(props: {
 }
 
 // ---------------------------------------------------------------------------
-// Dialog — the ONE modal surface for anything that needs the user's eyes:
-// errors, confirmations, notices. Replaces every toast system. Native-window feel:
-// centered, dimmed backdrop, Escape to dismiss, click-outside for notices.
+// Dialog — the one VISIBLE modal surface for anything that needs the
+// user's eyes: errors, confirmations, notices. (Structurally there are
+// two roots — this plus UpdateModal's own overlay with its own trap —
+// kept to one visible surface by yielding: only one ever shows.)
+// Replaces every toast system. Native-window feel: centered, dimmed
+// backdrop, Escape to dismiss, click-outside for notices.
 // ---------------------------------------------------------------------------
 export function Dialog(props: {
   title: string;

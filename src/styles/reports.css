@@ -48,8 +48,9 @@
   background: var(--bg-danger);
   color: var(--text-danger);
 }
-/* the middle tone (issues / partial): warn, like the list badge below */
-.badge-mid {
+/* the middle tone (issues / partial) shares the warn name with every
+   other tab: one vocabulary (ok/bad/warn) for all badges */
+.badge-warn {
   background: var(--bg-warning);
   color: var(--text-warning);
 }
@@ -100,7 +101,7 @@
 .report-moments li.hl-bad::before {
   background: var(--fill-danger);
 }
-.report-moments li.hl-mid::before {
+.report-moments li.hl-warn::before {
   background: var(--fill-warning);
 }
 
@@ -206,7 +207,7 @@
 .sl-icon-bad {
   color: var(--danger);
 }
-.sl-icon-mid { color: var(--warn); }
+.sl-icon-warn { color: var(--warn); }
 .sl-main {
   display: flex;
   flex-direction: column;
@@ -234,7 +235,7 @@
   background: var(--bg-danger);
   color: var(--text-danger);
 }
-.sl-badge-mid {
+.sl-badge-warn {
   background: var(--bg-warning);
   color: var(--text-warning);
 }

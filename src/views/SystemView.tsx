@@ -114,7 +114,7 @@ export function SystemView() {
   if (!info) {
     return (
       <div className="sys">
-        <EmptyState icon={<Cpu size={18} />} title={t.loading} hint="" />
+        <EmptyState icon={<RefreshCw size={20} />} title={t.loading} hint="" spin />
       </div>
     );
   }
@@ -132,7 +132,7 @@ export function SystemView() {
               <Cpu size={15} />
               {t.specCpu}
             </span>
-            <span className="spec-name">{text(info.cpu.name) ?? "--"}</span>
+            <span className="spec-name" title={text(info.cpu.name) ?? "--"}>{text(info.cpu.name) ?? "--"}</span>
             <span className="spec-sub">
               {info.cpu.mhz ? `${(info.cpu.mhz / 1000).toFixed(2)} GHz ${t.specBase}` : "--"}
             </span>
@@ -147,7 +147,7 @@ export function SystemView() {
               <Gamepad2 size={15} />
               {t.specGpu}
             </span>
-            <span className="spec-name">{gpu && text(gpu.name) ? gpu.name : "--"}</span>
+            <span className="spec-name" title={gpu && text(gpu.name) ? gpu.name : "--"}>{gpu && text(gpu.name) ? gpu.name : "--"}</span>
             <span className="spec-sub">
               {gpu?.vram_gb ? `${gpu.vram_gb} ${t.gbUnit} ${t.specDedicated}` : "--"}
             </span>

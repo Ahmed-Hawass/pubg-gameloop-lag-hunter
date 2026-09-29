@@ -4,9 +4,12 @@
 
 import { useEffect, useState } from "react";
 import { Brain, ChevronDown, Cpu, Database, Gamepad2, Play, Square } from "lucide-react";
-import { Hint, Button, EmptyState, MetricCard, NoteCard, SummaryCard, Timeline, diagnosisIcon, fmtDur } from "../components/components";
+import { Hint, Button, MetricCard, NoteCard, SummaryCard, Timeline, diagnosisIcon, fmtDur } from "../components/components";
 import type { StatusPayload } from "../bridge";
 import { useLang } from "../i18n";
+import { useSpotTheme } from "./tools/useSpotTheme";
+import spotIdleDark from "../assets/spot-monitor-idle-dark.svg?url";
+import spotIdleLight from "../assets/spot-monitor-idle-light.svg?url";
 
 export function MonitorView(props: {
   status: StatusPayload;
@@ -23,6 +26,7 @@ export function MonitorView(props: {
 }) {
   const { status, busy, durationSecs, onDurationChange, onToggle, onOpenReport, dismissedSession, onDismissSummary, psLimited } = props;
   const { t } = useLang();
+  const spotTheme = useSpotTheme();
   const ui = status.ui;
   const running = status.status === "running";
   const finished = status.status === "finished";
@@ -118,7 +122,10 @@ export function MonitorView(props: {
         />
       </div>
 
-      {/* timeline — always present */}
+      {/* timeline — live only. At idle a 00:00 head over an empty bar
+          answers nothing (the chosen duration already shows in the
+          pills), so the block mounts with the first live sample and
+          unmounts at stop; the finished summary owns the aftermath. */}
       {liveUi ? (
         <>
           <Timeline
@@ -134,17 +141,7 @@ export function MonitorView(props: {
             <Hint text={t.timelineHint} />
           </div>
         </>
-      ) : (
-        <Timeline
-          elapsedSec={0}
-          autoStopSec={null}
-          spikes={[]}
-          hasData={false}
-          kindLabel={(k) => t.feed[k] ?? k}
-          headLabel={t.timelineDuration}
-          targetSec={null}
-        />
-      )}
+      ) : null}
 
       {/* limited-mode note: PowerShell unavailable — scans still work, some
           checks run on safe defaults. Shown once per app run (not per tick). */}
@@ -155,13 +152,21 @@ export function MonitorView(props: {
       ) : null}
 
       {/* idle guidance: an empty layout explains nothing, so the calm
-          state carries its own invitation (what to do, what happens) */}
+          state carries its own invitation (what to do, what happens).
+          Same words as ever — staged around a custom spot (crosshair
+          lens + play core, themed like the Tools landing art). */}
       {!liveUi && !summaryAllowed ? (
-        <EmptyState
-          icon={<Play size={18} />}
-          title={t.idleGuideTitle}
-          hint={t.idleGuideHint}
-        />
+        <div className="empty idle-hero">
+          <img
+            className="idle-spot"
+            src={spotTheme === "light" ? spotIdleLight : spotIdleDark}
+            alt=""
+            aria-hidden="true"
+            draggable={false}
+          />
+          <div className="empty-title">{t.idleGuideTitle}</div>
+          <div className="empty-hint">{t.idleGuideHint}</div>
+        </div>
       ) : null}
 
       {/* confirmed diagnosis cards FIRST — what happened outranks the raw

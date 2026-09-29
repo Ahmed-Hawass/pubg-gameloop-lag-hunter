@@ -215,7 +215,7 @@ describe("ReportsView", () => {
     const items = document.querySelectorAll(".report-moments li");
     expect(items).toHaveLength(3);
     expect(items[0].classList.contains("hl-bad")).toBe(true);
-    expect(items[1].classList.contains("hl-mid")).toBe(true);
+    expect(items[1].classList.contains("hl-warn")).toBe(true);
     expect(items[2].className).toBe("");
     expect(screen.getByText(en.hideEventLog)).toBeTruthy();
     await user.click(screen.getByText(en.hideEventLog));

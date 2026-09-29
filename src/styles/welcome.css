@@ -81,6 +81,7 @@
 .welcome-finds {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
   gap: 10px;
   width: 100%;
   text-align: start;
@@ -90,6 +91,7 @@
   flex-direction: column;
   gap: 4px;
   padding: 14px;
+  height: 100%;
   animation: rise-in 0.35s var(--ease) both;
 }
 .welcome-finds > :nth-child(1) { animation-delay: 0.05s; }
@@ -144,17 +146,26 @@
   font-weight: 700;
   color: var(--text-3);
 }
-/* slide 2 sample: a real finding at reading width (keyed swap
-   re-runs a quiet fade on rotate — opacity only, never motion) */
+/* slide 2 sample: all three findings stacked in one grid cell, only
+   the active one visible — the slot keeps the tallest height forever,
+   so rotating never shifts the nav and dots below (keyed swap would
+   resize the box every 4 seconds) */
 .welcome-sample {
+  display: grid;
   width: 100%;
   text-align: start;
 }
-.welcome-sample > * {
+.welcome-sample > div {
+  grid-area: 1 / 1;
+}
+.welcome-sample > div.sample-off {
+  visibility: hidden;
+}
+.welcome-sample > div.sample-on > * {
   animation: fade-in 0.4s ease both;
 }
 @media (prefers-reduced-motion: reduce) {
-  .welcome-sample > * {
+  .welcome-sample > div.sample-on > * {
     animation: none;
   }
 }
@@ -162,6 +173,7 @@
 .welcome-cost {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
   gap: 10px;
   width: 100%;
 }
@@ -171,6 +183,7 @@
   align-items: center;
   gap: 2px;
   padding: 14px 10px;
+  height: 100%;
   text-align: center;
   color: var(--text-2);
   animation: rise-in 0.35s var(--ease) both;

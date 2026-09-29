@@ -6,7 +6,7 @@
 // nothing useful could load at all.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Recycle, SlidersHorizontal } from "lucide-react";
+import { Recycle, RefreshCw, SlidersHorizontal } from "lucide-react";
 import { EmptyState } from "../../components/components";
 import type { Notice } from "../../errors";
 import { useLang } from "../../i18n";
@@ -103,9 +103,10 @@ export function StorageSection(props: {
     return (
       <div className="check-list">
         <EmptyState
-          icon={<SlidersHorizontal size={18} />}
+          icon={<RefreshCw size={20} />}
           title={t.loading}
           hint=""
+          spin
         />
       </div>
     );

@@ -445,7 +445,7 @@ export const en = {
     "Under 1% CPU while scanning: it measures, it doesn't compete",
     "~25 MB of RAM, less than one browser tab",
     "~200 KB per minute of scanning on disk",
-    "Every session stops by itself, nothing runs forgotten",
+    "Your reports stay on your PC",
     "It changes a setting only when you flip its switch yourself",
   ],
   aboutUpdate: "Updates",

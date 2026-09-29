@@ -108,12 +108,17 @@
 .spec-card:hover .spec-head svg {
   transform: scale(1.18);
 }
+/* spec names wrap to two lines (CPU/GPU strings run long: a single
+   clipped line hid the model number); beyond that an ellipsis plus the
+   full name on hover */
 .spec-name {
   font-size: 14.5px;
   font-weight: 700;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 .spec-sub {
   font-size: 12px;
@@ -845,8 +850,9 @@
   color: var(--text-3);
   line-height: 1.45;
 }
-/* (?) background-note trigger: the same Info glyph as every other Hint,
-   ghost until hovered so the row stays quiet */
+/* (?) background-note trigger: the same Info glyph and the same quiet
+   hover as every other Hint (neutral, never green), only smaller and
+   borderless to sit inside a row name */
 .switch-hint {
   display: inline-flex;
   align-items: center;
@@ -860,8 +866,8 @@
   flex: none;
 }
 .switch-hint:hover {
-  color: var(--primary);
-  background: var(--primary-dim);
+  color: var(--text-2);
+  background: var(--hover-bg);
 }
 .switch-hint:focus-visible {
   outline: 2px solid var(--primary);

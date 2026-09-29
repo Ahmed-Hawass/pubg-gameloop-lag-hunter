@@ -57,29 +57,37 @@ describe("WelcomeView slides", () => {
 
   it("the sample finding rotates on a slow timer", async () => {
     // fake timers first (every async helper hangs under them): fireEvent
-    // is sync and safe, advancing runs inside act, reads stay sync
+    // is sync and safe, advancing runs inside act, reads stay sync.
+    // All three samples share one stacked slot: assert visibility, the
+    // box itself never resizes so nothing below ever moves.
     vi.useFakeTimers({ shouldAdvanceTime: false });
     const advance = (ms: number) => {
       act(() => {
         vi.advanceTimersByTime(ms);
       });
     };
+    const slots = () => document.querySelectorAll(".welcome-sample > div");
+    const visibleTitle = () =>
+      document.querySelector(".welcome-sample > div.sample-on")!.textContent ?? "";
     try {
       open();
       expect(screen.getByText(en.welcomeFindsLabel)).toBeTruthy();
       fireEvent.click(screen.getByText(en.welcomeNextBtn));
       expect(screen.getByText(en.welcomeStepsTitle)).toBeTruthy();
+      expect(slots()).toHaveLength(3);
       // first sample: disk
-      expect(screen.getByText(en.diagnoses.disk_wait.title)).toBeTruthy();
-      // one interval: cpu (the same slot, new copy)
+      expect(slots()[0].classList.contains("sample-on")).toBe(true);
+      expect(visibleTitle()).toContain(en.diagnoses.disk_wait.title);
+      // one interval: cpu takes the slot, disk hides (stays mounted)
       advance(4000);
-      expect(screen.getByText(en.diagnoses.cpu_busy.title)).toBeTruthy();
-      expect(screen.queryByText(en.diagnoses.disk_wait.title)).toBeNull();
+      expect(slots()[1].classList.contains("sample-on")).toBe(true);
+      expect(slots()[0].classList.contains("sample-off")).toBe(true);
+      expect(visibleTitle()).toContain(en.diagnoses.cpu_busy.title);
       // cycles back around: gpu, then disk again
       advance(4000);
-      expect(screen.getByText(en.diagnoses.gpu_busy.title)).toBeTruthy();
+      expect(visibleTitle()).toContain(en.diagnoses.gpu_busy.title);
       advance(4000);
-      expect(screen.getByText(en.diagnoses.disk_wait.title)).toBeTruthy();
+      expect(visibleTitle()).toContain(en.diagnoses.disk_wait.title);
     } finally {
       vi.useRealTimers();
     }
@@ -94,13 +102,13 @@ describe("WelcomeView slides", () => {
       expect(screen.getByText(en.welcomeFindsLabel)).toBeTruthy();
       fireEvent.click(screen.getByText(en.welcomeNextBtn));
       expect(screen.getByText(en.welcomeStepsTitle)).toBeTruthy();
-      expect(screen.getByText(en.diagnoses.disk_wait.title)).toBeTruthy();
       act(() => {
         vi.advanceTimersByTime(12000);
       });
       // still disk: no timer was ever armed
-      expect(screen.getByText(en.diagnoses.disk_wait.title)).toBeTruthy();
-      expect(screen.queryByText(en.diagnoses.cpu_busy.title)).toBeNull();
+      const frozen = document.querySelectorAll(".welcome-sample > div");
+      expect(frozen[0].classList.contains("sample-on")).toBe(true);
+      expect(frozen[1].classList.contains("sample-off")).toBe(true);
     } finally {
       vi.useRealTimers();
       window.matchMedia = matchMedia;
