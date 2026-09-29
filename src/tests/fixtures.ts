@@ -67,6 +67,9 @@ export function pagefileSettings(
       { drive: "C:", free_mb: 50000, mode: "system", min_mb: null, max_mb: null },
     ],
     pending: false,
+    ram_total_mb: 32768,
+    recommended_min_mb: 16384,
+    recommended_max_mb: 49152,
     ...over,
   };
 }

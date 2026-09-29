@@ -50,12 +50,12 @@ describe("ToolsView gaming switches", () => {
     openGaming();
     await user.click(screen.getByText(en.toolGamingTweaks));
     await screen.findByText(en.tweakDvrTitle);
-    // two cheap in-process reads: the landing badge first, then the
-    // details page's own reload (it never waits on the badge)
+    // landing badges read first (tweaks + page file, one each), then the
+    // details page reloads its own tweaks (it never waits on the badge)
     expect(apiMock.tweakStates).toHaveBeenCalledTimes(2);
-    // the gaming page never consumed page file data: the split stopped
-    // paying its read here (one fewer IPC round-trip, same pixels)
-    expect(apiMock.pagefileSettings).not.toHaveBeenCalled();
+    // the gaming page never consumed page file data: the details reload
+    // pays only the tweak read (one fewer IPC round-trip, same pixels)
+    expect(apiMock.pagefileSettings).toHaveBeenCalledTimes(1);
   });
 
   it("a client update raises the re-flip notice once, with its version", async () => {

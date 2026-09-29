@@ -577,9 +577,86 @@
   opacity: 0.55;
   cursor: default;
 }
-.cleanup-selected {
+/* idle hero: the only invitation before the first scan (icon, name,
+   promise, then the mode pills + Scan below do the work) */
+.cleanup-idle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+  padding: 18px 10px 6px;
+}
+.cleanup-idle-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--primary-dim);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  margin-block-end: 8px;
+}
+.cleanup-idle-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-1);
+}
+.cleanup-idle-desc {
   font-size: 12px;
-  color: var(--text-3);
+  color: var(--text-2);
+  line-height: 1.55;
+}
+/* payoff hero after a verified clean: the measured number big, the
+   tagline warm, Scan again as the way back (the work card returns on
+   the next scan) */
+.cleanup-cleaned {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+  padding: 26px 16px;
+}
+.cleanup-done {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--primary-dim);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  margin-block-end: 10px;
+}
+.cleanup-tagline {
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.55;
+  margin-block-end: 12px;
+}
+/* per-place breakdown bar under the scanned hero: identity colors
+   (never severity), shares scale with the row dots above */
+.cleanup-bars {
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--elev-3);
+}
+.cleanup-bars > span {
+  display: block;
+  height: 100%;
+  min-width: 3px;
+}
+.cleanup-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: none;
 }
 /* footer: the take on the reading-start side, both actions pinned to
    the end side (scan stays ghost, the commit action fills) */
@@ -596,14 +673,54 @@
   margin-inline-start: auto;
 }
 
-/* status readout atop the storage details: deliberately UNBOXED (plain
-   text, not a row surface) so it never reads as clickable — it answers
-   "what holds now", actions live below it */
-.pf-status {
+/* plain page header (icon + title + desc, never a card, never
+   collapsible): the shell back button above already says where this
+   lives — same pattern as the Sessions title row */
+.page-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 2px 4px;
+}
+.page-head-text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 2px 4px;
+  gap: 1px;
+  min-width: 0;
+}
+.page-head-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-1);
+}
+.page-head-desc {
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.5;
+}
+/* status strip inside the editor card: live mode state on the
+   reading-start side, installed RAM on the end side, (?) after */
+.pf-status-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--elev-3);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.pf-status-state {
+  flex: 1;
+  min-width: 0;
+}
+.pf-status-ram {
+  flex: none;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.pf-status-strip .switch-hint {
+  margin-inline-start: auto;
 }
 /* custom page file form: same card language as switch rows (elev-1
    surface, border, radius), labels above Latin-digit inputs; flex follows
@@ -611,74 +728,14 @@
 .pf-form {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 14px 16px;
-}
-.pf-form .switch-hint {
-  align-self: flex-start;
-}
-/* the section's face: the same row as every other Tools row (tile +
-   texts + badge + control, identical metrics), only the control is a
-   chevron into the editor instead of a switch. The state fill carries
-   the same language as the rows (automatic = the recommended state).
-   Flex follows reading direction, no physical properties anywhere */
-.pf-summary {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  gap: 10px;
   padding: 14px 16px;
 }
 /* deep-link landing (health page file card): the same temporary primary
    ring the rows get, cleared with the link itself */
-.pf-summary.is-linked {
+.pf-form.is-linked {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px var(--primary-dim);
-}
-/* summary title + status as text-styled buttons (unstyled so the (?)
-   can sit inside the name line like every SwitchRow, without nesting a
-   button inside a button). Logical properties only, like everywhere. */
-.pf-name-btn {
-  background: transparent;
-  border: none;
-  padding: 0;
-  font: inherit;
-  font-size: 12.5px;
-  font-weight: 700;
-  color: inherit;
-  text-align: start;
-  cursor: pointer;
-}
-.pf-desc-btn {
-  background: transparent;
-  border: none;
-  padding: 0;
-  font-size: 12px;
-  color: var(--text-2);
-  line-height: 1.55;
-  text-align: start;
-  cursor: pointer;
-}
-.pf-chev {
-  flex: none;
-  color: var(--text-3);
-  transition: transform 0.15s;
-}
-.pf-chev.is-open {
-  transform: rotate(180deg);
-}
-/* the chevron's own toggle (a button cannot nest inside the title
-   button): visually weightless, same action as the title area */
-.pf-chev-btn {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-  padding: 4px;
 }
 /* the expanded editor: global checkbox, selectable drive rows (the
    selected row carries the primary ring), sizes only for custom */

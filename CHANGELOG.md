@@ -246,6 +246,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   warning, danger, both themes): cards, banners, badges, dots, bars,
   and the danger dialog use them; state text rides only its own bg.
   Card surfaces drop to hairlines, filled cards borderless.
+- Tools land on four cards: game performance (with its own spot art),
+  backup memory and disk cleanup (each with its own page and spot art,
+  new clean-temp piece drawn for the occasion), and storage keeping
+  only the sense switch. The page file health rule is shared between
+  its landing badge and the editor so the two faces never drift.
 
 ### Fixed
 - The session tick no longer holds the state lock across clock reads and

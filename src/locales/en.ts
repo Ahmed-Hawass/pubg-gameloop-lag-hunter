@@ -277,8 +277,12 @@ export const en = {
       v2 goes stable */
   toolsBeta: "Beta",
   toolsBack: "Tools",
-  toolGamingTweaks: "Gaming tweaks",
-  toolGamingTweaksDesc: "Every game performance switch in one place.",
+  toolGamingTweaks: "Game performance",
+  toolGamingTweaksDesc: "Performance switches for smoother play",
+  toolPagefile: "Backup memory",
+  toolPagefileDesc: "Fewer stutters when memory fills up",
+  toolCleanup: "Disk cleanup",
+  toolCleanupDesc: "Reclaim disk space, nothing important touched",
   /** landing status badge over the gaming card (on/shown optimized):
       same rules as the details rows, via the shared summary */
   toolBadgeOptimized: (on: number, total: number) => `${on}/${total} optimized`,
@@ -319,8 +323,6 @@ export const en = {
   tweakPfStatusAuto: "Automatic: Windows manages every drive",
   tweakPfStatusManual: "Manual: per-drive settings below",
   tweakPfDrivesLabel: "Drives",
-  tweakPfDriveFree: (drive: string, gb: number) => `${drive} · ${gb} GB free`,
-  tweakPfDriveNoSpace: (drive: string) => `${drive} · free space unknown`,
   /** short drive-card lines (letter rides its own span, so no drive
       prefix here): free space and mode stay separate spans */
   tweakPfDriveFreeShort: (gb: number) => `${gb} GB free`,
@@ -334,6 +336,11 @@ export const en = {
   tweakPfMinLabel: "Initial size (MB)",
   tweakPfMaxLabel: "Maximum size (MB)",
   tweakPfApply: "Apply",
+  /** status strip (mode state plus installed RAM) and the engine
+      recommendation next to the inputs: values stay Latin */
+  pfRamInstalled: (gb: number) => `${gb} GB RAM installed`,
+  pfRecommend: (gb: number, min: number, max: number) =>
+    `Recommended for ${gb} GB RAM: ${min.toLocaleString("en-US")}–${max.toLocaleString("en-US")} MB`,
   tweakPfWarnOffTitle: (drive: string) => `Remove the page file on ${drive}?`,
   tweakPfWarnOffBody: (drive: string) =>
     `Without a page file on ${drive}, out-of-memory crashes are likely under load. This takes effect after you restart Windows.`,
@@ -386,10 +393,10 @@ export const en = {
   cleanupFreed: (mb: number) => `Freed ${mb} MB, measured before and after.`,
   cleanupUnmeasured:
     "Plus freed space Windows would not let us measure, so it stays out of the number above.",
-  cleanupSelected: (mb: number) => `Selected: ${mb} MB.`,
-  cleanupLastNever: "Never cleaned yet.",
-  cleanupLast: (mb: number, when: string) => `Last clean: ${mb} MB on ${when}.`,
-  cleanup30d: (mb: number) => `Last 30 days: ${mb} MB.`,
+  /** scanned hero + cleaned payoff labels (the numbers ride their own
+      lines, units stay Latin in both languages) */
+  cleanupReadyToFree: "ready to free up",
+  cleanupCleanedTag: "Your disk has a little more room to breathe.",
   cleanupScanningCat: (name: string) => `Scanning ${name}...`,
   cleanupCleaningCat: (name: string) => `Cleaning ${name}...`,
   cleanupConfirmTitle: "Delete the selected files?",

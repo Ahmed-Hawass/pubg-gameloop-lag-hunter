@@ -1448,6 +1448,14 @@ pub struct PagefileSettings {
     pub automatic: bool,
     pub drives: Vec<PagefileDriveState>,
     pub pending: bool,
+    /// installed RAM in MB (None = unreadable): feeds the "N GB
+    /// installed" strip and the recommendation below, never a gate
+    pub ram_total_mb: Option<u64>,
+    /// recommended custom sizes for the installed RAM (None when RAM is
+    /// unreadable): a starting point next to the inputs, not a gate —
+    /// the 8 GB warn floor still guards the write
+    pub recommended_min_mb: Option<u32>,
+    pub recommended_max_mb: Option<u32>,
 }
 
 /// The raw desired state Windows stores: the AutomaticManagedPagefile
@@ -1582,10 +1590,17 @@ pub fn pagefile_settings() -> Result<PagefileSettings, String> {
         p.tweak == super::tweaks::PAGEFILE_SETTINGS_ID
             && restart_pending_visible(p.at_uptime_ms, boot_uptime_ms())
     });
+    let ram_mb = ram_total_mb();
+    let (rec_min, rec_max) = ram_mb
+        .and_then(recommended_pagefile_mb)
+        .unzip();
     Ok(PagefileSettings {
         automatic: raw.automatic,
         drives: states,
         pending,
+        ram_total_mb: ram_mb,
+        recommended_min_mb: rec_min,
+        recommended_max_mb: rec_max,
     })
 }
 
@@ -1629,6 +1644,70 @@ pub fn drive_free_mb_for(_drive: &str) -> Option<u64> {
     None
 }
 
+/// Installed RAM in MB (GlobalMemoryStatusExW, read-only, no spawn):
+/// feeds the recommendation below. None = unreadable, never zero
+/// masquerading as a 0 MB machine.
+#[cfg(windows)]
+pub fn ram_total_mb() -> Option<u64> {
+    // SAFETY: dwLength set, stack struct, written once on success.
+    unsafe {
+        let mut mem = MemoryStatusEx {
+            dw_length: 64,
+            dw_memory_load: 0,
+            ull_total_phys: 0,
+            ull_avail_phys: 0,
+            ull_total_page_file: 0,
+            ull_avail_page_file: 0,
+            ull_total_virtual: 0,
+            ull_avail_virtual: 0,
+            ull_avail_extended_virtual: 0,
+        };
+        if GlobalMemoryStatusExW(&mut mem) == 0 {
+            return None;
+        }
+        if mem.ull_total_phys == 0 {
+            return None;
+        }
+        Some(mem.ull_total_phys / 1_048_576)
+    }
+}
+
+#[cfg(not(windows))]
+pub fn ram_total_mb() -> Option<u64> {
+    None
+}
+
+/// Recommended custom page file sizes for installed RAM: half of RAM
+/// initial, one-and-a-half maximum (32 GB installs read 16,384–49,152).
+/// Pure starting point for the inputs, never a gate. None on unknown
+/// RAM instead of recommending for a machine that reported nothing.
+pub fn recommended_pagefile_mb(ram_mb: u64) -> Option<(u32, u32)> {
+    if ram_mb == 0 {
+        return None;
+    }
+    let min = ram_mb / 2;
+    let max = ram_mb.saturating_mul(3) / 2;
+    Some((
+        min.min(u32::MAX as u64) as u32,
+        max.min(u32::MAX as u64) as u32,
+    ))
+}
+
+#[cfg(windows)]
+#[repr(C)]
+/// Mirrors the Win32 MEMORYSTATUSEX layout (renamed for Rust naming rules).
+struct MemoryStatusEx {
+    dw_length: u32,
+    dw_memory_load: u32,
+    ull_total_phys: u64,
+    ull_avail_phys: u64,
+    ull_total_page_file: u64,
+    ull_avail_page_file: u64,
+    ull_total_virtual: u64,
+    ull_avail_virtual: u64,
+    ull_avail_extended_virtual: u64,
+}
+
 #[cfg(windows)]
 #[link(name = "kernel32")]
 extern "system" {
@@ -1638,6 +1717,11 @@ extern "system" {
         total: *mut u64,
         total_free: *mut u64,
     ) -> i32;
+    // kernel32 exports this one undecorated (no W suffix in the SDK
+    // import lib or the DLL itself), so the Rust name keeps the W
+    // convention while the link name matches the real export.
+    #[link_name = "GlobalMemoryStatusEx"]
+    fn GlobalMemoryStatusExW(mem: *mut MemoryStatusEx) -> i32;
     fn GetLogicalDrives() -> u32;
     fn GetDriveTypeW(root: *const u16) -> u32;
 }
@@ -2119,6 +2203,20 @@ pub fn open_windows_panel(panel: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recommended_pagefile_is_half_to_one_and_a_half_ram() {
+        // the worked example behind the UI line (32 GB installs read
+        // 16,384–49,152 MB next to the inputs)
+        assert_eq!(recommended_pagefile_mb(32768), Some((16384, 49152)));
+        assert_eq!(recommended_pagefile_mb(16384), Some((8192, 24576)));
+        assert_eq!(recommended_pagefile_mb(8192), Some((4096, 12288)));
+        // unknown RAM recommends nothing, never zeros
+        assert_eq!(recommended_pagefile_mb(0), None);
+        // saturating, never wrapping, on absurd inputs
+        let (mn, mx) = recommended_pagefile_mb(u64::MAX).unwrap();
+        assert!(mx >= mn);
+    }
 
     #[test]
     fn memory_type_names_cover_common_modules() {

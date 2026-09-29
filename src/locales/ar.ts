@@ -285,8 +285,12 @@ export const ar: Locale = {
       v2 goes stable */
   toolsBeta: "تجريبية",
   toolsBack: "الأدوات",
-  toolGamingTweaks: "تعديلات الألعاب",
-  toolGamingTweaksDesc: "كل مفاتيح أداء الألعاب في مكان واحد.",
+  toolGamingTweaks: "أداء الألعاب",
+  toolGamingTweaksDesc: "مفاتيح أداء للعب أنعم",
+  toolPagefile: "ذاكرة احتياطية",
+  toolPagefileDesc: "تقطيع أقل عند امتلاء الذاكرة",
+  toolCleanup: "تنظيف القرص",
+  toolCleanupDesc: "استعد مساحة القرص دون المساس بالمهم",
   /** landing status badge over the gaming card (on/shown optimized):
       same rules as the details rows, via the shared summary */
   toolBadgeOptimized: (on: number, total: number) => `${on}/${total} محسّن`,
@@ -327,8 +331,6 @@ export const ar: Locale = {
   tweakPfStatusAuto: "تلقائي: ويندوز يدير كل الأقراص",
   tweakPfStatusManual: "يدوي: إعدادات كل قرص أدناه",
   tweakPfDrivesLabel: "الأقراص",
-  tweakPfDriveFree: (drive: string, gb: number) => `${drive} · ${gb} جيجابايت فارغة`,
-  tweakPfDriveNoSpace: (drive: string) => `${drive} · المساحة الفارغة غير معروفة`,
   /** short drive-card lines (letter rides its own span, so no drive
       prefix here): free space and mode stay separate spans */
   tweakPfDriveFreeShort: (gb: number) => `${gb} جيجابايت فارغة`,
@@ -342,6 +344,11 @@ export const ar: Locale = {
   tweakPfMinLabel: "الحجم الأولي (ميجابايت)",
   tweakPfMaxLabel: "الحجم الأقصى (ميجابايت)",
   tweakPfApply: "تطبيق",
+  /** status strip (mode state plus installed RAM) and the engine
+      recommendation next to the inputs: values stay Latin */
+  pfRamInstalled: (gb: number) => `${gb} جيجابايت ذاكرة مثبتة`,
+  pfRecommend: (gb: number, min: number, max: number) =>
+    `الموصى به لذاكرة ${gb} جيجابايت: ${min.toLocaleString("en-US")}–${max.toLocaleString("en-US")} ميجابايت`,
   tweakPfWarnOffTitle: (drive: string) => `إزالة page file على ${drive}؟`,
   tweakPfWarnOffBody: (drive: string) =>
     `بدون page file على ${drive}، أعطال نفاد الذاكرة مرجحة تحت الحمل. يُطبق بعد إعادة تشغيل ويندوز.`,
@@ -395,10 +402,10 @@ export const ar: Locale = {
   cleanupFreed: (mb: number) => `تم تحرير ${mb} MB مقاسة قبل التنظيف وبعده.`,
   cleanupUnmeasured:
     "بالإضافة لمساحة محررة منعنا ويندوز من قياسها، فبقيت خارج الرقم أعلاه.",
-  cleanupSelected: (mb: number) => `المحدد: ${mb} MB.`,
-  cleanupLastNever: "لم يُنظَّف بعد.",
-  cleanupLast: (mb: number, when: string) => `آخر تنظيف: ${mb} MB بتاريخ ${when}.`,
-  cleanup30d: (mb: number) => `آخر 30 يومًا: ${mb} MB.`,
+  /** scanned hero + cleaned payoff labels (the numbers ride their own
+      lines, units stay Latin in both languages) */
+  cleanupReadyToFree: "جاهزة للتحرير",
+  cleanupCleanedTag: "أصبح لقرصك متسع أكبر للتنفس.",
   cleanupScanningCat: (name: string) => `جارٍ فحص ${name}...`,
   cleanupCleaningCat: (name: string) => `جارٍ تنظيف ${name}...`,
   cleanupConfirmTitle: "حذف الملفات المحددة؟",

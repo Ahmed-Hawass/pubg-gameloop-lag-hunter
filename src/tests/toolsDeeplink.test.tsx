@@ -1,7 +1,7 @@
 // tests/toolsDeeplink.test.tsx — the health-card deep-link contract:
 // a row link opens the gaming page and rings the row, "pagefile" opens
-// storage with the editor expanded, and a link to a row this machine
-// lacks clears instead of re-firing on every visit.
+// its own backup-memory page with the editor expanded, and a link to a
+// row this machine lacks clears instead of re-firing on every visit.
 
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
@@ -60,14 +60,17 @@ describe("ToolsView deep-link", () => {
     });
   });
 
-  it('"pagefile" opens storage with the editor expanded', async () => {
+  it('"pagefile" opens its own page with the editor card ringed', async () => {
     openLinked("pagefile");
-    // the editor (not just the summary) is what the card promised
+    // the editor is always open now (no summary to expand): the ring
+    // lands on the editor card itself once the read settles
     await screen.findByText(en.tweakPfAutoLabel);
-    const summary = screen
-      .getByText(en.tweakPfTitle)
-      .closest(".pf-summary")!;
-    expect(summary.classList.contains("is-linked")).toBe(true);
+    const card = screen
+      .getByText(en.tweakPfAutoLabel)
+      .closest(".pf-form")!;
+    await waitFor(() => {
+      expect(card.classList.contains("is-linked")).toBe(true);
+    });
   });
 
   it("a link to a missing row clears instead of nagging", async () => {

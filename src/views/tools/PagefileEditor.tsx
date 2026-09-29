@@ -6,7 +6,7 @@
 // page-level loading/error gate).
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronDown, Database, Info } from "lucide-react";
+import { Database, Info } from "lucide-react";
 import { Button, Dialog, EmptyState } from "../../components/components";
 import {
   api,
@@ -21,14 +21,12 @@ export function PagefileEditor(props: {
   active: boolean;
   /** deep-link ring target id (null = no link) */
   linkedId: string | null;
-  /** a "pagefile" deep-link arrived: expand the editor, then clear it */
-  linkActive: boolean;
   /** first read settled (mount or retry): failed = inline error territory */
   onPfSettled: (failed: boolean) => void;
   showHint: (title: string, body: string) => void;
   failNotice: (notice: Notice | null) => void;
 }) {
-  const { active, linkedId, linkActive, onPfSettled, showHint, failNotice } = props;
+  const { active, linkedId, onPfSettled, showHint, failNotice } = props;
   const { t } = useLang();
   /** Virtual Memory-style editor: the backend's single read (global
       automatic flag + one live state per fixed drive). Null = not read
@@ -49,16 +47,12 @@ export function PagefileEditor(props: {
   /** pre-write confirm payload (null = no confirm): "off" names a
       destructive destination, "small" warns below the stutter floor */
   const [pfConfirm, setPfConfirm] = useState<{ warning: "off" | "small" } | null>(null);
-  /** the editor collapses under its summary row (the section never
-      opens itself: only a tap, or a health-card landing, expands it —
-      the pending badge on the summary carries the waiting reboot) */
-  const [pfOpen, setPfOpen] = useState(false);
   /** reboot offer after a verified page file write (once per write,
       never on load — Later dismisses for good until the next write) */
   const [rebootModal, setRebootModal] = useState(false);
-  /** settled once the first read lands (the deep-link waits for data,
-      like the row landing does in the gaming section) */
-  const [pfSettled, setPfSettled] = useState(false);
+  /** settled once the first read lands (the section gate waits on the
+      callback, not this flag) */
+  const [, setPfSettled] = useState(false);
   /** write busy gate: an elevated apply in flight (focus reads skip it,
       like the switch flips above) */
   const [writeBusy, setWriteBusy] = useState(false);
@@ -145,14 +139,6 @@ export function PagefileEditor(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
-  // deep-link: the health page file card lands here. The editor expands
-  // (the summary alone would hide what the card promised); the scroll
-  // and ring run from the storage section's shared landing effect.
-  useEffect(() => {
-    if (!linkActive || !pfSettled) return;
-    setPfOpen(true);
-  }, [linkActive, pfSettled]);
-
   /** digits-only field writer (mirrors the dialog: garbage never enters,
       Arabic-Indic digits normalized, 10-char DWORD cap) */
   const writeDigits = (
@@ -189,27 +175,6 @@ export function PagefileEditor(props: {
           ? t.tweakPfModeOff
           : t.tweakPfModeUnknown;
 
-  /** one drive's status line: letter, free space, live mode (read, never
-      derived from the working copies) */
-  const pfDriveLine = (drive: string, freeMb: number | null, mode: string, min: number | null, max: number | null) => {
-    const free = freeMb == null
-      ? t.tweakPfDriveNoSpace(drive)
-      : t.tweakPfDriveFree(drive, Math.round(freeMb / 1024));
-    return `${free} · ${pfModeLabel(mode, min, max)}`;
-  };
-
-  /** the state fill: green means SAFE paging, not automatic (automatic
-      always qualifies; otherwise a single viable file suffices — a
-      healthy drive beside an off one is the normal single-file setup,
-      not a warning. Small, off, and unreadable everywhere stays warn). */
-  const pfHealthy =
-    !!pfSettings &&
-    (pfSettings.automatic ||
-      pfSettings.drives.some(
-        (d) =>
-          d.mode === "system" ||
-          (d.mode === "custom" && (d.max_mb ?? 0) >= 8192),
-      ));
   const pfLiveDrive = pfSettings?.drives.find((d) => d.drive === pfDrive);
   /** Apply dies while nothing differs from live (no dead round-trip,
       no pointless UAC): automatic flag first, then the selected drive's
@@ -283,74 +248,15 @@ export function PagefileEditor(props: {
     void runPfApply();
   };
 
+  // RAM for the strip, rounded to whole GB for a quiet readout
+  // (31.9 GB installs read "32 GB RAM", never a jittery decimal)
+  const ramGb =
+    pfSettings?.ram_total_mb != null
+      ? Math.round(pfSettings.ram_total_mb / 1024)
+      : null;
+
   return (
     <>
-      {/* the section's face: one summary row (title + live global
-          status), the editor lives one tap under it instead of owning
-          the page open forever */}
-      {pfSettings ? (
-        <div
-          data-tweak="pagefile"
-          className={`card-sm pf-summary${pfHealthy ? " verdict-ok" : " verdict-warn"}${linkedId === "pagefile" ? " is-linked" : ""}`}
-        >
-          {/* same row language as every SwitchRow (tile, texts with
-              the (?) inside the name line, badge, chevron): the title
-              and desc are text-styled buttons so the (?) can sit next
-              to the title without nesting a button inside a button */}
-          <span className="icon-tile check-func">
-            <Database size={15} />
-          </span>
-          <div className="switch-body">
-            <span className="switch-name">
-              <button
-                type="button"
-                className="pf-name-btn"
-                aria-expanded={pfOpen}
-                onClick={() => setPfOpen(!pfOpen)}
-              >
-                {t.tweakPfTitle}
-              </button>
-              <button
-                type="button"
-                className="switch-hint"
-                aria-label={t.tweakPfTitle}
-                onClick={() => showHint(t.tweakPfTitle, t.tweakPfHint)}
-              >
-                <Info size={13} />
-              </button>
-            </span>
-            <button
-              type="button"
-              className="pf-desc-btn"
-              aria-expanded={pfOpen}
-              onClick={() => setPfOpen(!pfOpen)}
-            >
-              {pfSettings.automatic ? t.tweakPfStatusAuto : t.tweakPfStatusManual}
-            </button>
-          </div>
-          {/* pending survives collapsing: the full note lives in
-              the expanded card, this badge keeps the collapsed row
-              honest */}
-          {pfSettings.pending ? (
-            <span className="badge check-badge warn">{t.tweakPfPendingBadge}</span>
-          ) : null}
-          {/* its own toggle button (a button cannot nest): title-area
-              and chevron expand the same editor, matching the row
-              order of every other card (tile, texts, ?, badge, ctl) */}
-          <button
-            type="button"
-            className="pf-chev-btn"
-            aria-expanded={pfOpen}
-            aria-label={t.tweakPfTitle}
-            onClick={() => setPfOpen(!pfOpen)}
-          >
-            <ChevronDown
-              size={16}
-              className={`pf-chev${pfOpen ? " is-open" : ""}`}
-            />
-          </button>
-        </div>
-      ) : null}
       {/* read failure: the editor shows nothing guessed (an inline
           honest error; the window-focus retry is the rescue) */}
       {pfError ? (
@@ -360,23 +266,30 @@ export function PagefileEditor(props: {
           hint={pfError}
         />
       ) : null}
-      {/* per-drive live lines + the Virtual Memory-style editor, only
-          while expanded: global automatic checkbox, one selectable row
-          per fixed drive, the selected drive's mode, sizes only for
-          custom (only the selected drive ever changes) */}
-      {pfSettings && pfOpen ? (
-        <div className="pf-status">
-          {pfSettings.drives.map((d) => (
-            <span key={d.drive} className="switch-desc">
-              {pfDriveLine(d.drive, d.free_mb, d.mode, d.min_mb, d.max_mb)}
+      {/* the editor owns its page open: no summary row, no collapse.
+          The status strip up top answers "what holds now" (mode state
+          plus installed RAM); the deep-link ring lands on this card. */}
+      {pfSettings ? (
+        <div
+          data-tweak="pagefile"
+          className={`card-sm pf-form${linkedId === "pagefile" ? " is-linked" : ""}`}
+        >
+          <div className="pf-status-strip">
+            <span className="pf-status-state">
+              {pfSettings.automatic ? t.tweakPfStatusAuto : t.tweakPfStatusManual}
             </span>
-          ))}
-        </div>
-      ) : null}
-      {pfSettings && pfOpen ? (
-        <div className="card-sm pf-form">
-          {/* the (?) lives on the summary row (always visible); no
-              second copy in here */}
+            {ramGb !== null ? (
+              <span className="pf-status-ram">{t.pfRamInstalled(ramGb)}</span>
+            ) : null}
+            <button
+              type="button"
+              className="switch-hint"
+              aria-label={t.tweakPfTitle}
+              onClick={() => showHint(t.tweakPfTitle, t.tweakPfHint)}
+            >
+              <Info size={13} />
+            </button>
+          </div>
           <label className="pf-auto">
             <input
               type="checkbox"
@@ -466,6 +379,20 @@ export function PagefileEditor(props: {
                 />
               </label>
             </div>
+            {/* engine recommendation for the installed RAM: a starting
+                point next to the inputs, never a gate (hidden when RAM
+                is unreadable instead of recommending for nothing) */}
+            {pfSettings.ram_total_mb != null &&
+            pfSettings.recommended_min_mb != null &&
+            pfSettings.recommended_max_mb != null ? (
+              <p className="tool-note">
+                {t.pfRecommend(
+                  Math.round(pfSettings.ram_total_mb / 1024),
+                  pfSettings.recommended_min_mb,
+                  pfSettings.recommended_max_mb,
+                )}
+              </p>
+            ) : null}
             <Button
               label={t.tweakPfApply}
               className="pf-apply"
@@ -475,10 +402,9 @@ export function PagefileEditor(props: {
           </div>
         </div>
       ) : null}
-      {/* pending reboot note, inside the expanded card (self-clearing
-          on reboot, no writes); the summary badge above covers the
-          collapsed state */}
-      {pfSettings && pfOpen && pfSettings.pending ? (
+      {/* pending reboot note, inside the card (self-clearing on reboot,
+          no writes) */}
+      {pfSettings && pfSettings.pending ? (
         <p className="tool-note">{t.tweakPfPending}</p>
       ) : null}
       {/* pre-write confirm from the backend's validate step: "off"

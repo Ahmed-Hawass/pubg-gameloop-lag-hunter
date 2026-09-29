@@ -424,6 +424,11 @@ export interface PagefileSettings {
   drives: PagefileDrive[];
   /** a page file write is waiting for a reboot (self-clearing) */
   pending: boolean;
+  /** installed RAM in MB (null = unreadable): strip + recommendation only */
+  ram_total_mb: number | null;
+  /** recommended custom sizes for the installed RAM (null when unknown) */
+  recommended_min_mb: number | null;
+  recommended_max_mb: number | null;
 }
 /** pre-write warning from validate_pagefile_settings */
 export type PagefileWarning = "off" | "small" | null;

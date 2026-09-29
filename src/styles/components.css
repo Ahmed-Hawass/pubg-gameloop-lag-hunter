@@ -77,9 +77,6 @@
 .back-btn:focus-visible,
 .welcome-skip:focus-visible,
 .pf-drive:focus-visible,
-.pf-name-btn:focus-visible,
-.pf-desc-btn:focus-visible,
-.pf-chev-btn:focus-visible,
 .summary-x:focus-visible,
 .win-controls button:focus-visible {
   outline: 2px solid var(--primary);

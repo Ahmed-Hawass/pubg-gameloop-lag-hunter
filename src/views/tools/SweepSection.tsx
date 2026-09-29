@@ -1,10 +1,10 @@
 // SweepSection.tsx — the storage sweep: manual scan of the safe places,
-// delete only the ticked ones. Fully self-owned (state, runners, confirm):
-// the section never scans by itself, the Scan button below is the only
-// trigger, so the sweep costs nothing until asked.
+// delete only the ticked ones. Fully self-owned (page header, state,
+// runners, confirm): the section never scans by itself, the Scan button
+// below is the only trigger, so the sweep costs nothing until asked.
 
 import { useCallback, useRef, useState } from "react";
-import { ChevronDown, Info, Trash2 } from "lucide-react";
+import { CheckCircle2, Info, Trash2 } from "lucide-react";
 import { Button, Dialog } from "../../components/components";
 import { api, type CleanupCategory, type CleanupResult, type CleanupScan } from "../../bridge";
 import type { Notice } from "../../errors";
@@ -29,9 +29,10 @@ export function SweepSection(props: {
   const [clConfirm, setClConfirm] = useState(false);
   const [clBusy, setClBusy] = useState(false);
   const clBusyRef = useRef(false);
-  /** the sweep collapses under its summary row like the page file editor
-      (the section never opens itself: only a tap expands it) */
-  const [clOpen, setClOpen] = useState(false);
+  /** payoff flash: true from a successful clean until the next scan
+      starts — the cleaned hero owns the moment, then the work card
+      takes back over with fresh truth */
+  const [clCleanedFlash, setClCleanedFlash] = useState(false);
   /** deep scan answer (null = never asked). Deep places are NEVER
       auto-ticked, however big they measure. The card flips to
       whichever scan ran last: one list visible, one selection shared. */
@@ -66,6 +67,20 @@ export function SweepSection(props: {
     system_logs: t.cleanupCatLogs,
   };
   const clName = (id: string) => clNames[id] ?? id;
+  /** categorical dot/bar color per place (identity, never severity:
+      fixed hues readable on both themes, unknown ids fall muted) */
+  const CL_CATEGORY_COLORS: Record<string, string> = {
+    user_temp: "#58B368",
+    system_temp: "#45B8AC",
+    recycle_bin: "#8A8F98",
+    delivery_opt: "#4FA8D8",
+    thumb_cache: "#D8A64F",
+    error_reports: "#E07A5F",
+    old_minidumps: "#9B7EBD",
+    update_download: "#D48BC0",
+    system_logs: "#A3C14A",
+  };
+  const clColor = (id: string) => CL_CATEGORY_COLORS[id] ?? "#8A8F98";
   const clHintBodies: Record<string, string> = {
     user_temp: t.cleanupCatUserTempHint,
     system_temp: t.cleanupCatSystemTempHint,
@@ -92,6 +107,7 @@ export function SweepSection(props: {
     if (clBusyRef.current) return;
     clBusyRef.current = true;
     setClBusy(true);
+    setClCleanedFlash(false);
     setClProg(null);
     setClPhase("scan");
     setClScanError(null);
@@ -118,6 +134,7 @@ export function SweepSection(props: {
     if (clBusyRef.current) return;
     clBusyRef.current = true;
     setClBusy(true);
+    setClCleanedFlash(false);
     setClProg(null);
     setClPhase("scan");
     setClDeepError(null);
@@ -141,12 +158,14 @@ export function SweepSection(props: {
     setClConfirm(false);
     clBusyRef.current = true;
     setClBusy(true);
+    setClCleanedFlash(false);
     onCleaningChange?.(true);
     setClProg(null);
     setClPhase("clean");
     try {
       const res = await api.storageClean(clCleanIds, clProgress("clean"));
       setClResult(res);
+      setClCleanedFlash(true);
       // re-measure so the list shows the verified live truth, not hope
       // (both groups when both were scanned)
       try {
@@ -193,25 +212,6 @@ export function SweepSection(props: {
       ? { num: (clFreedBytes / 1073741824).toFixed(1), unit: "GB" }
       : { num: (clFreedBytes / 1048576).toFixed(1), unit: "MB" };
   const clFreedMb = Math.round((clFreedBytes / 1048576) * 10) / 10;
-  /** what counts as "worth cleaning": documented in one place, so the
-      state fill below never drifts from the copy */
-  const CLEAN_WORTHY_BYTES = 500 * 1048576;
-  /** summary state from the LAST SCAN (current truth, like every other
-      card), never from history: green = nothing worth cleaning, warn =
-      measurable junk above the floor, neutral = unscanned or unreadable.
-      Both groups count once scanned. */
-  const clEdge = (() => {
-    const byId = new Map<string, number | null>();
-    for (const category of [...(clScan?.categories ?? []), ...(clDeep?.categories ?? [])]) {
-      byId.set(category.id, category.bytes);
-    }
-    const all = [...byId.values()];
-    if (all.length === 0) return "";
-    const measured = all.filter((bytes) => bytes != null);
-    if (measured.length === 0) return "";
-    const total = measured.reduce((s, bytes) => s + (bytes ?? 0), 0);
-    return total >= CLEAN_WORTHY_BYTES ? "verdict-warn" : "verdict-ok";
-  })();
   /** one row per measured place (shared by both groups so the two lists
       can never drift apart in behavior) */
   const renderClRows = (cats: CleanupCategory[]) =>
@@ -223,6 +223,11 @@ export function SweepSection(props: {
       const empty = (c.bytes ?? 0) <= 0;
       return (
         <div key={c.id} className={`inset-row cleanup-row${empty ? " is-empty" : ""}`}>
+          <span
+            className="cleanup-dot"
+            style={{ background: clColor(c.id) }}
+            aria-hidden="true"
+          />
           <input
             type="checkbox"
             aria-label={clName(c.id)}
@@ -267,6 +272,13 @@ export function SweepSection(props: {
     .filter((c) => clCleanIds.includes(c.id))
     .reduce((s, c) => s + (c.bytes ?? 0), 0);
   const clTickable = clVisible.filter((c) => (c.bytes ?? 0) > 0);
+  /** breakdown bar inputs: measured places of the visible set, share of
+      their own total (a zero total hides the bar, never a flat one) */
+  const clMeasured = clVisible.filter((c) => (c.bytes ?? 0) > 0);
+  const clMeasuredTotal = clMeasured.reduce((s, c) => s + (c.bytes ?? 0), 0);
+  /** scanned this session (either group): the work card replaces the
+      idle hero from here on */
+  const clScanned = clScan !== null || clDeep !== null;
   const clAllTicked =
     clTickable.length > 0 && clTickable.every((c) => clChecked.includes(c.id));
   const toggleClAll = () => {
@@ -280,73 +292,53 @@ export function SweepSection(props: {
           ],
     );
   };
-  /** summary status line from the sweep memory (last run + 30 days) */
-  const clStatus = (h: { last_freed_bytes: number; last_at: string | null; last_30d_bytes: number }) => {
-    if (!h.last_at) return t.cleanupLastNever;
-    const mb = (b: number) => Math.round((b / 1048576) * 10) / 10;
-    const when = `${h.last_at.slice(0, 10)} ${h.last_at.slice(11, 16)}`;
-    return `${t.cleanupLast(mb(h.last_freed_bytes), when)} · ${t.cleanup30d(mb(h.last_30d_bytes))}`;
-  };
-
   return (
-    <>
-      {/* manual sweep: scan the quick safe places, delete only the ticked
-          ones. No auto-delete, no estimates: sizes are measured, the
-          freed number is before-minus-after, locked files are skipped.
-          Collapses under its summary row like the page file editor. */}
-      <div className={`card-sm pf-summary ${clEdge}`} data-tweak="cleanup">
-        {/* same row language as the page file summary above: the (?)
-            sits inside the name line, like every SwitchRow */}
-        <span className="icon-tile check-func">
-          <Trash2 size={15} />
+    <div className="check-list">
+      {/* plain page header (not a card, not collapsible): the shell
+          back button above already says where this lives */}
+      <div className="page-head">
+        <span className="icon-tile">
+          <Trash2 size={18} />
         </span>
-        <div className="switch-body">
-          <span className="switch-name">
-            <button
-              type="button"
-              className="pf-name-btn"
-              aria-expanded={clOpen}
-              // the section never scans by itself (not on open, not
-              // on launch): the Scan button below is the only
-              // trigger, so the sweep costs nothing until asked
-              onClick={() => setClOpen(!clOpen)}
-            >
-              {t.cleanupTitle}
-            </button>
-            <button
-              type="button"
-              className="switch-hint"
-              aria-label={t.cleanupTitle}
-              onClick={() => showHint(t.cleanupTitle, t.cleanupDesc)}
-            >
-              <Info size={13} />
-            </button>
-          </span>
-          <button
-            type="button"
-            className="pf-desc-btn"
-            aria-expanded={clOpen}
-            onClick={() => setClOpen(!clOpen)}
-          >
-            {clScan ? clStatus(clScan.history) : t.cleanupDesc}
-          </button>
-        </div>
-        {/* the chevron toggles the same editor as the title area */}
-        <button
-          type="button"
-          className="pf-chev-btn"
-          aria-expanded={clOpen}
-          aria-label={t.cleanupTitle}
-          onClick={() => setClOpen(!clOpen)}
-        >
-          <ChevronDown
-            size={16}
-            className={`pf-chev${clOpen ? " is-open" : ""}`}
-          />
-        </button>
+        <span className="page-head-text">
+          <span className="page-head-title">{t.toolCleanup}</span>
+          <span className="page-head-desc">{t.toolCleanupDesc}</span>
+        </span>
       </div>
-      {clOpen ? (
+      {/* cleaned payoff first: right after a verified clean the card
+          celebrates the measured number with a way back (Scan again).
+          The work card below takes over on the next scan. */}
+      {clCleanedFlash && clResult ? (
+        <div className="card-sm cleanup-cleaned">
+          <span className="cleanup-done">
+            <CheckCircle2 size={30} aria-hidden="true" />
+          </span>
+          <div className="cleanup-hero">
+            <span className="cleanup-hero-num">{clHero.num}</span>
+            <span className="cleanup-hero-unit">{clHero.unit}</span>
+          </div>
+          <p className="cleanup-result">{t.cleanupFreed(clFreedMb)}</p>
+          {clUnmeasured ? <p className="tool-note">{t.cleanupUnmeasured}</p> : null}
+          <p className="cleanup-tagline">{t.cleanupCleanedTag}</p>
+          <Button
+            label={t.cleanupRescan}
+            disabled={clBusy}
+            onClick={() => void (clMode === "deep" ? runClDeepScan() : runClScan())}
+          />
+        </div>
+      ) : (
         <div className="card-sm cleanup">
+          {/* idle hero: the only invitation before the first scan
+              (mode pills + Scan ride below it, like the concept) */}
+          {!clScanned && !clBusy ? (
+            <div className="cleanup-idle">
+              <span className="cleanup-idle-icon">
+                <Trash2 size={26} aria-hidden="true" />
+              </span>
+              <div className="cleanup-idle-title">{t.cleanupTitle}</div>
+              <div className="cleanup-idle-desc">{t.cleanupDesc}</div>
+            </div>
+          ) : null}
           {clScanError ? <p className="tool-note">{clScanError}</p> : null}
           {clDeepError ? <p className="tool-note">{clDeepError}</p> : null}
           {/* one toggle for the visible list only (the flip hides a
@@ -378,6 +370,36 @@ export function SweepSection(props: {
               </button>
             ))}
           </div>
+          {/* scanned hero: what the ticked rows would free right now,
+              with the per-place breakdown bar under it */}
+          {clScanned && clSelectedBytes > 0 && !clBusy ? (
+            <>
+              <div className="cleanup-hero">
+                <span className="cleanup-hero-num">
+                  {clSelectedBytes >= 1073741824
+                    ? (clSelectedBytes / 1073741824).toFixed(1)
+                    : (clSelectedBytes / 1048576).toFixed(1)}
+                </span>
+                <span className="cleanup-hero-unit">
+                  {clSelectedBytes >= 1073741824 ? "GB" : "MB"}
+                </span>
+              </div>
+              <p className="cleanup-result">{t.cleanupReadyToFree}</p>
+            </>
+          ) : null}
+          {clScanned && clMeasuredTotal > 0 && !clBusy ? (
+            <div className="cleanup-bars" aria-hidden="true">
+              {clMeasured.map((c) => (
+                <span
+                  key={c.id}
+                  style={{
+                    width: `${((c.bytes ?? 0) / clMeasuredTotal) * 100}%`,
+                    background: clColor(c.id),
+                  }}
+                />
+              ))}
+            </div>
+          ) : null}
           {/* one list visible: the mode's own results, on an inset
               surface with dividers. Selection stays
               shared, so Clean always acts on every ticked row. */}
@@ -426,26 +448,9 @@ export function SweepSection(props: {
             </div>
           ) : null}
           {clBusy && !clProg ? <p className="tool-note">{t.cleanupScanning}</p> : null}
-          {/* the payoff: one big measured number, then its sentence */}
-          {clResult ? (
-            <div className="cleanup-hero">
-              <span className="cleanup-hero-num">{clHero.num}</span>
-              <span className="cleanup-hero-unit">{clHero.unit}</span>
-            </div>
-          ) : null}
-          {clResult ? <p className="cleanup-result">{t.cleanupFreed(clFreedMb)}</p> : null}
-          {clResult && clUnmeasured ? (
-            <p className="tool-note">{t.cleanupUnmeasured}</p>
-          ) : null}
-          {/* footer: what Clean will take on the reading-start side,
-              the two actions on the end side. The "Selected" line counts
-              the same ids Clean will take. */}
+          {/* footer: both actions pinned to the end side (the hero
+              above already counts what Clean will take) */}
           <div className="cleanup-foot">
-            <span className="cleanup-selected">
-              {(clScan ?? clDeep) && clCleanIds.length > 0
-                ? t.cleanupSelected(Math.round((clSelectedBytes / 1048576) * 10) / 10)
-                : ""}
-            </span>
             <span className="cleanup-foot-btns">
               <Button
                 label={
@@ -473,7 +478,7 @@ export function SweepSection(props: {
             </span>
           </div>
         </div>
-      ) : null}
+      )}
       {/* destructive confirm (recycle bin is permanent): names the
           ticked places like the pagefile-off confirm names its drive */}
       {clConfirm ? (
@@ -488,6 +493,6 @@ export function SweepSection(props: {
           onClose={() => setClConfirm(false)}
         />
       ) : null}
-    </>
+    </div>
   );
 }
