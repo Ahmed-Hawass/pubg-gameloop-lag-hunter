@@ -1,5 +1,9 @@
 // UpdateModal.tsx — the update dialog: offer → download (progress, cancellable)
 // → verified success (open folder) → failure (retry). Four states, one surface.
+// Own overlay + trap (a second structural root beside Dialog); the App shows
+// only one visible surface at a time via `suspended`. Offer pins the dialog
+// (no click-outside) and autofocuses Download: a deliberate exception to the
+// safe-side rule, the offer IS the point here, not a destructive confirm.
 // Scope contract (engine/update.rs): no self-replace, no restart — the most
 // this modal does is put a VERIFIED file next to the user and open its folder.
 

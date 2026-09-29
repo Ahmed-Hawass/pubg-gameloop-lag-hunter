@@ -28,6 +28,28 @@ body {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
+/* reduced motion: spinners freeze (they signal waiting, never progress).
+   !important because base loads before the rules that arm animations. */
+@media (prefers-reduced-motion: reduce) {
+  .spin,
+  .empty-ico.spin svg {
+    animation: none !important;
+  }
+}
+/* selectable text: the app disables selection globally (kiosk-like
+   shell), but error lines, report content, notes, paths, and inputs
+   must copy — these re-enable it, nothing else does */
+input,
+textarea,
+.dialog-box,
+.note-body,
+.note-fix-box,
+.report-moments,
+.report-metrics,
+.feed-list,
+.um-notes {
+  user-select: text;
+}
 
 ::-webkit-scrollbar {
   width: 8px;

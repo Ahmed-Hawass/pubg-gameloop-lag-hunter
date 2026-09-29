@@ -5,7 +5,7 @@
 // ALL tooltips are the app's own (Tip component) — never the OS one.
 
 import { useEffect, useState } from "react";
-import { Copy, Minus, Square, X } from "lucide-react";
+import { Minus, PictureInPicture2, Square, X } from "lucide-react";
 import {
   isWindowMaximized,
   minimizeWindow,
@@ -16,9 +16,15 @@ import { Tip } from "./components";
 import { useLang } from "../i18n";
 import appIcon from "../assets/app-icon.png";
 
-export function TitleBar(props: { version: string; onRequestExit: () => void }) {
+export function TitleBar(props: {
+  version: string;
+  onRequestExit: () => void;
+  /** a newer release is known: a quiet dot rides the version (the
+      sidebar About dot and the heading dot stay the action sites) */
+  updateAvailable?: boolean;
+}) {
   const { t } = useLang();
-  const { version, onRequestExit } = props;
+  const { version, onRequestExit, updateAvailable } = props;
   const [maximized, setMaximized] = useState(false);
 
   // track the maximized state for the toggle's tooltip and icon
@@ -38,7 +44,15 @@ export function TitleBar(props: { version: string; onRequestExit: () => void }) 
 
   return (
     <div className="titlebar">
-      <div className="titlebar-left" data-tauri-drag-region>
+      {/* double-click the drag region toggles maximize (OS convention);
+          the controls are a separate block, never inside the region */}
+      <div
+        className="titlebar-left"
+        data-tauri-drag-region
+        onDoubleClick={() => {
+          void toggleMaximizeWindow();
+        }}
+      >
         <img
           className="titlebar-icon"
           src={appIcon}
@@ -54,6 +68,13 @@ export function TitleBar(props: { version: string; onRequestExit: () => void }) 
           <span className="titlebar-version num" data-tauri-drag-region>
             v{version}
           </span>
+        ) : null}
+        {updateAvailable ? (
+          <span
+            className="titlebar-dot"
+            role="status"
+            aria-label={t.updateAvailableTitle}
+          />
         ) : null}
       </div>
       <div className="win-controls">
@@ -77,7 +98,7 @@ export function TitleBar(props: { version: string; onRequestExit: () => void }) 
               void toggleMaximizeWindow();
             }}
           >
-            {maximized ? <Copy size={11} /> : <Square size={11} />}
+            {maximized ? <PictureInPicture2 size={11} /> : <Square size={11} />}
           </button>
         </Tip>
         <Tip text={t.close}>

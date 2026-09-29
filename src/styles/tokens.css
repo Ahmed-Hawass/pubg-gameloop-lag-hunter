@@ -16,6 +16,10 @@
   --primary-dim: rgba(83, 252, 24, 0.1);
   --primary-dim-2: rgba(83, 252, 24, 0.2);
   --on-primary: #06210a;
+  --warn: #f5c518;
+  --warn-dim: rgba(245, 197, 24, 0.12);
+  --danger: #ff5a52;
+  --danger-dim: rgba(255, 90, 82, 0.12);
   /* state quads — pale solid bg + dark ink (identical in both themes, so
      the pair reads on either): cards, banners, and badges only. Rule:
      state text rides its bg-* with its text-* ink; text on plain

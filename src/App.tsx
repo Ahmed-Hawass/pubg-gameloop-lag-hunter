@@ -459,7 +459,7 @@ export default function App() {
 
   return (
     <div className="shell">
-      <TitleBar version={appVersion} onRequestExit={requestExit} />
+      <TitleBar version={appVersion} onRequestExit={requestExit} updateAvailable={updateInfo != null} />
       <div className="shell-body">
         {/* null = settings still loading (IPC round-trip): show NOTHING
             decisive. The old bug rendered the main UI immediately, then
@@ -484,7 +484,12 @@ export default function App() {
               <nav className={`sidebar ${collapsed ? "is-collapsed" : ""}`}>
                 <div className="sb-label">{t.menu}</div>
                 {tabs.map((tab) => (
-                  <Tip key={tab.id} text={collapsed ? tab.label : ""}>
+                  <Tip
+                    key={tab.id}
+                    // collapsed rail hides the beta pill: the tooltip
+                    // carries the signal instead (expanded labels show it)
+                    text={collapsed ? (tab.beta ? `${tab.label} (${t.toolsBeta})` : tab.label) : ""}
+                  >
                     <button
                       className={`sb-item ${view === tab.id ? "is-active" : ""}`}
                       // the active tab is announced as current (visual
@@ -511,14 +516,20 @@ export default function App() {
                 <Tip text={collapsed ? t.about : ""}>
                   <button
                     className={`sb-item ${view === "about" ? "is-active" : ""}`}
-                    onClick={() => setView("about")}
+                    onClick={() => {
+                      // like every tab: a pending deep-link must not
+                      // survive a detour and fire on the way back
+                      setReportOpenId(null);
+                      setToolOpenId(null);
+                      setView("about");
+                    }}
                   >
                     <Info size={17} />
                     {!collapsed ? <span>{t.about}</span> : null}
-                    {/* the update dot: not dismissible, present for the whole
-                        life of the newer version — the silent signal behind
-                        the once-per-version modal */}
-                    {updateInfo ? (
+                    {/* the update dot: hidden while About itself is open
+                        (the heading dot carries the signal there — never
+                        two yellows for one update) */}
+                    {updateInfo && view !== "about" ? (
           <span
             className="sb-dot"
             // role+label: an aria-label on a plain span is invisible to
@@ -534,8 +545,9 @@ export default function App() {
                 <div className="sb-spacer" />
 
                 {/* collapse control — pinned at the very bottom of the sidebar:
-                    flips direction when collapsed */}
-                <Tip text={collapsed ? t.expandMenu : t.collapseMenu}>
+                    flips direction when collapsed; no tooltip while
+                    expanded (the visible label says it already) */}
+                <Tip text={collapsed ? t.expandMenu : ""}>
                   <button className="sb-collapse" onClick={toggleSidebar}>
                     {collapsed ? <ChevronsRight size={15} /> : <ChevronsLeft size={15} />}
                     {!collapsed ? <span>{t.collapseMenu}</span> : null}

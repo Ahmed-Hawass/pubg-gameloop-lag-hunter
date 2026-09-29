@@ -20,7 +20,17 @@
   padding: 0;
   padding-inline-start: 16px;
   background: var(--bg);
-  border-bottom: 1px solid var(--border);
+  border-block-end: 1px solid var(--border);
+}
+
+/* update signal in the chrome: the same 7px warn dot as the sidebar,
+   riding the version text (the About page owns the action) */
+.titlebar-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--fill-warning);
+  flex: none;
 }
 
 .titlebar-left {
@@ -98,6 +108,8 @@
   height: 100%;
 }
 
+/* default (not pointer) cursor is deliberate OS parity: native caption
+   buttons never show a hand, even with hover fills */
 .win-controls button {
   width: 46px;
   height: 100%;
@@ -198,9 +210,10 @@
   pointer-events: none;
 }
 
-/* active entry: the dot keeps its ring against the filled background */
+/* active entry: the dot keeps a contrasting ring against the filled
+   background (same-color ring rendered an unseparated blob) */
 .sb-item.is-active .sb-dot {
-  border-color: var(--warn);
+  border-color: var(--on-primary);
 }
 
 /* beta pill next to a sidebar entry: a FIXED signal yellow in both themes
@@ -229,6 +242,11 @@
 .sidebar.is-collapsed .sb-item {
   justify-content: center;
   padding: 10px 0;
+}
+/* collapsed rail: the corner dot re-anchors to the centered glyph
+   (half the 7px dot off the middle — logical, mirrors with RTL) */
+.sidebar.is-collapsed .sb-dot {
+  inset-inline-end: calc(50% - 3.5px);
 }
 
 .sidebar.is-collapsed .sb-label {
@@ -291,16 +309,7 @@
    view; visible only when the page actually overflows (overflow-y: auto
    above), so roomy screens stay clean. */
 :is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::-webkit-scrollbar,
-:is(.monitor, .feed-list)::-webkit-scrollbar,
-.content > div > .reports::-webkit-scrollbar,
-.content > div > .sys::-webkit-scrollbar,
-.content > div > .procs::-webkit-scrollbar,
-.content > div > .checks::-webkit-scrollbar,
-.content > div > .tools::-webkit-scrollbar,
-.content > div > .about::-webkit-scrollbar,
-.content > div > .settings-page::-webkit-scrollbar,
-.content > div > .monitor::-webkit-scrollbar,
-.feed-list::-webkit-scrollbar {
+:is(.monitor, .feed-list)::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
@@ -329,12 +338,16 @@
 }
 
 /* ---- icon micro-animations (quiet, app-wide) ---- */
-/* sidebar icons: nudge on hover, pop when becoming active */
+/* sidebar icons: nudge on hover (same 1.18 scale everywhere; the
+   tilt mirrors in RTL), pop when becoming active */
 .sb-item svg {
   transition: transform 0.25s var(--ease);
 }
 .sb-item:hover:not(.is-active) svg {
-  transform: scale(1.22) rotate(-6deg);
+  transform: scale(1.18) rotate(-6deg);
+}
+[dir="rtl"] .sb-item:hover:not(.is-active) svg {
+  transform: scale(1.18) rotate(6deg);
 }
 .sb-item.is-active svg {
   animation: sb-pop 0.3s var(--ease);
