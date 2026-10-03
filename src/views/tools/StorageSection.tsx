@@ -1,10 +1,11 @@
-// StorageSection.tsx — the storage details page: the Storage Sense
-// switch, alone for now (the page file and the sweep own their cards).
-// More storage features land here. The switch owns its read through
-// useTweaks; this shell only gates the first paint.
+// StorageSection.tsx — the storage details page: live-mirrored option
+// rows under a one-glance banner like the gaming page. The full general
+// pattern holds (banner, featured attention, full archive): future
+// options join the rows below, nothing restructures. The rows own
+// their read through useTweaks; this shell only gates the first paint.
 
-import { useEffect } from "react";
-import { Recycle, RefreshCw, SlidersHorizontal } from "lucide-react";
+import { Fragment, useEffect, type ReactNode } from "react";
+import { AlertTriangle, CheckCircle2, Recycle, RefreshCw, SlidersHorizontal } from "lucide-react";
 import { EmptyState } from "../../components/components";
 import type { Notice } from "../../errors";
 import { useLang } from "../../i18n";
@@ -60,9 +61,17 @@ export function StorageSection(props: {
     );
   }
 
-  return (
-    <div className="check-list">
-      {tweaks.ssOn !== null ? (
+  /** one row per storage option: the attention section and the full
+      archive render the SAME row below (edit once, both follow). A row
+      counts as needing attention only when rendered AND off — the same
+      rule as the gaming page, so future options slot in untouched. */
+  type StorageRow = { id: string; off: boolean; el: ReactNode };
+  const rows: StorageRow[] = [];
+  if (tweaks.ssOn !== null) {
+    rows.push({
+      id: "storagesense",
+      off: !tweaks.ssOn,
+      el: (
         <SwitchRow
           tweakId="storagesense"
           linked={false}
@@ -75,7 +84,52 @@ export function StorageSection(props: {
           busy={tweaks.tweakBusy}
           onFlip={(next) => void tweaks.flipTweak("storagesense", next)}
         />
+      ),
+    });
+  }
+  const offRows = rows.filter((r) => r.off);
+
+  return (
+    <>
+      {/* one-glance verdict, same pattern as the gaming page: derived
+          from the rendered rows, zero backend cost. Hidden while
+          unread (a badge that cannot be read is hidden, like every
+          landing badge). */}
+      {rows.length > 0 ? (
+        <div className={`health-banner ${offRows.length === 0 ? "ok" : "warn"}`}>
+          {offRows.length === 0 ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
+          <div>
+            <div className="hb-title">
+              {offRows.length === 0 ? t.tweakBannerGood : t.tweakBannerNeeds(offRows.length)}
+            </div>
+            <div className="hb-sub">
+              {offRows.length === 0 ? t.tweakBannerGoodSub : t.tweakBannerNeedsSub}
+            </div>
+          </div>
+        </div>
       ) : null}
-    </div>
+      {/* featured off-rows: the same rows as the archive below,
+          repeated deliberately (summary plus archive, not instead of it) */}
+      {offRows.length > 0 ? (
+        <section>
+          <h3 className="health-section-title">{t.checkWarnBadge}</h3>
+          <div className="check-list">
+            {offRows.map((r) => (
+              <Fragment key={`${r.id}-featured`}>{r.el}</Fragment>
+            ))}
+          </div>
+        </section>
+      ) : null}
+      {rows.length > 0 ? (
+        <section>
+          <h3 className="health-section-title">{t.storageAllTitle}</h3>
+          <div className="check-list">
+            {rows.map((r) => (
+              <Fragment key={`${r.id}-archive`}>{r.el}</Fragment>
+            ))}
+          </div>
+        </section>
+      ) : null}
+    </>
   );
 }

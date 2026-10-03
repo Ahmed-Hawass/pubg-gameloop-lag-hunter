@@ -251,6 +251,15 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   new clean-temp piece drawn for the occasion), and storage keeping
   only the sense switch. The page file health rule is shared between
   its landing badge and the editor so the two faces never drift.
+- The virtual-memory strip names the committed sizes (manual mode only,
+  from the same read, never a new round-trip), and the sweep memory is
+  readable without scanning (a new cleanup_history command over the
+  persisted runs): the disk cleanup card shows the last run badge-less,
+  the sweep page lines last plus last-30-days under its header.
+  Storage follows the general banner plus featured plus archive pattern
+  with its landing card badging the live sense state; back buttons swap
+  chevron for arrow; danger dialogs share the standard frame (no red
+  edge); the sweep idle copy drops the jargon.
 
 ### Fixed
 - The session tick no longer holds the state lock across clock reads and

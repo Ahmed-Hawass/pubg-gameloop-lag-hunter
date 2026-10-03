@@ -3,12 +3,13 @@
 // runners, confirm): the section never scans by itself, the Scan button
 // below is the only trigger, so the sweep costs nothing until asked.
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, Info, Trash2 } from "lucide-react";
 import { Button, Dialog } from "../../components/components";
-import { api, type CleanupCategory, type CleanupResult, type CleanupScan } from "../../bridge";
+import { api, type CleanupCategory, type CleanupHistory, type CleanupResult, type CleanupScan } from "../../bridge";
 import type { Notice } from "../../errors";
 import { useLang } from "../../i18n";
+import { cleanupHistoryLine } from "./summary";
 import { useModalSignal, useYieldToAppDialog } from "./useModalSignals";
 
 export function SweepSection(props: {
@@ -38,6 +39,22 @@ export function SweepSection(props: {
       whichever scan ran last: one list visible, one selection shared. */
   const [clDeep, setClDeep] = useState<CleanupScan | null>(null);
   const [clDeepError, setClDeepError] = useState<string | null>(null);
+  /** sweep memory for the history line under the page header (null =
+      unread yet: no line rather than a guessed one). A persisted read,
+      never a scan: measuring stays user-triggered. */
+  const [clHistory, setClHistory] = useState<CleanupHistory | null>(null);
+  useEffect(() => {
+    let live = true;
+    void api
+      .cleanupHistory()
+      .then((h) => {
+        if (live) setClHistory(h);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
   /** scan mode doubles as the visible set: one toggle, one Scan button,
       no twin buttons. A completed scan flips the mode to its own
       results; flipping the toggle by hand only switches the display. */
@@ -171,6 +188,9 @@ export function SweepSection(props: {
       try {
         const freshScan = await api.storageScan(clProgress("scan"));
         setClScan(freshScan);
+        // the scan answer carries the fresh sweep memory (the clean
+        // above just recorded into it): no extra read needed
+        setClHistory(freshScan.history);
         let freshCategories = [...freshScan.categories];
         if (clDeep !== null) {
           const freshDeep = await api.storageDeepScan(clProgress("scan"));
@@ -305,6 +325,11 @@ export function SweepSection(props: {
           <span className="page-head-desc">{t.toolCleanupDesc}</span>
         </span>
       </div>
+      {/* sweep memory under the header (last run plus last-30-days):
+          past measured truth, never a reason to scan */}
+      {clHistory ? (
+        <p className="tool-note">{cleanupHistoryLine(t, clHistory)}</p>
+      ) : null}
       {/* cleaned payoff first: right after a verified clean the card
           celebrates the measured number with a way back (Scan again).
           The work card below takes over on the next scan. */}

@@ -232,7 +232,7 @@ export const ar: Locale = {
   checksHint:
     "أهم إعدادات جهازك في مكان واحد: ما يساعد لعبك وما يبطئه بصمت. التفاصيل على بعد ضغطة.",
   checkPower: "خطة الطاقة",
-  checkPagefile: "ملف الترحيل (Pagefile)",
+  checkPagefile: "الذاكرة الظاهرية (page file)",
   checkCharger: "مصدر الطاقة",
   checkVt: "المحاكاة الافتراضية للمعالج (VT)",
   vtOk: "مفعّلة",
@@ -287,7 +287,6 @@ export const ar: Locale = {
   toolsBack: "الأدوات",
   toolGamingTweaks: "أداء الألعاب",
   toolGamingTweaksDesc: "مفاتيح أداء للعب أنعم",
-  toolPagefile: "ذاكرة احتياطية",
   toolPagefileDesc: "تقطيع أقل عند امتلاء الذاكرة",
   toolCleanup: "تنظيف القرص",
   toolCleanupDesc: "استعد مساحة القرص دون المساس بالمهم",
@@ -328,8 +327,6 @@ export const ar: Locale = {
   tweakPfHint:
     "يطابق مربع حوار الذاكرة الظاهرية في ويندوز: إدارة تلقائية لجميع الأقراص، أو لكل قرص حجم يديره النظام أو مخصص أو بدون page file. يتغير القرص المحدد فقط، وتبقى بقية الأقراص كما هي تمامًا. تُطبق التغييرات بعد إعادة تشغيل ويندوز.",
   tweakPfAutoLabel: "إدارة حجم page file تلقائيًا لجميع الأقراص",
-  tweakPfStatusAuto: "تلقائي: ويندوز يدير كل الأقراص",
-  tweakPfStatusManual: "يدوي: إعدادات كل قرص أدناه",
   tweakPfDrivesLabel: "الأقراص",
   /** short drive-card lines (letter rides its own span, so no drive
       prefix here): free space and mode stay separate spans */
@@ -349,6 +346,10 @@ export const ar: Locale = {
   pfRamInstalled: (gb: number) => `${gb} جيجابايت ذاكرة مثبتة`,
   pfRecommend: (gb: number, min: number, max: number) =>
     `الموصى به لذاكرة ${gb} جيجابايت: ${min.toLocaleString("en-US")}–${max.toLocaleString("en-US")} ميجابايت`,
+  pfCurrentlyUsing: (sum: string, n: number) =>
+    `الحجم المستخدم حاليا ${sum} MB على ${n === 1 ? "قرص واحد" : n === 2 ? "قرصين" : n >= 3 && n <= 10 ? `${n} أقراص` : `${n} قرصا`}`,
+  pfSystemSizes: (n: number) =>
+    `على ${n === 1 ? "قرص واحد" : n === 2 ? "قرصين" : n >= 3 && n <= 10 ? `${n} أقراص` : `${n} قرصا`}: الأحجام تحت إدارة ويندوز`,
   tweakPfWarnOffTitle: (drive: string) => `إزالة page file على ${drive}؟`,
   tweakPfWarnOffBody: (drive: string) =>
     `بدون page file على ${drive}، أعطال نفاد الذاكرة مرجحة تحت الحمل. يُطبق بعد إعادة تشغيل ويندوز.`,
@@ -378,6 +379,7 @@ export const ar: Locale = {
   tweakBannerGoodSub: "كل خيار على وضعه الموصى به",
   tweakBannerNeeds: (n: number) => `خيارات تحتاج إلى ضبط: ${n}`,
   tweakBannerNeedsSub: "كل شيء آخر محسّن",
+  storageAllTitle: "كل خيارات التخزين",
   /** header above the full archive list (attention rows repeat above it
       as the featured summary, so this labels what follows, not a filter) */
   tweakAllTweaks: "كل الخيارات",
@@ -389,7 +391,7 @@ export const ar: Locale = {
   /** storage sweep: scan four safe places, delete only the ticked ones */
   cleanupTitle: "تنظيف الملفات المؤقتة",
   cleanupDesc:
-    "يفحص أربعة أماكن آمنة ويحذف فقط ما تحدده. الملفات المستخدمة تُتخطى، والمساحة المحررة مقاسة فعليًا وليست تقديرًا.",
+    "يستعيد مساحة القرص من أماكن آمنة. لا يُحذف إلا ما تحدده، ولا يُمس شيء مهم أبدًا.",
   cleanupScan: "فحص",
   cleanupScanning: "جارٍ الفحص...",
   cleanupRescan: "فحص مجددًا",
@@ -406,6 +408,9 @@ export const ar: Locale = {
       lines, units stay Latin in both languages) */
   cleanupReadyToFree: "جاهزة للتحرير",
   cleanupCleanedTag: "أصبح لقرصك متسع أكبر للتنفس.",
+  cleanupLastNever: "لم يُنظَّف بعد.",
+  cleanupLast: (mb: number, when: string) => `آخر تنظيف: ${mb} MB بتاريخ ${when}.`,
+  cleanup30d: (mb: number) => `آخر 30 يومًا: ${mb} MB.`,
   cleanupScanningCat: (name: string) => `جارٍ فحص ${name}...`,
   cleanupCleaningCat: (name: string) => `جارٍ تنظيف ${name}...`,
   cleanupConfirmTitle: "حذف الملفات المحددة؟",

@@ -449,7 +449,7 @@ fn history_path() -> PathBuf {
     super::storage::app_dir().join("cleanup-history.jsonl")
 }
 
-fn history_totals() -> CleanupHistory {
+pub fn history_totals() -> CleanupHistory {
     history_totals_in(&history_path())
 }
 

@@ -226,7 +226,7 @@ export const en = {
   checksHint:
     "Your device's most important settings in one place: what helps your game and what quietly slows it down. Details are one click away.",
   checkPower: "Power plan",
-  checkPagefile: "Pagefile",
+  checkPagefile: "Virtual memory (page file)",
   checkCharger: "Power source",
   checkVt: "CPU virtualization (VT)",
   vtOk: "Enabled",
@@ -279,7 +279,6 @@ export const en = {
   toolsBack: "Tools",
   toolGamingTweaks: "Game performance",
   toolGamingTweaksDesc: "Performance switches for smoother play",
-  toolPagefile: "Backup memory",
   toolPagefileDesc: "Fewer stutters when memory fills up",
   toolCleanup: "Disk cleanup",
   toolCleanupDesc: "Reclaim disk space, nothing important touched",
@@ -320,8 +319,6 @@ export const en = {
   tweakPfHint:
     "Mirrors the Windows Virtual Memory dialog: automatic management for all drives, or per-drive system-managed, custom, or no paging file. Only the selected drive ever changes; every other drive is preserved exactly. Changes apply after you restart Windows.",
   tweakPfAutoLabel: "Automatically manage paging file size for all drives",
-  tweakPfStatusAuto: "Automatic: Windows manages every drive",
-  tweakPfStatusManual: "Manual: per-drive settings below",
   tweakPfDrivesLabel: "Drives",
   /** short drive-card lines (letter rides its own span, so no drive
       prefix here): free space and mode stay separate spans */
@@ -341,6 +338,14 @@ export const en = {
   pfRamInstalled: (gb: number) => `${gb} GB RAM installed`,
   pfRecommend: (gb: number, min: number, max: number) =>
     `Recommended for ${gb} GB RAM: ${min.toLocaleString("en-US")}–${max.toLocaleString("en-US")} MB`,
+  /** committed sizes for the "Currently using" strip line (manual mode
+      only): the sum of custom initials plus the live drive count.
+      Values stay Latin; the all-system variant names no sum because
+      those sizes are Windows-owned. */
+  pfCurrentlyUsing: (sum: string, n: number) =>
+    `Currently using ${sum} MB across ${n} drive${n === 1 ? "" : "s"}`,
+  pfSystemSizes: (n: number) =>
+    `Across ${n} drive${n === 1 ? "" : "s"}: sizes managed by Windows`,
   tweakPfWarnOffTitle: (drive: string) => `Remove the page file on ${drive}?`,
   tweakPfWarnOffBody: (drive: string) =>
     `Without a page file on ${drive}, out-of-memory crashes are likely under load. This takes effect after you restart Windows.`,
@@ -369,6 +374,9 @@ export const en = {
   tweakBannerGoodSub: "Every tweak holds its recommended state",
   tweakBannerNeeds: (n: number) => `${n} tweak${n === 1 ? "" : "s"} needs attention`,
   tweakBannerNeedsSub: "Everything else is optimized",
+  /** archive title under the featured repeat (same pattern as the
+      gaming page; future switches join this list, never the banner) */
+  storageAllTitle: "All storage options",
   /** header above the full archive list (attention rows repeat above it
       as the featured summary, so this labels what follows, not a filter) */
   tweakAllTweaks: "All tweaks",
@@ -380,7 +388,7 @@ export const en = {
   /** storage sweep: scan four safe places, delete only the ticked ones */
   cleanupTitle: "Clean temporary files",
   cleanupDesc:
-    "Scans four safe places and deletes only what you tick. Locked files are skipped, freed space is measured, never estimated.",
+    "Reclaims disk space from safe places. Only what you tick gets deleted, nothing important is ever touched.",
   cleanupScan: "Scan",
   cleanupScanning: "Scanning...",
   cleanupRescan: "Scan again",
@@ -397,6 +405,12 @@ export const en = {
       lines, units stay Latin in both languages) */
   cleanupReadyToFree: "ready to free up",
   cleanupCleanedTag: "Your disk has a little more room to breathe.",
+  /** sweep memory lines (last run + last-30-days, bytes only): the same
+      shapes the storage summary used before the card split, restored
+      for the landing card and the sweep page */
+  cleanupLastNever: "Never cleaned yet.",
+  cleanupLast: (mb: number, when: string) => `Last clean: ${mb} MB on ${when}.`,
+  cleanup30d: (mb: number) => `Last 30 days: ${mb} MB.`,
   cleanupScanningCat: (name: string) => `Scanning ${name}...`,
   cleanupCleaningCat: (name: string) => `Cleaning ${name}...`,
   cleanupConfirmTitle: "Delete the selected files?",

@@ -2,7 +2,7 @@
 // Content comes from the engine (keys + English fallbacks); the UI translates.
 
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, Clock, FileText, FileWarning, Folder, RefreshCw, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronDown, Clock, FileText, FileWarning, Folder, RefreshCw, Trash2 } from "lucide-react";
 import { Button, Dialog, EmptyState, Hint, NoteCard, Tip, diagnosisIcon, APP_DIALOG_OPEN_EVENT } from "../components/components";
 import { api, type FriendlyReport, type SessionEntry } from "../bridge";
 import { useLang } from "../i18n";
@@ -234,7 +234,7 @@ export function ReportsView(props: {
     return (
       <div className="reports">
         <button className="back-btn" onClick={() => setReport(null)}>
-          <ChevronLeft size={16} />
+          <ArrowLeft size={16} />
           {t.allSessions}
         </button>
 

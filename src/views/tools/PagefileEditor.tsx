@@ -16,6 +16,7 @@ import {
 import { errorDialog, type Notice } from "../../errors";
 import { useLang } from "../../i18n";
 import { useModalSignal, useYieldToAppDialog } from "./useModalSignals";
+import { summarizePagefileUsage } from "./summary";
 
 export function PagefileEditor(props: {
   active: boolean;
@@ -254,6 +255,9 @@ export function PagefileEditor(props: {
     pfSettings?.ram_total_mb != null
       ? Math.round(pfSettings.ram_total_mb / 1024)
       : null;
+  /** committed sizes for the "Currently using" strip line (null = no
+      line: automatic mode or nothing live — never a guessed number) */
+  const pfUsage = summarizePagefileUsage(pfSettings);
 
   return (
     <>
@@ -267,17 +271,26 @@ export function PagefileEditor(props: {
         />
       ) : null}
       {/* the editor owns its page open: no summary row, no collapse.
-          The status strip up top answers "what holds now" (mode state
-          plus installed RAM); the deep-link ring lands on this card. */}
+          The strip up top names what Windows holds now (committed sizes
+          in manual mode, installed RAM always); the mode itself lives
+          on the checkbox underneath, so no state is stated twice. The
+          deep-link ring lands on this card. */}
       {pfSettings ? (
         <div
           data-tweak="pagefile"
           className={`card-sm pf-form${linkedId === "pagefile" ? " is-linked" : ""}`}
         >
           <div className="pf-status-strip">
-            <span className="pf-status-state">
-              {pfSettings.automatic ? t.tweakPfStatusAuto : t.tweakPfStatusManual}
-            </span>
+            {pfUsage ? (
+              <span className="pf-status-state">
+                {pfUsage.allSystem
+                  ? t.pfSystemSizes(pfUsage.live)
+                  : t.pfCurrentlyUsing(
+                      pfUsage.sumMb.toLocaleString("en-US"),
+                      pfUsage.live,
+                    )}
+              </span>
+            ) : null}
             {ramGb !== null ? (
               <span className="pf-status-ram">{t.pfRamInstalled(ramGb)}</span>
             ) : null}

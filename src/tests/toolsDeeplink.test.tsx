@@ -1,6 +1,6 @@
 // tests/toolsDeeplink.test.tsx — the health-card deep-link contract:
 // a row link opens the gaming page and rings the row, "pagefile" opens
-// its own backup-memory page with the editor expanded, and a link to a
+// its own virtual-memory page with the editor expanded, and a link to a
 // row this machine lacks clears instead of re-firing on every visit.
 
 import { describe, expect, it, vi } from "vitest";
@@ -8,11 +8,12 @@ import { render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { en } from "../locales/en";
 import { ToolsView } from "../views/ToolsView";
-import { pagefileSettings, tweakStates } from "./fixtures";
+import { cleanupHistory, pagefileSettings, tweakStates } from "./fixtures";
 
 const apiMock = vi.hoisted(() => ({
   tweakStates: vi.fn(),
   pagefileSettings: vi.fn(),
+  cleanupHistory: vi.fn(),
   setTweak: vi.fn(),
   storageScan: vi.fn(),
   storageDeepScan: vi.fn(),
@@ -34,6 +35,7 @@ vi.mock("../i18n", () => ({
 function openLinked(toolOpenId: string | null) {
   apiMock.tweakStates.mockResolvedValue(tweakStates());
   apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
+  apiMock.cleanupHistory.mockResolvedValue(cleanupHistory());
   const onToolOpened = vi.fn();
   render(
     React.createElement(ToolsView, {

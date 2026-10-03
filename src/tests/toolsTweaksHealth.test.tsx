@@ -9,11 +9,12 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { en } from "../locales/en";
 import { ToolsView } from "../views/ToolsView";
-import { pagefileSettings, tweakStates } from "./fixtures";
+import { cleanupHistory, pagefileSettings, tweakStates } from "./fixtures";
 
 const apiMock = vi.hoisted(() => ({
   tweakStates: vi.fn(),
   pagefileSettings: vi.fn(),
+  cleanupHistory: vi.fn(),
   setTweak: vi.fn(),
   storageScan: vi.fn(),
   storageDeepScan: vi.fn(),
@@ -45,6 +46,7 @@ async function openGamingWith(states: ReturnType<typeof tweakStates>) {
   const user = userEvent.setup();
   apiMock.tweakStates.mockResolvedValue(states);
   apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
+  apiMock.cleanupHistory.mockResolvedValue(cleanupHistory());
   render(
     React.createElement(ToolsView, {
       active: true,
@@ -100,6 +102,7 @@ describe("ToolsView gaming summary", () => {
     const user = userEvent.setup();
     apiMock.tweakStates.mockResolvedValue({ ...allOn, game_dvr_enabled: true });
     apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
+    apiMock.cleanupHistory.mockResolvedValue(cleanupHistory());
     render(
       React.createElement(ToolsView, {
         active: true,

@@ -568,9 +568,9 @@
   gap: 10px;
   box-shadow: 0 30px 60px -20px rgba(0, 0, 0, 0.7);
 }
-.dialog-box.dialog-danger {
-  border-color: var(--border-danger);
-}
+/* danger dialogs share the standard hairline: the red fill of the
+   confirm button carries the destructiveness, never an edge (filled
+   surfaces stay borderless everywhere, one feel). */
 /* light theme: the modal scrim stays dark (standard dim over light UI) but
    lighter, and the heavy black dialog shadow softens to paper elevation */
 [data-theme="light"] .dialog-overlay {

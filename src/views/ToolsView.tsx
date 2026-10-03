@@ -1,4 +1,4 @@
-// ToolsView.tsx — one card per area (game performance, backup memory,
+// ToolsView.tsx — one card per area (game performance, virtual memory,
 // disk cleanup, storage), each opening its own details section. A switch
 // MIRRORS THE LIVE RESULT of its named action (ON = the action holds
 // right now, whoever made it hold), so manual changes outside the app
@@ -7,16 +7,16 @@
 // shared dialogs (hint, failed-write notice).
 
 import { useEffect, useState } from "react";
-import { ChevronLeft } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { Dialog, MODAL_OPEN_EVENT, APP_DIALOG_OPEN_EVENT } from "../components/components";
-import { api } from "../bridge";
+import { api, type CleanupHistory } from "../bridge";
 import type { Notice } from "../errors";
 import { useLang } from "../i18n";
 import { GamingSection } from "./tools/GamingSection";
 import { PagefileSection } from "./tools/PagefileSection";
 import { StorageSection } from "./tools/StorageSection";
 import { SweepSection } from "./tools/SweepSection";
-import { summarizePagefile, summarizeTweaks } from "./tools/summary";
+import { cleanupMb, cleanupWhen, summarizePagefile, summarizeTweaks } from "./tools/summary";
 import { useSpotTheme } from "./tools/useSpotTheme";
 import spotGamingDark from "../assets/spot-gaming-dark.svg?url";
 import spotGamingLight from "../assets/spot-gaming-light.svg?url";
@@ -30,7 +30,7 @@ import spotStorageLight from "../assets/spot-storage-light.svg?url";
 export function ToolsView(props: {
   active: boolean;
   /** health-card deep-link target (a gaming row id, or "pagefile" for
-      the backup-memory page): one-shot, cleared by the landing section
+      the virtual-memory page): one-shot, cleared by the landing section
       once it finishes — same contract as the Reports openId */
   toolOpenId: string | null;
   onToolOpened: () => void;
@@ -54,20 +54,28 @@ export function ToolsView(props: {
       shows no badge rather than a guessed one; the details page owns
       its own read and never waits on this) */
   const [summary, setSummary] = useState<{ shown: number; on: number } | null>(null);
-  /** page file health for the backup-memory badge (null = same
+  /** page file health for the virtual-memory badge (null = same
       no-guess rule as above; the editor owns the full read) */
   const [pfHealthy, setPfHealthy] = useState<boolean | null>(null);
+  /** storage sense for the storage badge: the same landing read already
+      carries it (zero new IPC), null hides the badge like every other */
+  const [storageOn, setStorageOn] = useState<boolean | null>(null);
+  /** last sweep memory for the cleanup card line (null = unread yet or
+      unreadable: the card shows no line rather than a guessed one).
+      Line only, no badge: cleanup is not a health state, a color would
+      invent one. */
+  const [clHistory, setClHistory] = useState<CleanupHistory | null>(null);
 
   /** background note behind a row's (?) button: title + body into the one
       shared Dialog below */
   const showHint = (title: string, body: string) => setHint({ title, body });
 
-  // landing badges: cheap reads while the cards show (and a refresh
-  // every return from the details, so flips land on the badges).
-  // Silent failure: a badge that cannot be read is hidden, never an
-  // error on a page whose job is only routing. No badge for cleanup:
-  // its history arrives only inside a scan, and scanning by itself is
-  // forbidden — a guessed badge would be a lie.
+  // landing reads: cheap calls while the cards show (and a refresh
+  // every return from the details, so flips land on the cards).
+  // Silent failure: a badge or line that cannot be read is hidden,
+  // never an error on a page whose job is only routing. The cleanup
+  // line reads the persisted sweep memory (no scan: measuring stays
+  // user-triggered, like every other read here).
   useEffect(() => {
     if (!active || openCard) return;
     let live = true;
@@ -75,9 +83,11 @@ export function ToolsView(props: {
       .tweakStates()
       .then((s) => {
         if (live) setSummary(summarizeTweaks(s));
+        if (live) setStorageOn(s.storage_sense);
       })
       .catch(() => {
         if (live) setSummary(null);
+        if (live) setStorageOn(null);
       });
     void api
       .pagefileSettings()
@@ -86,6 +96,14 @@ export function ToolsView(props: {
       })
       .catch(() => {
         if (live) setPfHealthy(null);
+      });
+    void api
+      .cleanupHistory()
+      .then((h) => {
+        if (live) setClHistory(h);
+      })
+      .catch(() => {
+        if (live) setClHistory(null);
       });
     return () => {
       live = false;
@@ -130,7 +148,7 @@ export function ToolsView(props: {
     return (
       <div className="tools">
         <button className="back-btn" onClick={() => setOpenCard(null)}>
-          <ChevronLeft size={16} />
+          <ArrowLeft size={16} />
           {t.toolsBack}
         </button>
         {openCard === "gaming" ? (
@@ -220,7 +238,7 @@ export function ToolsView(props: {
             draggable={false}
           />
           <span className="tool-title-row">
-            <span className="tool-title">{t.toolPagefile}</span>
+            <span className="tool-title">{t.tweakPfTitle}</span>
           </span>
           <span className="tool-desc">{t.toolPagefileDesc}</span>
           {pfHealthy !== null ? (
@@ -241,6 +259,16 @@ export function ToolsView(props: {
             <span className="tool-title">{t.toolCleanup}</span>
           </span>
           <span className="tool-desc">{t.toolCleanupDesc}</span>
+          {clHistory ? (
+            <span className="tool-desc">
+              {clHistory.last_at
+                ? t.cleanupLast(
+                    cleanupMb(clHistory.last_freed_bytes),
+                    cleanupWhen(clHistory.last_at),
+                  )
+                : t.cleanupLastNever}
+            </span>
+          ) : null}
         </button>
         <button className="card tool-card" onClick={() => setOpenCard("storage")}>
           <img
@@ -254,6 +282,11 @@ export function ToolsView(props: {
             <span className="tool-title">{t.toolStorage}</span>
           </span>
           <span className="tool-desc">{t.toolStorageDesc}</span>
+          {storageOn !== null ? (
+            <span className={`badge check-badge tool-badge ${storageOn ? "ok" : "warn"}`}>
+              {storageOn ? t.checkOkBadge : t.checkWarnBadge}
+            </span>
+          ) : null}
         </button>
       </div>
     </div>

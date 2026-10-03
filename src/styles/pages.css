@@ -698,8 +698,8 @@
   color: var(--text-2);
   line-height: 1.5;
 }
-/* status strip inside the editor card: live mode state on the
-   reading-start side, installed RAM on the end side, (?) after */
+/* status strip inside the editor card: committed sizes on the
+   reading-start side, installed RAM after it, (?) on the end side */
 .pf-status-strip {
   display: flex;
   align-items: center;

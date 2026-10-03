@@ -277,6 +277,9 @@ export const api = {
       categories,
       onEvent: new Channel<CleanupProgress>(onEvent),
     }),
+  /** sweep memory read, no scan: last run + last-30-days totals for the
+      Tools landing card and the sweep page (scanning stays manual) */
+  cleanupHistory: () => invoke<CleanupHistory>("cleanup_history"),
 };
 
 // ---- system tabs -----------------------------------------------------------

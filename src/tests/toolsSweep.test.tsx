@@ -1,8 +1,10 @@
 // tests/toolsSweep.test.tsx — the storage sweep contract: the page opens
-// under a plain header (title plus desc, like backup memory), scan first
-// (never on open), category names come from machine-key records, only
-// non-empty places auto-tick, zero/unreadable rows are muted and never
-// cleaned, and Clean deletes exactly the ticked ids.
+// under a plain header (title plus desc, like virtual memory) with the
+// sweep memory lined below it (last run plus last-30-days, or the never
+// line), the landing card shows the last run without a badge, scan runs
+// first (never on open), category names come from machine-key records,
+// only non-empty places auto-tick, zero/unreadable rows are muted and
+// never cleaned, and Clean deletes exactly the ticked ids.
 
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
@@ -10,11 +12,12 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { en } from "../locales/en";
 import { ToolsView } from "../views/ToolsView";
-import { cleanupScan, pagefileSettings, tweakStates } from "./fixtures";
+import { cleanupHistory, cleanupScan, pagefileSettings, tweakStates } from "./fixtures";
 
 const apiMock = vi.hoisted(() => ({
   tweakStates: vi.fn(),
   pagefileSettings: vi.fn(),
+  cleanupHistory: vi.fn(),
   setTweak: vi.fn(),
   storageScan: vi.fn(),
   storageDeepScan: vi.fn(),
@@ -33,9 +36,13 @@ vi.mock("../i18n", () => ({
   useLang: () => ({ t: en, lang: "en", setting: "en", setLanguage: vi.fn() }),
 }));
 
-async function openSweep(user: ReturnType<typeof userEvent.setup>) {
+async function openSweep(
+  user: ReturnType<typeof userEvent.setup>,
+  history = cleanupHistory(),
+) {
   apiMock.tweakStates.mockResolvedValue(tweakStates());
   apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
+  apiMock.cleanupHistory.mockResolvedValue(history);
   render(
     React.createElement(ToolsView, {
       active: true,
@@ -129,7 +136,7 @@ describe("ToolsView storage sweep", () => {
   it("opens under a plain page header with title and desc", async () => {
     const user = userEvent.setup();
     await openSweep(user);
-    // the cleanup page carries the same plain header as backup memory
+    // the cleanup page carries the same plain header as virtual memory
     // (title plus desc line, never a boxed accordion)
     const head = document.querySelector(".page-head")!;
     expect(head.querySelector(".page-head-title")?.textContent).toBe(
@@ -137,6 +144,50 @@ describe("ToolsView storage sweep", () => {
     );
     expect(head.querySelector(".page-head-desc")?.textContent).toBe(
       en.toolCleanupDesc,
+    );
+    // no run yet: the memory says so instead of a blank
+    expect(screen.getByText(en.cleanupLastNever)).toBeTruthy();
+  });
+
+  it("landing card shows the last run, never a badge", async () => {
+    apiMock.tweakStates.mockResolvedValue(tweakStates());
+    apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
+    apiMock.cleanupHistory.mockResolvedValue(
+      cleanupHistory({
+        last_freed_bytes: 10485760,
+        last_at: "2026-09-20T14:30:00",
+        last_30d_bytes: 20971520,
+      }),
+    );
+    render(
+      React.createElement(ToolsView, {
+        active: true,
+        toolOpenId: null,
+        onToolOpened: vi.fn(),
+        onCleaningChange: vi.fn(),
+      }),
+    );
+    // past measured truth on the card face (badge-less: cleanup is not
+    // a health state, a color would invent one)
+    await screen.findByText(en.cleanupLast(10, "2026-09-20 14:30"));
+    const card = screen.getByText(en.toolCleanup).closest(".tool-card")!;
+    expect(card.querySelector(".tool-badge")).toBeNull();
+  });
+
+  it("sweep page lines the full memory under its header", async () => {
+    const user = userEvent.setup();
+    apiMock.storageScan.mockResolvedValue(cleanupScan());
+    await openSweep(
+      user,
+      cleanupHistory({
+        last_freed_bytes: 10485760,
+        last_at: "2026-09-20T14:30:00",
+        last_30d_bytes: 20971520,
+      }),
+    );
+    // last run plus last-30-days, the same shapes the old summary used
+    await screen.findByText(
+      `${en.cleanupLast(10, "2026-09-20 14:30")} · ${en.cleanup30d(20)}`,
     );
   });
 });

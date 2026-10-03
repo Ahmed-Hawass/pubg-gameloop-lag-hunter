@@ -306,6 +306,16 @@ async fn storage_clean(
     res
 }
 
+/// Sweep memory read, no scan: the persisted last-run + last-30-days
+/// totals for the Tools landing card and the sweep page. A small jsonl
+/// read, never a disk walk, so it stays free to call (scanning itself
+/// stays user-triggered, like every other measuring read).
+#[tauri::command]
+fn cleanup_history() -> engine::cleanup::CleanupHistory {
+    let _t = engine::logging::timed("ipc: cleanup_history");
+    engine::cleanup::history_totals()
+}
+
 /// Immediate reboot for applying page file changes (the confirm dialog
 /// in Tools is the only caller; a refused UAC stays quiet like every
 /// other cancellation).
@@ -803,6 +813,7 @@ pub fn run() {
             storage_scan,
             storage_deep_scan,
             storage_clean,
+            cleanup_history,
             schedule_reboot,
             open_windows_panel,
             set_auto_stop,

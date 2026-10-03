@@ -3,6 +3,7 @@
 // UI, they never reimplement engine logic.
 
 import type {
+  CleanupHistory,
   CleanupScan,
   PagefileSettings,
   Settings,
@@ -82,6 +83,17 @@ export function cleanupScan(): CleanupScan {
       { id: "recycle_bin", bytes: null },
     ],
     history: { last_freed_bytes: 0, last_at: null, last_30d_bytes: 0 },
+  };
+}
+
+/** persisted sweep memory without a scan (the cleanup_history answer):
+    the landing card and the sweep page read this, measuring stays manual */
+export function cleanupHistory(over: Partial<CleanupHistory> = {}): CleanupHistory {
+  return {
+    last_freed_bytes: 0,
+    last_at: null,
+    last_30d_bytes: 0,
+    ...over,
   };
 }
 
