@@ -280,6 +280,9 @@ export const api = {
   /** sweep memory read, no scan: last run + last-30-days totals for the
       Tools landing card and the sweep page (scanning stays manual) */
   cleanupHistory: () => invoke<CleanupHistory>("cleanup_history"),
+  /** OS clock convention for wall-clock display (12-hour or not), read
+      from the Windows time format itself, never the app language */
+  clockHour12: () => invoke<boolean>("clock_hour12"),
 };
 
 // ---- system tabs -----------------------------------------------------------

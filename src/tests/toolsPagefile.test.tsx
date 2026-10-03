@@ -16,6 +16,7 @@ const apiMock = vi.hoisted(() => ({
   tweakStates: vi.fn(),
   pagefileSettings: vi.fn(),
   cleanupHistory: vi.fn(),
+  clockHour12: vi.fn(),
   setTweak: vi.fn(),
   storageScan: vi.fn(),
   storageDeepScan: vi.fn(),
@@ -37,6 +38,7 @@ vi.mock("../i18n", () => ({
 async function openPagefile(user: ReturnType<typeof userEvent.setup>) {
   apiMock.tweakStates.mockResolvedValue(tweakStates());
   apiMock.cleanupHistory.mockResolvedValue(cleanupHistory());
+  apiMock.clockHour12.mockResolvedValue(false);
   render(
     React.createElement(ToolsView, {
       active: true,
@@ -145,6 +147,7 @@ describe("ToolsView page file editor", () => {
     // C: system-managed reads healthy: the card says Good…
     apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
     apiMock.cleanupHistory.mockResolvedValue(cleanupHistory());
+  apiMock.clockHour12.mockResolvedValue(false);
     render(
       React.createElement(ToolsView, {
         active: true,
@@ -167,6 +170,7 @@ describe("ToolsView page file editor", () => {
       }),
     );
     apiMock.cleanupHistory.mockResolvedValue(cleanupHistory());
+  apiMock.clockHour12.mockResolvedValue(false);
     render(
       React.createElement(ToolsView, {
         active: true,

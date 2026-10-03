@@ -6,6 +6,8 @@ import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronDown, Clock, FileText, F
 import { Button, Dialog, EmptyState, Hint, NoteCard, Tip, diagnosisIcon, APP_DIALOG_OPEN_EVENT } from "../components/components";
 import { api, type FriendlyReport, type SessionEntry } from "../bridge";
 import { useLang } from "../i18n";
+import { useHour12 } from "../useHour12";
+import { formatClockTime } from "../clock";
 
 /** moment dot severity from the engine kind (no backend change — the
     kinds are a closed, documented set): sustained drops read danger,
@@ -53,7 +55,10 @@ export function ReportsView(props: {
   active?: boolean;
 }) {
   const { openId, onOpened, onDeleted, onDeletedAll, runningSessionId, active } = props;
-  const { t } = useLang();
+  const { t, lang } = useLang();
+  /** OS clock convention for the key-moment clocks (null until the
+      read lands: raw 24-hour meanwhile, the stored truth itself) */
+  const hour12 = useHour12();
   const [entries, setEntries] = useState<SessionEntry[] | null>(null);
   const [report, setReport] = useState<FriendlyReport | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
@@ -297,7 +302,9 @@ export function ReportsView(props: {
             <ul className="card report-moments">
               {report.highlights.map((h, i) => {
                 const base = t.highlights[h.kind] ?? h.kind;
-                const clock = h.clock ? ` (${h.clock})` : "";
+                // empty clocks ride summary entries (nothing happened at a
+                // time); live ones follow the OS convention like the feed
+                const clock = h.clock ? ` (${formatClockTime(h.clock, hour12 ?? false, lang)})` : "";
                 const dur = h.dur_sec ? ` - ${fmtDur(Math.round(h.dur_sec), { m: t.minUnit, s: t.secUnit })}` : "";
                 const tone = highlightTone(h.kind);
                 return (

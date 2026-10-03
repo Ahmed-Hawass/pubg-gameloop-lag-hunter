@@ -33,6 +33,7 @@ const apiMock = vi.hoisted(() => ({
   finishOnboarding: vi.fn(),
   finishGameAdvice: vi.fn(),
   finishBackgroundAdvice: vi.fn(),
+  clockHour12: vi.fn(),
 }));
 
 let enginePush!: (ev: { payload: StatusPayload }) => void;
@@ -55,6 +56,10 @@ vi.mock("../i18n", () => ({
   LanguageProvider: ({ children }: { children: React.ReactNode }) =>
     React.createElement(React.Fragment, null, children),
 }));
+
+// 24-hour default file-wide (mounted views read the OS convention;
+// 12-hour cases live in the view-level suites, never in App tests)
+apiMock.clockHour12.mockResolvedValue(false);
 
 const idleUi: UiState = {
   v: 1,

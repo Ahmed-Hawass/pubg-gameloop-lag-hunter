@@ -260,6 +260,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   with its landing card badging the live sense state; back buttons swap
   chevron for arrow; danger dialogs share the standard frame (no red
   edge); the sweep idle copy drops the jargon.
+- Wall-clock display follows the OS 12/24 convention (read once from the
+  Windows time format itself, never the app language): the sweep memory
+  line, the monitor feed clocks, and the report key moments convert
+  through one helper with Latin digits in both languages, while stored
+  timestamps stay 24-hour. Durations and dates are untouched.
 
 ### Fixed
 - The session tick no longer holds the state lock across clock reads and

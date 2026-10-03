@@ -28,6 +28,7 @@ const apiMock = vi.hoisted(() => ({
   setAutoStop: vi.fn(),
   setSidebarCollapsed: vi.fn(),
   setTheme: vi.fn(),
+  clockHour12: vi.fn(),
 }));
 
 let enginePush!: (ev: { payload: StatusPayload }) => void;
@@ -50,6 +51,9 @@ vi.mock("../i18n", () => ({
   LanguageProvider: ({ children }: { children: React.ReactNode }) =>
     React.createElement(React.Fragment, null, children),
 }));
+
+// 24-hour default file-wide (mounted views read the OS convention)
+apiMock.clockHour12.mockResolvedValue(false);
 
 import { closeWindow } from "../bridge";
 

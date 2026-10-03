@@ -18,6 +18,7 @@ const apiMock = vi.hoisted(() => ({
   tweakStates: vi.fn(),
   pagefileSettings: vi.fn(),
   cleanupHistory: vi.fn(),
+  clockHour12: vi.fn(),
   setTweak: vi.fn(),
   storageScan: vi.fn(),
   storageDeepScan: vi.fn(),
@@ -43,6 +44,7 @@ async function openSweep(
   apiMock.tweakStates.mockResolvedValue(tweakStates());
   apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
   apiMock.cleanupHistory.mockResolvedValue(history);
+  apiMock.clockHour12.mockResolvedValue(false);
   render(
     React.createElement(ToolsView, {
       active: true,
@@ -152,6 +154,7 @@ describe("ToolsView storage sweep", () => {
   it("landing card shows the last run, never a badge", async () => {
     apiMock.tweakStates.mockResolvedValue(tweakStates());
     apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
+    apiMock.clockHour12.mockResolvedValue(false);
     apiMock.cleanupHistory.mockResolvedValue(
       cleanupHistory({
         last_freed_bytes: 10485760,
@@ -188,6 +191,34 @@ describe("ToolsView storage sweep", () => {
     // last run plus last-30-days, the same shapes the old summary used
     await screen.findByText(
       `${en.cleanupLast(10, "2026-09-20 14:30")} · ${en.cleanup30d(20)}`,
+    );
+  });
+
+  it("a 12-hour machine reads its own convention on the sweep page", async () => {
+    const user = userEvent.setup();
+    apiMock.tweakStates.mockResolvedValue(tweakStates());
+    apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
+    apiMock.clockHour12.mockResolvedValue(true);
+    apiMock.cleanupHistory.mockResolvedValue(
+      cleanupHistory({
+        last_freed_bytes: 10485760,
+        last_at: "2026-09-20T14:30:00",
+        last_30d_bytes: 20971520,
+      }),
+    );
+    render(
+      React.createElement(ToolsView, {
+        active: true,
+        toolOpenId: null,
+        onToolOpened: vi.fn(),
+        onCleaningChange: vi.fn(),
+      }),
+    );
+    await user.click(screen.getByText(en.toolCleanup));
+    await screen.findByText(en.cleanupTitle);
+    // same shapes, converted pixels (the date stays locale-free)
+    await screen.findByText(
+      `${en.cleanupLast(10, "2026-09-20 2:30 PM")} · ${en.cleanup30d(20)}`,
     );
   });
 });

@@ -7,6 +7,8 @@ import { Brain, ChevronDown, Cpu, Database, Gamepad2, Play, Square } from "lucid
 import { Hint, Button, MetricCard, NoteCard, SummaryCard, Timeline, diagnosisIcon, fmtDur } from "../components/components";
 import type { StatusPayload } from "../bridge";
 import { useLang } from "../i18n";
+import { useHour12 } from "../useHour12";
+import { formatClockTime } from "../clock";
 import { useSpotTheme } from "./tools/useSpotTheme";
 import spotIdleDark from "../assets/spot-monitor-idle-dark.svg?url";
 import spotIdleLight from "../assets/spot-monitor-idle-light.svg?url";
@@ -25,7 +27,10 @@ export function MonitorView(props: {
   psLimited: boolean;
 }) {
   const { status, busy, durationSecs, onDurationChange, onToggle, onOpenReport, dismissedSession, onDismissSummary, psLimited } = props;
-  const { t } = useLang();
+  const { t, lang } = useLang();
+  /** OS clock convention for the feed clocks (null until the read
+      lands: raw 24-hour meanwhile, the stored truth itself) */
+  const hour12 = useHour12();
   const spotTheme = useSpotTheme();
   const ui = status.ui;
   const running = status.status === "running";
@@ -217,7 +222,7 @@ export function MonitorView(props: {
                     // static text, so index shifting on prepend only repaints text
                     // while duplicates (same clock+kind+severity) stay unique
                     <li key={`${f.clock}-${f.kind}-${f.sev}-${i}`} className={`feed-item feed-${f.sev}`}>
-                      <span className="feed-clock num">{f.clock}</span>
+                      <span className="feed-clock num">{formatClockTime(f.clock, hour12 ?? false, lang)}</span>
                       <span className="feed-text">{t.feed[f.kind] ?? f.kind}</span>
                     </li>
                   ))}

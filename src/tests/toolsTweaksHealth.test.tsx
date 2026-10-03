@@ -15,6 +15,7 @@ const apiMock = vi.hoisted(() => ({
   tweakStates: vi.fn(),
   pagefileSettings: vi.fn(),
   cleanupHistory: vi.fn(),
+  clockHour12: vi.fn(),
   setTweak: vi.fn(),
   storageScan: vi.fn(),
   storageDeepScan: vi.fn(),
@@ -47,6 +48,7 @@ async function openGamingWith(states: ReturnType<typeof tweakStates>) {
   apiMock.tweakStates.mockResolvedValue(states);
   apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
   apiMock.cleanupHistory.mockResolvedValue(cleanupHistory());
+  apiMock.clockHour12.mockResolvedValue(false);
   render(
     React.createElement(ToolsView, {
       active: true,
@@ -103,6 +105,7 @@ describe("ToolsView gaming summary", () => {
     apiMock.tweakStates.mockResolvedValue({ ...allOn, game_dvr_enabled: true });
     apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
     apiMock.cleanupHistory.mockResolvedValue(cleanupHistory());
+  apiMock.clockHour12.mockResolvedValue(false);
     render(
       React.createElement(ToolsView, {
         active: true,

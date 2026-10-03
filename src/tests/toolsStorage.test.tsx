@@ -16,6 +16,7 @@ const apiMock = vi.hoisted(() => ({
   tweakStates: vi.fn(),
   pagefileSettings: vi.fn(),
   cleanupHistory: vi.fn(),
+  clockHour12: vi.fn(),
   setTweak: vi.fn(),
   storageScan: vi.fn(),
   storageDeepScan: vi.fn(),
@@ -40,6 +41,7 @@ describe("ToolsView storage card", () => {
     apiMock.tweakStates.mockResolvedValue(tweakStates({ storage_sense: true }));
     apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
     apiMock.cleanupHistory.mockResolvedValue(cleanupHistory());
+  apiMock.clockHour12.mockResolvedValue(false);
     render(
       React.createElement(ToolsView, {
         active: true,
@@ -68,6 +70,7 @@ describe("ToolsView storage card", () => {
     apiMock.tweakStates.mockResolvedValue(tweakStates({ storage_sense: true }));
     apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
     apiMock.cleanupHistory.mockResolvedValue(cleanupHistory());
+  apiMock.clockHour12.mockResolvedValue(false);
     render(
       React.createElement(ToolsView, {
         active: true,
@@ -88,6 +91,7 @@ describe("ToolsView storage card", () => {
     apiMock.tweakStates.mockResolvedValue(tweakStates({ storage_sense: false }));
     apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
     apiMock.cleanupHistory.mockResolvedValue(cleanupHistory());
+  apiMock.clockHour12.mockResolvedValue(false);
     render(
       React.createElement(ToolsView, {
         active: true,
@@ -108,6 +112,7 @@ describe("ToolsView storage card", () => {
     apiMock.tweakStates.mockResolvedValue(tweakStates({ storage_sense: false }));
     apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
     apiMock.cleanupHistory.mockResolvedValue(cleanupHistory());
+  apiMock.clockHour12.mockResolvedValue(false);
     render(
       React.createElement(ToolsView, {
         active: true,

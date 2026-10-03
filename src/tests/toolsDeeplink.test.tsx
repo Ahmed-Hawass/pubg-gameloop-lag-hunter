@@ -14,6 +14,7 @@ const apiMock = vi.hoisted(() => ({
   tweakStates: vi.fn(),
   pagefileSettings: vi.fn(),
   cleanupHistory: vi.fn(),
+  clockHour12: vi.fn(),
   setTweak: vi.fn(),
   storageScan: vi.fn(),
   storageDeepScan: vi.fn(),
@@ -36,6 +37,7 @@ function openLinked(toolOpenId: string | null) {
   apiMock.tweakStates.mockResolvedValue(tweakStates());
   apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
   apiMock.cleanupHistory.mockResolvedValue(cleanupHistory());
+  apiMock.clockHour12.mockResolvedValue(false);
   const onToolOpened = vi.fn();
   render(
     React.createElement(ToolsView, {

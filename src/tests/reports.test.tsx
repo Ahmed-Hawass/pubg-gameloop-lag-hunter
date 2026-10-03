@@ -11,6 +11,7 @@ import { ReportsView } from "../views/ReportsView";
 import type { FriendlyReport, SessionEntry } from "../bridge";
 
 const apiMock = vi.hoisted(() => ({
+  clockHour12: vi.fn(),
   sessionEntries: vi.fn(),
   loadReport: vi.fn(),
   deleteSession: vi.fn(),
@@ -67,10 +68,11 @@ const report: FriendlyReport = {
   raw_path: "C:/sessions/session-2/report.md",
 };
 
-function open(props: Partial<React.ComponentProps<typeof ReportsView>> = {}) {
+function open(props: Partial<React.ComponentProps<typeof ReportsView>> = {}, hour12 = false) {
   const onOpened = vi.fn();
   const onDeleted = vi.fn();
   const onDeletedAll = vi.fn();
+  apiMock.clockHour12.mockResolvedValue(hour12);
   // each test presets its own sessionEntries answers BEFORE opening:
   // the list identity matters (a same-reference re-read bails out of
   // rendering, exactly like production re-reads from disk)
@@ -224,5 +226,23 @@ describe("ReportsView", () => {
     expect(document.querySelector(".report-moments")).toBeNull();
     await user.click(screen.getByText(en.showEventLog));
     expect(screen.getByText(en.hideEventLog)).toBeTruthy();
+  });
+
+  it("key moments follow the OS convention on a 12-hour machine", async () => {
+    const user = userEvent.setup();
+    apiMock.sessionEntries.mockResolvedValue(entries);
+    apiMock.loadReport.mockResolvedValue({
+      ...report,
+      highlights: [{ kind: "spike", clock: "14:30:05", dur_sec: 5 }],
+    });
+    open({}, true);
+    await screen.findByText("2026-09-25 10:00");
+    await user.click(
+      screen.getByRole("button", { name: `2026-09-25 11:00, ${en.lagCaptured}` }),
+    );
+    await screen.findByText(en.keyMoments);
+    // production shape in, converted pixels out (empty clocks stay empty)
+    const item = document.querySelector(".report-moments li")!;
+    expect(item.textContent).toContain("(2:30:05 PM)");
   });
 });

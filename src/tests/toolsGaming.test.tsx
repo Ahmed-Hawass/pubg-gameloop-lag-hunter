@@ -15,6 +15,7 @@ const apiMock = vi.hoisted(() => ({
   tweakStates: vi.fn(),
   pagefileSettings: vi.fn(),
   cleanupHistory: vi.fn(),
+  clockHour12: vi.fn(),
   setTweak: vi.fn(),
   storageScan: vi.fn(),
   storageDeepScan: vi.fn(),
@@ -37,6 +38,7 @@ function openGaming() {
   apiMock.tweakStates.mockResolvedValue(tweakStates({ game_dvr_enabled: false }));
   apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
   apiMock.cleanupHistory.mockResolvedValue(cleanupHistory());
+  apiMock.clockHour12.mockResolvedValue(false);
   render(
     React.createElement(ToolsView, {
       active: true,

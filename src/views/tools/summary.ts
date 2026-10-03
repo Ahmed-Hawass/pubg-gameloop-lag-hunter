@@ -4,6 +4,8 @@
 
 import type { CleanupHistory, PagefileSettings, TweakStates } from "../../bridge";
 import type { Locale } from "../../locales/en";
+import type { LangCode } from "../../i18n";
+import { formatClockTime } from "../../clock";
 
 export function summarizeTweaks(s: TweakStates): { shown: number; on: number } {
   const rows: { shown: boolean; on: boolean }[] = [
@@ -55,15 +57,19 @@ export function summarizePagefileUsage(s: PagefileSettings | null): {
 }
 
 /** sweep-memory formatting, shared by the landing card and the sweep
-    page: one-decimal MB (measured, never estimated) and the "YYYY-MM-DD
-    HH:MM" slice of the stored ISO stamp. The same shapes the storage
-    summary used before the card split. */
+    page: one-decimal MB (measured, never estimated) and the stored ISO
+    stamp as a locale-free date plus the OS-convention time. The same
+    shapes the storage summary used before the card split. */
 export function cleanupMb(bytes: number): number {
   return Math.round((bytes / 1048576) * 10) / 10;
 }
 
-export function cleanupWhen(iso: string): string {
-  return `${iso.slice(0, 10)} ${iso.slice(11, 16)}`;
+/** "YYYY-MM-DD" plus the wall time under the OS convention
+    ("2026-09-20 2:30 PM" on a 12-hour machine). Null convention means
+    the flag has not landed yet: raw 24-hour, the stored truth itself,
+    never a guess. */
+export function cleanupWhen(iso: string, hour12: boolean | null, lang: LangCode): string {
+  return `${iso.slice(0, 10)} ${formatClockTime(iso.slice(11, 16), hour12 ?? false, lang)}`;
 }
 
 /** one history line for a details surface (last run plus last-30-days),
@@ -73,7 +79,9 @@ export function cleanupWhen(iso: string): string {
 export function cleanupHistoryLine(
   t: Pick<Locale, "cleanupLastNever" | "cleanupLast" | "cleanup30d">,
   h: CleanupHistory,
+  hour12: boolean | null,
+  lang: LangCode,
 ): string {
   if (!h.last_at) return t.cleanupLastNever;
-  return `${t.cleanupLast(cleanupMb(h.last_freed_bytes), cleanupWhen(h.last_at))} · ${t.cleanup30d(cleanupMb(h.last_30d_bytes))}`;
+  return `${t.cleanupLast(cleanupMb(h.last_freed_bytes), cleanupWhen(h.last_at, hour12, lang))} · ${t.cleanup30d(cleanupMb(h.last_30d_bytes))}`;
 }

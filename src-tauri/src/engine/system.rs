@@ -1693,6 +1693,62 @@ pub fn recommended_pagefile_mb(ram_mb: u64) -> Option<(u32, u32)> {
     ))
 }
 
+/// Does this machine's clock run 12-hour? Read from the OS time format
+/// itself (HKCU Control Panel International), never guessed from the
+/// app language: an Arabic UI on a 24-hour machine must read 24-hour.
+/// Unreadable (or non-Windows) means 24-hour, today's behavior exactly.
+pub fn clock_uses_12h() -> bool {
+    #[cfg(windows)]
+    {
+        let hkcu = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
+        let key = match hkcu.open_subkey("Control Panel\\International") {
+            Ok(k) => k,
+            Err(_) => return false,
+        };
+        for name in ["sTimeFormat", "sShortTime"] {
+            let raw: Result<String, _> = key.get_value(name);
+            if let Ok(fmt) = raw {
+                return s_time_format_is_12h(&fmt);
+            }
+        }
+        false
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
+}
+
+/// Pure 12/24 verdict over one sTimeFormat-style pattern: an uppercase
+/// H anywhere outside quoted literals is the 24-hour marker, a
+/// lowercase h the 12-hour one (genuine formats carry exactly one
+/// family: "h:mm tt" versus "HH:mm"). Quoted literals ('o''clock')
+/// never decide; an empty or marker-less pattern reads 24-hour.
+fn s_time_format_is_12h(fmt: &str) -> bool {
+    // strip single-quoted literals first ('' is an escaped quote that
+    // stays inside the literal): only live markers ever decide
+    let mut bare = String::with_capacity(fmt.len());
+    let mut chars = fmt.chars();
+    let mut in_literal = false;
+    while let Some(c) = chars.next() {
+        if c == '\'' {
+            if in_literal && chars.clone().next() == Some('\'') {
+                chars.next();
+            } else {
+                in_literal = !in_literal;
+            }
+            continue;
+        }
+        if !in_literal {
+            bare.push(c);
+        }
+    }
+    if bare.contains('H') {
+        return false;
+    }
+    bare.contains('h')
+}
+
 #[cfg(windows)]
 #[repr(C)]
 /// Mirrors the Win32 MEMORYSTATUSEX layout (renamed for Rust naming rules).
@@ -2216,6 +2272,25 @@ mod tests {
         // saturating, never wrapping, on absurd inputs
         let (mn, mx) = recommended_pagefile_mb(u64::MAX).unwrap();
         assert!(mx >= mn);
+    }
+
+    #[test]
+    fn s_time_format_reads_12h_only_from_live_markers() {
+        // the dev machine's own shape plus the stock variants
+        assert!(s_time_format_is_12h("h:mm:ss tt"));
+        assert!(s_time_format_is_12h("h:mm tt"));
+        assert!(s_time_format_is_12h("hh:mm tt"));
+        assert!(!s_time_format_is_12h("HH:mm:ss"));
+        assert!(!s_time_format_is_12h("H:mm"));
+        assert!(!s_time_format_is_12h("HH:mm"));
+        // quoted literals never decide, however shouty
+        assert!(s_time_format_is_12h("h:mm 'H'"));
+        assert!(!s_time_format_is_12h("'h' HH:mm"));
+        // escaped quote stays inside its literal: the H:mm rides along
+        assert!(!s_time_format_is_12h("'don''t' H:mm"));
+        // empty or marker-less reads 24-hour (today's behavior exactly)
+        assert!(!s_time_format_is_12h(""));
+        assert!(!s_time_format_is_12h("mm:ss tt"));
     }
 
     #[test]

@@ -9,6 +9,7 @@ import { Button, Dialog } from "../../components/components";
 import { api, type CleanupCategory, type CleanupHistory, type CleanupResult, type CleanupScan } from "../../bridge";
 import type { Notice } from "../../errors";
 import { useLang } from "../../i18n";
+import { useHour12 } from "../../useHour12";
 import { cleanupHistoryLine } from "./summary";
 import { useModalSignal, useYieldToAppDialog } from "./useModalSignals";
 
@@ -19,7 +20,8 @@ export function SweepSection(props: {
   onCleaningChange?: (active: boolean) => void;
 }) {
   const { showHint, failNotice, onCleaningChange } = props;
-  const { t } = useLang();
+  const { t, lang } = useLang();
+  const hour12 = useHour12();
   /** storage sweep: measured places + memory (null = never scanned),
       ticked ids, last clean result, confirm gate, and scan-read failure.
       Own busy ref so a scan/clean never blocks the switches above. */
@@ -328,7 +330,7 @@ export function SweepSection(props: {
       {/* sweep memory under the header (last run plus last-30-days):
           past measured truth, never a reason to scan */}
       {clHistory ? (
-        <p className="tool-note">{cleanupHistoryLine(t, clHistory)}</p>
+        <p className="tool-note">{cleanupHistoryLine(t, clHistory, hour12, lang)}</p>
       ) : null}
       {/* cleaned payoff first: right after a verified clean the card
           celebrates the measured number with a way back (Scan again).

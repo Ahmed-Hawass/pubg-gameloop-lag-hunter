@@ -10,6 +10,14 @@ import { en } from "../locales/en";
 import { MonitorView } from "../views/MonitorView";
 import type { StatusPayload, UiState } from "../bridge";
 
+const apiMock = vi.hoisted(() => ({
+  clockHour12: vi.fn(),
+}));
+
+vi.mock("../bridge", () => ({
+  api: apiMock,
+}));
+
 vi.mock("../i18n", () => ({
   useLang: () => ({ t: en, lang: "en", setting: "en", setLanguage: vi.fn() }),
 }));
@@ -34,7 +42,8 @@ const ui: UiState = {
   emulator: "AndroidEmulatorEn",
 };
 
-function open(status: StatusPayload, over: Partial<React.ComponentProps<typeof MonitorView>> = {}) {
+function open(status: StatusPayload, over: Partial<React.ComponentProps<typeof MonitorView>> = {}, hour12 = false) {
+  apiMock.clockHour12.mockResolvedValue(hour12);
   const onToggle = vi.fn();
   const onDurationChange = vi.fn();
   const onOpenReport = vi.fn();
@@ -154,5 +163,24 @@ describe("MonitorView", () => {
     open({ status: "running", ui });
     // 65s elapsed of a 300s auto-stop: "01:05 / 05:00"
     expect(await screen.findByText("01:05 / 05:00")).toBeTruthy();
+  });
+
+  it("feed clocks follow the OS convention, raw until it lands", async () => {
+    const live: UiState = {
+      ...ui,
+      feed: [{ phase: "instant", clock: "14:30:05", kind: "spike", sev: "crit" }],
+    };
+    // 24-hour keeps today's pixels exactly (production shape in/out)
+    open({ status: "running", ui: live });
+    await screen.findByText("14:30:05");
+  });
+
+  it("a 12-hour machine reads converted feed clocks", async () => {
+    const live: UiState = {
+      ...ui,
+      feed: [{ phase: "instant", clock: "14:30:05", kind: "spike", sev: "crit" }],
+    };
+    open({ status: "running", ui: live }, {}, true);
+    await screen.findByText("2:30:05 PM");
   });
 });

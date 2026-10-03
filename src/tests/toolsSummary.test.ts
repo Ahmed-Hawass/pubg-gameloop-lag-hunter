@@ -61,19 +61,25 @@ describe("summarizePagefileUsage", () => {
 describe("sweep memory formatting", () => {
   it("renders one-decimal MB and the short stamp", () => {
     expect(cleanupMb(10485760)).toBe(10);
-    expect(cleanupWhen("2026-09-20T14:30:00")).toBe("2026-09-20 14:30");
+    expect(cleanupWhen("2026-09-20T14:30:00", false, "en")).toBe("2026-09-20 14:30");
   });
 
   it("lines the last run with the 30-day total, or the never line", () => {
+    const h = {
+      last_freed_bytes: 10485760,
+      last_at: "2026-09-20T14:30:00",
+      last_30d_bytes: 20971520,
+    };
+    expect(cleanupHistoryLine(en, h, false, "en")).toBe(
+      "Last clean: 10 MB on 2026-09-20 14:30. · Last 30 days: 20 MB.",
+    );
+    // a 12-hour machine reads its own convention, same shapes
+    expect(cleanupHistoryLine(en, h, true, "en")).toBe(
+      "Last clean: 10 MB on 2026-09-20 2:30 PM. · Last 30 days: 20 MB.",
+    );
+    expect(cleanupHistoryLine(en, h, true, "ar")).toContain("2:30 م");
     expect(
-      cleanupHistoryLine(en, {
-        last_freed_bytes: 10485760,
-        last_at: "2026-09-20T14:30:00",
-        last_30d_bytes: 20971520,
-      }),
-    ).toBe("Last clean: 10 MB on 2026-09-20 14:30. · Last 30 days: 20 MB.");
-    expect(
-      cleanupHistoryLine(en, { last_freed_bytes: 0, last_at: null, last_30d_bytes: 0 }),
+      cleanupHistoryLine(en, { last_freed_bytes: 0, last_at: null, last_30d_bytes: 0 }, false, "en"),
     ).toBe(en.cleanupLastNever);
   });
 });

@@ -17,6 +17,7 @@ import { PagefileSection } from "./tools/PagefileSection";
 import { StorageSection } from "./tools/StorageSection";
 import { SweepSection } from "./tools/SweepSection";
 import { cleanupMb, cleanupWhen, summarizePagefile, summarizeTweaks } from "./tools/summary";
+import { useHour12 } from "../useHour12";
 import { useSpotTheme } from "./tools/useSpotTheme";
 import spotGamingDark from "../assets/spot-gaming-dark.svg?url";
 import spotGamingLight from "../assets/spot-gaming-light.svg?url";
@@ -38,8 +39,11 @@ export function ToolsView(props: {
   onCleaningChange?: (active: boolean) => void;
 }) {
   const { active, toolOpenId, onToolOpened, onCleaningChange } = props;
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const spotTheme = useSpotTheme();
+  /** OS clock convention for the history line (null until the read
+      lands: raw 24-hour meanwhile, the stored truth itself) */
+  const hour12 = useHour12();
   /** which card's details are open (the landing cards need no data) */
   const [openCard, setOpenCard] = useState<"gaming" | "storage" | "pagefile" | "cleanup" | null>(null);
   /** failed-write notice (null = no notice) */
@@ -264,7 +268,7 @@ export function ToolsView(props: {
               {clHistory.last_at
                 ? t.cleanupLast(
                     cleanupMb(clHistory.last_freed_bytes),
-                    cleanupWhen(clHistory.last_at),
+                    cleanupWhen(clHistory.last_at, hour12, lang),
                   )
                 : t.cleanupLastNever}
             </span>

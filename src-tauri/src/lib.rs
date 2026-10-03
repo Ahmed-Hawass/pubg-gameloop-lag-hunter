@@ -316,6 +316,14 @@ fn cleanup_history() -> engine::cleanup::CleanupHistory {
     engine::cleanup::history_totals()
 }
 
+/// Clock convention read, no scan: whether this machine's clock runs
+/// 12-hour (from the OS time format itself, never the app language).
+/// A registry read, so the UI calls it once and caches it per launch.
+#[tauri::command]
+fn clock_hour12() -> bool {
+    engine::system::clock_uses_12h()
+}
+
 /// Immediate reboot for applying page file changes (the confirm dialog
 /// in Tools is the only caller; a refused UAC stays quiet like every
 /// other cancellation).
@@ -814,6 +822,7 @@ pub fn run() {
             storage_deep_scan,
             storage_clean,
             cleanup_history,
+            clock_hour12,
             schedule_reboot,
             open_windows_panel,
             set_auto_stop,
