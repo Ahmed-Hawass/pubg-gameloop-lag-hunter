@@ -120,6 +120,11 @@ export const en = {
   zoomSmall: "Small",
   zoomDefault: "Default",
   zoomLarge: "Large",
+  showUnsupportedTitle: "Show unavailable options",
+  showUnsupportedHint:
+    "Shows Tools rows this machine cannot run, greyed with the reason. Switches stay off: nothing here can be turned on.",
+  settingOff: "Off",
+  settingOn: "On",
   // language names in the picker: every user-facing string lives here,
   // including the names of the languages themselves (the hardcoded copies
   // in the views drifted from the dead lang.label key)
@@ -409,9 +414,18 @@ export const en = {
       as the featured summary, so this labels what follows, not a filter) */
   tweakAllTweaks: "All tweaks",
   /** reason line under a greyed-out row whose precondition the user can
-      fix (GameLoop exes not resolved) — never shown for rows that can
-      never work here (those hide instead) */
+      fix (GameLoop exes not resolved). Rows that can never work here
+      hide by default; the show-unsupported preference reveals them
+      greyed with one of the reasons below (never flippable). */
   tweakNeedsGameloop: "Needs GameLoop installed on this PC.",
+  tweakNeedsWin11: "Needs Windows 11 or later on this PC.",
+  tweakNeeds1803: "Needs Windows 10 version 1803 or later.",
+  tweakHiddenS0: "Unavailable here: this device runs Modern Standby (S0) power only.",
+  tweakHiddenUltimate: "Unavailable here: Ultimate Performance is already active.",
+  /** discover line on the gaming page (no count: hidden rows are
+      invisible by design, the number would need plural forms for a
+      line whose only job is pointing at the preference) */
+  showUnsupportedLink: "Show unavailable options",
   tweakFailed: "The change could not be verified and was not applied.",
   /** storage sweep: scan four safe places, delete only the ticked ones */
   cleanupTitle: "Clean temporary files",

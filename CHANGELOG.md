@@ -277,7 +277,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   Ctrl+=/-/0 shortcuts, persisted per machine and applied before first
   paint. Steps share one ladder with the stored values; async persist
   confirmations can never clobber a newer action.
-
+- Show-unsupported preference (Settings plus a discover line on the
+  gaming page): Tools rows the machine cannot run render greyed with
+  the exact engine-named cause (old build, S0-only, Ultimate active)
+  instead of hiding. Attention counts stay actionable (revealed rows
+  never join banner, featured, or landing totals); revealed switches
+  carry no flip handler and no effect timing.
 ### Fixed
 - The session tick no longer holds the state lock across clock reads and
   the diagnoser build (a periodic PowerShell spawn could stall stop and

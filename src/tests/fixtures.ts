@@ -40,6 +40,7 @@ export function settings(over: Partial<Settings> = {}): Settings {
     background_advice_done: true,
     dismissed_cards: [],
     ui_zoom_pct: 100,
+    show_unsupported: false,
     thresholds,
     ...over,
   };

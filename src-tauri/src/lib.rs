@@ -603,6 +603,16 @@ fn set_ui_zoom(pct: u32) -> Result<u32, String> {
     })
 }
 
+/// Persist the show-unsupported-rows preference (Tools reveals rows the
+/// machine cannot run, greyed with their translated reason).
+#[tauri::command]
+fn set_show_unsupported(show: bool) -> Result<bool, String> {
+    engine::settings::update(|s| {
+        s.show_unsupported = show;
+        s.show_unsupported
+    })
+}
+
 // ---- update flow (see engine/update.rs for the scope contract) ----------
 // check at boot + manual check from About; download only ever starts from
 // an explicit user click; verification against SHA256SUMS is mandatory.
@@ -863,6 +873,7 @@ pub fn run() {
             open_windows_panel,
             set_auto_stop,
             set_ui_zoom,
+            set_show_unsupported,
             open_path,
             open_url,
             get_version,

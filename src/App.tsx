@@ -140,6 +140,10 @@ export default function App() {
       the theme, so pills and shortcuts share one state; SettingsView
       only sends changes through onZoomChange below */
   const { zoom, setZoomPct, zoomIn, zoomOut, resetZoom } = useUiZoom();
+  /** reveal Tools rows the machine cannot run (owned here like the
+      theme: Settings pills, the gaming-page link, and the page share
+      one state, persisted per machine) */
+  const [showUnsupported, setShowUnsupported] = useState(false);
 
   // zoom shortcuts (browser convention, VS Code included): Ctrl+= in,
   // Ctrl+- out, Ctrl+0 reset. Arabic layouts remap these keys — the
@@ -185,6 +189,15 @@ export default function App() {
     setThemeSetting(v);
     void api.setTheme(v).catch((error) => {
       setThemeSetting(previous);
+      showSettingsError(error);
+    });
+  };
+
+  const onShowUnsupportedChange = (v: boolean) => {
+    const previous = showUnsupported;
+    setShowUnsupported(v);
+    void api.setShowUnsupported(v).catch((error) => {
+      setShowUnsupported(previous);
       showSettingsError(error);
     });
   };
@@ -278,6 +291,7 @@ export default function App() {
       .then((s) => {
         setDurationSecs(s.auto_stop_minutes * 60);
         setCollapsed(s.sidebar_collapsed);
+        setShowUnsupported(s.show_unsupported ?? false);
         setOnboardingDone(s.onboarding_done);
         setGameAdviceDone(s.game_advice_done);
         setBackgroundAdviceDone(s.background_advice_done);
@@ -620,10 +634,12 @@ export default function App() {
                   toolOpenId={toolOpenId}
                   onToolOpened={() => setToolOpenId(null)}
                   onCleaningChange={onCleaningActivity}
+                  showUnsupported={showUnsupported}
+                  onShowUnsupported={() => onShowUnsupportedChange(true)}
                 />
               </div>
               <div className={view === "settings" ? "" : "is-hidden-view"}>
-                <SettingsView theme={themeSetting} onThemeChange={onThemeChange} active={view === "settings"} zoom={zoom} onZoomChange={setZoomPct} />
+                <SettingsView theme={themeSetting} onThemeChange={onThemeChange} active={view === "settings"} zoom={zoom} onZoomChange={setZoomPct} showUnsupported={showUnsupported} onShowUnsupportedChange={onShowUnsupportedChange} />
               </div>
               <div className={view === "about" ? "" : "is-hidden-view"}>
                 <AboutView

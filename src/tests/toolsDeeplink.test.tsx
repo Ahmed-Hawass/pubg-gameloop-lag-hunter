@@ -48,6 +48,8 @@ function openLinked(toolOpenId: string | null) {
       toolOpenId,
       onToolOpened,
       onCleaningChange: vi.fn(),
+      showUnsupported: false,
+      onShowUnsupported: vi.fn(),
     }),
   );
   return { onToolOpened };

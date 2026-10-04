@@ -19,6 +19,7 @@ const apiMock = vi.hoisted(() => ({
   setLanguage: vi.fn(),
   resetIntroCards: vi.fn(),
   setUiZoom: vi.fn(),
+  setShowUnsupported: vi.fn(),
 }));
 
 vi.mock("../bridge", () => ({
@@ -37,6 +38,8 @@ function open(over: Partial<Settings> = {}, zoom = 100) {
         active: true,
         zoom,
         onZoomChange: vi.fn(),
+        showUnsupported: false,
+        onShowUnsupportedChange: vi.fn(),
       }),
     ),
   );
@@ -104,6 +107,8 @@ describe("SettingsView language", () => {
           active,
           zoom: 100,
           onZoomChange: vi.fn(),
+          showUnsupported: false,
+          onShowUnsupportedChange: vi.fn(),
         }),
       );
     // hidden tab: no group (the provider still reads for language)
@@ -127,6 +132,8 @@ describe("SettingsView language", () => {
           active: true,
           zoom: 100,
           onZoomChange,
+          showUnsupported: false,
+          onShowUnsupportedChange: vi.fn(),
         }),
       ),
     );
@@ -137,5 +144,34 @@ describe("SettingsView language", () => {
     ).toHaveAttribute("aria-checked", "true");
     await user.click(within(seg).getByRole("radio", { name: en.zoomLarge }));
     expect(onZoomChange).toHaveBeenCalledWith(125);
+  });
+
+  it("unsupported pills persist the preference", async () => {
+    const user = userEvent.setup();
+    const onShowUnsupportedChange = vi.fn();
+    render(
+      React.createElement(
+        LanguageProvider,
+        null,
+        React.createElement(SettingsView, {
+          theme: "dark",
+          onThemeChange: vi.fn(),
+          active: true,
+          zoom: 100,
+          onZoomChange: vi.fn(),
+          showUnsupported: false,
+          onShowUnsupportedChange,
+        }),
+      ),
+    );
+    // off by default, like the engine default
+    const seg = await screen.findByRole("radiogroup", { name: en.showUnsupportedTitle });
+    expect(
+      within(seg).getByRole("radio", { name: en.settingOff }),
+    ).toHaveAttribute("aria-checked", "true");
+    await user.click(within(seg).getByRole("radio", { name: en.settingOn }));
+    // the pills report upward (App persists through its own setter,
+    // like the theme pills — SettingsView never touches IPC itself)
+    expect(onShowUnsupportedChange).toHaveBeenCalledWith(true);
   });
 });

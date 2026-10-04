@@ -55,6 +55,8 @@ async function openSweep(
       toolOpenId: null,
       onToolOpened: vi.fn(),
       onCleaningChange: vi.fn(),
+      showUnsupported: false,
+      onShowUnsupported: vi.fn(),
     }),
   );
   await user.click(screen.getByText(en.toolCleanup));
@@ -170,6 +172,8 @@ describe("ToolsView storage sweep", () => {
         toolOpenId: null,
         onToolOpened: vi.fn(),
         onCleaningChange: vi.fn(),
+      showUnsupported: false,
+      onShowUnsupported: vi.fn(),
       }),
     );
     // past measured truth on the card face (badge-less: cleanup is not
@@ -215,6 +219,8 @@ describe("ToolsView storage sweep", () => {
         toolOpenId: null,
         onToolOpened: vi.fn(),
         onCleaningChange: vi.fn(),
+      showUnsupported: false,
+      onShowUnsupported: vi.fn(),
       }),
     );
     await user.click(screen.getByText(en.toolCleanup));

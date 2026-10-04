@@ -209,6 +209,8 @@ export const api = {
   dismissIntroCard: (id: string) => invoke<void>("dismiss_intro_card", { id }),
   /** empty the dismissed intro cards list (every card shows again) */
   resetIntroCards: () => invoke<void>("reset_intro_cards"),
+  /** persist the show-unsupported-rows preference */
+  setShowUnsupported: (show: boolean) => invoke<boolean>("set_show_unsupported", { show }),
   setAutoStop: (minutes: number) => invoke<number>("set_auto_stop", { minutes }),
   openPath: (path: string) => invoke<void>("open_path", { path }),
   openUrl: (url: string) => invoke<void>("open_url", { url }),
@@ -399,8 +401,17 @@ export interface SystemChecks {
 /** Visibility of a Tools row whose availability depends on the machine —
     mirrors RowState in engine/system.rs. `disabled_gameloop_not_found`
     renders greyed with a translated reason (fixable by the user);
-    `hidden` renders nothing (can never work here). */
-export type RowState = "on" | "off" | "disabled_gameloop_not_found" | "hidden";
+    `hidden` renders nothing (legacy shape, cause unknown); the Hidden*
+    shapes render nothing by default and greyed with their reason under
+    the show-unsupported preference. */
+export type RowState =
+  | "on"
+  | "off"
+  | "disabled_gameloop_not_found"
+  | "hidden"
+  | "hidden_old_build"
+  | "hidden_s0"
+  | "hidden_ultimate";
 export interface TweakStates {
   game_dvr_enabled: boolean;
   storage_sense: boolean | null;
@@ -507,6 +518,8 @@ export interface Settings {
   background_advice_done: boolean;
   /** dismissed one-shot page cards, by card id (old files: empty list) */
   dismissed_cards: string[];
+  /** show Tools rows the machine cannot run, greyed with reason */
+  show_unsupported: boolean;
   /** UI zoom percent (80..=125, 100 = no zoom) */
   ui_zoom_pct: number;
   thresholds: Thresholds;

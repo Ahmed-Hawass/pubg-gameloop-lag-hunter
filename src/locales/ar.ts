@@ -122,6 +122,14 @@ export const ar: Locale = {
   zoomSmall: "صغير",
   zoomDefault: "افتراضي",
   zoomLarge: "كبير",
+  /** show-unsupported group (segmented On/Off like language and theme;
+      the hint names what revealing does, never which rows: the set is
+      engine-decided and grows without copy edits) */
+  showUnsupportedTitle: "إظهار الخيارات غير المتاحة",
+  showUnsupportedHint:
+    "يعرض صفوف الأدوات التي لا يعمل عليها هذا الجهاز بلون باهت مع السبب. تبقى المفاتيح مطفأة: لا يمكن تشغيل شيء منها.",
+  settingOff: "إيقاف",
+  settingOn: "تشغيل",
   // language names in the picker: every user-facing string lives here,
   // including the names of the languages themselves
   langEn: "English",
@@ -401,6 +409,11 @@ export const ar: Locale = {
       fix (GameLoop exes not resolved) — never shown for rows that can
       never work here (those hide instead) */
   tweakNeedsGameloop: "يتطلب تثبيت GameLoop على هذا الجهاز.",
+  tweakNeedsWin11: "يتطلب ويندوز 11 أو أحدث على هذا الجهاز.",
+  tweakNeeds1803: "يتطلب ويندوز 10 بالإصدار 1803 أو أحدث.",
+  tweakHiddenS0: "غير متاح هنا: هذا الجهاز يعمل بوضع الاستعداد الحديث (S0) للطاقة فقط.",
+  tweakHiddenUltimate: "غير متاح هنا: وضع الأداء المطلق مفعّل بالفعل.",
+  showUnsupportedLink: "إظهار الخيارات غير المتاحة",
   tweakFailed: "تعذّر التحقق من التغيير ولم يُطبَّق.",
   /** storage sweep: scan four safe places, delete only the ticked ones */
   cleanupTitle: "تنظيف الملفات المؤقتة",

@@ -37,8 +37,12 @@ export function ToolsView(props: {
   onToolOpened: () => void;
   /** reports cleanup activity to the shell (the exit confirm needs it) */
   onCleaningChange?: (active: boolean) => void;
+  /** reveal rows this Windows cannot run, greyed with their reason
+      (owned by App like the theme: pills, link, and page share it) */
+  showUnsupported: boolean;
+  onShowUnsupported: () => void;
 }) {
-  const { active, toolOpenId, onToolOpened, onCleaningChange } = props;
+  const { active, toolOpenId, onToolOpened, onCleaningChange, showUnsupported, onShowUnsupported } = props;
   const { t, lang } = useLang();
   const spotTheme = useSpotTheme();
   /** OS clock convention for the history line (null until the read
@@ -162,6 +166,8 @@ export function ToolsView(props: {
             onLinkDone={onToolOpened}
             showHint={showHint}
             failNotice={setNotice}
+            showUnsupported={showUnsupported}
+            onShowUnsupported={onShowUnsupported}
           />
         ) : openCard === "pagefile" ? (
           <PagefileSection

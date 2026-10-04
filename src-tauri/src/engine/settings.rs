@@ -60,6 +60,11 @@ pub struct Settings {
     /// launch. Serde default keeps old files valid (100 = no zoom).
     #[serde(default = "default_ui_zoom")]
     pub ui_zoom_pct: u32,
+    /// show Tools rows the machine cannot run, greyed with their reason
+    /// (default hidden: a permanently dead row is clutter, not honesty).
+    /// Serde default keeps old files valid (off).
+    #[serde(default)]
+    pub show_unsupported: bool,
     /// the release version whose update modal has already been shown once
     /// (the modal appears ONCE per version; after that the About dot is the
     /// only signal until the next version lands)
@@ -114,6 +119,7 @@ impl Default for Settings {
             background_advice_done: false,
             dismissed_cards: Vec::new(),
             ui_zoom_pct: default_ui_zoom(),
+            show_unsupported: false,
             announced_update_version: None,
             last_seen_gameloop_version: None,
             previous_power_guid: None,
@@ -353,6 +359,7 @@ mod tests {
             pending_restart: None,
             dismissed_cards: vec!["processes".into()],
             ui_zoom_pct: 100,
+            show_unsupported: false,
             thresholds: Thresholds::default(),
         };
         let text = serde_json::to_string(&s).unwrap();
@@ -415,6 +422,7 @@ mod tests {
             pending_restart: None,
             dismissed_cards: vec!["health".into()],
             ui_zoom_pct: 125,
+            show_unsupported: true,
             thresholds: Thresholds::default(),
         };
         let text = serde_json::to_string(&s).unwrap();
@@ -429,6 +437,7 @@ mod tests {
         assert!(back.background_advice_done);
         assert_eq!(back.dismissed_cards, vec!["health".to_string()]);
         assert_eq!(back.ui_zoom_pct, 125);
+        assert!(back.show_unsupported);
     }
 
     #[test]
@@ -441,6 +450,7 @@ mod tests {
         .unwrap();
         assert!(back.dismissed_cards.is_empty());
         assert_eq!(back.ui_zoom_pct, 100);
+        assert!(!back.show_unsupported);
     }
 
     #[test]

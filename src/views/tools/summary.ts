@@ -2,19 +2,28 @@
 // render, plus the shared sweep-memory formatting. One function per
 // consumer group: faces can never drift from the pages behind them.
 
-import type { CleanupHistory, PagefileSettings, TweakStates } from "../../bridge";
+import type { CleanupHistory, PagefileSettings, RowState, TweakStates } from "../../bridge";
 import type { Locale } from "../../locales/en";
 import type { LangCode } from "../../i18n";
 import { formatClockTime } from "../../clock";
 
+/** every Hidden* shape plus legacy "hidden": never rendered, never
+    counted by default — the show-unsupported preference names each
+    cause instead. Lives here (not bridge: test mocks replace the
+    bridge module wholesale, and a runtime import from it would crash
+    every suite — types alone are erased and safe). */
+export function isHiddenRowState(s: RowState): boolean {
+  return s === "hidden" || s === "hidden_old_build" || s === "hidden_s0" || s === "hidden_ultimate";
+}
+
 export function summarizeTweaks(s: TweakStates): { shown: number; on: number } {
   const rows: { shown: boolean; on: boolean }[] = [
-    { shown: s.power_high_perf !== "hidden", on: s.power_high_perf === "on" },
+    { shown: !isHiddenRowState(s.power_high_perf), on: s.power_high_perf === "on" },
     { shown: true, on: !s.game_dvr_enabled },
     { shown: true, on: s.game_mode },
-    { shown: s.fso_disabled !== "hidden", on: s.fso_disabled === "on" },
+    { shown: !isHiddenRowState(s.fso_disabled), on: s.fso_disabled === "on" },
     { shown: s.windowed_game_opt !== null, on: s.windowed_game_opt === true },
-    { shown: s.gpu_high_perf !== "hidden", on: s.gpu_high_perf === "on" },
+    { shown: !isHiddenRowState(s.gpu_high_perf), on: s.gpu_high_perf === "on" },
     { shown: true, on: s.mouse_accel_off },
   ];
   const shown = rows.filter((r) => r.shown);

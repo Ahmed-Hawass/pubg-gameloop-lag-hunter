@@ -54,6 +54,8 @@ async function openGamingWith(states: ReturnType<typeof tweakStates>) {
       active: true,
       toolOpenId: null,
       onToolOpened: vi.fn(),
+      showUnsupported: false,
+      onShowUnsupported: vi.fn(),
     }),
   );
   await user.click(screen.getByText(en.toolGamingTweaks));
@@ -105,12 +107,14 @@ describe("ToolsView gaming summary", () => {
     apiMock.tweakStates.mockResolvedValue({ ...allOn, game_dvr_enabled: true });
     apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
     apiMock.cleanupHistory.mockResolvedValue(cleanupHistory());
-  apiMock.clockHour12.mockResolvedValue(false);
+    apiMock.clockHour12.mockResolvedValue(false);
     render(
       React.createElement(ToolsView, {
         active: true,
         toolOpenId: null,
         onToolOpened: vi.fn(),
+        showUnsupported: false,
+        onShowUnsupported: vi.fn(),
       }),
     );
     // 4 of 5 rendered rows on (power/gpu/fso hidden in the fixture)

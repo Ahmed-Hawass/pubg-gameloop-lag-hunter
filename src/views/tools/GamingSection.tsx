@@ -8,6 +8,7 @@ import {
   AppWindow,
   CheckCircle2,
   Expand,
+  Eye,
   Gamepad2,
   Monitor,
   Mouse,
@@ -16,10 +17,11 @@ import {
   Video,
   Zap,
 } from "lucide-react";
-import { EmptyState } from "../../components/components";
+import { Button, EmptyState } from "../../components/components";
 import type { Notice } from "../../errors";
 import { useLang } from "../../i18n";
 import { SwitchRow } from "./SwitchRow";
+import { isHiddenRowState } from "./summary";
 import { useTweaks } from "./useTweaks";
 
 export function GamingSection(props: {
@@ -29,8 +31,12 @@ export function GamingSection(props: {
   onLinkDone: () => void;
   showHint: (title: string, body: string) => void;
   failNotice: (notice: Notice | null) => void;
+  /** reveal rows this Windows cannot run, greyed with their reason
+      (owned by App like the theme: pills, link, and page share it) */
+  showUnsupported: boolean;
+  onShowUnsupported: () => void;
 }) {
-  const { active, linkTarget, onLinkDone, showHint, failNotice } = props;
+  const { active, linkTarget, onLinkDone, showHint, failNotice, showUnsupported, onShowUnsupported } = props;
   const { t } = useLang();
   const tweaks = useTweaks(failNotice);
   /** deep-link highlight row id: ringed for a moment, cleared with the link */
@@ -76,8 +82,9 @@ export function GamingSection(props: {
     const target = linkTarget;
     const row = listRef.current?.querySelector<HTMLElement>(`[data-tweak="${target}"]`);
     if (!row) {
-      // the linked row is not rendered on this machine (hidden, not
-      // disabled): clear the link instead of re-firing on every visit
+      // the linked row is not rendered on this machine (hidden and not
+      // revealed, never disabled): clear the link instead of re-firing
+      // on every visit. Revealed rows land and ring like live ones.
       onLinkDone();
       return;
     }
@@ -118,7 +125,14 @@ export function GamingSection(props: {
       rows do not exist, disabled rows wait on GameLoop. */
   type TweakRow = { id: string; off: boolean; el: ReactNode };
   const rows: TweakRow[] = [];
-  if (tweaks.powerState !== "hidden") {
+  /** rows this Windows cannot run: rendered greyed in the archive only
+      (never banner, never featured — attention stays actionable),
+      only under the show-unsupported preference, each with the exact
+      cause the engine named (an unknown cause stays hidden: a row that
+      cannot explain itself must not render). No effect line: a timing
+      for something that can never apply would be a guess. */
+  const unsupported: { id: string; el: ReactNode }[] = [];
+  if (!isHiddenRowState(tweaks.powerState)) {
     rows.push({
       id: "powerplan",
       off: tweaks.powerState === "off",
@@ -135,6 +149,27 @@ export function GamingSection(props: {
           onHint={showHint}
           busy={tweaks.tweakBusy}
           onFlip={(next) => void tweaks.flipTweak("powerplan", next)}
+        />
+      ),
+    });
+  } else if (showUnsupported && tweaks.powerState !== "hidden") {
+    unsupported.push({
+      id: "powerplan",
+      el: (
+        <SwitchRow
+          tweakId="powerplan"
+          linked={linkedId === "powerplan"}
+          on={false}
+          func={<Zap size={15} />}
+          name={t.tweakPowerTitle}
+          hintTitle={t.tweakPowerTitle}
+          hintBody={t.tweakPowerHint}
+          onHint={showHint}
+          busy={tweaks.tweakBusy}
+          disabled
+          disabledHint={
+            tweaks.powerState === "hidden_ultimate" ? t.tweakHiddenUltimate : t.tweakHiddenS0
+          }
         />
       ),
     });
@@ -180,7 +215,7 @@ export function GamingSection(props: {
       ),
     });
   }
-  if (tweaks.fsoState !== "hidden") {
+  if (!isHiddenRowState(tweaks.fsoState)) {
     rows.push({
       id: "fso",
       off: tweaks.fsoState === "off",
@@ -223,8 +258,29 @@ export function GamingSection(props: {
         />
       ),
     });
+  } else if (showUnsupported) {
+    // null means exactly one thing (below Win11: the only gate,
+    // windowed_opt_supported), so the reason needs no backend switch
+    unsupported.push({
+      id: "windowedopt",
+      el: (
+        <SwitchRow
+          tweakId="windowedopt"
+          linked={linkedId === "windowedopt"}
+          on={false}
+          func={<AppWindow size={15} />}
+          name={t.tweakWindowedTitle}
+          hintTitle={t.tweakWindowedTitle}
+          hintBody={t.tweakWindowedHint}
+          onHint={showHint}
+          busy={tweaks.tweakBusy}
+          disabled
+          disabledHint={t.tweakNeedsWin11}
+        />
+      ),
+    });
   }
-  if (tweaks.gpuState !== "hidden") {
+  if (!isHiddenRowState(tweaks.gpuState)) {
     rows.push({
       id: "gpupref",
       off: tweaks.gpuState === "off",
@@ -243,6 +299,26 @@ export function GamingSection(props: {
           disabled={tweaks.gpuState === "disabled_gameloop_not_found"}
           disabledHint={t.tweakNeedsGameloop}
           onFlip={(next) => void tweaks.flipTweak("gpupref", next)}
+        />
+      ),
+    });
+  } else if (showUnsupported && tweaks.gpuState !== "hidden") {
+    // below Win10 1803 is the only gate the backend names here
+    unsupported.push({
+      id: "gpupref",
+      el: (
+        <SwitchRow
+          tweakId="gpupref"
+          linked={linkedId === "gpupref"}
+          on={false}
+          func={<Monitor size={15} />}
+          name={t.tweakGpuTitle}
+          hintTitle={t.tweakGpuTitle}
+          hintBody={t.tweakGpuHint}
+          onHint={showHint}
+          busy={tweaks.tweakBusy}
+          disabled
+          disabledHint={t.tweakNeeds1803}
         />
       ),
     });
@@ -269,6 +345,15 @@ export function GamingSection(props: {
     });
   }
   const offRows = rows.filter((r) => r.off);
+  /** hidden rows the preference reveals: counted for the discover
+      line below (a hidden row the user can never see needs an
+      invitation), never for the banner or featured (attention stays
+      actionable). fso never hides (its worst case is a fixable
+      disabled), so only the three hiding rows count. */
+  const hiddenCount =
+    (isHiddenRowState(tweaks.powerState) ? 1 : 0) +
+    (isHiddenRowState(tweaks.gpuState) ? 1 : 0) +
+    (tweaks.wgcOn === null ? 1 : 0);
 
   return (
     <>
@@ -285,6 +370,17 @@ export function GamingSection(props: {
           </div>
         </div>
       </div>
+
+      {/* discover line: hidden rows are invisible by design, so without
+          this no one could ever learn the preference exists */}
+      {!showUnsupported && hiddenCount > 0 ? (
+        <Button
+          label={t.showUnsupportedLink}
+          icon={<Eye size={14} />}
+          variant="ghost"
+          onClick={onShowUnsupported}
+        />
+      ) : null}
 
       {/* featured off-rows: the same rows as the archive below,
           repeated deliberately (summary + archive, not instead of it) */}
@@ -307,6 +403,11 @@ export function GamingSection(props: {
               every row here targets gaming, subdivision would be noise. */}
           {rows.map((r) => (
             <Fragment key={`${r.id}-archive`}>{r.el}</Fragment>
+          ))}
+          {/* revealed unavailable rows ride the archive tail (greyed,
+              never counted above): future rows join without restructuring */}
+          {unsupported.map((r) => (
+            <Fragment key={`${r.id}-unsupported`}>{r.el}</Fragment>
           ))}
         </div>
       </section>

@@ -48,6 +48,8 @@ async function openPagefile(user: ReturnType<typeof userEvent.setup>, dismissed:
       toolOpenId: null,
       onToolOpened: vi.fn(),
       onCleaningChange: vi.fn(),
+      showUnsupported: false,
+      onShowUnsupported: vi.fn(),
     }),
   );
   await user.click(screen.getByText(en.tweakPfTitle));
@@ -168,6 +170,8 @@ describe("ToolsView page file editor", () => {
         toolOpenId: null,
         onToolOpened: vi.fn(),
         onCleaningChange: vi.fn(),
+      showUnsupported: false,
+      onShowUnsupported: vi.fn(),
       }),
     );
     await screen.findByText(en.checkOkBadge);
@@ -192,6 +196,8 @@ describe("ToolsView page file editor", () => {
         toolOpenId: null,
         onToolOpened: vi.fn(),
         onCleaningChange: vi.fn(),
+      showUnsupported: false,
+      onShowUnsupported: vi.fn(),
       }),
     );
     // tree one sits on the details page: the second landing card is

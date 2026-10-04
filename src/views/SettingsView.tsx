@@ -4,7 +4,7 @@
 // selection language: filled green on the active segment, nothing else.
 
 import { useEffect, useState } from "react";
-import { Languages, Lightbulb, RotateCcw, SunMoon, ZoomIn } from "lucide-react";
+import { Eye, Languages, Lightbulb, RotateCcw, SunMoon, ZoomIn } from "lucide-react";
 import { Button, Hint } from "../components/components";
 import { api } from "../bridge";
 import { useLang, type LangSetting } from "../i18n";
@@ -23,9 +23,13 @@ export function SettingsView(props: {
       shortcuts share one state through this callback) */
   zoom: number;
   onZoomChange: (pct: number) => void;
+  /** reveal Tools rows the machine cannot run (owned by App: the
+      gaming page link and these pills share it, persisted) */
+  showUnsupported: boolean;
+  onShowUnsupportedChange: (show: boolean) => void;
 }) {
   const { t, setting, setLanguage } = useLang();
-  const { theme, onThemeChange, active, zoom, onZoomChange } = props;
+  const { theme, onThemeChange, active, zoom, onZoomChange, showUnsupported, onShowUnsupportedChange } = props;
   /** friendly names for the fixed steps (unknown future steps fall
       back to their number, never a wrong word) */
   const zoomLabels: Record<number, string> = {
@@ -159,6 +163,31 @@ export function SettingsView(props: {
             />
           </section>
         ) : null}
+        <section className="settings-group">
+          <h3 className="settings-group-title">
+            <Eye size={13} />
+            {t.showUnsupportedTitle}
+            <Hint text={t.showUnsupportedHint} />
+          </h3>
+          <div className="lang-segment" role="radiogroup" aria-label={t.showUnsupportedTitle}>
+            {(
+              [
+                { value: false, label: t.settingOff },
+                { value: true, label: t.settingOn },
+              ] as const
+            ).map((o) => (
+              <button
+                key={o.value ? "on" : "off"}
+                className={`lang-seg ${showUnsupported === o.value ? "is-active" : ""}`}
+                role="radio"
+                aria-checked={showUnsupported === o.value}
+                onClick={() => onShowUnsupportedChange(o.value)}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   );

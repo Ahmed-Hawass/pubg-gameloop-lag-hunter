@@ -1003,8 +1003,9 @@ pub struct TweakStates {
     /// build (row hides — there is no such Settings toggle to mirror there)
     pub windowed_game_opt: Option<bool>,
     /// High Performance row state: On = a performance-class plan is
-    /// active; Off = present or restorable; Hidden = Ultimate active or
-    /// S0-only firmware (forcing plans there fights the design)
+    /// active; Off = present or restorable; HiddenUltimate/HiddenS0 =
+    /// Ultimate active or S0-only firmware (forcing plans there fights
+    /// the design)
     pub power_high_perf: RowState,
     /// one-time client-update notice: the GameLoop build changed since the
     /// last Tools read (path-keyed GPU/FSO prefs orphan on client updates,
@@ -1022,8 +1023,17 @@ pub struct TweakStates {
 /// - DisabledGameloopNotFound: visible but greyed — GameLoop exes did not
 ///   resolve, which the user can fix (install/run GameLoop). A row the
 ///   user can act on must explain itself, never vanish silently.
-/// - Hidden: can never work here (unsupported OS/build) — the row is
-///   absent entirely. A permanently dead row is clutter, not honesty.
+/// - Hidden: can never work here, cause unknown to the UI — the row is
+///   absent entirely (legacy shape; new hides name their cause below).
+/// - HiddenOldBuild: needs a newer Windows (windowed needs Win11, the
+///   per-exe GPU preference needs 10 1803+).
+/// - HiddenS0: S0-only firmware (forcing plans there fights the design).
+/// - HiddenUltimate: Ultimate Performance already active (nothing above
+///   it to offer).
+///
+/// A permanently dead row stays hidden by default; the "show
+/// unsupported" preference reveals all three Hidden* shapes greyed with
+/// their translated reason (never flippable, writes stay refused).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RowState {
@@ -1031,6 +1041,9 @@ pub enum RowState {
     Off,
     DisabledGameloopNotFound,
     Hidden,
+    HiddenOldBuild,
+    HiddenS0,
+    HiddenUltimate,
 }
 
 /// Windows build number (e.g. 22631), None when unreadable. Same source
@@ -1372,9 +1385,10 @@ fn s0_available_in(powercfg_a: &str) -> bool {
 /// The Tools power row state: On = a performance-class plan is active
 /// (built-in GUID, custom duplicate, or name fallback — the dev box
 /// itself runs a custom High Performance duplicate); Off = a
-/// performance plan exists or the machine can restore one; Hidden =
-/// Ultimate already active (nothing above it to offer) or an S0-only
-/// machine (forcing plans fights the firmware by design).
+/// performance plan exists or the machine can restore one;
+/// HiddenUltimate = Ultimate already active (nothing above it to
+/// offer), HiddenS0 = an S0-only machine (forcing plans fights the
+/// firmware by design).
 pub fn power_row_state(
     active_guid: &str,
     active_name: &str,
@@ -1387,7 +1401,7 @@ pub fn power_row_state(
         || active_name.to_ascii_lowercase().contains("ultimate")
         || active_name.contains("الأداء المطلق");
     if ultimate_active {
-        return RowState::Hidden;
+        return RowState::HiddenUltimate;
     }
     if is_performance_plan(active_name, active_guid) {
         return RowState::On;
@@ -1401,7 +1415,7 @@ pub fn power_row_state(
     if perf_present || !s0 {
         return RowState::Off;
     }
-    RowState::Hidden
+    RowState::HiddenS0
 }
 
 fn pagefile_ok(mode: &str, mb: u64) -> bool {
@@ -2089,7 +2103,7 @@ pub fn query_tweak_states() -> TweakStates {
     );
     // per-exe states over the resolved GameLoop executables. No resolved
     // exes + supported build = DISABLED with an actionable reason (the
-    // user can install/run GameLoop); unsupported build = HIDDEN (can
+    // user can install/run GameLoop); unsupported build = HiddenOldBuild (can
     // never work here — a permanently dead row is clutter). The GPU row
     // additionally requires Win10 1803+: older builds ignore the
     // preference value while our re-read would still "verify", so the
@@ -2122,7 +2136,7 @@ pub fn query_tweak_states() -> TweakStates {
         })
         .collect();
     let gpu_high_perf = if !gpu_supported {
-        RowState::Hidden
+        RowState::HiddenOldBuild
     } else {
         match unanimous_state(&gpu_on) {
             Some(true) => RowState::On,
@@ -2525,11 +2539,11 @@ mod tests {
         // Ultimate active (GUID or duplicate by name): hide, nothing above it
         assert_eq!(
             power_row_state(POWER_GUID_ULTIMATE_PERFORMANCE, "Ultimate Performance", &list, false),
-            RowState::Hidden
+            RowState::HiddenUltimate
         );
         assert_eq!(
             power_row_state("223d3f55-7a5e-4b4f-9518-861f628282ba", "Ultimate Performance", &list, false),
-            RowState::Hidden
+            RowState::HiddenUltimate
         );
         // Balanced, performance present or restorable: plain toggle
         assert_eq!(
@@ -2543,7 +2557,7 @@ mod tests {
         // Balanced-only on S0 firmware: hide, forcing fights the design
         assert_eq!(
             power_row_state(&balanced, "Balanced", std::slice::from_ref(&pair(&balanced, "Balanced")), true),
-            RowState::Hidden
+            RowState::HiddenS0
         );
     }
 

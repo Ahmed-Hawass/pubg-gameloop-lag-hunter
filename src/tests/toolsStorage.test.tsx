@@ -48,6 +48,8 @@ describe("ToolsView storage card", () => {
         toolOpenId: null,
         onToolOpened: vi.fn(),
         onCleaningChange: vi.fn(),
+      showUnsupported: false,
+      onShowUnsupported: vi.fn(),
       }),
     );
     await user.click(screen.getByText(en.toolStorage));
@@ -77,6 +79,8 @@ describe("ToolsView storage card", () => {
         toolOpenId: null,
         onToolOpened: vi.fn(),
         onCleaningChange: vi.fn(),
+      showUnsupported: false,
+      onShowUnsupported: vi.fn(),
       }),
     );
     // Good while holding, from the same landing read (zero new IPC)
@@ -98,6 +102,8 @@ describe("ToolsView storage card", () => {
         toolOpenId: null,
         onToolOpened: vi.fn(),
         onCleaningChange: vi.fn(),
+      showUnsupported: false,
+      onShowUnsupported: vi.fn(),
       }),
     );
     const card = screen.getByText(en.toolStorage).closest(".tool-card")!;
@@ -119,6 +125,8 @@ describe("ToolsView storage card", () => {
         toolOpenId: null,
         onToolOpened: vi.fn(),
         onCleaningChange: vi.fn(),
+      showUnsupported: false,
+      onShowUnsupported: vi.fn(),
       }),
     );
     await user.click(screen.getByText(en.toolStorage));

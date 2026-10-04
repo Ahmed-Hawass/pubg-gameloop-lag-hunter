@@ -28,10 +28,12 @@ export function SwitchRow(props: {
   /** the health-card deep-link landed on this row: temporary ring */
   linked: boolean;
   busy: boolean;
-  onFlip: (next: boolean) => void;
+  /** flip handler (absent on revealed-unsupported rows: a disabled
+      switch never fires, so there is nothing to handle) */
+  onFlip?: (next: boolean) => void;
   /** greyed, non-clickable row with a translated reason underneath —
-      for preconditions the user can fix (vs hidden, for rows that can
-      never work here) */
+      fixable preconditions (GameLoop) or revealed-unsupported rows
+      (never flippable by design) */
   disabled?: boolean;
   disabledHint?: string;
 }) {
@@ -70,7 +72,7 @@ export function SwitchRow(props: {
         aria-disabled={disabled}
         className="switch"
         disabled={busy || disabled}
-        onClick={() => void onFlip(!on)}
+        onClick={() => void onFlip?.(!on)}
       >
         <span className="switch-knob" />
       </button>

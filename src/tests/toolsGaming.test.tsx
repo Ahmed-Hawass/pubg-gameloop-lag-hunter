@@ -44,6 +44,8 @@ function openGaming() {
       active: true,
       toolOpenId: null,
       onToolOpened: vi.fn(),
+      showUnsupported: false,
+      onShowUnsupported: vi.fn(),
     }),
   );
 }
@@ -77,6 +79,8 @@ describe("ToolsView gaming switches", () => {
         active: true,
         toolOpenId: null,
         onToolOpened: vi.fn(),
+        showUnsupported: false,
+        onShowUnsupported: vi.fn(),
       }),
     );
     await user.click(screen.getByText(en.toolGamingTweaks));
@@ -95,6 +99,62 @@ describe("ToolsView gaming switches", () => {
     // power_high_perf/gpu/fso/windowed are "hidden"/null in the fixture
     expect(screen.queryByText(en.tweakPowerTitle)).toBeNull();
     expect(screen.queryByText(en.tweakGpuTitle)).toBeNull();
+  });
+
+  it("reveals hidden rows greyed with reasons under the preference", async () => {
+    const user = userEvent.setup();
+    apiMock.tweakStates.mockResolvedValue(
+      tweakStates({ power_high_perf: "hidden_ultimate", gpu_high_perf: "hidden_old_build" }),
+    );
+    apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
+    apiMock.cleanupHistory.mockResolvedValue(cleanupHistory());
+    render(
+      React.createElement(ToolsView, {
+        active: true,
+        toolOpenId: null,
+        onToolOpened: vi.fn(),
+        showUnsupported: true,
+        onShowUnsupported: vi.fn(),
+      }),
+    );
+    // attention stays actionable: revealed rows join neither count
+    // (landing badge first: it unmounts with the page behind it)
+    await screen.findByText(en.toolBadgeOptimized(0, 3));
+    await user.click(screen.getByText(en.toolGamingTweaks));
+    // each names its exact engine cause (never a generic "unavailable")
+    await screen.findByText(en.tweakHiddenUltimate);
+    expect(screen.getByText(en.tweakNeeds1803)).toBeTruthy();
+    expect(screen.getByText(en.tweakNeedsWin11)).toBeTruthy();
+    // greyed and unflippable: revealed rows carry no switch action
+    const powerRow = screen.getByText(en.tweakPowerTitle).closest(".switch-row")!;
+    expect(powerRow.querySelector(".switch")).toBeDisabled();
+    expect(screen.getByText(en.tweakBannerNeeds(3))).toBeTruthy();
+  });
+
+  it("names hidden rows with a discover line until shown", async () => {
+    const user = userEvent.setup();
+    const onShowUnsupported = vi.fn();
+    apiMock.tweakStates.mockResolvedValue(
+      tweakStates({ power_high_perf: "hidden_s0", gpu_high_perf: "hidden_old_build" }),
+    );
+    apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
+    apiMock.cleanupHistory.mockResolvedValue(cleanupHistory());
+    render(
+      React.createElement(ToolsView, {
+        active: true,
+        toolOpenId: null,
+        onToolOpened: vi.fn(),
+        showUnsupported: false,
+        onShowUnsupported,
+      }),
+    );
+    await user.click(screen.getByText(en.toolGamingTweaks));
+    // off DVR renders featured plus archive: the page is open either way
+    await screen.findAllByText(en.tweakDvrTitle);
+    // hidden rows stay hidden, but the page admits they exist
+    expect(screen.queryByText(en.tweakPowerTitle)).toBeNull();
+    await user.click(screen.getByText(en.showUnsupportedLink));
+    expect(onShowUnsupported).toHaveBeenCalledOnce();
   });
 
   it("verified flip writes the mapped value and stays put", async () => {

@@ -22,12 +22,15 @@ export function useTweaks(failNotice: (notice: Notice | null) => void) {
   const [dvrOn, setDvrOn] = useState<boolean | null>(null);
   const [ssOn, setSsOn] = useState<boolean | null>(null);
   const [gameModeOn, setGameModeOn] = useState<boolean | null>(null);
-  /** tri-state rows (on/off/disabled-with-reason/hidden) for preconditions
-      the user can fix — "hidden" never reaches the render below */
+  /** tri-state rows (on/off/disabled-with-reason/hidden*) for
+      preconditions the user can fix — hidden shapes never reach the
+      render below by themselves (the section reveals caused ones
+      greyed under the show-unsupported preference) */
   const [fsoState, setFsoState] = useState<RowState>("hidden");
   const [gpuState, setGpuState] = useState<RowState>("hidden");
   /** power plan row: On = High performance active; Off = present or
-      restorable; Hidden = Ultimate active or S0-only firmware */
+      restorable; HiddenUltimate/HiddenS0 = Ultimate active or S0-only
+      firmware */
   const [powerState, setPowerState] = useState<RowState>("hidden");
   const [wgcOn, setWgcOn] = useState<boolean | null>(null);
   const [mouseOn, setMouseOn] = useState<boolean | null>(null);
