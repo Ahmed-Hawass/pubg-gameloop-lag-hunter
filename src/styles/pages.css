@@ -234,6 +234,42 @@
   font-size: 11px;
   color: var(--text-3);
 }
+/* end-task action on app rows: the shared ghost row-action materials
+   (same family as the session delete), neutral hover like every
+   quiet control — the danger lives only in the confirm dialog */
+.proc-end {
+  flex: none;
+  padding: 4px 10px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+.proc-end:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+/* real program artwork: bare, no tile (the tile stays for glyphs
+   only) — same footprint as the tile so rows never shift on resolve */
+.proc-art {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+}
+.proc-icon {
+  width: 24px;
+  height: 24px;
+}
+/* group size after the app name: quieter than the numbers column */
+.proc-count {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-3);
+  margin-inline-start: 6px;
+}
 /* process groups: title row plus the card list */
 .proc-group {
   display: flex;

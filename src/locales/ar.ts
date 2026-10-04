@@ -72,6 +72,10 @@ export const ar: Locale = {
     POWERSHELL_TIMEOUT: "استغرق فحص النظام وقتا طويلا. حاول مرة أخرى.",
     EMULATOR_UNKNOWN:
       "يبدو أن GameLoop يعمل بنسخة لا تعرفها هذه الأداة بعد. إذا كانت اللعبة قيد التشغيل، حدّث Lag Hunter إلى آخر إصدار.",
+    PROCESS_NOT_FOUND: "هذا التطبيق أُغلق بالفعل. لم يتم إيقاف شيء.",
+    PROCESS_ACCESS_DENIED: "رفض ويندوز إيقاف هذا التطبيق. يحتاج إلى صلاحيات المسؤول.",
+    PROCESS_KILL_FAILED: "تعذّر إيقاف هذا التطبيق. حاول مرة أخرى.",
+    PROCESS_REFUSED: "هذه العملية محمية ولا يمكن إيقافها من هنا أبدا.",
   } as Record<string, string>,
 
   // ---- report highlights (composed in the UI from event kinds) ----
@@ -208,18 +212,31 @@ export const ar: Locale = {
   // ---- top processes tab ----
   introProcessesTitle: "أغلق التطبيقات الثقيلة قبل اللعب",
   introProcessesBody:
-    "هذه البرامج التي تلتهم المعالج والذاكرة الآن، واللعبة مستثناة. تطبيقاتك آمن إغلاقها، أما مهام النظام فلا.",
+    "هذه البرامج التي تلتهم المعالج والذاكرة الآن، واللعبة مستثناة. أغلق ما لا تحتاجه قبل اللعب.",
   topProcessesEmpty: "لا يوجد شيء ملحوظ يعمل حاليًا",
-  topProcessesRefreshing: "جارٍ فحص ما يعمل الآن...",
   refresh: "تحديث",
   /** background totals header: the list below is truncated, these are not */
   totalCpuBackground: "إجمالي المعالج في الخلفية",
   totalRamBackground: "إجمالي الذاكرة في الخلفية",
-  /** process groups: user software versus OS-owned tasks */
+  /** the single apps group: every row ends, nothing here is
+      guidance-free */
   groupAppsTitle: "تطبيقات فتحتها",
   groupAppsHint: "آمن إغلاقها قبل اللعب",
-  groupSystemTitle: "مهام النظام الخلفية",
-  groupSystemHint: "اتركها تعمل",
+  endTask: "إنهاء",
+  endingTask: "جارٍ الإنهاء...",
+  endConfirmTitle: (name: string) => `إيقاف ${name}؟`,
+  endConfirmBody: (name: string) =>
+    `سيُغلق ${name} فورا. أي عمل غير محفوظ فيه سيضيع.`,
+  endConfirmBodyCount: (name: string, count: string) =>
+    `سيُغلق ${name} (${count}) فورا. أي عمل غير محفوظ فيها سيضيع.`,
+  procCount: (n: number) =>
+    n === 1
+      ? "عملية واحدة"
+      : n === 2
+        ? "عمليتان"
+        : n >= 3 && n <= 10
+          ? `${n} عمليات`
+          : `${n} عملية`,
   /** curated process display names (stable OS staples only; user
       software names itself via ProductName, raw names back both) */
   procNames: {
@@ -238,6 +255,7 @@ export const ar: Locale = {
     procStartMenu: "قائمة ابدأ",
     procShellExperience: "واجهة النظام",
     procSpooler: "التخزين المؤقت للطباعة",
+    procEdgeWebView: "مكوّن عرض الويب",
   } as Record<string, string>,
   /** generic loading line for tabs that are not Top Processes */
   loading: "جارٍ التحميل...",

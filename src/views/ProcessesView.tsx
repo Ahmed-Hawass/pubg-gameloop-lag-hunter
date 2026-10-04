@@ -6,39 +6,30 @@
 // needed).
 
 import { useEffect, useRef, useState } from "react";
-import { Activity, AppWindow, RefreshCw, Settings } from "lucide-react";
-import { EmptyState, IntroCard } from "../components/components";
+import { Activity, AppWindow, RefreshCw } from "lucide-react";
+import { Dialog, EmptyState, IntroCard } from "../components/components";
 import { api, type TopProcess, type TopProcesses } from "../bridge";
-import { errorDialog } from "../errors";
+import { errorDialog, type Notice } from "../errors";
 import { useLang } from "../i18n";
 import { useIntroCard } from "../useIntroCard";
+import { useModalSignal, useYieldToAppDialog } from "./tools/useModalSignals";
 
-/** live refresh cadence while the tab is visible */
-const LIVE_INTERVAL_MS = 5000;
+/** live refresh cadence while the tab is visible (native snapshot costs
+    microseconds, no spawn: a 2s beat is cheaper than one old 5s poll) */
+const LIVE_INTERVAL_MS = 2000;
 
 export function ProcessesView(props: { active: boolean }) {
   const { active } = props;
   const { t } = useLang();
   const [answer, setAnswer] = useState<TopProcesses | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  // overlap guard: a slow read never stacks a second one (the 2s beat
+  // always wins over waiting: a skipped beat just serves the next one)
   const busyRef = useRef(false);
-  // one pending slot for a manual press that lands mid-query (the Checks
-  // tab's pattern): instead of swallowing the click silently while a
-  // silent poll is in flight, the button spins immediately and the press
-  // runs right after the in-flight query finishes — one click suffices
-  const pendingManualRef = useRef(false);
 
   const load = async (silent: boolean, force = false) => {
-    if (busyRef.current) {
-      if (!silent) {
-        pendingManualRef.current = true;
-        setBusy(true);
-      }
-      return;
-    }
+    if (busyRef.current) return;
     busyRef.current = true;
-    if (!silent) setBusy(true);
     try {
       setAnswer(await api.topProcesses(force));
       setError(null);
@@ -58,20 +49,13 @@ export function ProcessesView(props: { active: boolean }) {
       }
     } finally {
       busyRef.current = false;
-      if (pendingManualRef.current) {
-        pendingManualRef.current = false;
-        void load(false, true);
-      } else if (!silent) {
-        setBusy(false);
-      }
     }
   };
 
   // first data
   useEffect(() => {
     void load(false);
-    // mount-time fetch only: the refresh button and the interval below
-    // own every later attempt
+    // mount-time fetch only: the interval below owns every later attempt
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -80,18 +64,86 @@ export function ProcessesView(props: { active: boolean }) {
     if (!active) return;
     const timer = window.setInterval(() => void load(true), LIVE_INTERVAL_MS);
     return () => window.clearInterval(timer);
-    // load reads busyRef/pendingManualRef (refs) and queues itself; its
-    // identity is not part of the interval contract
+    // load guards itself through busyRef; its identity is not part of
+    // the interval contract
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
   const procs = answer?.processes ?? null;
+  // apps only on screen (system rows stay in the honest totals above,
+  // never as rows: nothing here is guidance-free, every row ends).
+  // The engine still classifies every row; display just stops listing
+  // the leave-running kind (one actionable list, no dead headers).
   const apps = procs?.filter((p) => p.kind === "app") ?? [];
-  const system = procs?.filter((p) => p.kind !== "app") ?? [];
+  /** end-task confirm target (null = no confirm): app rows only, the
+      Dialog names the app and warns about unsaved work */
+  const [confirm, setConfirm] = useState<TopProcess | null>(null);
+  /** per-row busy PID (null = idle): one kill at a time, other rows
+      stay interactive throughout */
+  const [endingPid, setEndingPid] = useState<number | null>(null);
+  /** action failure notice on the one modal surface (load failures stay
+      EmptyState above; this is only for the end-task attempt itself) */
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const closeConfirm = () => setConfirm(null);
+  const closeNotice = () => setNotice(null);
+  useYieldToAppDialog(confirm !== null, closeConfirm);
+  useYieldToAppDialog(notice !== null, closeNotice);
+  useModalSignal(confirm !== null || notice !== null);
+
+  const runEndTask = async (target: TopProcess) => {
+    if (endingPid !== null) return;
+    setEndingPid(target.pid);
+    try {
+      // the whole group goes: one worker alone never ends the app
+      await api.endProcesses(target.pids.length > 0 ? target.pids : [target.pid]);
+      setConfirm(null);
+      // verify by re-read: the forced refresh shows the kill result
+      await load(false, true);
+    } catch (e) {
+      const raw = typeof e === "string" ? e : String(e);
+      const d = errorDialog(raw, t.errors, {
+        somethingWrong: t.dialog.somethingWrong,
+        scanNeedsGame: t.dialog.scanNeedsGame,
+        scanNeedsGameBody: t.dialog.scanNeedsGameBody,
+        unknownErrorBody: t.dialog.unknownErrorBody,
+      });
+      setConfirm(null);
+      setNotice({ title: d.title, body: d.body });
+    } finally {
+      setEndingPid(null);
+    }
+  };
   /** one-shot page guidance (replaces the static header line): the
-      close-before-playing decision and the apps versus system-tasks
-      rule. Transient states below keep no card. */
+      close-before-playing decision for the single apps list. Transient
+      states below keep no card. */
   const intro = useIntroCard("processes");
+  /** real artwork by representative PID (glyph until it lands): asked
+      once per new PID, kept across polls like the name cache */
+  const [icons, setIcons] = useState<Record<number, string>>({});
+  useEffect(() => {
+    if (apps.length === 0) return;
+    const fresh = apps
+      .map((p) => p.pids[0] ?? p.pid)
+      .filter((pid, i, all) => pid > 0 && !(pid in icons) && all.indexOf(pid) === i);
+    if (fresh.length === 0) return;
+    let live = true;
+    void api
+      .processIcons(fresh)
+      .then((found) => {
+        if (!live || found.length === 0) return;
+        setIcons((prev) => {
+          const next = { ...prev };
+          for (const f of found) next[f.pid] = f.url;
+          return next;
+        });
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+    // icons keyed by PID: a re-poll with the same set asks nothing
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [answer]);
 
   return (
     <div className="procs">
@@ -105,10 +157,9 @@ export function ProcessesView(props: { active: boolean }) {
         />
       ) : null}
       {/* a LOAD failure is a page state (the totals card below re-reads
-          live every 5s and on every refresh press; dead states with no
-          data keep the silent poll plus refocus) — never a modal, never
-          an inline red line: the one-modal surface stays for action
-          failures, and this tab's only action is the refresh itself */}
+          live every 2s; dead states with no data keep the silent poll
+          plus refocus) — never a modal, never an inline red line: the
+          one-modal surface stays for action failures */}
       {error ? (
         <EmptyState
           icon={<Activity size={18} />}
@@ -116,8 +167,8 @@ export function ProcessesView(props: { active: boolean }) {
           hint={error}
         />
       ) : procs === null ? (
-        <EmptyState icon={<RefreshCw size={20} />} title={t.topProcessesRefreshing} hint="" spin />
-      ) : procs.length === 0 ? (
+        <EmptyState icon={<RefreshCw size={20} />} title={t.loading} hint="" spin />
+      ) : apps.length === 0 ? (
         <EmptyState icon={<Activity size={18} />} title={t.topProcessesEmpty} hint="" />
       ) : (
         <>
@@ -132,17 +183,6 @@ export function ProcessesView(props: { active: boolean }) {
               <span className="total-num num">{Math.round(answer!.total_ram_mb)} MB</span>
               <span className="total-label">{t.totalRamBackground}</span>
             </div>
-            {/* the refresh lives with the numbers it re-measures (not in
-                a lone header row above): manual retry where data shows */}
-            <button
-              type="button"
-              className="back-btn"
-              disabled={busy}
-              onClick={() => void load(false, true)}
-            >
-              <RefreshCw size={14} className={busy ? "spin" : ""} />
-              {busy ? t.topProcessesRefreshing : t.refresh}
-            </button>
           </div>
           {apps.length > 0 ? (
             <section className="proc-group">
@@ -155,49 +195,111 @@ export function ProcessesView(props: { active: boolean }) {
               </h3>
               <ul className="card proc-list">
                 {apps.map((p) => (
-                  <ProcRow key={p.pid} proc={p} icon={<AppWindow size={15} />} />
-                ))}
-              </ul>
-            </section>
-          ) : null}
-          {system.length > 0 ? (
-            <section className="proc-group">
-              <h3 className="proc-group-head">
-                <Settings size={15} />
-                <span className="proc-group-text">
-                  <span className="proc-group-title">{t.groupSystemTitle}</span>
-                  <span className="proc-group-hint">{t.groupSystemHint}</span>
-                </span>
-              </h3>
-              <ul className="card proc-list">
-                {system.map((p) => (
-                  <ProcRow key={p.pid} proc={p} icon={<Settings size={15} />} />
+                  <ProcRow
+                    key={p.name}
+                    proc={p}
+                    art={icons[p.pids[0] ?? p.pid] ?? null}
+                    glyph={<AppWindow size={15} />}
+                    endLabel={t.endTask}
+                    endingLabel={t.endingTask}
+                    ending={endingPid === p.pid}
+                    onEnd={() => setConfirm(p)}
+                  />
                 ))}
               </ul>
             </section>
           ) : null}
         </>
       )}
+      {/* destructive confirm: names the app and its size, unsaved work
+          may be lost in every member */}
+      {confirm ? (
+        <Dialog
+          title={t.endConfirmTitle(confirm.display_name)}
+          body={
+            confirm.pids.length > 1
+              ? t.endConfirmBodyCount(confirm.display_name, t.procCount(confirm.pids.length))
+              : t.endConfirmBody(confirm.display_name)
+          }
+          kind="confirm"
+          danger
+          confirmLabel={endingPid !== null ? t.endingTask : t.endTask}
+          cancelLabel={t.dialog.cancel}
+          onConfirm={() => void runEndTask(confirm)}
+          onClose={() => {
+            if (endingPid === null) setConfirm(null);
+          }}
+        />
+      ) : null}
+      {/* action failure: known keys get locale copy, novel ones ride the
+          technical line (same errorDialog contract everywhere) */}
+      {notice ? (
+        <Dialog
+          title={notice.title}
+          body={notice.body}
+          kind="notice"
+          okLabel={t.dialog.ok}
+          onClose={() => setNotice(null)}
+        />
+      ) : null}
     </div>
   );
 }
 
-/** one row: generic group tile (never brand artwork), name, numbers.
-    Curated staples translate by key, everything else shows the engine's
-    ProductName-or-raw string verbatim. */
-function ProcRow(props: { proc: TopProcess; icon: React.ReactNode }) {
-  const { proc: p, icon } = props;
+/** one row: real artwork bare (no box) once
+    resolved, the shared tile with the glyph until then. Curated staples
+    translate by key, everything else shows the engine's
+    FileDescription-or-raw string verbatim. App rows carry an end-task
+    action on the shared neutral button (danger lives only in the
+    confirm); system rows carry no action by construction. */
+function ProcRow(props: {
+  proc: TopProcess;
+  art: string | null;
+  glyph: React.ReactNode;
+  endLabel?: string;
+  endingLabel?: string;
+  ending?: boolean;
+  onEnd?: () => void;
+}) {
+  const { proc: p, art, glyph, endLabel, endingLabel, ending, onEnd } = props;
   const { t } = useLang();
   const label =
     (p.display_key ? t.procNames[p.display_key] : undefined) ?? p.display_name;
   return (
     <li className="proc-row">
-      <span className="icon-tile">{icon}</span>
-      <span className="proc-name">{label}</span>
+      {art ? (
+        <span className="proc-art">
+          <img
+            className="proc-icon"
+            src={art}
+            alt=""
+            aria-hidden="true"
+            draggable={false}
+          />
+        </span>
+      ) : (
+        <span className="icon-tile">{glyph}</span>
+      )}
+      <span className="proc-name">
+        {label}
+        {p.pids.length > 1 ? (
+          <span className="proc-count">{t.procCount(p.pids.length)}</span>
+        ) : null}
+      </span>
       <span className="proc-nums num">
         <span className="proc-cpu">{p.cpu_pct.toFixed(1)}%</span>
         <span className="proc-ram">{Math.round(p.ram_mb)} MB</span>
       </span>
+      {onEnd ? (
+        <button
+          type="button"
+          className="row-act proc-end"
+          disabled={ending}
+          onClick={onEnd}
+        >
+          {ending ? endingLabel : endLabel}
+        </button>
+      ) : null}
     </li>
   );
 }

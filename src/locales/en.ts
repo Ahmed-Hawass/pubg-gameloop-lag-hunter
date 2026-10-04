@@ -68,6 +68,10 @@ export const en = {
     POWERSHELL_TIMEOUT: "Checking the system took too long. Try again.",
     EMULATOR_UNKNOWN:
       "GameLoop seems to be running a build this tool does not recognize yet. If the game is running, update Lag Hunter to the latest version.",
+    PROCESS_NOT_FOUND: "That app already closed. Nothing was stopped.",
+    PROCESS_ACCESS_DENIED: "Windows refused to stop that app. It needs administrator rights.",
+    PROCESS_KILL_FAILED: "That app could not be stopped. Try again.",
+    PROCESS_REFUSED: "That process is protected and can never be stopped from here.",
   } as Record<string, string>,
 
   // ---- report highlights (composed in the UI from event kinds) ----
@@ -209,18 +213,30 @@ export const en = {
       system-tasks rule */
   introProcessesTitle: "Close the heavy apps before you play",
   introProcessesBody:
-    "These are the programs eating CPU and RAM right now, game excluded. Your own apps are safe to close; system tasks are not.",
+    "These are the programs eating CPU and RAM right now, game excluded. Close what you don't need before playing.",
   topProcessesEmpty: "Nothing significant is running",
-  topProcessesRefreshing: "Checking what's running...",
   refresh: "Refresh",
   /** background totals header: the list below is truncated, these are not */
   totalCpuBackground: "total CPU in background",
   totalRamBackground: "total RAM in background",
-  /** process groups: user software versus OS-owned tasks */
+  /** the single apps group: every row ends, nothing here is
+      guidance-free */
   groupAppsTitle: "Apps you opened",
   groupAppsHint: "Safe to close before playing",
-  groupSystemTitle: "Background system tasks",
-  groupSystemHint: "Leave these running",
+  /** end-task action on every row: confirm names the app,
+      unsaved work may be lost */
+  endTask: "End",
+  endingTask: "Ending...",
+  endConfirmTitle: (name: string) => `Stop ${name}?`,
+  endConfirmBody: (name: string) =>
+    `${name} will close immediately. Unsaved work in it will be lost.`,
+  /** grouped confirm: the count string comes from procCount (one MSA
+      site), so this key never pluralizes itself */
+  endConfirmBodyCount: (name: string, count: string) =>
+    `${name} (${count}) will close immediately. Unsaved work in them will be lost.`,
+  /** grouped-row size line under the app name (MSA-safe counts live
+      here alone, like spikeCount) */
+  procCount: (n: number) => `${n} process${n === 1 ? "" : "es"}`,
   /** curated process display names (stable OS staples only; user
       software names itself via ProductName, raw names back both) */
   procNames: {
@@ -239,6 +255,7 @@ export const en = {
     procStartMenu: "Start Menu",
     procShellExperience: "Shell Experience Host",
     procSpooler: "Print Spooler",
+    procEdgeWebView: "WebView2 Runtime",
   } as Record<string, string>,
   /** generic loading line for tabs that are not Top Processes */
   loading: "Loading...",

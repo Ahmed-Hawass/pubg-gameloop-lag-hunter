@@ -24,6 +24,8 @@ const apiMock = vi.hoisted(() => ({
   announceUpdate: vi.fn(),
   systemInfo: vi.fn(),
   topProcesses: vi.fn(),
+  endProcesses: vi.fn(),
+  processIcons: vi.fn(),
   systemChecks: vi.fn(),
   sessionEntries: vi.fn(),
   setAutoStop: vi.fn(),

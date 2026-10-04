@@ -36,6 +36,10 @@ ureq = { version = "2.12", default-features = false, features = ["tls"] }
 sha2 = "0.10"
 url = "2.5"
 winreg = "0.55"
+# program icons: PNG encoding of native 32-bit pixels (pure Rust, no
+# system codecs — BMP cannot carry the alpha the icons need, and its
+# transparent pixels painted black behind every badge)
+png = "0.18"
 # user CLI signal handling: Ctrl+C stops the scan and finalizes the
 # partial report instead of abandoning it (single-purpose micro-dep)
 ctrlc = "3"

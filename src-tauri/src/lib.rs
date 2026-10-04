@@ -110,6 +110,36 @@ async fn system_checks(force: bool) -> Result<engine::system::SystemChecks, Stri
     }
 }
 
+/// End one app group by PIDs (Processes tab action): instant
+/// TerminateProcess per member plus a 2s re-read verify each — blocking
+/// pool like every other slow path. A denied member refuses honestly
+/// (no silent elevation); only real failures after attempts are logged
+/// like every command failure.
+#[tauri::command]
+async fn end_processes(pids: Vec<u32>) -> Result<(), String> {
+    let _t = engine::logging::timed("ipc: end_processes");
+    let res = tauri::async_runtime::spawn_blocking(move || engine::prockill::end_processes(&pids))
+        .await
+        .map_err(|e| format!("end process task failed: {e}"))
+        .and_then(|r| r);
+    // "cancelled" has no meaning here (no UAC in this path): every Err
+    // is a real outcome worth one log line for user reports.
+    log_err("end_processes", &res);
+    res
+}
+
+/// Real program icons for PIDs (Processes tab artwork): one native
+/// extraction per unique exe path, cached by path — the poll never
+/// extracts, the UI asks only for new PIDs. Misses stay absent (the UI
+/// keeps the glyph); small, fast, blocking pool like every probe.
+#[tauri::command]
+async fn process_icons(pids: Vec<u32>) -> Vec<engine::icons::ProcessIcon> {
+    let _t = engine::logging::timed("ipc: process_icons");
+    tauri::async_runtime::spawn_blocking(move || engine::icons::process_icons(&pids))
+        .await
+        .unwrap_or_default()
+}
+
 /// The Tools tab's switches, live from the registry (microseconds,
 /// in-process — no PowerShell spawn). SYNC by the codebase's own rule:
 /// only commands slower than a few milliseconds go async. The full
@@ -858,6 +888,8 @@ pub fn run() {
             watch_gameloop,
             system_info,
             top_processes,
+            end_processes,
+            process_icons,
             system_checks,
             tweak_states,
             set_tweak,

@@ -21,11 +21,27 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   suite pins the load-bearing UI contracts (optimistic flips with
   rollback, sweep honesty, page file validate-write-reboot, one modal
   surface, deep-links both directions, one-shot advice, exit gate).
-- Top Processes answers how bad the background is overall: honest CPU
-  and RAM totals over every non-excluded process (the displayed list
-  stays truncated at 12), then two groups, user apps to close before
-  playing and system tasks to leave running. Known OS processes show
-  translated names, app binaries name themselves, raw names back both.
+- Top Processes is one actionable apps list: honest CPU and RAM totals
+  over every non-excluded process (the displayed list stays truncated
+  at 12, ranked by RAM), one grouped row per program with its live
+  size, and an End button on every row. Known OS processes show
+  translated names, app binaries name themselves from their own
+  version resource, trimmed stems back the rest.
+- End task stops the whole program, not one worker: the engine
+  re-resolves every member PID by live name (a reused PID kills
+  nobody's stranger), verifies by re-read with a forced refresh, logs
+  an audit line, and refuses protected names. The confirm names the
+  app and its size on the one modal surface; a refusal reads as an
+  honest translated reason, never a scary dialog for a deliberate No.
+- Real program artwork on every row (PNG with transparency, one native
+  extraction per exe path cached by path, glyph-first while resolving):
+  PIDs cross the bridge, never paths.
+- The tab measures natively end to end (Toolhelp plus one limited
+  handle per PID: times, memory, path, session, parentage): no
+  PowerShell spawn per poll, no phantom PowerShell row, and a 2s beat
+  instead of 5s. CPU still needs two points in time, so newcomers read
+  zero once and idle apps read an honest zero (CPU measures activity,
+  RAM measures weight).
 - Monitor reads calm-first: an idle guidance panel instead of an empty
   layout, confirmed diagnoses ahead of the event feed, a live-only
   collapsible log, square metric tiles, the target readout, and a slim
@@ -290,6 +306,19 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   now logs a one-line evidence summary (counts plus matched family,
   never other apps' names).
 ### Fixed
+- Top Processes no longer measures itself: every poll spawned a
+  PowerShell probe that the next poll caught mid-flight (a persistent
+  PowerShell row with real-looking CPU), pinned by a TTL longer than
+  the poll beat. The native snapshot excludes our own PID and its
+  children by parentage on every machine, and the totals never carry
+  our own cost.
+- Process names no longer fall back to raw stems wholesale: the
+  PowerShell name batch parsed its own separator against itself (an
+  empty map on every poll), vendor boilerplate
+  ("Microsoft Windows Operating System") posed as a program name, and
+  dotted suffixes (".Root") rode along. Names read natively now
+  (FileDescription, then ProductName), boilerplate reads as missing,
+  and stems trim at the first dot.
 - The session tick no longer holds the state lock across clock reads and
   the diagnoser build (a periodic PowerShell spawn could stall stop and
   status behind it). The lock covers the fast update plus the file
@@ -595,6 +624,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   round-trip, same pixels).
 
 ### Removed
+- The Top Processes manual Refresh button is gone (a 2s native beat
+  made its only jobs, TTL bypass and momentary retry, worth less than
+  the lone row and its busy machinery): the kill flow still verifies
+  with its own forced re-read, and load failures still recover through
+  the silent poll. Its locale keys and spinner test went with it.
 - The System health disk-space card is gone (measurement only, no in-app
   fix, and its Storage Sense page link duplicated a destination nothing
   else needs): the struct fields, the Win32_LogicalDisk query line, the

@@ -217,6 +217,12 @@ export const api = {
   getVersion: () => invoke<string>("get_version"),
   systemInfo: () => invoke<SystemInfo>("system_info"),
   topProcesses: (force?: boolean) => invoke<TopProcesses>("top_processes", { force: force ?? false }),
+  /** end one app group by PIDs (Processes tab action): the engine
+      re-guards every member by live name, GameLoop and ourselves refuse */
+  endProcesses: (pids: number[]) => invoke<void>("end_processes", { pids }),
+  /** real program icons for new PIDs only (cached by the UI across
+      polls, misses keep the glyph): paths never cross, PIDs only */
+  processIcons: (pids: number[]) => invoke<ProcessIcon[]>("process_icons", { pids }),
   systemChecks: (force?: boolean) =>
     invoke<SystemChecks>("system_checks", { force: force ?? false }),
   /** the Tools tab's switches only (microseconds, in-process) — the
@@ -363,6 +369,9 @@ export interface SystemInfo {
 export interface TopProcess {
   name: string;
   pid: number;
+  /** every live PID in this group (hottest first): End stops them
+      all, the icon reads the first */
+  pids: number[];
   cpu_pct: number;
   ram_mb: number;
   /** "app" (user software) or "system" (leave running), decided by the engine */
@@ -371,6 +380,12 @@ export interface TopProcess {
   display_key: string | null;
   /** ProductName from the exe itself, else the raw process name */
   display_name: string;
+}
+
+/** one resolved program icon: the asked PID plus its paintable URL */
+export interface ProcessIcon {
+  pid: number;
+  url: string;
 }
 
 /** ranked rows plus honest background totals (every non-excluded process,
