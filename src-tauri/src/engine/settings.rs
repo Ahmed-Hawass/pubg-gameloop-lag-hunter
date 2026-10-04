@@ -55,6 +55,11 @@ pub struct Settings {
     /// through the serde default above.
     #[serde(default)]
     pub dismissed_cards: Vec<String>,
+    /// UI zoom in percent (80..=125, snapped to fixed levels by the UI).
+    /// Stored, never derived: the window opens at this factor every
+    /// launch. Serde default keeps old files valid (100 = no zoom).
+    #[serde(default = "default_ui_zoom")]
+    pub ui_zoom_pct: u32,
     /// the release version whose update modal has already been shown once
     /// (the modal appears ONCE per version; after that the About dot is the
     /// only signal until the next version lands)
@@ -108,6 +113,7 @@ impl Default for Settings {
             game_advice_done: false,
             background_advice_done: false,
             dismissed_cards: Vec::new(),
+            ui_zoom_pct: default_ui_zoom(),
             announced_update_version: None,
             last_seen_gameloop_version: None,
             previous_power_guid: None,
@@ -277,6 +283,17 @@ pub fn default_theme() -> String {
     "auto".into()
 }
 
+/// Validate + clamp a UI zoom choice coming from the UI (percent).
+/// The UI snaps to its own fixed levels before sending; the engine only
+/// guards the range, so the two sides share no level table to drift.
+pub fn clamp_ui_zoom(pct: u32) -> u32 {
+    pct.clamp(80, 125)
+}
+
+pub fn default_ui_zoom() -> u32 {
+    100
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -335,6 +352,7 @@ mod tests {
             previous_power_guid: None,
             pending_restart: None,
             dismissed_cards: vec!["processes".into()],
+            ui_zoom_pct: 100,
             thresholds: Thresholds::default(),
         };
         let text = serde_json::to_string(&s).unwrap();
@@ -396,6 +414,7 @@ mod tests {
             previous_power_guid: None,
             pending_restart: None,
             dismissed_cards: vec!["health".into()],
+            ui_zoom_pct: 125,
             thresholds: Thresholds::default(),
         };
         let text = serde_json::to_string(&s).unwrap();
@@ -409,6 +428,7 @@ mod tests {
         assert!(back.game_advice_done);
         assert!(back.background_advice_done);
         assert_eq!(back.dismissed_cards, vec!["health".to_string()]);
+        assert_eq!(back.ui_zoom_pct, 125);
     }
 
     #[test]
@@ -420,11 +440,11 @@ mod tests {
         )
         .unwrap();
         assert!(back.dismissed_cards.is_empty());
+        assert_eq!(back.ui_zoom_pct, 100);
     }
 
     #[test]
-    fn dismissing_cards_appends_once_and_ignores_garbage() {
-        let mut list = Vec::new();
+    fn dismissing_cards_appends_once_and_ignores_garbage() {        let mut list = Vec::new();
         assert!(note_dismissed_cards(&mut list, "processes"));
         assert_eq!(list, vec!["processes".to_string()]);
         // repeats and padded repeats never duplicate the row
@@ -500,6 +520,15 @@ mod tests {
         assert_eq!(clamp_auto_stop(0), 5);
         assert_eq!(clamp_auto_stop(30), 30);
         assert_eq!(clamp_auto_stop(9999), 60);
+    }
+
+    #[test]
+    fn ui_zoom_clamped_to_supported_range() {
+        assert_eq!(clamp_ui_zoom(0), 80);
+        assert_eq!(clamp_ui_zoom(100), 100);
+        assert_eq!(clamp_ui_zoom(125), 125);
+        assert_eq!(clamp_ui_zoom(9999), 125);
+        assert_eq!(default_ui_zoom(), 100);
     }
 
     #[test]

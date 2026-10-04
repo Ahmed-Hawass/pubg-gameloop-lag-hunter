@@ -4,11 +4,12 @@
 // selection language: filled green on the active segment, nothing else.
 
 import { useEffect, useState } from "react";
-import { Languages, Lightbulb, RotateCcw, SunMoon } from "lucide-react";
+import { Languages, Lightbulb, RotateCcw, SunMoon, ZoomIn } from "lucide-react";
 import { Button, Hint } from "../components/components";
 import { api } from "../bridge";
 import { useLang, type LangSetting } from "../i18n";
 import { INTRO_CARDS_EVENT } from "../useIntroCard";
+import { ZOOM_LEVELS } from "../useUiZoom";
 import type { ThemeSetting } from "../theme";
 
 export function SettingsView(props: {
@@ -18,9 +19,20 @@ export function SettingsView(props: {
       re-reads on every visit: dismissals happen on other tabs while
       this view stays mounted, so a launch-time read would go stale) */
   active: boolean;
+  /** interface zoom percent, owned by App like the theme (pills and
+      shortcuts share one state through this callback) */
+  zoom: number;
+  onZoomChange: (pct: number) => void;
 }) {
   const { t, setting, setLanguage } = useLang();
-  const { theme, onThemeChange, active } = props;
+  const { theme, onThemeChange, active, zoom, onZoomChange } = props;
+  /** friendly names for the fixed steps (unknown future steps fall
+      back to their number, never a wrong word) */
+  const zoomLabels: Record<number, string> = {
+    80: t.zoomSmall,
+    100: t.zoomDefault,
+    125: t.zoomLarge,
+  };
   /** dismissed intro cards count (null = unread yet): the re-show
       group renders only while something is actually dismissed (a
       button with nothing to restore would be a dead control) */
@@ -109,6 +121,25 @@ export function SettingsView(props: {
                 onClick={() => onThemeChange(o.key)}
               >
                 {o.label}
+              </button>
+            ))}
+          </div>
+        </section>
+        <section className="settings-group">
+          <h3 className="settings-group-title">
+            <ZoomIn size={13} />
+            {t.zoomTitle}
+          </h3>
+          <div className="lang-segment" role="radiogroup" aria-label={t.zoomTitle}>
+            {ZOOM_LEVELS.map((level) => (
+              <button
+                key={level}
+                className={`lang-seg ${zoom === level ? "is-active" : ""}`}
+                role="radio"
+                aria-checked={zoom === level}
+                onClick={() => onZoomChange(level)}
+              >
+                {zoomLabels[level] ?? `${level}%`}
               </button>
             ))}
           </div>

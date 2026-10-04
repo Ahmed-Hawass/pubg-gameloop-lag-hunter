@@ -5,7 +5,7 @@
 // while cards are dismissed, hiding at once on reset.
 
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { en } from "../locales/en";
@@ -18,13 +18,14 @@ const apiMock = vi.hoisted(() => ({
   getSettings: vi.fn(),
   setLanguage: vi.fn(),
   resetIntroCards: vi.fn(),
+  setUiZoom: vi.fn(),
 }));
 
 vi.mock("../bridge", () => ({
   api: apiMock,
 }));
 
-function open(over: Partial<Settings> = {}) {
+function open(over: Partial<Settings> = {}, zoom = 100) {
   apiMock.getSettings.mockResolvedValue(settings({ language: "en", ...over }));
   render(
     React.createElement(
@@ -34,6 +35,8 @@ function open(over: Partial<Settings> = {}) {
         theme: "dark",
         onThemeChange: vi.fn(),
         active: true,
+        zoom,
+        onZoomChange: vi.fn(),
       }),
     ),
   );
@@ -90,8 +93,7 @@ describe("SettingsView language", () => {
     expect(screen.queryByText(en.introResetTitle)).toBeNull();
   });
 
-  it("re-reads the list on every visit, never a stale launch read", async () => {
-    apiMock.getSettings.mockResolvedValue(settings({ dismissed_cards: ["health"] }));
+  it("re-reads the list on every visit, never a stale launch read", async () => {    apiMock.getSettings.mockResolvedValue(settings({ dismissed_cards: ["health"] }));
     const view = (active: boolean) =>
       React.createElement(
         LanguageProvider,
@@ -100,6 +102,8 @@ describe("SettingsView language", () => {
           theme: "dark",
           onThemeChange: vi.fn(),
           active,
+          zoom: 100,
+          onZoomChange: vi.fn(),
         }),
       );
     // hidden tab: no group (the provider still reads for language)
@@ -108,5 +112,30 @@ describe("SettingsView language", () => {
     // opening the tab reads fresh: a card dismissed elsewhere shows up
     rerender(view(true));
     await screen.findByText(en.introResetTitle);
+  });
+
+  it("zoom pills send the step and mark it active", async () => {
+    const user = userEvent.setup();
+    const onZoomChange = vi.fn();
+    render(
+      React.createElement(
+        LanguageProvider,
+        null,
+        React.createElement(SettingsView, {
+          theme: "dark",
+          onThemeChange: vi.fn(),
+          active: true,
+          zoom: 100,
+          onZoomChange,
+        }),
+      ),
+    );
+    // same segmented control as language and theme, one checked step
+    const seg = await screen.findByRole("radiogroup", { name: en.zoomTitle });
+    expect(
+      within(seg).getByRole("radio", { name: en.zoomDefault }),
+    ).toHaveAttribute("aria-checked", "true");
+    await user.click(within(seg).getByRole("radio", { name: en.zoomLarge }));
+    expect(onZoomChange).toHaveBeenCalledWith(125);
   });
 });

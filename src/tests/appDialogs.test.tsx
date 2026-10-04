@@ -4,7 +4,7 @@
 // silently dropping it.
 
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { en } from "../locales/en";
@@ -30,12 +30,19 @@ const apiMock = vi.hoisted(() => ({
   setTheme: vi.fn(),
   clockHour12: vi.fn(),
   dismissIntroCard: vi.fn(),
+  setUiZoom: vi.fn(),
 }));
+
+const setWebviewZoomMock = vi.hoisted(() => vi.fn());
+
+// native zoom applies through the WebView (always resolves in tests)
+setWebviewZoomMock.mockResolvedValue(undefined);
 
 let enginePush!: (ev: { payload: StatusPayload }) => void;
 
 vi.mock("../bridge", () => ({
   api: apiMock,
+  setWebviewZoom: setWebviewZoomMock,
   closeWindow: vi.fn(),
   onEngineState: vi.fn((cb: (ev: { payload: StatusPayload }) => void) => {
     enginePush = cb;
@@ -130,5 +137,23 @@ describe("App pushed dialogs", () => {
     // confirming rides the normal close path (the backend safety net runs)
     await user.click(screen.getByText(en.dialog.exitConfirm));
     expect(closeWindow).toHaveBeenCalledOnce();
+  });
+
+  it("zoom shortcuts step and reset through one state", async () => {
+    boot({ status: "idle", ui: null });
+    await screen.findByText(en.startScanning);
+    // persisted 100%: Ctrl+= steps the ladder (browser convention)
+    apiMock.setUiZoom.mockResolvedValue(125);
+    fireEvent.keyDown(document, { key: "=", ctrlKey: true });
+    await waitFor(() => {
+      expect(apiMock.setUiZoom).toHaveBeenCalledWith(125);
+    });
+    expect(setWebviewZoomMock).toHaveBeenCalledWith(1.25);
+    // Ctrl+0 resets straight to 100%
+    apiMock.setUiZoom.mockResolvedValue(100);
+    fireEvent.keyDown(document, { key: "0", ctrlKey: true });
+    await waitFor(() => {
+      expect(apiMock.setUiZoom).toHaveBeenCalledWith(100);
+    });
   });
 });

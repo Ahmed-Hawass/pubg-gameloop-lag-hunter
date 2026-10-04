@@ -506,6 +506,7 @@ fn get_settings() -> engine::settings::Settings {
     let mut s = engine::settings::load();
     // always hand back the bounded value
     s.auto_stop_minutes = engine::settings::clamp_auto_stop(s.auto_stop_minutes);
+    s.ui_zoom_pct = engine::settings::clamp_ui_zoom(s.ui_zoom_pct);
     s
 }
 
@@ -588,6 +589,17 @@ fn set_auto_stop(minutes: u32) -> Result<u32, String> {
     engine::settings::update(|s| {
         s.auto_stop_minutes = engine::settings::clamp_auto_stop(minutes);
         s.auto_stop_minutes
+    })
+}
+
+/// Persist the UI zoom level in percent. The UI snaps to its own fixed
+/// levels before sending; the engine only guards the range and hands
+/// the stored value back, like every other set_* command.
+#[tauri::command]
+fn set_ui_zoom(pct: u32) -> Result<u32, String> {
+    engine::settings::update(|s| {
+        s.ui_zoom_pct = engine::settings::clamp_ui_zoom(pct);
+        s.ui_zoom_pct
     })
 }
 
@@ -850,6 +862,7 @@ pub fn run() {
             schedule_reboot,
             open_windows_panel,
             set_auto_stop,
+            set_ui_zoom,
             open_path,
             open_url,
             get_version,

@@ -35,12 +35,19 @@ const apiMock = vi.hoisted(() => ({
   finishBackgroundAdvice: vi.fn(),
   clockHour12: vi.fn(),
   dismissIntroCard: vi.fn(),
+  setUiZoom: vi.fn(),
 }));
+
+const setWebviewZoomMock = vi.hoisted(() => vi.fn());
+
+// native zoom applies through the WebView (always resolves in tests)
+setWebviewZoomMock.mockResolvedValue(undefined);
 
 let enginePush!: (ev: { payload: StatusPayload }) => void;
 
 vi.mock("../bridge", () => ({
   api: apiMock,
+  setWebviewZoom: setWebviewZoomMock,
   closeWindow: vi.fn(),
   onEngineState: vi.fn((cb: (ev: { payload: StatusPayload }) => void) => {
     enginePush = cb;

@@ -118,6 +118,10 @@ export const ar: Locale = {
   themeAuto: "تلقائي",
   themeDark: "داكن",
   themeLight: "فاتح",
+  zoomTitle: "حجم الواجهة",
+  zoomSmall: "صغير",
+  zoomDefault: "افتراضي",
+  zoomLarge: "كبير",
   // language names in the picker: every user-facing string lives here,
   // including the names of the languages themselves
   langEn: "English",

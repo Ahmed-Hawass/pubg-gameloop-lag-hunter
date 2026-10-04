@@ -131,6 +131,14 @@ export async function showMainWindow(): Promise<void> {
   await getCurrentWindow().show();
 }
 
+/** Apply the UI zoom factor to this webview (native WebView zoom:
+    layout and fonts scale together, zero CSS changes). Factor only,
+    persistence stays in settings like every other preference. */
+export async function setWebviewZoom(factor: number): Promise<void> {
+  const { getCurrentWebview } = await import("@tauri-apps/api/webview");
+  await getCurrentWebview().setZoom(factor);
+}
+
 /** Is the main window maximized? */
 export async function isWindowMaximized(): Promise<boolean> {
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
@@ -189,6 +197,9 @@ export const api = {
   getSettings: () => invoke<Settings>("get_settings"),
   setLanguage: (lang: string) => invoke<string>("set_language", { lang }),
   setTheme: (theme: string) => invoke<string>("set_theme", { theme }),
+  /** persist the UI zoom percent (the engine clamps to 80..=125 and
+      hands the stored value back, like every other set_* command) */
+  setUiZoom: (pct: number) => invoke<number>("set_ui_zoom", { pct }),
   setSidebarCollapsed: (collapsed: boolean) => invoke<boolean>("set_sidebar_collapsed", { collapsed }),
   finishOnboarding: () => invoke<void>("finish_onboarding"),
   finishGameAdvice: () => invoke<void>("finish_game_advice"),
@@ -496,6 +507,8 @@ export interface Settings {
   background_advice_done: boolean;
   /** dismissed one-shot page cards, by card id (old files: empty list) */
   dismissed_cards: string[];
+  /** UI zoom percent (80..=125, 100 = no zoom) */
+  ui_zoom_pct: number;
   thresholds: Thresholds;
 }
 

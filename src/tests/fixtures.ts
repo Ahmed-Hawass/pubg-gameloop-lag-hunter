@@ -39,6 +39,7 @@ export function settings(over: Partial<Settings> = {}): Settings {
     game_advice_done: true,
     background_advice_done: true,
     dismissed_cards: [],
+    ui_zoom_pct: 100,
     thresholds,
     ...over,
   };

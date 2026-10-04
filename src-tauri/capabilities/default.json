@@ -11,6 +11,7 @@
     "core:window:allow-close",
     "core:window:allow-is-maximized",
     "core:window:allow-show",
+    "core:webview:allow-set-webview-zoom",
     "dialog:allow-save",
     {
       "identifier": "opener:default",

@@ -29,6 +29,7 @@ import { useLang } from "./i18n";
 import { errorDialog } from "./errors";
 import { shouldShowUpdateModal } from "./updateFlow";
 import { resolveTheme, type ThemeSetting } from "./theme";
+import { useUiZoom } from "./useUiZoom";
 import { UpdateModal } from "./components/UpdateModal";
 
 type View = "monitor" | "system" | "processes" | "checks" | "tools" | "reports" | "settings" | "about";
@@ -135,6 +136,31 @@ export default function App() {
       document.documentElement.dataset.theme — single source of truth,
       SettingsView only sends changes through onThemeChange below */
   const [themeSetting, setThemeSetting] = useState<ThemeSetting>("auto");
+  /** interface zoom percent (fixed ladder in useUiZoom): owned here like
+      the theme, so pills and shortcuts share one state; SettingsView
+      only sends changes through onZoomChange below */
+  const { zoom, setZoomPct, zoomIn, zoomOut, resetZoom } = useUiZoom();
+
+  // zoom shortcuts (browser convention, VS Code included): Ctrl+= in,
+  // Ctrl+- out, Ctrl+0 reset. Arabic layouts remap these keys — the
+  // pills in Settings stay the layout-free path, like every control.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || e.shiftKey || e.altKey || e.metaKey) return;
+      if (e.key === "=" || e.key === "+") {
+        e.preventDefault();
+        zoomIn();
+      } else if (e.key === "-") {
+        e.preventDefault();
+        zoomOut();
+      } else if (e.key === "0") {
+        e.preventDefault();
+        resetZoom();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [zoomIn, zoomOut, resetZoom]);
 
   const showSettingsError = (error: unknown) => {
     const raw = typeof error === "string" ? error : String(error);
@@ -597,7 +623,7 @@ export default function App() {
                 />
               </div>
               <div className={view === "settings" ? "" : "is-hidden-view"}>
-                <SettingsView theme={themeSetting} onThemeChange={onThemeChange} active={view === "settings"} />
+                <SettingsView theme={themeSetting} onThemeChange={onThemeChange} active={view === "settings"} zoom={zoom} onZoomChange={setZoomPct} />
               </div>
               <div className={view === "about" ? "" : "is-hidden-view"}>
                 <AboutView

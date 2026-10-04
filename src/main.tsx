@@ -3,7 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { LanguageProvider } from "./i18n";
 import { installNativeBehavior } from "./webBehavior";
-import { showMainWindow } from "./bridge";
+import { api, setWebviewZoom, showMainWindow } from "./bridge";
 // fonts: subset + base64-inlined (Google Sans latin, Cairo arabic) — first in
 // the import order so every style that follows resolves against loaded faces;
 // no fontsource fetch, no first-paint swap
@@ -21,6 +21,15 @@ import "./styles/welcome.css";
 import appIcon from "./assets/app-icon.png";
 
 installNativeBehavior();
+
+// apply the saved UI zoom as early as the theme seed: the read races
+// the first-paint reveal above, so non-100% users see at most one
+// flipped frame (same honesty as the contradicting-theme case below —
+// unavoidable without a synchronous bridge, splash covers the window).
+void api
+  .getSettings()
+  .then((s) => setWebviewZoom((s.ui_zoom_pct ?? 100) / 100))
+  .catch(() => {});
 
 // seed the theme attribute BEFORE the first React paint: the boot splash
 // is dark-only, and the app's own default ("auto") matched the OS here

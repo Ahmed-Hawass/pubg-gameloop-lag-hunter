@@ -114,6 +114,12 @@ export const en = {
   themeAuto: "Automatic",
   themeDark: "Dark",
   themeLight: "Light",
+  /** interface zoom group (Small/Default/Large pills, same segmented
+      control as language and theme; shortcuts mirror these steps) */
+  zoomTitle: "Interface size",
+  zoomSmall: "Small",
+  zoomDefault: "Default",
+  zoomLarge: "Large",
   // language names in the picker: every user-facing string lives here,
   // including the names of the languages themselves (the hardcoded copies
   // in the views drifted from the dead lang.label key)

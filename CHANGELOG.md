@@ -272,6 +272,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   line, the monitor feed clocks, and the report key moments convert
   through one helper with Latin digits in both languages, while stored
   timestamps stay 24-hour. Durations and dates are untouched.
+- Interface zoom (80 to 125 percent): native WebView scaling (layout and
+  fonts together, zero CSS changes) with fixed pills in Settings plus
+  Ctrl+=/-/0 shortcuts, persisted per machine and applied before first
+  paint. Steps share one ladder with the stored values; async persist
+  confirmations can never clobber a newer action.
 
 ### Fixed
 - The session tick no longer holds the state lock across clock reads and
