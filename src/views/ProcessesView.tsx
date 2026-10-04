@@ -7,7 +7,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Activity, AppWindow, RefreshCw, Settings } from "lucide-react";
-import { Button, EmptyState, IntroCard } from "../components/components";
+import { EmptyState, IntroCard } from "../components/components";
 import { api, type TopProcess, type TopProcesses } from "../bridge";
 import { errorDialog } from "../errors";
 import { useLang } from "../i18n";
@@ -104,19 +104,10 @@ export function ProcessesView(props: { active: boolean }) {
           onDismiss={intro.dismiss}
         />
       ) : null}
-      <div className="procs-head">
-        <Button
-          label={busy ? t.topProcessesRefreshing : t.refresh}
-          icon={<RefreshCw size={14} className={busy ? "spin" : ""} />}
-          variant="ghost"
-          disabled={busy}
-          onClick={() => void load(false, true)}
-        />
-      </div>
-
-      {/* a LOAD failure is a page state (the retry above re-reads live
-          every 5s anyway and on every press) — never a modal, never an
-          inline red line: the one-modal surface stays for action
+      {/* a LOAD failure is a page state (the totals card below re-reads
+          live every 5s and on every refresh press; dead states with no
+          data keep the silent poll plus refocus) — never a modal, never
+          an inline red line: the one-modal surface stays for action
           failures, and this tab's only action is the refresh itself */}
       {error ? (
         <EmptyState
@@ -141,6 +132,17 @@ export function ProcessesView(props: { active: boolean }) {
               <span className="total-num num">{Math.round(answer!.total_ram_mb)} MB</span>
               <span className="total-label">{t.totalRamBackground}</span>
             </div>
+            {/* the refresh lives with the numbers it re-measures (not in
+                a lone header row above): manual retry where data shows */}
+            <button
+              type="button"
+              className="back-btn"
+              disabled={busy}
+              onClick={() => void load(false, true)}
+            >
+              <RefreshCw size={14} className={busy ? "spin" : ""} />
+              {busy ? t.topProcessesRefreshing : t.refresh}
+            </button>
           </div>
           {apps.length > 0 ? (
             <section className="proc-group">

@@ -266,18 +266,11 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
           onDismiss={intro.dismiss}
         />
       ) : null}
-      <div className="checks-head">
-        <Button
-          label={busy ? t.loading : t.refresh}
-          icon={<RefreshCw size={14} className={busy ? "spin" : ""} />}
-          variant="ghost"
-          disabled={busy}
-          onClick={() => void load(false, true)}
-        />
-      </div>
 
       {/* one-glance verdict: derived from the five checks above, zero
-          backend cost (counts warn cards, nothing more) */}
+          backend cost (counts warn cards, nothing more). The re-read is
+          a quiet back-button in the banner tail (same control as the
+          Tools/Reports back buttons): no box to clash with the fill. */}
       <div className={`health-banner ${warnItems.length === 0 ? "ok" : "warn"}`}>
         {warnItems.length === 0 ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
         <div>
@@ -286,8 +279,16 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
           </div>
           <div className="hb-sub">{warnItems.length === 0 ? t.healthAllGoodSub : t.healthNeedsSub}</div>
         </div>
+        <button
+          type="button"
+          className="back-btn"
+          disabled={busy}
+          onClick={() => void load(false, true)}
+        >
+          <RefreshCw size={14} className={busy ? "spin" : ""} />
+          {busy ? t.loading : t.refresh}
+        </button>
       </div>
-
       {/* featured warnings: the same cards as the archive below, repeated
           deliberately (summary + archive, not summary instead of it) */}
       {warnItems.length > 0 ? (

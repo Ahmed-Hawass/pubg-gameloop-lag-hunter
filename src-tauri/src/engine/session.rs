@@ -227,10 +227,12 @@ impl Engine {
             sampler::Presence::GameRunning => {}
             sampler::Presence::UnknownVersion => {
                 super::logging::info("start blocked: unrecognized emulator build");
+                super::emulator::log_presence_evidence();
                 return Err("EMULATOR_UNKNOWN".into());
             }
             sampler::Presence::ClientIdle | sampler::Presence::Absent => {
                 super::logging::info("start blocked: game not running in GameLoop");
+                super::emulator::log_presence_evidence();
                 return Err("GAMELOOP_NOT_RUNNING".into());
             }
         }

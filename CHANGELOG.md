@@ -283,6 +283,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   instead of hiding. Attention counts stay actionable (revealed rows
   never join banner, featured, or landing totals); revealed switches
   carry no flip handler and no effect timing.
+- One typeface everywhere: numerals join the Google Sans stack
+  (tabular figures where the face has them) and the Plex Mono package
+  is gone. A closed emulator with only static install evidence reads
+  "not running" instead of "unrecognized build"; every blocked start
+  now logs a one-line evidence summary (counts plus matched family,
+  never other apps' names).
 ### Fixed
 - The session tick no longer holds the state lock across clock reads and
   the diagnoser build (a periodic PowerShell spawn could stall stop and

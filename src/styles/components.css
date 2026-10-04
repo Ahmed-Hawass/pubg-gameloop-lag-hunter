@@ -136,6 +136,34 @@
   font-size: 11.5px;
   color: var(--text-3);
 }
+/* quiet refresh pinned to the end of a summary surface (processes
+   totals, health banner): transparent back-button, hover on the glyph
+   only — one rule for every refresh, future ones join this selector
+   list, never a copy */
+.procs .totals .back-btn,
+.health-banner .back-btn {
+  margin-inline-start: auto;
+  align-self: center;
+  flex: none;
+  color: inherit;
+}
+.procs .totals .back-btn:hover,
+.health-banner .back-btn:hover {
+  color: inherit;
+  /* self-tint, never a neutral box (that read black on the fills) and
+     never brightness() (it shows on light inks and nearly vanishes on
+     dark ones: light totals, both banner states). Evergreen WebView2
+     ships color-mix; the fallback below serves only older runtimes so
+     no engine ever lacks feedback. */
+  background: color-mix(in srgb, currentColor 15%, transparent);
+}
+@supports not (background: color-mix(in srgb, red 15%, transparent)) {
+  .procs .totals .back-btn:hover,
+  .health-banner .back-btn:hover {
+    background: none;
+    filter: brightness(0.82);
+  }
+}
 /* 32px function tile shared by Tools rows and the storage/pagefile cards */
 .icon-tile {
   display: flex;
@@ -197,6 +225,15 @@
 .back-btn:hover {
   color: var(--text-1);
   background: var(--hover-bg);
+}
+/* disabled back-button (busy refresh): no hover tease, dimmed ink */
+.back-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.back-btn:disabled:hover {
+  color: inherit;
+  background: none;
 }
 /* row action: ghost materials in a compact footprint, shared by the
    session-row delete and the health-card open buttons */

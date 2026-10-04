@@ -190,12 +190,6 @@
   flex-direction: column;
   gap: 14px;
 }
-.procs-head {
-  display: flex;
-  justify-content: flex-end;
-  align-items: flex-start;
-  gap: 14px;
-}
 .proc-list {
   list-style: none;
   display: flex;

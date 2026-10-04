@@ -267,12 +267,51 @@ pub fn detect(running: &[String], reg: &RegistrySnapshot) -> Detected {
     if has_family(V6.proc_names) {
         return Detected::V6Game;
     }
-    if lower.iter().any(|n| UNKNOWN_HINTS.iter().any(|h| n.contains(h)))
-        || !reg.uninstall_dirs.is_empty()
-    {
+    // a LIVE gameloop-ish process no profile matches (a future rename):
+    // honest Unknown, never "not running".
+    if lower.iter().any(|n| UNKNOWN_HINTS.iter().any(|h| n.contains(h))) {
         return Detected::Unknown;
     }
+    // static install evidence alone (Uninstall entries persist whether
+    // the client runs or not) means installed-but-closed — or a past
+    // install — so it routes to Absent ("not running"), never Unknown.
+    // The exe resolver below still uses these dirs; only the verdict
+    // ignores them. A fully renamed future client whose processes shed
+    // every known stem would also read Absent here (same action for the
+    // user either way: start the game first), and the evidence log line
+    // at the start gate keeps that case diagnosable.
     Detected::Absent
+}
+
+/// One-line evidence summary for the start gate log: counts plus the
+/// matched family and the verdict — never other apps' process names
+/// (privacy: the full tasklist must not land in our logs). Pure, so the
+/// shapes stay pinned by tests below.
+pub fn presence_evidence_summary(names: &[String], reg: &RegistrySnapshot) -> String {
+    let verdict = detect(names, reg);
+    let family = match verdict {
+        Detected::V6Game => "v6",
+        Detected::V7Game { .. } | Detected::V7Idle { .. } => "v7",
+        _ => "none",
+    };
+    format!(
+        "emulator evidence: procs={} family={} v7ver={} running_apps={} uninstall={} verdict={:?}",
+        names.len(),
+        family,
+        reg.v7_version.as_deref().unwrap_or("-"),
+        reg.running_apps.len(),
+        reg.uninstall_dirs.len(),
+        verdict,
+    )
+}
+
+/// Probe once and log the evidence summary. Called ONLY on blocked
+/// starts (user-initiated, rare): the extra tasklist + registry pass
+/// never touches the per-tick hot path.
+pub fn log_presence_evidence() {
+    let names = super::sampler::query_all_proc_names().unwrap_or_default();
+    let reg = read_snapshot();
+    super::logging::info(&presence_evidence_summary(&names, &reg));
 }
 
 /// Install roots for the exe resolver, strongest evidence first:
@@ -461,16 +500,46 @@ mod tests {
     fn detect_unknown_future_rename() {
         // a family rename keeps its stem as a prefix ("GameLoopNextGen"
         // still matches the v7 prefix rule, by design): the unknown path
-        // is for stems we never knew, matched mid-string or via an
-        // installed-but-unrecognized layout
+        // is for live processes with stems we never knew
         let d = detect(&["TencentGameLoopNext.exe".into()], &empty_reg());
         assert_eq!(d, Detected::Unknown);
-        // ...and an installed-but-unrecognized layout counts too
+    }
+
+    #[test]
+    fn detect_installed_but_closed_is_absent_not_unknown() {
+        // static install evidence persists whether the client runs or
+        // not: alone (no live gameloop-ish process) it means
+        // installed-but-closed, so the honest verdict is Absent ("start
+        // the game first"), never Unknown. Live evidence proved this on
+        // a real machine: update windows kill every family process while
+        // Uninstall entries stay put.
         let d = detect(
             &["explorer.exe".into()],
             &reg(None, None, vec![], vec![r"C:\GL8"], vec![]),
         );
-        assert_eq!(d, Detected::Unknown);
+        assert_eq!(d, Detected::Absent);
+    }
+
+    #[test]
+    fn presence_evidence_names_counts_never_processes() {
+        // the gate log must answer "what did you see" without leaking
+        // other apps: counts plus the matched family, full stop
+        let line = presence_evidence_summary(
+            &["GameLoop.exe".into(), "explorer.exe".into()],
+            &reg(Some("7.0.167.0"), None, vec![], vec![r"C:\GL"], vec!["com.tencent.ig"]),
+        );
+        assert!(line.contains("procs=2"), "{line}");
+        assert!(line.contains("family=v7"), "{line}");
+        assert!(line.contains("v7ver=7.0.167.0"), "{line}");
+        assert!(line.contains("running_apps=1"), "{line}");
+        assert!(line.contains("uninstall=1"), "{line}");
+        assert!(!line.contains("explorer"), "{line}");
+        // and the closed machine reads as absent with its evidence intact
+        let closed = presence_evidence_summary(
+            &["explorer.exe".into()],
+            &reg(None, None, vec![], vec![r"C:\GL"], vec![]),
+        );
+        assert!(closed.contains("verdict=Absent"), "{closed}");
     }
 
     #[test]

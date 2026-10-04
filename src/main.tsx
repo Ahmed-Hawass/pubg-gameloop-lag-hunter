@@ -8,8 +8,6 @@ import { api, setWebviewZoom, showMainWindow } from "./bridge";
 // the import order so every style that follows resolves against loaded faces;
 // no fontsource fetch, no first-paint swap
 import "./styles/fonts/fonts.css";
-import "@fontsource/ibm-plex-mono/500.css";
-import "@fontsource/ibm-plex-mono/600.css";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/shell.css";

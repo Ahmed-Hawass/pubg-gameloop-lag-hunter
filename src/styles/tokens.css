@@ -61,9 +61,10 @@
   --text-2: #8c948d;
   --text-3: #5a605a;
   /* type — Google Sans covers latin; "Google Sans Arabic" (Cairo) covers the
-     Arabic codepoints via unicode-range — one stack, both scripts, inlined */
+     Arabic codepoints via unicode-range — one stack, both scripts, inlined.
+     Numerals ride this stack too (tabular figures where the face has
+     them); no second family anywhere. */
   --font-ui: "Google Sans", "Google Sans Arabic", "Segoe UI", system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", "Consolas", monospace;
   /* hover lifts for filled actions — direction differs per theme (lighten on
      dark, deepen on light), so they are tokens, not literals */
   --primary-hover: #6aff3a;
