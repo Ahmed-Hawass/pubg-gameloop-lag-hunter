@@ -119,6 +119,14 @@ export const en = {
   // in the views drifted from the dead lang.label key)
   langEn: "English",
   langAr: "العربية",
+  /** re-show action for dismissed intro cards: visible only while the
+      dismissal list is non-empty (a button with nothing to restore
+      would be a dead control) */
+  introResetTitle: "Introduction cards",
+  introResetAction: "Show again",
+  /** (?) behind the re-show group: what the button does (every card
+      closed with X comes back on its page) */
+  introResetHint: "Shows again every introduction card you closed with X.",
   // small measurement units (translated, not hardcoded Latin)
   gbUnit: "GB",
   ramUnit: "RAM",
@@ -185,8 +193,12 @@ export const en = {
     "PowerShell is unavailable, so some checks run on safe defaults: device tuning is skipped, clock times may read in UTC, and GPU pause/resume detection is muted. Scans still work; the core counters are native Windows.",
 
   // ---- top processes tab ----
-  topProcessesHint:
-    "The processes consuming the most resources right now: anything above 0.5% CPU, excluding GameLoop processes (the game itself is never counted as a suspect). Close the heavy ones before playing.",
+  /** one-shot page card (title plus page-level guidance, never option
+      mechanics): the close-before-playing decision and the apps versus
+      system-tasks rule */
+  introProcessesTitle: "Close the heavy apps before you play",
+  introProcessesBody:
+    "These are the programs eating CPU and RAM right now, game excluded. Your own apps are safe to close; system tasks are not.",
   topProcessesEmpty: "Nothing significant is running",
   topProcessesRefreshing: "Checking what's running...",
   refresh: "Refresh",
@@ -225,6 +237,11 @@ export const en = {
   // ---- system checks tab ----
   checksHint:
     "Your device's most important settings in one place: what helps your game and what quietly slows it down. Details are one click away.",
+  /** one-shot page card: the smooth-or-stuttering verdict and the
+      one-click fix path (healthy quiet is a feature, not emptiness) */
+  introHealthTitle: "What quietly slows your game",
+  introHealthBody:
+    "A few Windows settings decide smooth or stuttering play. Anything marked goes straight to its fix with one click.",
   checkPower: "Power plan",
   checkPagefile: "Virtual memory (page file)",
   checkCharger: "Power source",
@@ -316,6 +333,11 @@ export const en = {
   tweakWindowedHint:
     "Modern Windows can present windowed and borderless games with lower latency through a newer path. Microsoft documents smoother play for these modes when the toggle is on. Turning it off restores the old path with one tap.",
   tweakPfTitle: "Virtual memory (page file)",
+  /** one-shot page card: the why (borrowed disk instead of a crash)
+      and the honest default (automatic suits almost everyone) */
+  introPagefileTitle: "Backup room for when memory fills up",
+  introPagefileBody:
+    "When RAM fills up, Windows borrows disk space so the game keeps going instead of crashing. Automatic suits almost everyone.",
   tweakPfHint:
     "Mirrors the Windows Virtual Memory dialog: automatic management for all drives, or per-drive system-managed, custom, or no paging file. Only the selected drive ever changes; every other drive is preserved exactly. Changes apply after you restart Windows.",
   tweakPfAutoLabel: "Automatically manage paging file size for all drives",
@@ -387,6 +409,11 @@ export const en = {
   tweakFailed: "The change could not be verified and was not applied.",
   /** storage sweep: scan four safe places, delete only the ticked ones */
   cleanupTitle: "Clean temporary files",
+  /** one-shot page card: the trust rule (important stuff is never
+      even listed) plus what counts as leftovers */
+  introCleanupTitle: "Only you decide what goes",
+  introCleanupBody:
+    "Everything here is leftovers Windows and apps forgot: temporary files, old logs, finished reports. Tick what you no longer need; anything important is never listed.",
   cleanupDesc:
     "Reclaims disk space from safe places. Only what you tick gets deleted, nothing important is ever touched.",
   cleanupScan: "Scan",

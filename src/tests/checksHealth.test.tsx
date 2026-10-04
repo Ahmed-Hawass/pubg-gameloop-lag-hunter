@@ -9,10 +9,13 @@ import React from "react";
 import { en } from "../locales/en";
 import { ChecksView } from "../views/ChecksView";
 import type { SystemChecks } from "../bridge";
+import { settings } from "./fixtures";
 
 const apiMock = vi.hoisted(() => ({
   systemChecks: vi.fn(),
   openWindowsPanel: vi.fn(),
+  getSettings: vi.fn(),
+  dismissIntroCard: vi.fn(),
 }));
 
 vi.mock("../bridge", () => ({
@@ -53,9 +56,12 @@ const threeWarns: SystemChecks = {
 describe("ChecksView health summary", () => {
   it("all green shows the good banner and no attention section", async () => {
     apiMock.systemChecks.mockResolvedValue(allGood);
+    apiMock.getSettings.mockResolvedValue(settings());
     render(React.createElement(ChecksView, { active: false, onOpenTool: vi.fn() }));
     await screen.findByText(en.healthAllGood);
     expect(screen.getByText(en.healthAllGoodSub)).toBeTruthy();
+    // new user: the one-shot page card explains banner and shortcuts
+    expect(screen.getByText(en.introHealthTitle)).toBeTruthy();
     expect(screen.getByText(en.healthAllSettings)).toBeTruthy();
     // no warn badge anywhere: neither featured nor archive may invent one
     expect(screen.queryByText(en.checkWarnBadge)).toBeNull();
@@ -69,6 +75,7 @@ describe("ChecksView health summary", () => {
 
   it("warnings show a counted banner plus featured cards above the archive", async () => {
     apiMock.systemChecks.mockResolvedValue(threeWarns);
+    apiMock.getSettings.mockResolvedValue(settings());
     render(React.createElement(ChecksView, { active: false, onOpenTool: vi.fn() }));
     await screen.findByText(en.healthNeedsTitle(3));
     expect(screen.getByText(en.healthNeedsSub)).toBeTruthy();
@@ -82,6 +89,7 @@ describe("ChecksView health summary", () => {
 
   it("the archive keeps every open button (featured cards add, never move)", async () => {
     apiMock.systemChecks.mockResolvedValue(threeWarns);
+    apiMock.getSettings.mockResolvedValue(settings());
     render(React.createElement(ChecksView, { active: false, onOpenTool: vi.fn() }));
     await screen.findByText(en.healthNeedsTitle(3));
     // 3 destinations x 2 sections: moving a button instead of repeating

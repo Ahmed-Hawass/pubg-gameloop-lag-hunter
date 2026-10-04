@@ -12,13 +12,15 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { en } from "../locales/en";
 import { ToolsView } from "../views/ToolsView";
-import { cleanupHistory, cleanupScan, pagefileSettings, tweakStates } from "./fixtures";
+import { cleanupHistory, cleanupScan, pagefileSettings, settings, tweakStates } from "./fixtures";
 
 const apiMock = vi.hoisted(() => ({
   tweakStates: vi.fn(),
   pagefileSettings: vi.fn(),
   cleanupHistory: vi.fn(),
   clockHour12: vi.fn(),
+  getSettings: vi.fn(),
+  dismissIntroCard: vi.fn(),
   setTweak: vi.fn(),
   storageScan: vi.fn(),
   storageDeepScan: vi.fn(),
@@ -40,11 +42,13 @@ vi.mock("../i18n", () => ({
 async function openSweep(
   user: ReturnType<typeof userEvent.setup>,
   history = cleanupHistory(),
+  dismissed: string[] = [],
 ) {
   apiMock.tweakStates.mockResolvedValue(tweakStates());
   apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
   apiMock.cleanupHistory.mockResolvedValue(history);
   apiMock.clockHour12.mockResolvedValue(false);
+  apiMock.getSettings.mockResolvedValue(settings({ dismissed_cards: dismissed }));
   render(
     React.createElement(ToolsView, {
       active: true,
@@ -135,19 +139,16 @@ describe("ToolsView storage sweep", () => {
     await screen.findByText(en.cleanupReadyToFree);
   });
 
-  it("opens under a plain page header with title and desc", async () => {
+  it("shows the plain header once its intro is dismissed", async () => {
     const user = userEvent.setup();
-    await openSweep(user);
-    // the cleanup page carries the same plain header as virtual memory
-    // (title plus desc line, never a boxed accordion)
+    await openSweep(user, cleanupHistory(), ["cleanup"]);
+    // one header per page: the plain title returns, the intro is gone
     const head = document.querySelector(".page-head")!;
     expect(head.querySelector(".page-head-title")?.textContent).toBe(
       en.toolCleanup,
     );
-    expect(head.querySelector(".page-head-desc")?.textContent).toBe(
-      en.toolCleanupDesc,
-    );
-    // no run yet: the memory says so instead of a blank
+    expect(screen.queryByText(en.introCleanupTitle)).toBeNull();
+    // the history line still shows under the header
     expect(screen.getByText(en.cleanupLastNever)).toBeTruthy();
   });
 
@@ -155,6 +156,7 @@ describe("ToolsView storage sweep", () => {
     apiMock.tweakStates.mockResolvedValue(tweakStates());
     apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
     apiMock.clockHour12.mockResolvedValue(false);
+    apiMock.getSettings.mockResolvedValue(settings());
     apiMock.cleanupHistory.mockResolvedValue(
       cleanupHistory({
         last_freed_bytes: 10485760,
@@ -199,6 +201,7 @@ describe("ToolsView storage sweep", () => {
     apiMock.tweakStates.mockResolvedValue(tweakStates());
     apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
     apiMock.clockHour12.mockResolvedValue(true);
+    apiMock.getSettings.mockResolvedValue(settings());
     apiMock.cleanupHistory.mockResolvedValue(
       cleanupHistory({
         last_freed_bytes: 10485760,
@@ -216,6 +219,9 @@ describe("ToolsView storage sweep", () => {
     );
     await user.click(screen.getByText(en.toolCleanup));
     await screen.findByText(en.cleanupTitle);
+    // new user: the intro card stands in for the header
+    await screen.findByText(en.introCleanupTitle);
+    expect(document.querySelector(".page-head")).toBeNull();
     // same shapes, converted pixels (the date stays locale-free)
     await screen.findByText(
       `${en.cleanupLast(10, "2026-09-20 2:30 PM")} · ${en.cleanup30d(20)}`,

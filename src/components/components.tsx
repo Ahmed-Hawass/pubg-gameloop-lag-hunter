@@ -234,6 +234,42 @@ export function SummaryCard(props: {
 }
 
 // ---------------------------------------------------------------------------
+// IntroCard — one-shot page guidance for new users: what lives on this
+// page and what to do first (never option mechanics: those stay behind
+// each row's (?) button). Dumb surface, parents own the once-ever
+// gating. Info fill, never a severity tone; the X reuses the summary
+// dismiss language with its own accessible name (Tip is visual-only).
+// ---------------------------------------------------------------------------
+export function IntroCard(props: {
+  icon: ReactNode;
+  title: string;
+  body: string;
+  dismissLabel: string;
+  onDismiss: () => void;
+}) {
+  const { icon, title, body, dismissLabel, onDismiss } = props;
+  return (
+    <div className="card-sm intro-card">
+      <span className="icon-tile intro-ico">{icon}</span>
+      <div className="intro-text">
+        <span className="intro-title">{title}</span>
+        <p>{body}</p>
+      </div>
+      <Tip text={dismissLabel}>
+        <button
+          type="button"
+          className="summary-x intro-x"
+          aria-label={dismissLabel}
+          onClick={onDismiss}
+        >
+          <X size={14} />
+        </button>
+      </Tip>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Dialog — the one VISIBLE modal surface for anything that needs the
 // user's eyes: errors, confirmations, notices. (Structurally there are
 // two roots — this plus UpdateModal's own overlay with its own trap —
@@ -249,13 +285,10 @@ export function Dialog(props: {
   confirmLabel?: string;
   cancelLabel?: string;
   danger?: boolean;
-  /** red confirm button on the standard frame (no danger border): for
-      expected-action confirms like Exit, where the frame must not restyle */
-  neutralBorder?: boolean;
   onConfirm?: () => void;
   onClose: () => void;
 }) {
-  const { title, body, kind, okLabel, confirmLabel, cancelLabel, danger, neutralBorder, onConfirm, onClose } = props;
+  const { title, body, kind, okLabel, confirmLabel, cancelLabel, danger, onConfirm, onClose } = props;
 
   // focus trap: a keyboard user must never Tab out of a modal into the
   // dead page behind it. Tab cycles between the dialog's own buttons; the
@@ -293,7 +326,7 @@ export function Dialog(props: {
     >
       <div
         ref={boxRef}
-        className={`dialog-box ${danger && !neutralBorder ? "dialog-danger" : ""}`}
+        className="dialog-box"
         role="alertdialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}

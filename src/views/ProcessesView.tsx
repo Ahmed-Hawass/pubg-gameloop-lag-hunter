@@ -7,10 +7,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Activity, AppWindow, RefreshCw, Settings } from "lucide-react";
-import { Button, EmptyState } from "../components/components";
+import { Button, EmptyState, IntroCard } from "../components/components";
 import { api, type TopProcess, type TopProcesses } from "../bridge";
 import { errorDialog } from "../errors";
 import { useLang } from "../i18n";
+import { useIntroCard } from "../useIntroCard";
 
 /** live refresh cadence while the tab is visible */
 const LIVE_INTERVAL_MS = 5000;
@@ -87,11 +88,23 @@ export function ProcessesView(props: { active: boolean }) {
   const procs = answer?.processes ?? null;
   const apps = procs?.filter((p) => p.kind === "app") ?? [];
   const system = procs?.filter((p) => p.kind !== "app") ?? [];
+  /** one-shot page guidance (replaces the static header line): the
+      close-before-playing decision and the apps versus system-tasks
+      rule. Transient states below keep no card. */
+  const intro = useIntroCard("processes");
 
   return (
     <div className="procs">
+      {intro.show ? (
+        <IntroCard
+          icon={<Activity size={16} />}
+          title={t.introProcessesTitle}
+          body={t.introProcessesBody}
+          dismissLabel={t.dialog.dismiss}
+          onDismiss={intro.dismiss}
+        />
+      ) : null}
       <div className="procs-head">
-        <p className="procs-hint">{t.topProcessesHint}</p>
         <Button
           label={busy ? t.topProcessesRefreshing : t.refresh}
           icon={<RefreshCw size={14} className={busy ? "spin" : ""} />}

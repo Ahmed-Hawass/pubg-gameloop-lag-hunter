@@ -12,13 +12,15 @@ import {
   Plug,
   RefreshCw,
   ShieldAlert,
+  ShieldCheck,
   Video,
   Zap,
 } from "lucide-react";
-import { Button, Dialog, EmptyState, MODAL_OPEN_EVENT, APP_DIALOG_OPEN_EVENT } from "../components/components";
+import { Button, Dialog, EmptyState, IntroCard, MODAL_OPEN_EVENT, APP_DIALOG_OPEN_EVENT } from "../components/components";
 import { api, FEATURE_STATE_CHANGED_EVENT, type SystemChecks } from "../bridge";
 import { errorDialog } from "../errors";
 import { useLang } from "../i18n";
+import { useIntroCard } from "../useIntroCard";
 
 const LIVE_INTERVAL_MS = 30000;
 
@@ -39,6 +41,12 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
       Same unified Dialog as everywhere: one modal surface, yields to the
       App-level dialog like every view dialog. */
   const [hint, setHint] = useState<{ title: string; body: string } | null>(null);
+  /** one-shot page guidance (replaces the static header line below):
+      the smooth-or-stuttering verdict and the one-click fix path.
+      Declared with every other hook (never past the error/loading early
+      returns): hook order must not shift between renders. Transient
+      error/loading headers above keep their own hint line. */
+  const intro = useIntroCard("health");
 
   const load = async (silent: boolean, force = false) => {
     if (busyRef.current) {
@@ -249,8 +257,16 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
 
   return (
     <div className="checks">
+      {intro.show ? (
+        <IntroCard
+          icon={<ShieldCheck size={16} />}
+          title={t.introHealthTitle}
+          body={t.introHealthBody}
+          dismissLabel={t.dialog.dismiss}
+          onDismiss={intro.dismiss}
+        />
+      ) : null}
       <div className="checks-head">
-        <p className="checks-hint">{t.checksHint}</p>
         <Button
           label={busy ? t.loading : t.refresh}
           icon={<RefreshCw size={14} className={busy ? "spin" : ""} />}

@@ -10,13 +10,15 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { en } from "../locales/en";
 import { ToolsView } from "../views/ToolsView";
-import { cleanupHistory, pagefileSettings, tweakStates } from "./fixtures";
+import { cleanupHistory, pagefileSettings, settings, tweakStates } from "./fixtures";
 
 const apiMock = vi.hoisted(() => ({
   tweakStates: vi.fn(),
   pagefileSettings: vi.fn(),
   cleanupHistory: vi.fn(),
   clockHour12: vi.fn(),
+  getSettings: vi.fn(),
+  dismissIntroCard: vi.fn(),
   setTweak: vi.fn(),
   storageScan: vi.fn(),
   storageDeepScan: vi.fn(),
@@ -35,9 +37,10 @@ vi.mock("../i18n", () => ({
   useLang: () => ({ t: en, lang: "en", setting: "en", setLanguage: vi.fn() }),
 }));
 
-async function openPagefile(user: ReturnType<typeof userEvent.setup>) {
+async function openPagefile(user: ReturnType<typeof userEvent.setup>, dismissed: string[] = ["pagefile"]) {
   apiMock.tweakStates.mockResolvedValue(tweakStates());
   apiMock.cleanupHistory.mockResolvedValue(cleanupHistory());
+  apiMock.getSettings.mockResolvedValue(settings({ dismissed_cards: dismissed }));
   apiMock.clockHour12.mockResolvedValue(false);
   render(
     React.createElement(ToolsView, {
@@ -141,13 +144,24 @@ describe("ToolsView page file editor", () => {
     await screen.findByText(en.pfSystemSizes(1));
   });
 
+  it("intro card stands in for the header until dismissed", async () => {
+    const user = userEvent.setup();
+    apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
+    await openPagefile(user, []);
+    // new user: the intro carries its own icon and title, so no plain
+    // header renders under it (one header per page, always)
+    await screen.findByText(en.introPagefileTitle);
+    expect(document.querySelector(".page-head")).toBeNull();
+  });
+
   it("landing badge agrees with the editor verdict", async () => {
     const user = userEvent.setup();
     apiMock.tweakStates.mockResolvedValue(tweakStates());
     // C: system-managed reads healthy: the card says Good…
     apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
     apiMock.cleanupHistory.mockResolvedValue(cleanupHistory());
-  apiMock.clockHour12.mockResolvedValue(false);
+    apiMock.getSettings.mockResolvedValue(settings({ dismissed_cards: ["pagefile"] }));
+    apiMock.clockHour12.mockResolvedValue(false);
     render(
       React.createElement(ToolsView, {
         active: true,
@@ -157,8 +171,8 @@ describe("ToolsView page file editor", () => {
       }),
     );
     await screen.findByText(en.checkOkBadge);
-    // …and the editor behind it paints the same ok state (expanded
-    // from its summary row, like the details test above)
+    // …and the editor behind it paints the same ok state (the page
+    // opens straight onto the editor, no summary row in between)
     await user.click(screen.getByText(en.tweakPfTitle));
     await user.click(await screen.findByText(en.tweakPfTitle));
     await screen.findByText(en.tweakPfAutoLabel);
@@ -170,7 +184,8 @@ describe("ToolsView page file editor", () => {
       }),
     );
     apiMock.cleanupHistory.mockResolvedValue(cleanupHistory());
-  apiMock.clockHour12.mockResolvedValue(false);
+    apiMock.getSettings.mockResolvedValue(settings({ dismissed_cards: ["pagefile"] }));
+    apiMock.clockHour12.mockResolvedValue(false);
     render(
       React.createElement(ToolsView, {
         active: true,

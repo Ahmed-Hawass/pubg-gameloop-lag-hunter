@@ -29,6 +29,7 @@ const apiMock = vi.hoisted(() => ({
   setSidebarCollapsed: vi.fn(),
   setTheme: vi.fn(),
   clockHour12: vi.fn(),
+  dismissIntroCard: vi.fn(),
 }));
 
 let enginePush!: (ev: { payload: StatusPayload }) => void;
@@ -54,6 +55,8 @@ vi.mock("../i18n", () => ({
 
 // 24-hour default file-wide (mounted views read the OS convention)
 apiMock.clockHour12.mockResolvedValue(false);
+// intro cards read the dismissal list on mount (always-mounted views)
+apiMock.getSettings.mockResolvedValue(settings());
 
 import { closeWindow } from "../bridge";
 

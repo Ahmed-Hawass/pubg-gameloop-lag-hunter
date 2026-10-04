@@ -260,6 +260,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   with its landing card badging the live sense state; back buttons swap
   chevron for arrow; danger dialogs share the standard frame (no red
   edge); the sweep idle copy drops the jargon.
+- One-shot intro cards for new users (processes, health, virtual memory,
+  cleanup): what lives on each page and what to do first, on a new info
+  fill outside the state color language, replacing the static header
+  lines. Dismissal by X persists per machine (recorded at dismiss, never
+  at show); option mechanics stay behind each row's (?) button. A
+  Settings action shows them again (visible only while any stay
+  dismissed) through one local signal, no restart.
 - Wall-clock display follows the OS 12/24 convention (read once from the
   Windows time format itself, never the app language): the sweep memory
   line, the monitor feed clocks, and the report key moments convert

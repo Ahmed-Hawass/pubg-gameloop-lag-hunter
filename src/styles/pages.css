@@ -192,15 +192,9 @@
 }
 .procs-head {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: flex-start;
   gap: 14px;
-}
-.procs-hint {
-  font-size: 12.5px;
-  color: var(--text-2);
-  line-height: 1.55;
-  max-width: 480px;
 }
 .proc-list {
   list-style: none;
@@ -297,6 +291,7 @@
 }
 .checks-head {
   display: flex;
+  justify-content: flex-end;
   align-items: flex-start;
   gap: 12px;
 }
@@ -693,11 +688,6 @@
   font-weight: 700;
   color: var(--text-1);
 }
-.page-head-desc {
-  font-size: 12px;
-  color: var(--text-2);
-  line-height: 1.5;
-}
 /* status strip inside the editor card: committed sizes on the
    reading-start side, installed RAM after it, (?) on the end side */
 .pf-status-strip {
@@ -922,9 +912,11 @@
   cursor: pointer;
   flex: none;
 }
+/* (?) triggers: hover lives on the glyph only (no background box
+   anywhere, so inline, standalone, and floating triggers share one
+   feel). Keyboard focus keeps the shared primary outline instead. */
 .switch-hint:hover {
   color: var(--text-2);
-  background: var(--hover-bg);
 }
 .switch-hint:focus-visible {
   outline: 2px solid var(--primary);
@@ -1143,6 +1135,12 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+/* reset action: same row width as the segmented controls above (full
+   width under the same cap, so all three rows share one edge) */
+.settings-group > .btn {
+  width: 100%;
+  max-width: 460px;
 }
 .settings-group-title {
   display: flex;

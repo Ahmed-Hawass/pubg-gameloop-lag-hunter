@@ -36,6 +36,14 @@
   --text-danger: #5c1a10;
   --fill-danger: #ff5a52;
   --border-danger: rgba(255, 90, 82, 0.3);
+  /* info quad for one-shot guidance (intro cards): blue family, outside
+     the success/warn/danger state language by construction. The dark
+     theme runs saturated (a pale fill would sink into the dark
+     surfaces); the light theme stays soft. */
+  --bg-info: #1b5a8c;
+  --text-info: #dceefb;
+  --fill-info: #7fb8e6;
+  --border-info: rgba(127, 184, 230, 0.35);
   /* fix-box ink: the white answer box is white in both themes, so its
      ink stays dark cocoa in both (never a theme text token) */
   --ink-fix: #4d3d0c;
@@ -100,6 +108,10 @@
   --text-danger: #5c1a10;
   --fill-danger: #d92d20;
   --border-danger: rgba(217, 45, 32, 0.3);
+  --bg-info: #b9d5ea;
+  --text-info: #0e3a56;
+  --fill-info: #1f6faf;
+  --border-info: rgba(31, 111, 175, 0.3);
   /* fix-box ink: the white answer box is white in both themes, so its
      ink stays dark cocoa in both (never a theme text token) */
   --ink-fix: #4d3d0c;

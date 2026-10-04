@@ -561,6 +561,28 @@ fn finish_background_advice() -> Result<(), String> {
     })
 }
 
+/// Mark a one-shot page card dismissed — it never shows again on this
+/// machine. Recorded at dismiss time (the X click itself), never at show
+/// time: unlike the advice modals (any click dismisses), a card must
+/// survive until the user explicitly closes it. A repeated id is a
+/// no-op, never a duplicate row.
+#[tauri::command]
+fn dismiss_intro_card(id: String) -> Result<(), String> {
+    engine::settings::update(|s| {
+        engine::settings::note_dismissed_cards(&mut s.dismissed_cards, &id);
+    })
+}
+
+/// Empty the dismissed intro cards list: every one-shot page card shows
+/// again on its next visit. The reset itself is the user's click; this
+/// only records it, through the same serialized update as every write.
+#[tauri::command]
+fn reset_intro_cards() -> Result<(), String> {
+    engine::settings::update(|s| {
+        s.dismissed_cards.clear();
+    })
+}
+
 #[tauri::command]
 fn set_auto_stop(minutes: u32) -> Result<u32, String> {
     engine::settings::update(|s| {
@@ -808,6 +830,8 @@ pub fn run() {
             finish_onboarding,
             finish_game_advice,
             finish_background_advice,
+            dismiss_intro_card,
+            reset_intro_cards,
             ps_available,
             watch_gameloop,
             system_info,

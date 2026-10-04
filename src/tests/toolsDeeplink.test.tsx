@@ -8,13 +8,15 @@ import { render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { en } from "../locales/en";
 import { ToolsView } from "../views/ToolsView";
-import { cleanupHistory, pagefileSettings, tweakStates } from "./fixtures";
+import { cleanupHistory, pagefileSettings, settings, tweakStates } from "./fixtures";
 
 const apiMock = vi.hoisted(() => ({
   tweakStates: vi.fn(),
   pagefileSettings: vi.fn(),
   cleanupHistory: vi.fn(),
   clockHour12: vi.fn(),
+  getSettings: vi.fn(),
+  dismissIntroCard: vi.fn(),
   setTweak: vi.fn(),
   storageScan: vi.fn(),
   storageDeepScan: vi.fn(),
@@ -37,6 +39,7 @@ function openLinked(toolOpenId: string | null) {
   apiMock.tweakStates.mockResolvedValue(tweakStates());
   apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
   apiMock.cleanupHistory.mockResolvedValue(cleanupHistory());
+  apiMock.getSettings.mockResolvedValue(settings());
   apiMock.clockHour12.mockResolvedValue(false);
   const onToolOpened = vi.fn();
   render(

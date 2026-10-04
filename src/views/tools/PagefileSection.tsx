@@ -6,9 +6,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Database, RefreshCw } from "lucide-react";
-import { EmptyState } from "../../components/components";
+import { EmptyState, IntroCard } from "../../components/components";
 import type { Notice } from "../../errors";
 import { useLang } from "../../i18n";
+import { useIntroCard } from "../../useIntroCard";
 import { PagefileEditor } from "./PagefileEditor";
 
 export function PagefileSection(props: {
@@ -21,6 +22,9 @@ export function PagefileSection(props: {
 }) {
   const { active, linkTarget, onLinkDone, showHint, failNotice } = props;
   const { t } = useLang();
+  /** one-shot page guidance (the header keeps its title only): the
+      why and the honest automatic default */
+  const intro = useIntroCard("pagefile");
   /** deep-link highlight: ringed for a moment, cleared with the link */
   const [linkedId, setLinkedId] = useState<string | null>(null);
   /** the details list element: the link landing scrolls within it */
@@ -59,17 +63,29 @@ export function PagefileSection(props: {
   // lands, so the spinner is the only visible thing meanwhile.
   return (
     <div className="check-list" ref={listRef}>
-      {/* plain page header (not a card, not collapsible): the shell
-          back button above already says where this lives */}
-      <div className="page-head">
-        <span className="icon-tile">
-          <Database size={18} />
-        </span>
-        <span className="page-head-text">
-          <span className="page-head-title">{t.tweakPfTitle}</span>
-          <span className="page-head-desc">{t.toolPagefileDesc}</span>
-        </span>
-      </div>
+      {/* one header per page, always: the intro card replaces the plain
+          page header until dismissed (it carries its own icon and title,
+          a second header under it would only repeat both) */}
+      {intro.show ? (
+        <IntroCard
+          icon={<Database size={16} />}
+          title={t.introPagefileTitle}
+          body={t.introPagefileBody}
+          dismissLabel={t.dialog.dismiss}
+          onDismiss={intro.dismiss}
+        />
+      ) : (
+        /* plain page header (not a card, not collapsible): the shell
+           back button above already says where this lives */
+        <div className="page-head">
+          <span className="icon-tile">
+            <Database size={18} />
+          </span>
+          <span className="page-head-text">
+            <span className="page-head-title">{t.tweakPfTitle}</span>
+          </span>
+        </div>
+      )}
       {pfFailed === null ? (
         <EmptyState
           icon={<RefreshCw size={20} />}

@@ -38,6 +38,7 @@ export function settings(over: Partial<Settings> = {}): Settings {
     onboarding_done: true,
     game_advice_done: true,
     background_advice_done: true,
+    dismissed_cards: [],
     thresholds,
     ...over,
   };

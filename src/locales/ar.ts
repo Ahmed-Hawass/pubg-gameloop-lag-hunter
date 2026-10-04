@@ -122,6 +122,9 @@ export const ar: Locale = {
   // including the names of the languages themselves
   langEn: "English",
   langAr: "العربية",
+  introResetTitle: "البطاقات التعريفية",
+  introResetAction: "عرض مجددا",
+  introResetHint: "يعيد عرض كل بطاقة تعريفية أغلقتها بزر X.",
   // small measurement units: standalone units are Latin by design ("25 MB"
   // reads as one technical token inside an Arabic sentence; "25 ميجابايت"
   // splits the number from its unit and reads unprofessionally). Full
@@ -191,8 +194,9 @@ export const ar: Locale = {
     "PowerShell غير متاح على جهازك، لذا ستعمل بعض الفحوصات على إعدادات افتراضية آمنة: لن يتم ضبط الجهاز على مقاسه، وقد تظهر الأوقات بتوقيت UTC، ويبقى كشف توقف كرت الشاشة معطلًا. الفحص نفسه يعمل بشكل طبيعي، وتُقرأ العدادات الأساسية من ويندوز مباشرة.",
 
   // ---- top processes tab ----
-  topProcessesHint:
-    "هذه أكثر العمليات استهلاكًا لموارد جهازك الآن: كل ما يتجاوز 0.5% من المعالج، باستثناء عمليات GameLoop نفسها (فهي اللعبة، ولا تُحتسب ضمن المشتبه بها). أغلق العمليات الثقيلة قبل بدء اللعب.",
+  introProcessesTitle: "أغلق التطبيقات الثقيلة قبل اللعب",
+  introProcessesBody:
+    "هذه البرامج التي تلتهم المعالج والذاكرة الآن، واللعبة مستثناة. تطبيقاتك آمن إغلاقها، أما مهام النظام فلا.",
   topProcessesEmpty: "لا يوجد شيء ملحوظ يعمل حاليًا",
   topProcessesRefreshing: "جارٍ فحص ما يعمل الآن...",
   refresh: "تحديث",
@@ -231,6 +235,9 @@ export const ar: Locale = {
   // ---- system checks tab ----
   checksHint:
     "أهم إعدادات جهازك في مكان واحد: ما يساعد لعبك وما يبطئه بصمت. التفاصيل على بعد ضغطة.",
+  introHealthTitle: "ما يبطئ لعبك بصمت",
+  introHealthBody:
+    "بضعة إعدادات في ويندوز تحسم اللعب السلس من المتقطع. أي شيء مُعلَّم يوصلك لإصلاحه بضغطة واحدة.",
   checkPower: "خطة الطاقة",
   checkPagefile: "الذاكرة الظاهرية (page file)",
   checkCharger: "مصدر الطاقة",
@@ -324,6 +331,9 @@ export const ar: Locale = {
   tweakWindowedHint:
     "يستطيع ويندوز الحديث عرض الألعاب النافذة والتي بلا حدود بزمن استجابة أقل عبر مسار أحدث. توثّق مايكروسوفت لعبًا أنعم لهذه الأنماط عند تشغيل المفتاح. إيقافه يعيد المسار القديم بضغطة واحدة.",
   tweakPfTitle: "الذاكرة الظاهرية (page file)",
+  introPagefileTitle: "مساحة احتياطية عند امتلاء الذاكرة",
+  introPagefileBody:
+    "عند امتلاء الذاكرة يستعير ويندوز مساحة من القرص لتواصل اللعبة بدلا من الانهيار. الوضع التلقائي يناسب الجميع تقريبا.",
   tweakPfHint:
     "يطابق مربع حوار الذاكرة الظاهرية في ويندوز: إدارة تلقائية لجميع الأقراص، أو لكل قرص حجم يديره النظام أو مخصص أو بدون page file. يتغير القرص المحدد فقط، وتبقى بقية الأقراص كما هي تمامًا. تُطبق التغييرات بعد إعادة تشغيل ويندوز.",
   tweakPfAutoLabel: "إدارة حجم page file تلقائيًا لجميع الأقراص",
@@ -390,6 +400,9 @@ export const ar: Locale = {
   tweakFailed: "تعذّر التحقق من التغيير ولم يُطبَّق.",
   /** storage sweep: scan four safe places, delete only the ticked ones */
   cleanupTitle: "تنظيف الملفات المؤقتة",
+  introCleanupTitle: "وحدك تقرر ما يُحذف",
+  introCleanupBody:
+    "كل ما هنا بقايا نسيها ويندوز والتطبيقات: ملفات مؤقتة وسجلات قديمة وتقارير منتهية. حدد ما لم تعد تحتاجه؛ فالمهم لا يُعرض أصلا.",
   cleanupDesc:
     "يستعيد مساحة القرص من أماكن آمنة. لا يُحذف إلا ما تحدده، ولا يُمس شيء مهم أبدًا.",
   cleanupScan: "فحص",

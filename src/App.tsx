@@ -597,7 +597,7 @@ export default function App() {
                 />
               </div>
               <div className={view === "settings" ? "" : "is-hidden-view"}>
-                <SettingsView theme={themeSetting} onThemeChange={onThemeChange} />
+                <SettingsView theme={themeSetting} onThemeChange={onThemeChange} active={view === "settings"} />
               </div>
               <div className={view === "about" ? "" : "is-hidden-view"}>
                 <AboutView
@@ -644,7 +644,6 @@ export default function App() {
             .join(" ")}
           kind="confirm"
           danger
-          neutralBorder
           confirmLabel={t.dialog.exitConfirm}
           cancelLabel={t.dialog.cancel}
           onConfirm={() => {

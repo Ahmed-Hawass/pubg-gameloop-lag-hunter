@@ -3,7 +3,7 @@
 // No status card/strip — the layout itself is the state.
 
 import { useEffect, useState } from "react";
-import { Brain, ChevronDown, Cpu, Database, Gamepad2, Play, Square } from "lucide-react";
+import { ChevronDown, Cpu, Database, Gamepad2, MemoryStick, Play, Square } from "lucide-react";
 import { Hint, Button, MetricCard, NoteCard, SummaryCard, Timeline, diagnosisIcon, fmtDur } from "../components/components";
 import type { StatusPayload } from "../bridge";
 import { useLang } from "../i18n";
@@ -109,7 +109,7 @@ export function MonitorView(props: {
         />
         <MetricCard
           label={t.ram}
-          icon={<Brain size={14} />}
+          icon={<MemoryStick size={14} />}
           value={bars?.ram ?? null}
           hint={t.ramHint}
         />

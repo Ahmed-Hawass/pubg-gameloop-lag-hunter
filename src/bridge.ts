@@ -193,6 +193,11 @@ export const api = {
   finishOnboarding: () => invoke<void>("finish_onboarding"),
   finishGameAdvice: () => invoke<void>("finish_game_advice"),
   finishBackgroundAdvice: () => invoke<void>("finish_background_advice"),
+  /** persist one dismissed intro card by id (a repeat id is a backend
+      no-op, never a duplicate row) */
+  dismissIntroCard: (id: string) => invoke<void>("dismiss_intro_card", { id }),
+  /** empty the dismissed intro cards list (every card shows again) */
+  resetIntroCards: () => invoke<void>("reset_intro_cards"),
   setAutoStop: (minutes: number) => invoke<number>("set_auto_stop", { minutes }),
   openPath: (path: string) => invoke<void>("open_path", { path }),
   openUrl: (url: string) => invoke<void>("open_url", { url }),
@@ -489,6 +494,8 @@ export interface Settings {
   game_advice_done: boolean;
   /** stay-in-game advice shown once ever */
   background_advice_done: boolean;
+  /** dismissed one-shot page cards, by card id (old files: empty list) */
+  dismissed_cards: string[];
   thresholds: Thresholds;
 }
 

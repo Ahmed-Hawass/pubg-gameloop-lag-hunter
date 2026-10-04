@@ -9,10 +9,13 @@ import React from "react";
 import { en } from "../locales/en";
 import { ChecksView } from "../views/ChecksView";
 import type { SystemChecks } from "../bridge";
+import { settings } from "./fixtures";
 
 const apiMock = vi.hoisted(() => ({
   systemChecks: vi.fn(),
   openWindowsPanel: vi.fn(),
+  getSettings: vi.fn(),
+  dismissIntroCard: vi.fn(),
 }));
 
 vi.mock("../bridge", () => ({
@@ -39,6 +42,7 @@ const checks: SystemChecks = {
 
 function open(onOpenTool?: (id: string) => void) {
   apiMock.systemChecks.mockResolvedValue(checks);
+  apiMock.getSettings.mockResolvedValue(settings());
   const onOpen = onOpenTool ?? vi.fn();
   render(React.createElement(ChecksView, { active: true, onOpenTool: onOpen }));
   return { onOpen };
@@ -67,6 +71,7 @@ describe("ChecksView deep-link senders", () => {
   it("without the link the buttons fall back to Windows panels", async () => {
     const user = userEvent.setup();
     apiMock.systemChecks.mockResolvedValue(checks);
+  apiMock.getSettings.mockResolvedValue(settings());
     render(React.createElement(ChecksView, { active: true }));
     await screen.findAllByText(en.checkPower);
     const archive = screen.getByText(en.healthAllSettings).closest("section");

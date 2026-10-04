@@ -540,6 +540,47 @@
   border-color: var(--hover-border);
 }
 
+/* IntroCard — one-shot page guidance: info fill with ink text (never a
+   severity tone), borderless like every filled surface. The icon tile
+   rides the fill with the fill's own light ink; the X reuses the
+   summary dismiss control, retinted to the info ink. */
+.intro-card {
+  background: var(--bg-info);
+  border-color: transparent;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+}
+.intro-ico {
+  background: var(--fill-info);
+  color: var(--bg-info);
+}
+.intro-text {
+  flex: 1;
+  min-width: 0;
+}
+.intro-title {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-info);
+  margin-bottom: 2px;
+}
+.intro-text p {
+  font-size: 12.5px;
+  color: var(--text-info);
+  line-height: 1.6;
+}
+.summary-x.intro-x {
+  color: var(--text-info);
+}
+.summary-x.intro-x:hover {
+  color: var(--bg-info);
+  background: var(--fill-info);
+  border-color: transparent;
+}
+
 /* Dialog — the single modal surface (no toasts anywhere) */
 .dialog-overlay {
   position: fixed;
@@ -718,8 +759,13 @@
 .hint:hover,
 .hint:focus-visible {
   color: var(--text-2);
-  background: var(--hover-bg);
-  border-color: var(--hover-border);
+}
+.hint:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+.hint:hover svg {
+  opacity: 1;
 }
 .hint svg {
   width: 12px;

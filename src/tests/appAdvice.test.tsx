@@ -34,6 +34,7 @@ const apiMock = vi.hoisted(() => ({
   finishGameAdvice: vi.fn(),
   finishBackgroundAdvice: vi.fn(),
   clockHour12: vi.fn(),
+  dismissIntroCard: vi.fn(),
 }));
 
 let enginePush!: (ev: { payload: StatusPayload }) => void;
@@ -60,6 +61,8 @@ vi.mock("../i18n", () => ({
 // 24-hour default file-wide (mounted views read the OS convention;
 // 12-hour cases live in the view-level suites, never in App tests)
 apiMock.clockHour12.mockResolvedValue(false);
+// intro cards read the dismissal list on mount (always-mounted views)
+apiMock.getSettings.mockResolvedValue(settings());
 
 const idleUi: UiState = {
   v: 1,

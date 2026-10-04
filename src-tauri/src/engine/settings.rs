@@ -49,6 +49,12 @@ pub struct Settings {
     /// session measures the game window in the background; never again
     #[serde(default)]
     pub background_advice_done: bool,
+    /// dismissed one-shot page cards, by card id ("processes", "health",
+    /// "pagefile", "cleanup"). One list, never one flag per card: new
+    /// cards slot in with zero schema work, and old files stay valid
+    /// through the serde default above.
+    #[serde(default)]
+    pub dismissed_cards: Vec<String>,
     /// the release version whose update modal has already been shown once
     /// (the modal appears ONCE per version; after that the About dot is the
     /// only signal until the next version lands)
@@ -76,6 +82,18 @@ pub struct Settings {
     pub thresholds: Thresholds,
 }
 
+/// Record one dismissed intro card id: trims, drops empties and absurd
+/// lengths (a corrupt caller must not grow the file), dedupes repeats.
+/// True when the list actually grew.
+pub fn note_dismissed_cards(list: &mut Vec<String>, id: &str) -> bool {
+    let id = id.trim();
+    if id.is_empty() || id.len() > 64 || list.iter().any(|d| d == id) {
+        return false;
+    }
+    list.push(id.to_string());
+    true
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -89,6 +107,7 @@ impl Default for Settings {
             onboarding_done: false,
             game_advice_done: false,
             background_advice_done: false,
+            dismissed_cards: Vec::new(),
             announced_update_version: None,
             last_seen_gameloop_version: None,
             previous_power_guid: None,
@@ -315,6 +334,7 @@ mod tests {
             last_seen_gameloop_version: None,
             previous_power_guid: None,
             pending_restart: None,
+            dismissed_cards: vec!["processes".into()],
             thresholds: Thresholds::default(),
         };
         let text = serde_json::to_string(&s).unwrap();
@@ -375,6 +395,7 @@ mod tests {
             last_seen_gameloop_version: Some("7.0.19.05".into()),
             previous_power_guid: None,
             pending_restart: None,
+            dismissed_cards: vec!["health".into()],
             thresholds: Thresholds::default(),
         };
         let text = serde_json::to_string(&s).unwrap();
@@ -387,6 +408,34 @@ mod tests {
         assert_eq!(back.last_seen_gameloop_version.as_deref(), Some("7.0.19.05"));
         assert!(back.game_advice_done);
         assert!(back.background_advice_done);
+        assert_eq!(back.dismissed_cards, vec!["health".to_string()]);
+    }
+
+    #[test]
+    fn old_files_without_dismissed_cards_stay_valid() {
+        // a v3 file written before intro cards existed carries no list:
+        // serde default keeps it readable with an empty dismissal list
+        let back: Settings = serde_json::from_str(
+            r#"{"version":3,"auto_stop_minutes":10,"language":"ar","theme":"dark","sidebar_collapsed":true,"onboarding_done":true,"game_advice_done":true,"background_advice_done":true,"announced_update_version":null,"previous_power_guid":null,"pending_restart":null}"#,
+        )
+        .unwrap();
+        assert!(back.dismissed_cards.is_empty());
+    }
+
+    #[test]
+    fn dismissing_cards_appends_once_and_ignores_garbage() {
+        let mut list = Vec::new();
+        assert!(note_dismissed_cards(&mut list, "processes"));
+        assert_eq!(list, vec!["processes".to_string()]);
+        // repeats and padded repeats never duplicate the row
+        assert!(!note_dismissed_cards(&mut list, "processes"));
+        assert!(!note_dismissed_cards(&mut list, "  processes  "));
+        assert_eq!(list.len(), 1);
+        // empties and absurd ids never reach the file
+        assert!(!note_dismissed_cards(&mut list, ""));
+        assert!(!note_dismissed_cards(&mut list, "   "));
+        assert!(!note_dismissed_cards(&mut list, &"x".repeat(65)));
+        assert_eq!(list, vec!["processes".to_string()]);
     }
 
     #[test]
