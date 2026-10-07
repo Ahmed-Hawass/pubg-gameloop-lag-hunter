@@ -12,6 +12,9 @@
     "tauri": "tauri",
     "checksum": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/checksum.ps1"
   },
+  "overrides": {
+    "brace-expansion": "5.0.12"
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@tauri-apps/cli": "^2.11.4",

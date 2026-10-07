@@ -367,7 +367,9 @@ pub fn run_reboot_action() -> i32 {
     super::logging::init_panic_hook();
     #[cfg(windows)]
     use std::os::windows::process::CommandExt;
-    let mut cmd = std::process::Command::new("shutdown");
+    // absolute System32 path (never a bare name): this runs elevated,
+    // so the binary resolves against the OS, not any search order
+    let mut cmd = std::process::Command::new(super::system::system32_exe("shutdown.exe"));
     #[cfg(windows)]
     cmd.creation_flags(0x0800_0000);
     let out = cmd

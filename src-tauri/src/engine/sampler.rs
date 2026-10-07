@@ -792,9 +792,14 @@ pub fn is_gameloop_process(name: &str) -> bool {
 /// Is this OURSELVES? The tool must never appear as a suspect in its own list.
 /// Matches any versioned name (`...-1.0.0`) — releases are versioned by hand,
 /// so the pattern stays true no matter what the exe is called this release.
+/// The companion CLI (`laghunter-cli`) and the test harness binaries
+/// (`lag_hunter_*`) are ourselves too: same namespace, every separator.
 pub fn is_self_process(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();
-    lower.starts_with("pubg-gameloop-lag-hunter") || lower.starts_with("lag-hunter")
+    lower.starts_with("pubg-gameloop-lag-hunter")
+        || lower.starts_with("laghunter")
+        || lower.starts_with("lag-hunter")
+        || lower.starts_with("lag_hunter")
 }
 
 /// GameLoop detection: Some("GameLoop") when a game is actually running.
@@ -1167,6 +1172,9 @@ mod tests {
         assert!(is_self_process("pubg-gameloop-lag-hunter-1.0.0"));
         assert!(is_self_process("pubg-gameloop-lag-hunter-1.2.3"));
         assert!(is_self_process("lag-hunter-2.0.0"));
+        // the headless companion and the test harness share the namespace
+        assert!(is_self_process("laghunter-cli.exe"));
+        assert!(is_self_process("lag_hunter_lib-ab12cd34.exe"));
         // anything that doesn't carry our prefix is not us
         assert!(!is_self_process("explorer"));
         assert!(!is_self_process("chrome"));

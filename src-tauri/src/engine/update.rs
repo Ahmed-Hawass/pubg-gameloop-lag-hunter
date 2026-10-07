@@ -211,7 +211,7 @@ fn sha_from_sums(sums: &str, file_name: &str) -> Option<String> {
 ///
 /// Note: we do NOT require the destination to be inside any app-owned folder
 /// (the user explicitly chose it), but a pre-existing file is never deleted
-/// by us — cleanup only ever removes the `.part` sibling we created.
+/// by us — cleanup only ever removes our namespaced temp sibling.
 fn validate_dest(dest: &std::path::Path) -> Result<(), String> {
     if !dest.is_absolute() {
         return Err("download path must be absolute".into());
@@ -320,6 +320,12 @@ fn download_inner(
         }
     }
 
+    // a cancel landing after the last read still wins: the user closed
+    // the modal, so nothing gets verified or saved afterwards
+    if cancel.load(Ordering::Relaxed) {
+        return Err("cancelled".into());
+    }
+
     // verify BEFORE writing — a wrong hash never reaches the disk
     let actual = format!("{:x}", hasher.finalize());
     if actual != expected {
@@ -330,10 +336,12 @@ fn download_inner(
         return Err("verification failed — the downloaded file does not match its published hash".into());
     }
 
-    // write to a temp sibling, then rename over the destination: a file the
-    // user may already have (Windows asks about overwriting in the save
+    // write to a namespaced temp sibling, then rename over the
+    // destination: our extension can never be a user's own file (and a
+    // file the user may already have at dest is only ever replaced by
+    // the verified rename — Windows asks about overwriting in the save
     // dialog, but we still never leave a half-written exe behind)
-    let tmp = dest.with_extension("part");
+    let tmp = part_sibling(&dest);
     std::fs::write(&tmp, &buf).map_err(|e| format!("write: {e}"))?;
     std::fs::rename(&tmp, &dest).map_err(|e| {
         let _ = std::fs::remove_file(&tmp);
@@ -354,20 +362,26 @@ fn download_inner(
 /// Remove any in-flight download PARTIAL — called on cancel and app exit.
 /// Takes (not peeks) the path so a completed download can never be swept:
 /// by the time the file is Done, ACTIVE_DOWNLOAD was already cleared.
-/// The in-progress body writes to a `.part` sibling; the DEST itself is
-/// only ever created by the final verified rename — so cleanup removes
-/// ONLY the `.part`. A file the user already had at the same path is
-/// never touched by a cancelled or failed download.
+/// The in-progress body writes to our namespaced sibling; the DEST
+/// itself is only ever created by the final verified rename — so cleanup
+/// removes ONLY that sibling. A file the user already had anywhere,
+/// under any extension, is never touched by a cancelled/failed download.
 pub fn cleanup_active_download() {
     if let Some(p) = ACTIVE_DOWNLOAD
         .lock()
         .unwrap_or_else(|p| p.into_inner())
         .take()
     {
-        let part = p.with_extension("part");
-        let _ = std::fs::remove_file(&part);
+        let _ = std::fs::remove_file(part_sibling(&p));
         logging::info("update download partial cleaned up");
     }
+}
+
+/// Temp sibling for a download destination: our own extension, so cleanup
+/// can never mistake a user's file for our partial (a plain ".part" file
+/// could already belong to the user). Pure.
+fn part_sibling(dest: &std::path::Path) -> std::path::PathBuf {
+    dest.with_extension("laghunter-part")
 }
 
 /// Open Explorer with the downloaded file selected — the standard
@@ -604,29 +618,46 @@ mod tests {
         // a directory as destination → refused
         assert!(validate_dest(std::path::Path::new("C:\\Windows")).is_err());
         // a real folder + file name → accepted (existing FILE at the path is
-        // fine — cleanup only ever removes the .part sibling, never the dest)
+        // fine — cleanup only ever removes our namespaced sibling)
         let tmp = std::env::temp_dir().join("laghunter-dest-test.exe");
         assert!(validate_dest(&tmp).is_ok());
     }
 
     #[test]
+    fn part_sibling_is_namespaced_to_us() {
+        let dest = std::path::Path::new("C:\\dl\\update.exe");
+        assert_eq!(
+            part_sibling(dest),
+            std::path::PathBuf::from("C:\\dl\\update.laghunter-part")
+        );
+    }
+
+    #[test]
     fn cleanup_removes_part_sibling_only() {
-        // simulate a registered download over a PRE-EXISTING user file:
-        // cleanup must remove the .part sibling and leave the file alone
+        // simulate a registered download over PRE-EXISTING user files:
+        // cleanup must remove our sibling and leave everything else
+        // alone — including a user's own plain ".part" file next door
         let dir = std::env::temp_dir();
         let dest = dir.join("laghunter-cleanup-test-existing.txt");
-        let part = dir.join("laghunter-cleanup-test-existing.part");
+        let ours = dir.join("laghunter-cleanup-test-existing.laghunter-part");
+        let theirs = dir.join("laghunter-cleanup-test-existing.part");
         std::fs::write(&dest, "user's own file").unwrap();
-        std::fs::write(&part, "partial bytes").unwrap();
+        std::fs::write(&ours, "partial bytes").unwrap();
+        std::fs::write(&theirs, "user's own partial").unwrap();
         *ACTIVE_DOWNLOAD
             .lock()
             .unwrap_or_else(|p| p.into_inner()) = Some(dest.clone());
         cleanup_active_download();
-        assert!(!part.exists(), ".part must be removed");
+        assert!(!ours.exists(), "our sibling must be removed");
         assert!(
             dest.exists(),
             "the pre-existing destination file must NOT be deleted"
         );
+        assert!(
+            theirs.exists(),
+            "a user's own .part file must NOT be deleted"
+        );
         let _ = std::fs::remove_file(&dest);
+        let _ = std::fs::remove_file(&theirs);
     }
 }

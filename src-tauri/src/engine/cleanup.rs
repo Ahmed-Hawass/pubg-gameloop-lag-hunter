@@ -398,7 +398,15 @@ pub fn clean_admin(ids: &[String]) -> Result<(), String> {
 
 /// Delete only files older than `keep_ms` (direct children). Fresh
 /// files, links and dirs are left alone; locked files are skipped.
+/// A linked root is refused like in [`empty_dir_contents`].
 fn remove_old_files(dir: &Path, keep_ms: i64) {
+    if root_is_link(dir) {
+        super::logging::warn(&format!(
+            "cleanup refused: root is a link: {}",
+            dir.display()
+        ));
+        return;
+    };
     let Ok(canonical) = dir.canonicalize() else {
         return;
     };
@@ -605,8 +613,9 @@ fn system_temp_dir() -> Option<PathBuf> {
 
 #[cfg(windows)]
 fn delivery_opt_dir() -> Option<PathBuf> {
-    let windir = std::env::var_os("windir").map(PathBuf::from)?;
-    let dir = windir.join(r"SoftwareDistribution\DeliveryOptimization");
+    // from the kernel, never the inherited environment (an elevated
+    // cleaner must resolve against the OS itself)
+    let dir = super::system::windows_dir().join(r"SoftwareDistribution\DeliveryOptimization");
     dir.is_dir().then_some(dir)
 }
 
@@ -668,8 +677,8 @@ fn minidump_dir() -> Option<PathBuf> {
 /// still advises running after updates finish: politeness over repair.
 #[cfg(windows)]
 fn update_download_dir() -> Option<PathBuf> {
-    let windir = std::env::var_os("windir").map(PathBuf::from)?;
-    let dir = windir.join(r"SoftwareDistribution\Download");
+    // from the kernel, never the inherited environment (see above)
+    let dir = super::system::windows_dir().join(r"SoftwareDistribution\Download");
     dir.is_dir().then_some(dir)
 }
 
@@ -851,11 +860,43 @@ fn recycle_bin_bytes() -> Option<u64> {
 
 // ---- deletion -------------------------------------------------------------
 
-/// Delete a dir's CONTENTS, never the dir itself. Skips symlinks targets
-/// (removes the link), skips anything that canonicalizes outside the
-/// root (junction escape), skips locked files (no forcing). Best effort:
+/// True when a cleanup root is itself a link: deleting "inside" it
+/// would really delete inside its target, so the whole category is
+/// skipped with a log line. Same primitive as the per-entry link
+/// checks below (one rule for links everywhere). Checked once per root.
+fn root_is_link(root: &Path) -> bool {
+    let Ok(meta) = std::fs::symlink_metadata(root) else {
+        return false;
+    };
+    if meta.is_symlink() {
+        return true;
+    }
+    // junctions surface as reparse points rather than symlinks:
+    // either shape means "deleting inside" hits the target instead
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+        if meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return true;
+        }
+    }
+    false
+}
+
+/// Delete a dir's CONTENTS, never the dir itself. Refuses a linked root
+/// outright, skips symlinks targets (removes the link), skips anything
+/// that canonicalizes outside the root (junction escape), skips locked
+/// files (no forcing). Best effort:
 // callers re-measure afterwards, so a skip is honest, not an error.
 fn empty_dir_contents(root: &Path) {
+    if root_is_link(root) {
+        super::logging::warn(&format!(
+            "cleanup refused: root is a link: {}",
+            root.display()
+        ));
+        return;
+    }
     let Ok(canonical_root) = root.canonicalize() else {
         return;
     };
@@ -973,6 +1014,33 @@ mod tests {
         assert!(dir.is_dir(), "the dir itself must survive");
         assert_eq!(dir_size_capped(dir.clone()), Some(0));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn linked_root_is_refused_not_emptied() {
+        // a plain dir is no link (negative control for the predicate)
+        let dir = temp_workdir("linkroot");
+        assert!(!root_is_link(&dir));
+        assert!(!root_is_link(&dir.join("no-such-entry")));
+        // junctions need no privileges (unlike symlinks): a category
+        // pointed at one keeps everything, including the target
+        let target = temp_workdir("linktarget");
+        std::fs::write(target.join("victim.tmp"), "x").unwrap();
+        let link = temp_workdir("link");
+        let _ = std::fs::remove_dir_all(&link);
+        let mk = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J", link.to_str().unwrap(), target.to_str().unwrap()])
+            .output();
+        if mk.map(|o| o.status.success()).unwrap_or(false) && root_is_link(&link) {
+            empty_dir_contents(&link);
+            assert!(
+                target.join("victim.tmp").is_file(),
+                "a linked root must not empty its target"
+            );
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&target);
+        let _ = std::fs::remove_dir_all(&link);
     }
 
     #[test]

@@ -306,6 +306,28 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   now logs a one-line evidence summary (counts plus matched family,
   never other apps' names).
 ### Fixed
+- Elevated spawns name their binary exactly (`System32\powercfg.exe`,
+  `System32\shutdown.exe`, resolved from the OS itself): no caller
+  visible search order is ever consulted with raised rights.
+- Cleanup roots resolve from the OS directory API instead of the
+  inherited environment, and a linked root refuses the whole category
+  with a log line (pinned by a live junction test).
+- The update temp file lives in our own namespace now
+  (`update.laghunter-part` instead of a bare `.part`): a user's own
+  `.part` file next door can never be mistaken for our partial, and
+  cleanup still removes only what we wrote (pinned by a test with all
+  three files present).
+- A cancel landing after the last download read still wins: nothing is
+  verified or saved afterwards (the check used to live inside the read
+  loop only).
+- Session dates never panic on foreign folder names: the two raw byte
+  slices became one shared `.get()` helper with a crafted-name test
+  (the app builds with panic=abort, so any slice is a crash).
+- The engine refuses End targets by itself now (identity from the
+  opened handle plus the app/system kind from its path): protection no
+  longer leans on the UI alone, and opening the handle first closes the
+  PID-reuse window between check and act. The self-match also covers
+  the companion CLI and the test harness binaries.
 - Top Processes no longer measures itself: every poll spawned a
   PowerShell probe that the next poll caught mid-flight (a persistent
   PowerShell row with real-looking CPU), pinned by a TTL longer than

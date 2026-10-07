@@ -7,8 +7,14 @@
 //   * panics           — the hook fires even with panic=abort (last chance)
 //   * sampler health   — every streaming source logs spawn + first sample
 //   * session lifecycle — start gate, timings, stop reason, sample counts
-//   * slow IPC         — any command > 500ms is logged by name + duration
+//   * slow IPC         — commands slower than their threshold (2s default)
+//                        log one WARN line; fast ones stay silent
 //   * rig profile      — one line at boot: RAM/disks/GPU counters/PS state
+//
+// Volume contract (silence is normal, records are exceptions): routine
+// fast operations write NOTHING, so a tab left open all day cannot bury
+// the useful lines under tens of thousands of fast ones. A per-day size
+// cap backs this up; WARN/ERROR/PANIC always get through.
 //
 // Writer rule: every public fn is lock-free-ish and NEVER blocks callers —
 // a logging failure is swallowed, never propagated (fail-soft, like the
@@ -40,9 +46,18 @@ fn log_path() -> PathBuf {
     log_path_in(&logs_dir())
 }
 
+/// Backstop against any chatty future source: one day's file never
+/// grows past this. Routine lines stop at the cap; WARN/ERROR/PANIC
+/// always get through (a cap that eats the panic line would defeat the
+/// flight recorder).
+const MAX_LOG_FILE_BYTES: u64 = 5 * 1024 * 1024;
+
 fn write_line_to(dir: &Path, level: &str, msg: &str) {
     let _guard = LOG_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     let _ = fs::create_dir_all(dir);
+    if level != "WARN" && level != "ERROR" && file_too_big(dir) {
+        return;
+    }
     let iso = sampler::iso_now();
     let clock = iso.get(11..23).unwrap_or(&iso);
     if let Ok(mut f) = fs::OpenOptions::new()
@@ -52,6 +67,15 @@ fn write_line_to(dir: &Path, level: &str, msg: &str) {
     {
         let _ = writeln!(f, "{clock} [{level}] {msg}");
     }
+}
+
+/// True when today's file already hit the size cap. Missing/unreadable
+/// reads as room left (fail-open: logging must never silence itself on
+/// a metadata error).
+fn file_too_big(dir: &Path) -> bool {
+    fs::metadata(log_path_in(dir))
+        .map(|m| m.len() >= MAX_LOG_FILE_BYTES)
+        .unwrap_or(false)
 }
 
 fn write_line(level: &str, msg: &str) {
@@ -104,9 +128,9 @@ impl TimerGuard {
 fn log_op_duration_to(dir: &Path, op: &str, elapsed_ms: u128, warn_above_ms: u128) {
     if elapsed_ms >= warn_above_ms {
         write_line_to(dir, "WARN", &format!("{op}: {elapsed_ms}ms (slow)"));
-    } else {
-        write_line_to(dir, "INFO", &format!("{op}: {elapsed_ms}ms"));
     }
+    // fast operations stay silent by design (see the volume contract
+    // above): a 2s poll beat would otherwise write ~43k lines a day.
 }
 
 impl Drop for TimerGuard {
@@ -231,11 +255,30 @@ mod tests {
     #[test]
     fn timed_guard_logs_on_drop() {
         let dir = temp_logs_dir("timed");
+        // fast operations stay silent (the volume contract)
         log_op_duration_to(&dir, "unit test op", 1, 2_000);
+        // slow ones warn
         log_op_duration_to(&dir, "unit slow op", 2_500, 100);
         let body = fs::read_to_string(only_log_file(&dir)).expect("test log must be readable");
-        assert!(body.contains("unit test op: 1ms"));
+        assert!(!body.contains("unit test op"));
         assert!(body.contains("unit slow op: 2500ms (slow)"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn size_cap_silences_routine_but_never_warns() {
+        let dir = temp_logs_dir("cap");
+        // fill today's file past the cap with routine lines
+        let filler = "x".repeat(1024);
+        for _ in 0..(6 * 1024) {
+            write_line_to(&dir, "INFO", &filler);
+        }
+        assert!(file_too_big(&dir), "test must actually fill past the cap");
+        write_line_to(&dir, "INFO", "routine after cap");
+        write_line_to(&dir, "WARN", "warning after cap");
+        let body = fs::read_to_string(only_log_file(&dir)).expect("test log must be readable");
+        assert!(!body.contains("routine after cap"));
+        assert!(body.contains("warning after cap"));
         let _ = fs::remove_dir_all(&dir);
     }
 

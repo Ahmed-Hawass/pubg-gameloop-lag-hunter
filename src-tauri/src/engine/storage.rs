@@ -72,6 +72,22 @@ fn session_id_from(iso: &str) -> String {
     format!("session-{date}_{time}")
 }
 
+/// Display date from a session id (`session-YYYY-MM-DD_HHMMSS`).
+/// Byte slicing would panic on multi-byte names (and this app builds
+/// with panic=abort), so every cut is a char-boundary-safe `.get`.
+/// Anything unexpected reads as the id itself, never a blank. Pure.
+fn session_id_date(id: &str) -> String {
+    id.strip_prefix("session-")
+        .map(|s| {
+            let d = s.get(0..10).unwrap_or(s);
+            let t = s.get(11..17).unwrap_or("000000");
+            let hh = t.get(0..2).unwrap_or("00");
+            let mm = t.get(2..4).unwrap_or("00");
+            format!("{d} {hh}:{mm}")
+        })
+        .unwrap_or_else(|| id.to_string())
+}
+
 pub struct SessionWriter {
     samples: fs::File,
     dir: PathBuf,
@@ -474,17 +490,8 @@ pub fn session_entries(live_id: Option<&str>) -> Vec<SessionEntry> {
                 }
             }
         }
-        // date from the id: session-YYYY-MM-DD_HHMMSS -> "YYYY-MM-DD HH:MM"
-        let date = id
-            .strip_prefix("session-")
-            .map(|s| {
-                let d = &s[0..10.min(s.len())];
-                let t = s.get(11..19.min(s.len())).unwrap_or("000000");
-                let hh = t.get(0..2).unwrap_or("00");
-                let mm = t.get(2..4).unwrap_or("00");
-                format!("{d} {hh}:{mm}")
-            })
-            .unwrap_or_else(|| id.clone());
+        // date from the id, boundary-safe for any local folder name
+        let date = session_id_date(&id);
         // samples count from jsonl (streamed line count, no full parse)
         let samples = count_lines(&dir.join("samples.jsonl"));
         // summary numbers when finalized
@@ -714,16 +721,7 @@ pub fn friendly_report(id: &str) -> Result<FriendlyReport, String> {
         honest_outcome(spikes, distinct_issues)
     };
 
-    let date = id
-        .strip_prefix("session-")
-        .map(|s| {
-            let d = &s[0..10.min(s.len())];
-            let t = s.get(11..19.min(s.len())).unwrap_or("000000");
-            let hh = t.get(0..2).unwrap_or("00");
-            let mm = t.get(2..4).unwrap_or("00");
-            format!("{d} {hh}:{mm}")
-        })
-        .unwrap_or_else(|| id.to_string());
+    let date = session_id_date(id);
 
     // findings: map distinct event kinds to friendly copy (same copy as diagnoser)
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
@@ -914,6 +912,20 @@ mod tests {
     fn session_id_format() {
         let id = session_id_from("2026-08-31T00:19:52.123Z");
         assert_eq!(id, "session-2026-08-31_001952");
+    }
+
+    #[test]
+    fn session_id_date_never_panics_on_foreign_names() {
+        // a hand-planted folder with multi-byte chars must degrade to
+        // readable text, never panic (panic=abort would kill the app)
+        assert_eq!(
+            session_id_date("session-2026-08-31_001952"),
+            "2026-08-31 00:19"
+        );
+        let odd = session_id_date("session-中文-2026-08-31_001952");
+        assert!(!odd.is_empty());
+        assert_eq!(session_id_date("garbage"), "garbage");
+        assert_eq!(session_id_date("session-"), " 00:00");
     }
 
     #[test]

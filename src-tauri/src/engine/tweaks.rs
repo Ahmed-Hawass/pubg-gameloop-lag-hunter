@@ -548,7 +548,9 @@ fn set_tweak_elevated_powerplan(value: u32) -> Result<TweakResult, String> {
 /// the same discipline as the panel opener; PowerShell never enters the
 /// write path). Reads need no elevation; writes run elevated (child).
 fn powercfg(args: &[&str]) -> Result<String, String> {
-    let out = std::process::Command::new("powercfg")
+    // absolute System32 path (never a bare name): elevated runs must not
+    // resolve through any caller-visible search order
+    let out = std::process::Command::new(super::system::system32_exe("powercfg.exe"))
         .args(args)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())

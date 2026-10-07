@@ -75,61 +75,109 @@ pub fn end_process(pid: u32) -> Result<(), String> {
 
 #[cfg(windows)]
 fn end_process_windows(pid: u32) -> Result<(), String> {
-    let name = process_name_of(pid).ok_or_else(|| PROCESS_NOT_FOUND.to_string())?;
-    // identity guard only (GameLoop/ourselves): the app/system KIND gate
-    // lives in the UI (no End button exists outside app rows), so the
-    // engine refuses names, never kinds.
-    if super::sampler::is_gameloop_process(&name) || super::sampler::is_self_process(&name) {
-        super::logging::warn(&format!("end process refused (protected): {name} pid={pid}"));
-        return Err(PROCESS_REFUSED.into());
-    }
-    if name.trim().is_empty() {
-        return Err(PROCESS_REFUSED.into());
-    }
+    // Open first, ask questions after: the handle pins the process
+    // object, so a PID recycled between listing and acting is harmless
+    // (every check below reads the opened object itself, never a
+    // re-resolved number).
     unsafe {
         let handle = OpenProcess(PROCESS_TERMINATE, 0, pid);
         if handle.is_null() {
             let err = GetLastError();
             if err == ERROR_ACCESS_DENIED {
-                super::logging::info(&format!("end process denied: {name} pid={pid}"));
+                super::logging::info(&format!("end process denied: pid={pid}"));
                 return Err(PROCESS_ACCESS_DENIED.into());
             }
             return Err(PROCESS_NOT_FOUND.into());
+        }
+        // identity AND kind from the handle itself: GameLoop, ourselves,
+        // non-app kinds, and the shared runtime refuse here no matter
+        // what the UI passed (the UI gate is convenience, this is policy).
+        let (name, path) = handle_name_and_path(handle);
+        let kind_ok = path
+            .as_deref()
+            .map(|p| {
+                super::system::classify_process(
+                    None,
+                    Some(p),
+                    &std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into()),
+                )
+            })
+            .unwrap_or("system")
+            == "app";
+        let stem = name
+            .as_deref()
+            .map(|n| n.trim_end_matches(".exe").to_string())
+            .unwrap_or_default();
+        let refused = name.as_deref().is_some_and(|n| {
+            n.trim().is_empty()
+                || super::sampler::is_gameloop_process(n)
+                || super::sampler::is_self_process(n)
+        }) || stem.eq_ignore_ascii_case("msedgewebview2")
+            || !kind_ok;
+        if refused {
+            super::logging::warn(&format!(
+                "end process refused (protected): {} pid={pid}",
+                name.as_deref().unwrap_or("?")
+            ));
+            CloseHandle(handle);
+            return Err(PROCESS_REFUSED.into());
         }
         let ok = TerminateProcess(handle, 1);
         CloseHandle(handle);
         if ok == 0 {
             let err = GetLastError();
             if err == ERROR_ACCESS_DENIED {
-                super::logging::info(&format!("end process denied: {name} pid={pid}"));
+                super::logging::info(&format!("end process denied: pid={pid}"));
                 return Err(PROCESS_ACCESS_DENIED.into());
             }
-            super::logging::warn(&format!("end process failed: {name} pid={pid} os={err}"));
+            super::logging::warn(&format!("end process failed: pid={pid} os={err}"));
             return Err(PROCESS_KILL_FAILED.into());
         }
-    }
-    // verify by re-read: the PID must be gone (or recycled under another
-    // name, which also ends this attempt). A lingering same-name PID is
-    // a real failure, never ok.
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
-    loop {
-        match process_name_of(pid) {
-            None => {
-                super::logging::info(&format!("end process ok: {name} pid={pid}"));
-                return Ok(());
-            }
-            Some(now) => {
-                if !now.eq_ignore_ascii_case(&name) {
-                    super::logging::info(&format!("end process ok (pid recycled): {name} pid={pid}"));
+        let wanted = name.unwrap_or_default();
+        // verify by re-read: the PID must be gone (or recycled under
+        // another name, which also ends this attempt). A lingering
+        // same-name PID is a real failure, never ok. Observing only:
+        // identity was already pinned by the handle above.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        loop {
+            match process_name_of(pid) {
+                None => {
+                    super::logging::info(&format!("end process ok: {wanted} pid={pid}"));
                     return Ok(());
                 }
-                if std::time::Instant::now() >= deadline {
-                    super::logging::warn(&format!("end process still alive: {name} pid={pid}"));
-                    return Err(PROCESS_KILL_FAILED.into());
+                Some(now) => {
+                    if !now.eq_ignore_ascii_case(&wanted) {
+                        super::logging::info(&format!(
+                            "end process ok (pid recycled): {wanted} pid={pid}"
+                        ));
+                        return Ok(());
+                    }
+                    if std::time::Instant::now() >= deadline {
+                        super::logging::warn(&format!("end process still alive: {wanted} pid={pid}"));
+                        return Err(PROCESS_KILL_FAILED.into());
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(100));
                 }
-                std::thread::sleep(std::time::Duration::from_millis(100));
             }
         }
+    }
+}
+
+/// File name + full path of an opened process object (never by PID:
+/// the handle is the identity here).
+#[cfg(windows)]
+fn handle_name_and_path(handle: *mut core::ffi::c_void) -> (Option<String>, Option<String>) {
+    unsafe {
+        let mut size = 1024u32;
+        let mut buf = vec![0u16; size as usize];
+        if QueryFullProcessImageNameW(handle, 0, buf.as_mut_ptr(), &mut size) == 0 {
+            return (None, None);
+        }
+        let Ok(path) = String::from_utf16(&buf[..size as usize]) else {
+            return (None, None);
+        };
+        let name = path.rsplit(['\\', '/']).next().map(str::to_string);
+        (name, Some(path))
     }
 }
 
@@ -225,6 +273,12 @@ extern "system" {
     fn CreateToolhelp32Snapshot(flags: u32, pid: u32) -> *mut core::ffi::c_void;
     fn Process32FirstW(snap: *mut core::ffi::c_void, entry: *mut PROCESSENTRY32W) -> i32;
     fn Process32NextW(snap: *mut core::ffi::c_void, entry: *mut PROCESSENTRY32W) -> i32;
+    fn QueryFullProcessImageNameW(
+        handle: *mut core::ffi::c_void,
+        flags: u32,
+        name: *mut u16,
+        size: *mut u32,
+    ) -> i32;
 }
 
 #[cfg(test)]
@@ -242,6 +296,17 @@ mod tests {
     #[test]
     fn zero_pid_refuses_without_touching_the_os() {
         assert_eq!(end_process(0).unwrap_err(), PROCESS_REFUSED);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn own_pid_refuses_through_the_handle_path() {
+        // the test runner itself: openable, but our own binary is never
+        // a target (exercises the handle-first guard with zero risk)
+        assert_eq!(
+            end_process(std::process::id()).unwrap_err(),
+            PROCESS_REFUSED
+        );
     }
 
     #[test]

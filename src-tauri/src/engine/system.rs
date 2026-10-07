@@ -414,6 +414,46 @@ pub fn system_checks_fresh() -> Result<SystemChecks, String> {
     Ok(fresh)
 }
 
+/// Windows directory from the kernel, never the environment: inherited
+/// env vars (`windir`, `SystemRoot`) belong to the parent chain, while
+/// elevated writes and cleanup roots must resolve against the OS itself.
+/// Falls back to `C:\Windows` when unreadable (same fail-soft as every
+/// other OS fact here).
+pub fn windows_dir() -> std::path::PathBuf {
+    #[cfg(windows)]
+    {
+        let mut buf = vec![0u16; 260];
+        let len = unsafe { GetSystemWindowsDirectoryW(buf.as_mut_ptr(), buf.len() as u32) };
+        if len > 0 && (len as usize) < buf.len() {
+            if let Ok(s) = String::from_utf16(&buf[..len as usize]) {
+                if !s.is_empty() {
+                    return std::path::PathBuf::from(s);
+                }
+            }
+        }
+    }
+    std::path::PathBuf::from(r"C:\Windows")
+}
+
+/// System32 from the kernel (same source as [`windows_dir`]).
+pub fn system32_dir() -> std::path::PathBuf {
+    windows_dir().join("System32")
+}
+
+/// Absolute path of a Windows tool: bare exe names resolve through the
+/// caller-visible search order, so elevated spawns name their binary
+/// exactly (a planted file can never preempt System32). Pure join over
+/// [`system32_dir`].
+pub fn system32_exe(name: &str) -> std::path::PathBuf {
+    system32_dir().join(name)
+}
+
+#[cfg(windows)]
+#[link(name = "kernel32")]
+extern "system" {
+    fn GetSystemWindowsDirectoryW(buf: *mut u16, size: u32) -> u32;
+}
+
 /// Windows build identity for the boot log, read straight from the registry
 /// (no PowerShell spawn, no elevation): `ProductName` + `CurrentBuildNumber`.
 /// This is what makes any user-sent log readable on the 10/11 axis — the
@@ -1561,7 +1601,7 @@ fn looks_like_guid(s: &str) -> bool {
 /// fresh GUID every time, so GUID-only matching can never see it — the
 /// name fallback in is_performance_plan is what recognizes it.
 pub fn power_list() -> Vec<(String, String)> {
-    let out = super::sampler::output_tracked(Command::new("powercfg")
+    let out = super::sampler::output_tracked(Command::new(system32_exe("powercfg.exe"))
         .arg("/list")
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -1594,7 +1634,7 @@ pub fn power_active_guid() -> String {
 /// Active scheme as (guid, display name): the verify step needs both
 /// (performance-class by GUID or by name fallback, like the row read).
 pub fn power_active_scheme() -> (String, String) {
-    let out = super::sampler::output_tracked(Command::new("powercfg")
+    let out = super::sampler::output_tracked(Command::new(system32_exe("powercfg.exe"))
         .arg("/getactivescheme")
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -1615,7 +1655,7 @@ pub fn power_active_scheme() -> (String, String) {
 /// that cannot work fails honestly at verify time instead of hiding a
 /// working feature). Powercfg output is native-fast, no PowerShell.
 pub fn s0_standby_present() -> bool {
-    let out = super::sampler::output_tracked(Command::new("powercfg")
+    let out = super::sampler::output_tracked(Command::new(system32_exe("powercfg.exe"))
         .arg("/a")
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -2425,7 +2465,7 @@ pub fn query_tweak_states() -> TweakStates {
     // fixed args — the batch's 0.5-2s PowerShell cost stays untouched).
     // Active scheme line carries "GUID (Name)": the same parse the health
     // batch uses, so the row and the card can never disagree on what is on.
-    let power_active_raw = super::sampler::output_tracked(Command::new("powercfg")
+    let power_active_raw = super::sampler::output_tracked(Command::new(system32_exe("powercfg.exe"))
         .arg("/getactivescheme")
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -2731,6 +2771,19 @@ mod tests {
         assert_eq!(out[2].0.name, "hot");
         // zero-CPU members keep their seat (membership is not gated)
         assert_eq!(out[0].0.cpu_pct, 0.0);
+    }
+
+    #[test]
+    fn system_exe_paths_come_from_the_os_itself() {
+        // absolute, kernel-resolved, never through any search order
+        let p = system32_exe("powercfg.exe");
+        assert_eq!(p.file_name().and_then(|s| s.to_str()), Some("powercfg.exe"));
+        let parent = p.parent().expect("system tool has a parent dir");
+        assert_eq!(
+            parent.file_name().and_then(|s| s.to_str()).map(|s| s.to_ascii_lowercase()),
+            Some("system32".to_string())
+        );
+        assert!(windows_dir().is_absolute());
     }
 
     #[test]
