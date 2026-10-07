@@ -143,7 +143,7 @@ export function AboutView(props: {
       {/* footer: links + signature — same row, quiet */}
       <div className="about-footer">
         <Button
-          label="GitHub"
+          label={t.aboutGitHub}
           icon={<Code2 size={14} />}
           variant="ghost"
           onClick={() => void api.openUrl(REPO_URL)}

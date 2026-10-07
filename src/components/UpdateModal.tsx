@@ -134,7 +134,7 @@ export function UpdateModal(props: {
       // user picks the location, the official asset name comes pre-filled
       const dest = await saveDialog({
         defaultPath: info.asset_name,
-        filters: [{ name: "Application", extensions: ["exe"] }],
+        filters: [{ name: t.updateExeFilter, extensions: ["exe"] }],
       });
       if (!dest) return; // save dialog cancelled — back to the offer state
       // the modal may have been closed (Escape) while the OS dialog was

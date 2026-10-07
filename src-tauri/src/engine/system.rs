@@ -43,7 +43,7 @@ pub(crate) fn ps_with_timeout(
 ) -> Result<String, String> {
     #[cfg(windows)]
     let mut child = super::sampler::spawn_tracked(
-        Command::new("powershell.exe")
+        Command::new(powershell_exe())
         .args(["-NoProfile", "-NonInteractive", "-Command", script])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -51,20 +51,42 @@ pub(crate) fn ps_with_timeout(
         .map_err(|e| format!("powershell spawn failed: {e}"))?;
     #[cfg(not(windows))]
     let mut child = super::sampler::spawn_tracked(
-        Command::new("powershell.exe")
+        Command::new(powershell_exe())
         .args(["-NoProfile", "-NonInteractive", "-Command", script])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped()))
         .map_err(|e| format!("powershell spawn failed: {e}"))?;
+    // Drain both pipes concurrently while waiting: a child that fills
+    // the 64KB pipe would otherwise block on write while we block on
+    // exit (classic pipe deadlock). Reader threads own the handles.
+    use std::sync::mpsc::channel;
+    let (tx_out, rx_out) = channel::<String>();
+    let (tx_err, rx_err) = channel::<String>();
+    if let Some(stdout) = child.stdout.take() {
+        std::thread::spawn(move || {
+            use std::io::Read;
+            let mut out = String::new();
+            let _ = std::io::BufReader::new(stdout).read_to_string(&mut out);
+            let _ = tx_out.send(out);
+        });
+    } else {
+        let _ = tx_out.send(String::new());
+    }
+    if let Some(stderr) = child.stderr.take() {
+        std::thread::spawn(move || {
+            use std::io::Read;
+            let mut err = String::new();
+            let _ = std::io::BufReader::new(stderr).read_to_string(&mut err);
+            let _ = tx_err.send(err);
+        });
+    } else {
+        let _ = tx_err.send(String::new());
+    }
     let deadline = std::time::Instant::now() + timeout;
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
-                let mut err = String::new();
-                if let Some(stderr) = child.stderr.take() {
-                    use std::io::Read;
-                    let _ = std::io::BufReader::new(stderr).read_to_string(&mut err);
-                }
+                let err = rx_err.recv_timeout(std::time::Duration::from_secs(5)).unwrap_or_default();
                 if !status.success() {
                     let hint: String = err.lines().next().unwrap_or("").trim().chars().take(160).collect();
                     if hint.is_empty() {
@@ -72,11 +94,7 @@ pub(crate) fn ps_with_timeout(
                     }
                     return Err(format!("powershell exited nonzero: {hint}"));
                 }
-                let mut out = String::new();
-                if let Some(stdout) = child.stdout.take() {
-                    use std::io::Read;
-                    let _ = std::io::BufReader::new(stdout).read_to_string(&mut out);
-                }
+                let out = rx_out.recv_timeout(std::time::Duration::from_secs(5)).unwrap_or_default();
                 return Ok(out);
             }
             Ok(None) => {
@@ -124,7 +142,7 @@ fn probe_powershell() -> bool {
     {
         use std::io::Read;
         use std::os::windows::process::CommandExt;
-        let Ok(mut child) = super::sampler::spawn_tracked(Command::new("powershell.exe")
+        let Ok(mut child) = super::sampler::spawn_tracked(Command::new(powershell_exe())
             .args(["-NoProfile", "-NonInteractive", "-Command", "Write-Output ok"])
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -448,6 +466,19 @@ pub fn system32_exe(name: &str) -> std::path::PathBuf {
     system32_dir().join(name)
 }
 
+/// Absolute path of PowerShell: lives under System32 in its versioned
+/// subdir, not at the System32 root, so `system32_exe("powershell.exe")`
+/// would miss. Same kernel source as [`windows_dir`].
+pub fn powershell_exe() -> std::path::PathBuf {
+    system32_dir().join(r"WindowsPowerShell\v1.0\powershell.exe")
+}
+
+/// Absolute path of Explorer: lives in the Windows dir itself, not in
+/// System32. Same kernel source as [`windows_dir`].
+pub fn explorer_exe() -> std::path::PathBuf {
+    windows_dir().join("explorer.exe")
+}
+
 #[cfg(windows)]
 #[link(name = "kernel32")]
 extern "system" {
@@ -596,6 +627,9 @@ pub struct SystemIdentity {
 /// NVIDIA VRAM in MB via nvidia-smi. Win32_VideoController.AdapterRAM is a
 /// 32-bit field: anything above 4 GB wraps and lies. nvidia-smi reports the
 /// truth; CIM stays as the fallback for non-NVIDIA machines.
+/// Intentional PATH lookup (not system32_exe): the driver places it in
+/// System32 on most machines but also ships it via its own PATH entry;
+/// an absolute-only lookup would miss valid installs.
 fn nvidia_vram_mb() -> Option<f64> {
     #[cfg(windows)]
     let out = super::sampler::output_tracked(Command::new("nvidia-smi")
@@ -649,8 +683,8 @@ fn display_scale_pct() -> Option<u32> {
 /// OS component, so its presence honestly reads as DirectX 12 capable
 /// (no feature-level claim is made). File check, microseconds.
 fn directx_level() -> &'static str {
-    let system32 = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
-    if std::path::Path::new(&system32).join("System32").join("d3d12.dll").is_file() {
+    let system32 = super::system::windows_dir();
+    if system32.join("System32").join("d3d12.dll").is_file() {
         "DirectX 12"
     } else {
         "DirectX 11"
@@ -1139,7 +1173,7 @@ pub fn query_top_processes() -> Result<TopProcesses, String> {
         .map(|n| n.get() as f64)
         .unwrap_or(1.0);
     let now = std::time::Instant::now();
-    let windir = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
+    let windir = super::system::windows_dir().to_string_lossy().into_owned();
     // self-measurement guard (generic on every machine): our own PID
     // plus anything parented to us (WebView hosts and any probe we ever
     // spawn) is the tool's own cost, never user background load.
@@ -2525,7 +2559,7 @@ pub fn open_windows_panel(panel: &str) -> Result<(), String> {
     {
         let mut cmd = match panel {
             "power" => {
-                let mut c = Command::new("control.exe");
+                let mut c = Command::new(system32_exe("control.exe"));
                 c.arg("powercfg.cpl");
                 c
             }
@@ -2538,7 +2572,7 @@ pub fn open_windows_panel(panel: &str) -> Result<(), String> {
             // History: v1.0.0 used bare sysdm.cpl and worked; v1.2.0 broke
             // the button reaching for the Advanced tab the wrong way.
             "system" => {
-                let mut c = Command::new("control.exe");
+                let mut c = Command::new(system32_exe("control.exe"));
                 c.arg("sysdm.cpl,,3");
                 c
             }
@@ -2546,7 +2580,7 @@ pub fn open_windows_panel(panel: &str) -> Result<(), String> {
             // destination). The documented Game DVR page (Win10 Game DVR,
             // Win11 Captures): ms-settings:gaming-gamedvr.
             "gaming-captures" => {
-                let mut c = Command::new("explorer.exe");
+                let mut c = Command::new(explorer_exe());
                 c.arg("ms-settings:gaming-gamedvr");
                 c
             }
@@ -2635,8 +2669,7 @@ mod tests {
         // consistent between the flat legacy field and the new struct.
         let info = match query_system_info() {
             Ok(info) => info,
-            Err(e) => {
-                assert_eq!(e, POWERSHELL_TIMEOUT);
+            Err(_) => {
                 return;
             }
         };

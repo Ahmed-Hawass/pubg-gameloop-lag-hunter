@@ -440,6 +440,10 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  /* hover lift (-1px) and focus ring (3px) on the first grid row would
+     clip against the scrollport top: keep breathing room inside the
+     scroller so both render fully at scroll-top 0 */
+  padding-block-start: 4px;
 }
 /* details sections (banner, featured, archive) stack like the health tab */
 .tools section {

@@ -37,9 +37,25 @@ pub fn ensure_sessions_root() {
 /// because the Reports list reads `events.json`/`summary.json` while a
 /// running session's autosave rewrites them on a timer.
 pub(crate) fn write_file_atomic(path: &Path, contents: &[u8]) -> std::io::Result<()> {
-    let tmp = path.with_extension("tmp");
+    let tmp = path.with_extension("laghunter-tmp");
     fs::write(&tmp, contents)?;
     fs::rename(&tmp, path)
+}
+
+/// Hard bound for trusted-but-tinkerable local JSON (mirrors the network
+/// MAX_METADATA_BYTES in update.rs): a hand-planted multi-GB summary or
+/// events file must read as missing, never as an OOM that aborts the app.
+pub(crate) const MAX_LOCAL_META_BYTES: u64 = 2 * 1024 * 1024;
+
+/// Bounded file read: None when missing, oversized, or unreadable.
+/// Every session/settings/history reader goes through this so no single
+/// planted file can exhaust memory (panic=abort would kill the app).
+pub(crate) fn read_limited(path: &Path) -> Option<String> {
+    let meta = fs::metadata(path).ok()?;
+    if meta.len() > MAX_LOCAL_META_BYTES {
+        return None;
+    }
+    fs::read_to_string(path).ok()
 }
 
 /// Create a new session directory named by local time: session-YYYY-MM-DD_HHMMSS
@@ -432,6 +448,8 @@ fn count_lines(path: &Path) -> u64 {
 }
 
 /// All session dirs sorted by name (= chronological, newest last).
+/// Foreign folder names (hand-planted, wrong shape) never enter the
+/// list: readers below can assume the strict id shape.
 pub fn list_sessions() -> Vec<String> {
     let Ok(rd) = fs::read_dir(sessions_root()) else {
         return vec![];
@@ -440,6 +458,7 @@ pub fn list_sessions() -> Vec<String> {
         .flatten()
         .filter(|e| e.path().is_dir())
         .filter_map(|e| e.file_name().to_str().map(String::from))
+        .filter(|name| validate_session_id(name).is_ok())
         .collect();
     v.sort();
     v
@@ -494,9 +513,10 @@ pub fn session_entries(live_id: Option<&str>) -> Vec<SessionEntry> {
         let date = session_id_date(&id);
         // samples count from jsonl (streamed line count, no full parse)
         let samples = count_lines(&dir.join("samples.jsonl"));
-        // summary numbers when finalized
-        let (duration, spikes, outcome) = match fs::read_to_string(dir.join("summary.json")) {
-            Ok(text) => match serde_json::from_str::<serde_json::Value>(&text) {
+        // summary numbers when finalized (bounded: a planted GB file
+        // reads as missing, never as an OOM)
+        let (duration, spikes, outcome) = match read_limited(&dir.join("summary.json")) {
+            Some(text) => match serde_json::from_str::<serde_json::Value>(&text) {
                 Ok(v) => {
                     let partial = v.get("partial").and_then(|p| p.as_bool()).unwrap_or(false);
                     let write_failed = v
@@ -514,7 +534,7 @@ pub fn session_entries(live_id: Option<&str>) -> Vec<SessionEntry> {
                 }
                 Err(_) => (0, 0, "partial".into()),
             },
-            Err(_) => {
+            None => {
                 let (spikes, _distinct_issues) = classify_events(&dir);
                 // samples exist but no summary = crashed mid-session: NEVER call it clean
                 let outcome = if samples == 0 {
@@ -543,7 +563,7 @@ pub fn session_entries(live_id: Option<&str>) -> Vec<SessionEntry> {
 /// Frame freezes + distinct issue kinds from a session's events.
 /// Returns (lag_spikes, distinct_issue_kinds).
 fn classify_events(dir: &Path) -> (u64, u64) {
-    let Ok(text) = fs::read_to_string(dir.join("events.json")) else {
+    let Some(text) = read_limited(&dir.join("events.json")) else {
         return (0, 0);
     };
     let Ok(evs) = serde_json::from_str::<Vec<serde_json::Value>>(&text) else {
@@ -579,23 +599,88 @@ fn honest_outcome(spikes: u64, distinct_issues: u64) -> String {
     }
 }
 
-/// Same session-id guard as delete/session_dir: anything that doesn't look
-/// like a session id is refused before it ever touches the filesystem.
+/// Strict session-id shape: session-YYYY-MM-DD_HHMMSS with an optional
+/// -N collision suffix. Anything else (ADS colons, wildcards, spaces,
+/// unicode, trailing dots, wrong lengths) is refused before touching
+/// the filesystem. Pure.
 fn validate_session_id(id: &str) -> Result<(), String> {
-    if !id.starts_with("session-") || id.contains("..") || id.contains('\\') || id.contains('/') {
+    if id.len() > 40 || !id.starts_with("session-") {
         return Err("invalid session id".into());
     }
+    let rest = &id["session-".len()..];
+    // head is exactly date(10) + '_' + time(6); anything after must be
+    // a -N collision suffix (the id stays sortable and chronological)
+    if rest.len() < 17 {
+        return Err("invalid session id".into());
+    }
+    let (head, suffix) = rest.split_at(17);
+    let b = head.as_bytes();
+    // YYYY-MM-DD_HHMMSS
+    for &i in &[4, 7] {
+        if b[i] != b'-' {
+            return Err("invalid session id".into());
+        }
+    }
+    if b[10] != b'_' {
+        return Err("invalid session id".into());
+    }
+    for (i, &c) in b.iter().enumerate() {
+        if i == 4 || i == 7 || i == 10 {
+            continue;
+        }
+        if !c.is_ascii_digit() {
+            return Err("invalid session id".into());
+        }
+    }
+    if !suffix.is_empty() {
+        if !suffix.starts_with('-') || suffix.len() < 2 || suffix.len() > 6 {
+            return Err("invalid session id".into());
+        }
+        if !suffix[1..].bytes().all(|c| c.is_ascii_digit()) {
+            return Err("invalid session id".into());
+        }
+    }
     Ok(())
+}
+
+/// Resolve a session dir fail-closed: strict id, not a symlink, and
+/// canonicalized inside the sessions root (a planted junction pointing
+/// at System32 must never be emptied by the Reports delete buttons).
+fn checked_session_dir(id: &str) -> Result<PathBuf, String> {
+    validate_session_id(id)?;
+    let root = sessions_root();
+    let dir = root.join(id);
+    let meta = std::fs::symlink_metadata(&dir).map_err(|_| format!("session not found: {id}"))?;
+    if meta.is_symlink() {
+        return Err("session is a link, refusing".into());
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+        if meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return Err("session is a link, refusing".into());
+        }
+    }
+    if !dir.is_dir() {
+        return Err(format!("session not found: {id}"));
+    }
+    let canonical_root = root
+        .canonicalize()
+        .map_err(|e| format!("app data unavailable: {e}"))?;
+    let canonical = dir
+        .canonicalize()
+        .map_err(|e| format!("session unreadable: {e}"))?;
+    if !canonical.starts_with(&canonical_root) {
+        return Err("session escapes the app data folder".into());
+    }
+    Ok(canonical)
 }
 
 /// Delete a session directory (Reports page cleanup).
 pub fn delete_session(id: &str) -> Result<(), String> {
     // refuse anything that doesn't look like a session id (path safety)
-    validate_session_id(id)?;
-    let dir = sessions_root().join(id);
-    if !dir.is_dir() {
-        return Err(format!("session not found: {id}"));
-    }
+    let dir = checked_session_dir(id)?;
     fs::remove_dir_all(&dir).map_err(|e| format!("cannot delete: {e}"))
 }
 
@@ -612,15 +697,43 @@ pub fn delete_all_sessions(root: &Path, exclude_id: Option<&str>) -> Result<Vec<
     let Ok(rd) = fs::read_dir(root) else {
         return Ok(deleted);
     };
+    let canonical_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
     for e in rd.flatten() {
         let name = e.file_name().to_str().unwrap_or("").to_string();
-        if !name.starts_with("session-") || name.contains("..") || name.contains('\\') || name.contains('/') {
+        if validate_session_id(&name).is_err() {
             continue;
         }
         if Some(name.as_str()) == exclude_id {
             continue;
         }
-        if e.path().is_dir() && fs::remove_dir_all(e.path()).is_ok() {
+        let p = e.path();
+        // same link + containment gate as single delete: a planted
+        // junction must never be emptied by the bulk button either
+        let Ok(meta) = std::fs::symlink_metadata(&p) else {
+            continue;
+        };
+        if meta.is_symlink() {
+            continue;
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::MetadataExt;
+            const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+            if meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+                continue;
+            }
+        }
+        if !p.is_dir() {
+            continue;
+        }
+        if let Ok(canonical) = p.canonicalize() {
+            if !canonical.starts_with(&canonical_root) {
+                continue;
+            }
+        } else {
+            continue;
+        }
+        if fs::remove_dir_all(&p).is_ok() {
             deleted.push(name);
         }
     }
@@ -630,11 +743,7 @@ pub fn delete_all_sessions(root: &Path, exclude_id: Option<&str>) -> Result<Vec<
 
 /// Full path of a session dir (for "open folder").
 pub fn session_dir(id: &str) -> Result<String, String> {
-    validate_session_id(id)?;
-    let dir = sessions_root().join(id);
-    if !dir.is_dir() {
-        return Err(format!("session not found: {id}"));
-    }
+    let dir = checked_session_dir(id)?;
     Ok(dir.to_string_lossy().to_string())
 }
 
@@ -686,18 +795,12 @@ pub struct FriendlyFinding {
 }
 
 pub fn friendly_report(id: &str) -> Result<FriendlyReport, String> {
-    validate_session_id(id)?;
-    let dir = sessions_root().join(id);
-    if !dir.is_dir() {
-        return Err(format!("session not found: {id}"));
-    }
+    let dir = checked_session_dir(id)?;
 
-    let summary: serde_json::Value = fs::read_to_string(dir.join("summary.json"))
-        .ok()
+    let summary: serde_json::Value = read_limited(&dir.join("summary.json"))
         .and_then(|t| serde_json::from_str(&t).ok())
         .unwrap_or(serde_json::json!({}));
-    let events: Vec<serde_json::Value> = fs::read_to_string(dir.join("events.json"))
-        .ok()
+    let events: Vec<serde_json::Value> = read_limited(&dir.join("events.json"))
         .and_then(|t| serde_json::from_str(&t).ok())
         .unwrap_or_default();
     let samples = count_lines(&dir.join("samples.jsonl"));
@@ -750,11 +853,16 @@ pub fn friendly_report(id: &str) -> Result<FriendlyReport, String> {
         });
     }
 
-    // highlights: raw event facts (kind + clock + duration) — the UI composes
-    // the sentence in the user's language. Max 8, newest last.
+    // highlights: known event facts only (kind + clock + duration) — the
+    // UI composes the sentence in the user's language. Max 8, newest
+    // last. Unknown kinds are skipped (a planted kind string never
+    // reaches the UI verbatim); findings already map them to Other event.
     let mut highlights: Vec<HighlightEntry> = Vec::new();
     for ev in &events {
         let kind = ev.get("kind").and_then(|k| k.as_str()).unwrap_or("");
+        if !is_known_highlight_kind(kind) {
+            continue;
+        }
         let sev = ev
             .get("severity")
             .and_then(|s| s.as_str())
@@ -867,6 +975,28 @@ pub struct HighlightEntry {
     pub dur_sec: Option<f64>,
 }
 
+/// Allowlist for highlight kinds: only engine-known moments reach the UI.
+/// Anything else (including a hand-planted string in events.json) is
+/// skipped by the highlights loop. Pure.
+fn is_known_highlight_kind(kind: &str) -> bool {
+    matches!(
+        kind,
+        "disk_queue"
+            | "disk_busy"
+            | "hard_faults"
+            | "cpu_saturation"
+            | "cpu_throttle"
+            | "mem_pressure"
+            | "paging_churn"
+            | "gpu_mem_idle"
+            | "gpu_activity_cliff"
+            | "gpu_activity_cliff_loaded"
+            | "gpu_clock_low"
+            | "gpu_temp"
+            | "spike"
+    )
+}
+
 /// Machine key for UI translation (mirrors the diagnoser dictionary keys).
 /// Unknown engine kinds map to "" like the live path (diagnoser ignores
 /// them; the report reader falls back to the English "Other event" copy
@@ -940,7 +1070,7 @@ mod tests {
         fs::write(&target, r#"[{"old":true}]"#).unwrap();
         write_file_atomic(&target, br#"[{"new":true}]"#).unwrap();
         assert_eq!(fs::read_to_string(&target).unwrap(), r#"[{"new":true}]"#);
-        assert!(!d.join("events.tmp").exists());
+        assert!(!d.join("events.laghunter-tmp").exists());
         let _ = fs::remove_dir_all(&d);
     }
 
@@ -1071,13 +1201,49 @@ mod tests {
 
     #[test]
     fn path_traversal_rejected() {
-        // delete/session-dir ids must look like session-* and stay inside our root
+        // delete/session-dir ids must match the strict shape and stay inside our root
         assert!(delete_session("../evil").is_err());
         assert!(delete_session("session-..\\..\\evil").is_err());
         assert!(delete_session("not-a-session").is_err());
         assert!(session_dir("..\\..\\Windows").is_err());
+        // ADS, wildcards, spaces, unicode, and overlong ids are refused too
+        assert!(validate_session_id("session-2026-08-31_000000:evil").is_err());
+        assert!(validate_session_id("session-2026-08-31_000000 evil").is_err());
+        assert!(validate_session_id("session-2026-08-31_000000*.exe").is_err());
+        assert!(validate_session_id("session-中文-2026-08-31_000000").is_err());
+        assert!(validate_session_id(&format!("session-{}_000000", "9".repeat(60))).is_err());
+        // strict shape passes, including the -N collision suffix
+        assert!(validate_session_id("session-2026-08-31_001952").is_ok());
+        assert!(validate_session_id("session-2026-08-31_001952-2").is_ok());
+        assert!(validate_session_id("session-2026-08-31_00195").is_err());
         // a well-formed id that simply doesn't exist = clean error, no panic
         assert!(delete_session("session-2026-08-31_000000").is_err());
+    }
+
+    #[test]
+    fn oversized_local_meta_reads_as_missing() {
+        // a hand-planted multi-MB summary must read as missing (partial),
+        // never as an OOM: the bound mirrors the network metadata cap
+        let d = std::env::temp_dir().join(format!("lh-limited-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(&d).unwrap();
+        let big = d.join("summary.json");
+        let blob = "x".repeat((MAX_LOCAL_META_BYTES + 16) as usize);
+        fs::write(&big, blob).unwrap();
+        assert!(read_limited(&big).is_none());
+        let small = d.join("small.json");
+        fs::write(&small, r#"{"ok":true}"#).unwrap();
+        assert_eq!(read_limited(&small).as_deref(), Some(r#"{"ok":true}"#));
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn highlight_allowlist_skips_planted_kinds() {
+        assert!(is_known_highlight_kind("disk_queue"));
+        assert!(is_known_highlight_kind("spike"));
+        assert!(!is_known_highlight_kind(""));
+        assert!(!is_known_highlight_kind("evil<script>"));
+        assert!(!is_known_highlight_kind("disk_queue; rm -rf"));
     }
 
     #[test]

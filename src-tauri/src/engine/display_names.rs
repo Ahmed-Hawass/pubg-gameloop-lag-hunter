@@ -331,7 +331,7 @@ mod tests {
     fn friendly_name_reads_the_files_own_words() {
         // PowerShell's own exe: guaranteed present with a version resource
         // on every Windows (the read is native, no spawn to recurse into).
-        let root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
+        let root = super::super::system::windows_dir().to_string_lossy().into_owned();
         let ps = format!(
             r"{root}\System32\WindowsPowerShell\v1.0\powershell.exe",
             root = root.trim_end_matches(['\\', '/'])

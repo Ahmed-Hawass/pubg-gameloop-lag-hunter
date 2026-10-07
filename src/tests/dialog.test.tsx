@@ -29,7 +29,6 @@ function confirm(onClose = vi.fn(), onConfirm = vi.fn()) {
       kind: "confirm",
       confirmLabel: "Delete",
       cancelLabel: "Cancel",
-      okLabel: "OK",
       danger: true,
       onConfirm,
       onClose,

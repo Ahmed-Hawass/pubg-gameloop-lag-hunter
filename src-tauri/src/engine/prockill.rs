@@ -80,7 +80,7 @@ fn end_process_windows(pid: u32) -> Result<(), String> {
     // (every check below reads the opened object itself, never a
     // re-resolved number).
     unsafe {
-        let handle = OpenProcess(PROCESS_TERMINATE, 0, pid);
+        let handle = OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_LIMITED, 0, pid);
         if handle.is_null() {
             let err = GetLastError();
             if err == ERROR_ACCESS_DENIED {
@@ -99,7 +99,7 @@ fn end_process_windows(pid: u32) -> Result<(), String> {
                 super::system::classify_process(
                     None,
                     Some(p),
-                    &std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into()),
+                    &super::system::windows_dir().to_string_lossy(),
                 )
             })
             .unwrap_or("system")
@@ -193,6 +193,8 @@ fn process_name_of(pid: u32) -> Option<String> {
 
 #[cfg(windows)]
 const PROCESS_TERMINATE: u32 = 0x0001;
+#[cfg(windows)]
+const PROCESS_QUERY_LIMITED: u32 = 0x1000;
 #[cfg(windows)]
 const TH32CS_SNAPPROCESS: u32 = 0x0000_0002;
 #[cfg(windows)]

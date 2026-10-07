@@ -27,7 +27,7 @@ switch off automatically when piped or under `NO_COLOR`).
 ```text
 > laghunter scan 10
 LAG HUNTER
-PUBG GameLoop Lag Hunter 1.6.0 — headless scan, 10 min
+PUBG GameLoop Lag Hunter 1.6.0 (headless scan, 10 min)
 t+07s  samples=1  game  cpu=26  Ok
 ...
 done: 600 samples, 3 lag spike(s)
@@ -51,7 +51,7 @@ release assets. Prerequisites, in order: the CLI exe ships in a GitHub
 release first (the manifest needs its published URL and SHA-256, which
 only exist after release), then a manifest PR via `wingetcreate` to
 `microsoft/winget-pkgs` (bot validation plus reviewer merge, usually
-days — nothing instant). Unsigned first-run SmartScreen warnings stay
+days, nothing instant). Unsigned first-run SmartScreen warnings stay
 regardless of the channel.
 
 ## Engine probe (developers)

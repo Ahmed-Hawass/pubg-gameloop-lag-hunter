@@ -570,6 +570,30 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - Tools confirms yield to the app dialog like the notices already did:
   the pagefile, clean, and reboot offers no longer stack under the exit
   confirm (all three are re-askable, and Later stays the reboot default).
+- Session delete paths refuse links and stay inside the sessions root:
+  single delete, bulk delete, and open folder resolve through a strict
+  id shape (session-YYYY-MM-DD_HHMMSS with an optional -N suffix) plus
+  a symlink and reparse check and a canonical containment check, so a
+  planted junction can never redirect a Reports delete outside the app
+  data (pinned by strict-shape tests).
+- Local JSON reads are bounded at 2MB like the network metadata cap
+  (sessions summary and events, settings, cleanup history): an oversized
+  hand-planted file reads as missing instead of risking an OOM abort,
+  and v3 settings load through the same clamp and normalize pass the
+  IPC setters enforce (pinned by bound and sanitize tests).
+- Log retention only touches managed files (laghunter-*.log) and
+  refuses a linked logs dir, skipping symlink entries outright (pinned
+  by a filter test).
+- Cleanup history totals saturate instead of wrapping on crafted
+  maxima, and report highlights only carry engine-known kinds (a
+  planted kind string never reaches the UI verbatim).
+- Update destinations are bound to the verified asset name (exact file
+  name match, no parent traversal, no reserved characters): a
+  compromised IPC path can no longer redirect verified bytes over an
+  arbitrary user file (pinned by an extended dest test).
+- Tools landing first-row cards no longer clip at the top on hover or
+  keyboard focus: the hover lift and the focus ring rendered outside
+  the scrollport edge, so the scroller keeps top breathing room now.
 
 ### Changed
 - The Tools tab's details page reads only the two switches it displays,

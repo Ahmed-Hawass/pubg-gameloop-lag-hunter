@@ -164,7 +164,7 @@ export function NoteCard(props: {
   /** card severity ("high" | "medium" | "low") — drives the fill + icon */
   severity: CardSeverity;
   /** localized "Fix:" prefix for the fix block (e.g. "الحل:") */
-  fixLabel?: string;
+  fixLabel: string;
   /** title glyph (the caller maps its diagnosis key; severity triangle
       when omitted) */
   icon?: ReactNode;
@@ -179,7 +179,7 @@ export function NoteCard(props: {
       <div className="note-body">{simple}</div>
       <div className="note-fix-box">
         <Lightbulb size={14} aria-hidden="true" />
-        <span className="note-fix-label">{fixLabel ?? "Fix"}</span>
+        <span className="note-fix-label">{fixLabel}</span>
         {fix}
       </div>
     </div>
@@ -277,18 +277,22 @@ export function IntroCard(props: {
 // Replaces every toast system. Native-window feel: centered, dimmed
 // backdrop, Escape to dismiss, click-outside for notices.
 // ---------------------------------------------------------------------------
-export function Dialog(props: {
-  title: string;
-  body: string;
-  kind: "notice" | "confirm";
-  okLabel?: string;
-  confirmLabel?: string;
-  cancelLabel?: string;
-  danger?: boolean;
-  onConfirm?: () => void;
-  onClose: () => void;
-}) {
-  const { title, body, kind, okLabel, confirmLabel, cancelLabel, danger, onConfirm, onClose } = props;
+export function Dialog(
+  props: {
+    title: string;
+    body: string;
+    danger?: boolean;
+    onConfirm?: () => void;
+    onClose: () => void;
+  } & (
+    | { kind: "notice"; okLabel: string }
+    | { kind: "confirm"; confirmLabel: string; cancelLabel: string }
+  ),
+) {
+  const { title, body, kind, danger, onConfirm, onClose } = props;
+  const okLabel = props.kind === "notice" ? props.okLabel : "";
+  const confirmLabel = props.kind === "confirm" ? props.confirmLabel : "";
+  const cancelLabel = props.kind === "confirm" ? props.cancelLabel : "";
 
   // focus trap: a keyboard user must never Tab out of a modal into the
   // dead page behind it. Tab cycles between the dialog's own buttons; the
@@ -341,7 +345,7 @@ export function Dialog(props: {
                   (a WAI-ARIA violation) and Enter re-fired the delete
                   button through the overlay. Safe side + keyboard-first. */}
               <button className="btn btn-md btn-ghost" onClick={onClose} autoFocus>
-                {cancelLabel ?? "Cancel"}
+                {cancelLabel}
               </button>
               <button
                 className={`btn btn-md ${danger ? "btn-danger-filled" : "btn-primary"}`}
@@ -350,7 +354,7 @@ export function Dialog(props: {
                   onClose();
                 }}
               >
-                {confirmLabel ?? "Confirm"}
+                {confirmLabel}
               </button>
             </>
           ) : (
@@ -359,7 +363,7 @@ export function Dialog(props: {
               onClick={onClose}
               autoFocus
             >
-              {okLabel ?? "OK"}
+              {okLabel}
             </button>
           )}
         </div>

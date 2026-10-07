@@ -210,11 +210,31 @@ fn sha_from_sums(sums: &str, file_name: &str) -> Option<String> {
 ///   * the destination itself must NOT be a directory
 ///
 /// Note: we do NOT require the destination to be inside any app-owned folder
-/// (the user explicitly chose it), but a pre-existing file is never deleted
-/// by us — cleanup only ever removes our namespaced temp sibling.
-fn validate_dest(dest: &std::path::Path) -> Result<(), String> {
+/// (the user explicitly chose it), but the file name must equal the asset
+/// we verified (a compromised IPC path can never redirect the verified
+/// bytes over an arbitrary user file), and cleanup only ever removes our
+/// namespaced temp sibling.
+fn validate_dest(dest: &std::path::Path, expected_name: &str) -> Result<(), String> {
     if !dest.is_absolute() {
         return Err("download path must be absolute".into());
+    }
+    if expected_name.is_empty()
+        || !expected_name.ends_with(".exe")
+        || expected_name.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|'])
+    {
+        return Err("update asset name is not valid".into());
+    }
+    let Some(file_name) = dest.file_name().and_then(|n| n.to_str()) else {
+        return Err("download path has no file name".into());
+    };
+    if file_name != expected_name {
+        return Err("download file name must match the verified asset".into());
+    }
+    if dest
+        .components()
+        .any(|c| matches!(c, std::path::Component::ParentDir))
+    {
+        return Err("download path must not contain ..".into());
     }
     let Some(parent) = dest.parent() else {
         return Err("download path has no parent folder".into());
@@ -246,7 +266,7 @@ pub fn download_and_verify(
     }
     // validate the destination while DOWNLOAD_RUNNING is held: a bad path
     // can never even register a cleanup entry (validate_dest never writes)
-    if let Err(e) = validate_dest(&dest) {
+    if let Err(e) = validate_dest(&dest, &info.asset_name) {
         DOWNLOAD_RUNNING.store(false, Ordering::SeqCst);
         return Err(e);
     }
@@ -407,7 +427,7 @@ pub fn open_folder_selected(path: &str) -> Result<(), String> {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
-        std::process::Command::new("explorer.exe")
+        std::process::Command::new(super::system::explorer_exe())
             .raw_arg(format!("/select,\"{}\"", p.display()))
             .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
             .spawn()
@@ -451,13 +471,22 @@ fn agent() -> ureq::Agent {
     if std::env::var_os("HTTPS_PROXY").is_none() && std::env::var_os("https_proxy").is_none() {
         if let Some(proxy_url) = windows_system_proxy() {
             if let Ok(p) = ureq::Proxy::new(&proxy_url) {
-                logging::info(&format!("update http: using system proxy {proxy_url}"));
+                logging::info(&format!("update http: using system proxy {}", redact_proxy(&proxy_url)));
                 builder = builder.proxy(p);
             }
         }
     }
 
     builder.build()
+}
+
+/// Proxy URL with credentials stripped for logs: `user:pass@host` must
+/// never reach the flight recorder. Pure.
+fn redact_proxy(url: &str) -> String {
+    match url.rsplit_once('@') {
+        Some((_, host)) => format!("<redacted>@{host}"),
+        None => url.to_string(),
+    }
 }
 
 /// Read the Windows system proxy (WinINET settings — the same ones browsers
@@ -606,21 +635,31 @@ mod tests {
 
     #[test]
     fn dest_validation_refuses_bad_paths() {
+        let asset = "laghunter-dest-test.exe";
         // relative path → refused (would land in the CWD)
-        assert!(validate_dest(std::path::Path::new("update.exe")).is_err());
+        assert!(validate_dest(std::path::Path::new("update.exe"), asset).is_err());
         // no parent → refused
-        assert!(validate_dest(std::path::Path::new("\\update.exe")).is_err());
+        assert!(validate_dest(std::path::Path::new("\\update.exe"), asset).is_err());
         // parent folder doesn't exist → refused
-        assert!(validate_dest(std::path::Path::new(
-            "Z:\\definitely-not-a-real-folder-9f3a\\update.exe"
-        ))
+        assert!(validate_dest(
+            std::path::Path::new("Z:\\definitely-not-a-real-folder-9f3a\\update.exe"),
+            asset
+        )
         .is_err());
         // a directory as destination → refused
-        assert!(validate_dest(std::path::Path::new("C:\\Windows")).is_err());
-        // a real folder + file name → accepted (existing FILE at the path is
-        // fine — cleanup only ever removes our namespaced sibling)
-        let tmp = std::env::temp_dir().join("laghunter-dest-test.exe");
-        assert!(validate_dest(&tmp).is_ok());
+        assert!(validate_dest(std::path::Path::new("C:\\Windows"), asset).is_err());
+        // name must equal the verified asset (no overwriting thesis.docx
+        // with verified bytes through a compromised IPC path)
+        let other = std::env::temp_dir().join("thesis.docx");
+        assert!(validate_dest(&other, asset).is_err());
+        // .. in the path → refused
+        let dotdot = std::env::temp_dir().join("..").join(asset);
+        assert!(validate_dest(&dotdot, asset).is_err());
+        // a real folder + the exact asset name → accepted (existing FILE
+        // at the path is fine — cleanup only ever removes our namespaced
+        // sibling)
+        let tmp = std::env::temp_dir().join(asset);
+        assert!(validate_dest(&tmp, asset).is_ok());
     }
 
     #[test]
@@ -629,6 +668,18 @@ mod tests {
         assert_eq!(
             part_sibling(dest),
             std::path::PathBuf::from("C:\\dl\\update.laghunter-part")
+        );
+    }
+
+    #[test]
+    fn proxy_redact_strips_credentials() {
+        assert_eq!(
+            redact_proxy("http://user:pass@proxy.example:8080"),
+            "<redacted>@proxy.example:8080"
+        );
+        assert_eq!(
+            redact_proxy("http://proxy.example:8080"),
+            "http://proxy.example:8080"
         );
     }
 

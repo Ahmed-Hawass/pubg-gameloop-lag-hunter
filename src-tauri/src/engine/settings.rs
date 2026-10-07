@@ -141,11 +141,11 @@ pub fn settings_path() -> PathBuf {
 /// The migration write itself goes through `update()` below, so a user
 /// toggle landing in the same moment cannot be overwritten by our upgrade.
 pub fn load() -> Settings {
-    let Ok(text) = fs::read_to_string(settings_path()) else {
+    let Some(text) = super::storage::read_limited(&settings_path()) else {
         return Settings::default();
     };
     if migration_kind(&text) == MigrationKind::Current {
-        return parse_settings_text(&text);
+        return sanitize_settings(parse_settings_text(&text));
     }
     update(|s| s.clone()).unwrap_or_else(|_| upgrade_text(&text).0)
 }
@@ -182,6 +182,42 @@ fn prefs_path() -> PathBuf {
 
 fn parse_settings_text(text: &str) -> Settings {
     serde_json::from_str::<Settings>(text).unwrap_or_default()
+}
+
+/// Clamp + normalize a parsed v3 file: hand-edited extremes (huge zoom,
+/// zero auto-stop, 10MB language strings, million-entry card lists) are
+/// pulled back into the same ranges the IPC setters enforce. Pure.
+fn sanitize_settings(mut s: Settings) -> Settings {
+    s.version = SETTINGS_VERSION;
+    s.language = normalize_language(&s.language);
+    s.theme = normalize_theme(&s.theme);
+    s.auto_stop_minutes = clamp_auto_stop(s.auto_stop_minutes);
+    s.ui_zoom_pct = clamp_ui_zoom(s.ui_zoom_pct);
+    if s.dismissed_cards.len() > 32 {
+        s.dismissed_cards.truncate(32);
+    }
+    s.dismissed_cards.retain(|c| !c.trim().is_empty() && c.len() <= 64);
+    if let Some(v) = s.announced_update_version.as_ref() {
+        if v.len() > 32 {
+            s.announced_update_version = None;
+        }
+    }
+    if let Some(v) = s.last_seen_gameloop_version.as_ref() {
+        if v.len() > 32 {
+            s.last_seen_gameloop_version = None;
+        }
+    }
+    if let Some(g) = s.previous_power_guid.as_ref() {
+        if g.len() > 64 {
+            s.previous_power_guid = None;
+        }
+    }
+    if let Some(p) = s.pending_restart.as_ref() {
+        if p.tweak.len() > 64 {
+            s.pending_restart = None;
+        }
+    }
+    s
 }
 
 /// Upgrade on-disk text to the current schema in memory. Pure derivation
@@ -229,7 +265,7 @@ pub fn save(s: &Settings) -> Result<(), String> {
     let dir = path.parent().ok_or("no settings dir")?;
     fs::create_dir_all(dir).map_err(|e| format!("cannot create app dir: {e}"))?;
 
-    let tmp = dir.join("settings.json.tmp");
+    let tmp = dir.join("settings.json.laghunter-tmp");
     let body = serde_json::to_string_pretty(s).map_err(|e| format!("serialize: {e}"))?;
     fs::write(&tmp, body).map_err(|e| format!("cannot write temp: {e}"))?;
     fs::rename(&tmp, &path).map_err(|e| format!("cannot commit settings: {e}"))?;
@@ -238,7 +274,7 @@ pub fn save(s: &Settings) -> Result<(), String> {
 
 /// Serialize every read-modify-write against the same lock: concurrent
 /// set_* commands each used to load→mutate→save independently, so two
-/// overlapping writes raced on the fixed .tmp name and the loser's
+/// overlapping writes raced on the fixed temp name and the loser's
 /// change silently vanished (the winner's save never saw it). One mutex
 /// per process makes each update atomic end-to-end. Modern `load()`
 /// readers stay lock-free (they only ever see committed files); a load
@@ -250,8 +286,9 @@ pub fn update<R>(mutate: impl FnOnce(&mut Settings) -> R) -> Result<R, String> {
     let _guard = SETTINGS_WRITE_LOCK
         .lock()
         .unwrap_or_else(|p| p.into_inner());
-    let text = fs::read_to_string(settings_path()).unwrap_or_default();
+    let text = super::storage::read_limited(&settings_path()).unwrap_or_default();
     let (mut s, retire_prefs) = upgrade_text(&text);
+    s = sanitize_settings(s);
     let ret = mutate(&mut s);
     save(&s)?;
     if retire_prefs {
@@ -548,5 +585,29 @@ mod tests {
         assert_eq!(normalize_language("auto"), "auto");
         assert_eq!(normalize_language("fr"), "auto"); // unknown → auto
         assert_eq!(normalize_language("garbage"), "auto");
+    }
+
+    #[test]
+    fn sanitize_pulls_hand_edited_extremes_back() {
+        // a v3 file edited by hand with absurd values must load clamped,
+        // never raw: same ranges the IPC setters enforce
+        let s = Settings {
+            auto_stop_minutes: 0,
+            ui_zoom_pct: 4294967295,
+            language: "x".repeat(10_000),
+            theme: "blue".into(),
+            dismissed_cards: vec!["ok".into(), "".into(), "y".repeat(100)],
+            announced_update_version: Some("v".repeat(100)),
+            previous_power_guid: Some("g".repeat(100)),
+            ..Settings::default()
+        };
+        let clean = sanitize_settings(s);
+        assert_eq!(clean.auto_stop_minutes, 5);
+        assert_eq!(clean.ui_zoom_pct, 125);
+        assert_eq!(clean.language, "auto");
+        assert_eq!(clean.theme, "auto");
+        assert_eq!(clean.dismissed_cards, vec!["ok".to_string()]);
+        assert_eq!(clean.announced_update_version, None);
+        assert_eq!(clean.previous_power_guid, None);
     }
 }

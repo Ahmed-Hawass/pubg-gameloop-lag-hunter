@@ -40,16 +40,7 @@ fn main() {
                 )
             };
             if action == IDOK {
-                use std::os::windows::process::CommandExt;
-                let _ = std::process::Command::new("cmd")
-                    .args([
-                        "/C",
-                        "start",
-                        "",
-                        "https://developer.microsoft.com/microsoft-edge/webview2/",
-                    ])
-                    .creation_flags(0x0800_0000)
-                    .spawn();
+                open_url_native("https://developer.microsoft.com/microsoft-edge/webview2/");
             }
             std::process::exit(0);
         }
@@ -107,7 +98,7 @@ fn encode_utf16(s: &str) -> Vec<u16> {
         .collect()
 }
 
-// ---- only ONE binding: MessageBoxW from user32 (standard, safe) ----
+// ---- only TWO bindings: MessageBoxW + ShellExecuteW from system DLLs ----
 #[cfg(windows)]
 #[link(name = "user32")]
 extern "system" {
@@ -117,6 +108,44 @@ extern "system" {
         caption: *const u16,
         utype: u32,
     ) -> i32;
+}
+
+#[cfg(windows)]
+#[link(name = "shell32")]
+extern "system" {
+    fn ShellExecuteW(
+        hwnd: *mut core::ffi::c_void,
+        verb: *const u16,
+        file: *const u16,
+        params: *const u16,
+        dir: *const u16,
+        show: i32,
+    ) -> isize;
+}
+
+/// Open a fixed HTTPS URL with the shell default handler: no cmd /C,
+/// no shell string, no injection surface (same rule as lib.rs open_path).
+#[cfg(windows)]
+fn open_url_native(url: &str) {
+    use std::os::windows::ffi::OsStrExt;
+    let to_wide = |s: &str| {
+        std::ffi::OsStr::new(s)
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect::<Vec<u16>>()
+    };
+    let verb = to_wide("open");
+    let file = to_wide(url);
+    unsafe {
+        ShellExecuteW(
+            std::ptr::null_mut(),
+            verb.as_ptr(),
+            file.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            1,
+        );
+    }
 }
 
 #[cfg(windows)]

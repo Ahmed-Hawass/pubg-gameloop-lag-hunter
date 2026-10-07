@@ -481,7 +481,6 @@ export function ReportsView(props: {
           danger
           confirmLabel={t.dialog.delete}
           cancelLabel={t.dialog.cancel}
-          okLabel={t.dialog.ok}
           onConfirm={() => {
             void removeSession(confirmDelete);
           }}
@@ -498,7 +497,6 @@ export function ReportsView(props: {
           danger
           confirmLabel={t.dialog.delete}
           cancelLabel={t.dialog.cancel}
-          okLabel={t.dialog.ok}
           onConfirm={() => {
             void removeAllSessions();
           }}

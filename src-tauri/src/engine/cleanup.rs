@@ -273,13 +273,16 @@ pub fn clean_selected_with(
     Ok(results)
 }
 
-/// Fixed sidecar for the elevated clean's measurements (parent deletes
-/// before spawning, reads after the child exits). Predetermined path,
-/// never user-supplied: nothing crosses the boundary but category words.
-/// Stale files cannot linger: the parent clears first on every run, and
-/// the UI single-flights Clean behind its busy gate.
+/// Sidecar for the elevated clean's measurements (parent deletes
+/// before spawning, reads after the child exits). Lives in our own
+/// per-user app dir, never the shared temp dir: a fixed temp name is
+/// plantable by another local user, while app-data is ACL'd to this
+/// user. Predetermined path, never user-supplied: nothing crosses the
+/// boundary but category words. Stale files cannot linger: the parent
+/// clears first on every run, and the UI single-flights Clean behind
+/// its busy gate.
 fn clean_sidecar_path() -> PathBuf {
-    std::env::temp_dir().join("laghunter-clean-sidecar.json")
+    super::storage::app_dir().join("laghunter-clean-sidecar.json")
 }
 
 fn clear_clean_sidecar() {
@@ -462,7 +465,7 @@ pub fn history_totals() -> CleanupHistory {
 }
 
 fn history_totals_in(path: &Path) -> CleanupHistory {
-    let text = std::fs::read_to_string(path).unwrap_or_default();
+    let text = super::storage::read_limited(path).unwrap_or_default();
     let now = super::types::iso_ms(&super::sampler::iso_now()).unwrap_or(0);
     let mut last_freed = 0u64;
     let mut last_at: Option<String> = None;
@@ -499,8 +502,12 @@ fn record_history(results: &[CleanupResult]) {
 
 fn record_history_in(path: &Path, results: &[CleanupResult]) {
     // unknown verdicts count as 0 in the memory total (the memory tracks
-    // measured bytes; an unmeasured run keeps its honesty in the UI note)
-    let freed: u64 = results.iter().map(|r| r.freed_bytes.unwrap_or(0)).sum();
+    // measured bytes; an unmeasured run keeps its honesty in the UI note).
+    // saturating: hand-edited u64::MAX sidecars must never wrap the total.
+    let freed: u64 = results
+        .iter()
+        .map(|r| r.freed_bytes.unwrap_or(0))
+        .fold(0u64, |a, b| a.saturating_add(b));
     // a run that freed nothing updates nothing: recording it would paint
     // "last clean: 0 MB" over a real older result (noise, not memory)
     if freed == 0 {
@@ -515,7 +522,7 @@ fn record_history_in(path: &Path, results: &[CleanupResult]) {
     // is pressed.
     let now = super::types::iso_ms(&super::sampler::iso_now()).unwrap_or(0);
     let mut kept = String::new();
-    if let Ok(text) = std::fs::read_to_string(path) {
+    if let Some(text) = super::storage::read_limited(path) {
         for line in text.lines() {
             let keep = serde_json::from_str::<serde_json::Value>(line)
                 .ok()
@@ -1028,7 +1035,9 @@ mod tests {
         std::fs::write(target.join("victim.tmp"), "x").unwrap();
         let link = temp_workdir("link");
         let _ = std::fs::remove_dir_all(&link);
-        let mk = std::process::Command::new("cmd")
+        // test-only: mklink is a cmd builtin with no exe of its own, so
+        // the absolute cmd path is named here (never shipped code).
+        let mk = std::process::Command::new(crate::engine::system::system32_exe("cmd.exe"))
             .args(["/C", "mklink", "/J", link.to_str().unwrap(), target.to_str().unwrap()])
             .output();
         if mk.map(|o| o.status.success()).unwrap_or(false) && root_is_link(&link) {
@@ -1180,8 +1189,7 @@ mod tests {
     }
 
     #[test]
-    fn history_records_and_totals() {
-        // numbers only: one line per run, last run + 30-day total.
+    fn history_records_and_totals() {        // numbers only: one line per run, last run + 30-day total.
         // Aimed at a throwaway file, never the production history.
         let path = temp_workdir("history").join("cleanup-history.jsonl");
         assert!(history_totals_in(&path).last_at.is_none());
@@ -1206,6 +1214,29 @@ mod tests {
         let totals = history_totals_in(&path);
         assert_eq!(totals.last_freed_bytes, 5);
         assert_eq!(totals.last_30d_bytes, 10 * 1024 * 1024 + 5);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn history_total_saturates_on_crafted_maxima() {
+        // hand-edited u64::MAX sidecars must saturate, never wrap the total
+        let path = temp_workdir("history-sat").join("cleanup-history.jsonl");
+        record_history_in(
+            &path,
+            &[
+                CleanupResult {
+                    id: USER_TEMP_ID.into(),
+                    freed_bytes: Some(u64::MAX),
+                },
+                CleanupResult {
+                    id: RECYCLE_BIN_ID.into(),
+                    freed_bytes: Some(u64::MAX),
+                },
+            ],
+        );
+        let text = std::fs::read_to_string(&path).unwrap();
+        let v: serde_json::Value = serde_json::from_str(text.lines().last().unwrap()).unwrap();
+        assert_eq!(v.get("freed").and_then(|f| f.as_u64()), Some(u64::MAX));
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 

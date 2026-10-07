@@ -810,7 +810,7 @@ static FIRST_SAMPLE_AT: Mutex<Option<std::time::Instant>> = Mutex::new(None);
 
 fn total_ram_mb() -> f64 {
     use std::os::windows::process::CommandExt;
-    let out = super::sampler::output_tracked(std::process::Command::new("powershell.exe")
+    let out = super::sampler::output_tracked(std::process::Command::new(super::system::powershell_exe())
         .args([
             "-NoProfile",
             "-NonInteractive",
@@ -833,7 +833,7 @@ fn total_ram_mb() -> f64 {
 /// threshold: each device can legitimately serve ~1 parallel request.
 fn physical_disk_count() -> u32 {
     use std::os::windows::process::CommandExt;
-    let out = super::sampler::output_tracked(std::process::Command::new("powershell.exe")
+    let out = super::sampler::output_tracked(std::process::Command::new(super::system::powershell_exe())
         .args([
             "-NoProfile",
             "-NonInteractive",

@@ -759,7 +759,7 @@ fn open_path_inner(path: &str, app: &tauri::AppHandle) -> Result<(), String> {
         .map_err(|e| format!("path not found: {e}"))?;
     let canonical_root = allowed_root
         .canonicalize()
-        .unwrap_or_else(|_| allowed_root.clone());
+        .map_err(|e| format!("app data unavailable: {e}"))?;
     if !canonical.starts_with(&canonical_root) {
         return Err("path is outside the app data folder".into());
     }

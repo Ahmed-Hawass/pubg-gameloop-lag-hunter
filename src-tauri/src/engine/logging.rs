@@ -188,6 +188,11 @@ pub fn cleanup_old_logs() {
 }
 
 fn cleanup_old_logs_in(dir: &Path) {
+    // a planted symlink as the logs dir would redirect the sweep into
+    // another folder: refuse the whole run like the cleanup roots do
+    if dir_is_link(dir) {
+        return;
+    }
     let _ = fs::create_dir_all(dir);
     let Ok(rd) = fs::read_dir(dir) else {
         return;
@@ -197,6 +202,19 @@ fn cleanup_old_logs_in(dir: &Path) {
         .map(|d| d.as_secs() as i64 - 7 * 86_400)
         .unwrap_or(0);
     for entry in rd.flatten() {
+        // only our own log files are ever removed: anything else in the
+        // folder (and any symlink entry itself) is left alone
+        let path = entry.path();
+        let name = entry.file_name().to_str().unwrap_or("").to_string();
+        if !is_managed_log_file(&name) {
+            continue;
+        }
+        let Ok(meta) = std::fs::symlink_metadata(&path) else {
+            continue;
+        };
+        if meta.is_symlink() || !meta.is_file() {
+            continue;
+        }
         let Ok(meta) = entry.metadata() else { continue };
         let Ok(modified) = meta.modified() else {
             continue;
@@ -205,9 +223,37 @@ fn cleanup_old_logs_in(dir: &Path) {
             continue;
         };
         if (age.as_secs() as i64) < cutoff {
-            let _ = fs::remove_file(entry.path());
+            let _ = fs::remove_file(&path);
         }
     }
+}
+
+/// Our own log file shape only: laghunter-*.log. Pure.
+fn is_managed_log_file(name: &str) -> bool {
+    name.starts_with("laghunter-")
+        && name.ends_with(".log")
+        && !name.contains("..")
+        && !name.contains(['\\', '/'])
+}
+
+/// True when a dir is itself a link (symlink or junction): sweeping
+/// "inside" it would really sweep inside its target. Pure.
+fn dir_is_link(dir: &Path) -> bool {
+    let Ok(meta) = std::fs::symlink_metadata(dir) else {
+        return false;
+    };
+    if meta.is_symlink() {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+        if meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return true;
+        }
+    }
+    false
 }
 
 #[cfg(test)]
@@ -249,6 +295,22 @@ mod tests {
         assert!(body.contains("[INFO] test message"));
         assert!(body.contains("[ERROR] test error"));
         assert!(body.contains("[WARN] test warn"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn log_cleanup_keeps_only_managed_files() {
+        // the retention sweep must never touch foreign files, even when
+        // they are old: only laghunter-*.log entries are managed
+        assert!(is_managed_log_file("laghunter-2026-10-07.log"));
+        assert!(!is_managed_log_file("notes.txt"));
+        assert!(!is_managed_log_file("laghunter-2026-10-07.txt"));
+        assert!(!is_managed_log_file("laghunter-../evil.log"));
+        assert!(!is_managed_log_file("other.log"));
+        // a plain dir is no link (negative control for the predicate)
+        let dir = temp_logs_dir("linkcheck");
+        assert!(!dir_is_link(&dir));
+        assert!(!dir_is_link(&dir.join("no-such-entry")));
         let _ = fs::remove_dir_all(&dir);
     }
 

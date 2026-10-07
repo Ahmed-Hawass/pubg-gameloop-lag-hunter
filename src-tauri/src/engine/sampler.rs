@@ -204,7 +204,7 @@ fn spawn_source_watchdog(pid: u32, running: Arc<AtomicBool>) {
             thread::sleep(Duration::from_secs(2));
         }
         // the session ended: reap the child even if its stream is silent
-        let _ = Command::new("taskkill")
+        let _ = Command::new(super::system::system32_exe("taskkill.exe"))
             .args(["/PID", &pid.to_string(), "/T", "/F"])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -265,7 +265,7 @@ pub fn english_counters_work() -> bool {
     }
     let ok = {
         let out = output_tracked(
-            Command::new("typeperf")
+            Command::new(super::system::system32_exe("typeperf.exe"))
             .args([
                 COUNTER_PATHS[0],
                 "-si",
@@ -344,7 +344,7 @@ while ($true) {{
 "#
     );
     let mut child = spawn_tracked(
-        Command::new("powershell.exe")
+        Command::new(super::system::powershell_exe())
             .args(["-NoProfile", "-NonInteractive", "-Command", &script])
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -505,7 +505,7 @@ where
         .collect();
 
     let mut child = spawn_tracked(
-        Command::new("typeperf")
+        Command::new(super::system::system32_exe("typeperf.exe"))
             .args(&args)
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -615,6 +615,8 @@ where
 
 /// Spawns `nvidia-smi dmon` and calls `emit` with each GpuSample.
 /// If nvidia-smi is missing, returns Ok(false) → session continues GPU-less.
+/// Intentional PATH lookup (not system32_exe): driver-provided tool, also
+/// reachable via its own PATH entry; absolute-only would miss valid installs.
 pub fn spawn_dmon<F>(interval_sec: u32, running: Arc<AtomicBool>, emit: F) -> Result<bool, String>
 where
     F: Fn(GpuSample) + Send + Sync + 'static,
@@ -703,7 +705,7 @@ where
 /// zero resident cost — unlike spawning a full PowerShell every probe).
 /// PUBG Mobile on GameLoop only: the tool's entire identity.
 pub fn query_emulator_procs() -> Result<Vec<ProcInfo>, String> {
-    let out = output_tracked(Command::new("tasklist")
+    let out = output_tracked(Command::new(super::system::system32_exe("tasklist.exe"))
         .args(["/FO", "CSV", "/NH"])
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -839,7 +841,7 @@ pub fn presence() -> Presence {
 /// Every process name on the box (unfiltered): the presence scan above.
 /// Fail-soft like the filtered query — an unreadable table reads as empty.
 pub fn query_all_proc_names() -> Result<Vec<String>, String> {
-    let out = output_tracked(Command::new("tasklist")
+    let out = output_tracked(Command::new(super::system::system32_exe("tasklist.exe"))
         .args(["/FO", "CSV", "/NH"])
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -912,7 +914,7 @@ pub fn query_game_visible() -> Option<bool> {
          }}\n\
          \"visible|$vis\"\n"
     );
-    let out = super::sampler::output_tracked(Command::new("powershell.exe")
+    let out = super::sampler::output_tracked(Command::new(super::system::powershell_exe())
         .args(["-NoProfile", "-NonInteractive", "-Command", &script])
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -1003,7 +1005,7 @@ fn local_utc_offset_secs() -> i64 {
         // DST-aware, no registry parsing — the same source .NET uses.
         const SCRIPT: &str =
             "[int][TimeZoneInfo]::Local.GetUtcOffset([DateTimeOffset]::Now).TotalSeconds";
-        let out = output_tracked(Command::new("powershell.exe")
+        let out = output_tracked(Command::new(super::system::powershell_exe())
             .args(["-NoProfile", "-NonInteractive", "-Command", SCRIPT])
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -1084,7 +1086,7 @@ mod tests {
         // sanity: our iso_now hour must equal the OS local hour (InvariantCulture
         // so the OS string format is guaranteed regardless of display language)
         let ours = iso_now();
-        let out = Command::new("powershell.exe")
+        let out = Command::new(crate::engine::system::powershell_exe())
             .args([
                 "-NoProfile",
                 "-NonInteractive",

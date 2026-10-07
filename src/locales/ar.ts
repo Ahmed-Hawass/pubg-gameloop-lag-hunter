@@ -513,6 +513,7 @@ export const ar: Locale = {
   aboutNewVersion: "يتوفر إصدار جديد، قم بتنزيله",
   aboutUpdateErr: "تعذّر التحقق الآن، حاول مرة أخرى لاحقًا",
   aboutSupport: "اشترِ لي قهوة",
+  aboutGitHub: "GitHub",
   aboutMade: "صُنع باستخدام",
   version: "الإصدار",
 
@@ -529,6 +530,7 @@ export const ar: Locale = {
   updateOk: "تمام",
   updateFailedTitle: "فشل التنزيل",
   updateNotesLabel: "ملاحظات الإصدار",
+  updateExeFilter: "تطبيق",
 
   // ---- monitor: controls ----
   startScanning: "ابدأ",

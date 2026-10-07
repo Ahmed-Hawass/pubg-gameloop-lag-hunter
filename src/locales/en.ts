@@ -530,6 +530,7 @@ export const en = {
   aboutNewVersion: "A new version is available. Download it",
   aboutUpdateErr: "Couldn't check right now. Try again later",
   aboutSupport: "Buy me a coffee",
+  aboutGitHub: "GitHub",
   aboutMade: "Made with",
   version: "Version",
 
@@ -546,6 +547,7 @@ export const en = {
   updateOk: "Done",
   updateFailedTitle: "Download failed",
   updateNotesLabel: "Release notes",
+  updateExeFilter: "Application",
 
   // ---- monitor: controls ----
   startScanning: "Start",
