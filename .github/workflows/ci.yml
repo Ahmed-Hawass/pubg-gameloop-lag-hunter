@@ -35,8 +35,11 @@ jobs:
       - name: Lint (eslint + react-hooks)
         run: npm run lint
 
-      - name: Unit tests (vitest)
-        run: npm test
+      # --coverage is the point, not decoration: vite.config.ts carries a
+      # v8 threshold floor, and a plain `npm test` skips coverage entirely,
+      # so the floor never gated anything. CONTRIBUTING promises this gate.
+      - name: Unit tests (vitest + coverage floor)
+        run: npm test -- --coverage
 
       # tsc runs as part of the build script, this is also the locale
       # type bond check (ar.ts must match en.ts key-for-key)
@@ -99,7 +102,10 @@ jobs:
           conf=$(node -p "require('./src-tauri/tauri.conf.json').version")
           mainbin=$(node -p "require('./src-tauri/tauri.conf.json').mainBinaryName")
           cargo=$(grep -m1 '^version' src-tauri/Cargo.toml | sed 's/version *= *"\(.*\)"/\1/')
-          changelog=$(grep -m1 -oP '^\[\K[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md)
+          # the "## " prefix is part of the match: every header here is
+          # "## [1.6.0] - date", so a bare '^\[' anchor never fires and
+          # the gate compared 1.6.0 against an empty string forever
+          changelog=$(grep -m1 -oP '^## \[\K[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md)
           echo "package=$pkg tauri=$conf cargo=$cargo changelog=$changelog mainBinaryName=$mainbin"
           [ "$pkg" = "$conf" ] || { echo "::error::package.json ($pkg) != tauri.conf.json ($conf)"; exit 1; }
           [ "$pkg" = "$cargo" ] || { echo "::error::package.json ($pkg) != Cargo.toml ($cargo)"; exit 1; }

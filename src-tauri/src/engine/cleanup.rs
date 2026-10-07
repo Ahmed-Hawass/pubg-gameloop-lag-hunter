@@ -1189,7 +1189,8 @@ mod tests {
     }
 
     #[test]
-    fn history_records_and_totals() {        // numbers only: one line per run, last run + 30-day total.
+    fn history_records_and_totals() {
+        // numbers only: one line per run, last run + 30-day total.
         // Aimed at a throwaway file, never the production history.
         let path = temp_workdir("history").join("cleanup-history.jsonl");
         assert!(history_totals_in(&path).last_at.is_none());
