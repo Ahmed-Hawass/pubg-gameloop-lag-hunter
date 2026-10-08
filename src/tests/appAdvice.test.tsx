@@ -131,7 +131,7 @@ const running = (ui: Partial<UiState>): StatusPayload => ({
 describe("App one-shot advice", () => {
   it("pre-scan tip fires on the first real start and persists at show", async () => {
     boot({ advice: "game" });
-    await screen.findByText(en.startScanning);
+    await screen.findByText(en.scanIdleStart);
     enginePush({ payload: running({ session: "s-1" }) });
     await screen.findByText(en.dialog.gameAdviceTitle);
     // persisted at SHOW, not at close: already recorded while open
@@ -140,7 +140,7 @@ describe("App one-shot advice", () => {
 
   it("stay-in-game tip needs a visible-to-background transition", async () => {
     boot({ advice: "background" });
-    await screen.findByText(en.startScanning);
+    await screen.findByText(en.scanIdleStart);
     const tick = () => new Promise((r) => setTimeout(r, 0));
     // starting minimized is expected, not nag-worthy: no dialog
     enginePush({ payload: running({ session: "s-1", game_visible: false }) });

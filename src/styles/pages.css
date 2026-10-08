@@ -1,10 +1,10 @@
 /* System / Processes / Checks / About tabs + the gaming scan button */
 
-/* ---- scan zone: THE SCOPE — the hunter's crosshair ----
-   A calm 88px circle. Four ticks form the crosshair; the play icon is the
-   core. On hover: lock-on — the ring rotates a quarter-turn and the ticks
-   pull inward around the target. Running = the core becomes a red square
-   with a breathing pulse. */
+/* Session duration — the same segmented control as the language, theme and
+   zoom switches in Settings (same track, same pill, same materials), so
+   the two surfaces read as one app. flex + flex:1, not a grid: the pills
+   share the row equally in both languages, so "5 min" and "5 دقائق" occupy
+   the same four boxes without one language needing its own track. */
 .scan-duration {
   display: flex;
   gap: 3px;
@@ -12,18 +12,33 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 3px;
+  width: 100%;
 }
 
+/* mirrors .lang-seg, including its fixed line box: Arabic glyphs run
+   taller than Latin, so without an explicit line-height an Arabic row
+   stands taller than an English one and the control changes height with
+   the language. The horizontal padding is tighter than .lang-seg because
+   four pills share this track instead of three, and "60 دقيقة" is the
+   longest label either language produces: at the wider padding it clipped
+   to "60 د". */
 .scan-dur-btn {
+  flex: 1;
+  min-width: 0;
   border: none;
   background: transparent;
   color: var(--text-3);
   font: inherit;
-  font-size: 11.5px;
+  font-size: 12.5px;
+  line-height: 20px;
   font-weight: 600;
-  padding: 6px 12px;
+  padding: 9px 4px;
   border-radius: 6px;
   cursor: pointer;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   transition: background 0.12s, color 0.12s;
 }
 
@@ -1205,6 +1220,7 @@
   width: 100%;
   max-width: 460px;
 }
+
 .lang-seg {
   flex: 1;
   min-width: 0;

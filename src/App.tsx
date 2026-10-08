@@ -381,8 +381,8 @@ export default function App() {
     setView("reports");
   };
 
-  // stable identity: MonitorView's auto-dismiss timer depends on this
-  // callback, so a new identity per render would restart it forever.
+  // stable identity: a new callback per render would re-trigger every
+  // MonitorView effect that depends on it.
   const dismissSummary = useCallback((session: string) => {
     setDismissedSession(session);
   }, []);

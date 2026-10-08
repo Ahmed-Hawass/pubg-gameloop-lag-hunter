@@ -144,7 +144,6 @@ export const en = {
   introResetHint: "Shows again every introduction card you closed with X.",
   // small measurement units (translated, not hardcoded Latin)
   gbUnit: "GB",
-  ramUnit: "RAM",
   minUnit: "m",
   secUnit: "s",
 
@@ -550,8 +549,6 @@ export const en = {
   updateExeFilter: "Application",
 
   // ---- monitor: controls ----
-  startScanning: "Start",
-  stop: "Stop",
   autoStop: "Auto-stop",
   min5: "5 min",
   min10: "10 min",
@@ -559,64 +556,55 @@ export const en = {
   min60: "60 min",
   /** fallback for a stored duration outside the four presets */
   minutesShort: (n: number) => `${n} min`,
-  time: "Time",
-  timelineHint: "Every red dot is a lag spike we captured. The bar fills toward your auto-stop time.",
-  timelineAutoStop: "Auto-stop",
-  timelineDuration: "Session duration",
   fixLabel: "Fix:",
-
-  // ---- monitor: hero states ----
-  spikesCaptured: (n: number) => `${n} lag spike${n === 1 ? "" : "s"} captured`,
-  sessionClean: "Session was clean",
-
-  // ---- monitor: metrics ----
-  cpu: "CPU",
-  ram: "RAM",
-  gpu: "GPU",
-  disk: "Disk",
-  cpuHint:
-    "Processor usage. High while GameLoop translates the game is fine, but sustained 95%+ with lag means the CPU can't keep up.",
-  ramHint:
-    "Memory in use. When it fills up, the game swaps files to disk, and every swap is a stutter.",
-  gpuHint:
-    "Graphics card usage while rendering. Low values during a match can mean power-saving hitches.",
-  diskHint:
-    "Disk activity. Spikes during hot drops are loading, but sustained 100% with lag is a paging storm.",
-
-  // ---- monitor: activity feed ----
-  activity: "Activity",
-  activityHint:
-    "Everything the tool detects during play, newest first. Whenever you feel a stutter, check this section: it will explain what happened.",
-  nothingUnusual: "Nothing unusual so far. That's good.",
-  waitingGameloopFeed: "Waiting for PUBG Mobile to start...",
-  /** idle guidance panel (empty state before the first scan) */
-  idleGuideTitle: "Press Start, then play normally",
-  idleGuideHint:
-    "CPU, RAM, GPU, and disk are measured every second while you play. Any stutter shows up here with its explanation and fix.",
-  /** collapsible event log toggle */
+  /** collapsible event log toggle (Reports shares the same pair) */
   showEventLog: "Show event log",
   hideEventLog: "Hide event log",
 
-  // feed lines (by engine event kind)
-  feed: {
-    disk_queue: "Disk under load",
-    disk_busy: "Disk under load",
-    hard_faults: "Heavy file loading from disk",
-    cpu_saturation: "CPU reached its limit",
-    cpu_throttle: "CPU reduced its speed under load",
-    mem_pressure: "Memory under pressure",
-    paging_churn: "Background file shuffling",
-    gpu_mem_idle: "GPU power-saving while rendering",
-    gpu_activity_cliff: "GPU activity dropped sharply",
-    gpu_activity_cliff_loaded: "GPU activity dropped under load",
-    gpu_clock_low: "GPU clock low",
-    gpu_temp: "GPU temperature high",
-    spike: "Sustained performance drop",
-  } as Record<string, string>,
+  // ---- monitor: idle state (one centered column: the session plan) ----
+  scanPlanKicker: "Ready to scan",
+  // the big duration number is split from its unit so the number can read
+  // at display size; the unit takes the minutes because Arabic plurals and
+  // word order differ from English, and both locales must stay honest.
+  scanPlanUnit: (_m: number) => "min session",
+  scanStep1: "Start the scan",
+  scanStep2: "Play normally",
+  scanStep3: "Read the report",
+  scanIdleStart: "Start scan",
+  scanIdleCloseApps:
+    "Close your browser and heavy apps. The scan measures the whole machine.",
 
-  // ---- monitor: summary ----
-  openReportBtn: "Open full report",
-  summaryHint: (n: number) => `Captured ${n} samples. Open the report to see what happened.`,
+  // ---- monitor: running state (the user is away) ----
+  scanRunningTitle: "Leave this window and go play",
+  scanRunningBody: "We are measuring. You will get the result when it is done.",
+  // the live doubt this screen settles: "can I minimize this?" Asked and
+  // answered where the window is actually open — idle could only promise
+  // it in theory, so the sentence moved here instead of being duplicated.
+  scanRunningNote:
+    "Nothing to watch. You can minimize this window, the scan keeps running.",
+  scanElapsed: "Elapsed",
+  scanRemainingLabel: "Auto-stop in",
+  scanRemaining: (m: number) => `${m} min left`,
+  scanSamples: "Samples",
+  scanOfSession: "of session",
+  scanMeasuring: "measuring",
+  scanRecentMoments: "Recent moments",
+  scanMoments: (n: number) => `${n} moment${n === 1 ? "" : "s"} captured`,
+  scanStop: "Stop the scan",
+  scanAllClear: "All clear",
+
+  // ---- monitor: result state (never auto-dismisses) ----
+  scanResultLagTitle: "Lag was captured",
+  scanResultCleanTitle: "Nothing unusual",
+  scanResultOver: (m: number) => `Over your ${m} minute session`,
+  scanResultSeconds: "seconds",
+  scanResultMoments: "Moments",
+  scanResultTopSignal: "Top signal",
+  scanResultNone: "None",
+  scanResultOpenReport: "Open the full report",
+  scanResultAgain: "Scan again",
+  scanResultFootnote:
+    "The report has the timeline, every moment, and what to do about it.",
 
   // ---- diagnoses (by engine key, mirrors the backend dictionary) ----
   diagnoses: {

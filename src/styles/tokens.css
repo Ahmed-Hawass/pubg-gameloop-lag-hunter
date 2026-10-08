@@ -69,6 +69,12 @@
      dark, deepen on light), so they are tokens, not literals */
   --primary-hover: #6aff3a;
   --danger-hover: #ff6f68;
+  /* radar sweep alpha stops — an alpha of the dark neon green is invisible
+     on the light paper background, so the stops are tokens per theme and the
+     conic gradient never hardcodes the signal colour */
+  --sweep-far: rgba(83, 252, 24, 0.05);
+  --sweep-mid: rgba(83, 252, 24, 0.3);
+  --sweep-near: rgba(83, 252, 24, 0.42);
   /* shape & motion */
   --radius: 12px;
   --radius-sm: 9px;
@@ -127,4 +133,8 @@
   --text-3: #7a817b;
   --primary-hover: #146c2a;
   --danger-hover: #e5484d;
+  /* the deeper green needs heavier alphas to read against #eef1ec */
+  --sweep-far: rgba(27, 135, 55, 0.06);
+  --sweep-mid: rgba(27, 135, 55, 0.3);
+  --sweep-near: rgba(27, 135, 55, 0.46);
 }

@@ -77,7 +77,7 @@
 .back-btn:focus-visible,
 .welcome-skip:focus-visible,
 .pf-drive:focus-visible,
-.summary-x:focus-visible,
+.card-x:focus-visible,
 .win-controls button:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
@@ -261,131 +261,13 @@
   }
 }
 
-/* MetricCard — surface comes from .card, layout only below: centered
-   tile (icon, value, label) with the hint riding the corner */
-.metric {
-  position: relative;
-  padding: 16px 14px 14px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  text-align: center;
-  /* square tiles (the window never drops below 960px,
-     so four squares always fit); content stays centered either way */
-  aspect-ratio: 1 / 1;
-}
-/* value + corner tooltip share the card: the hint pins to the corner
-   in both directions (no physical properties) */
-.metric-hint-dot {
-  position: absolute;
-  inset-inline-end: 8px;
-  top: 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  color: var(--text-3);
-  opacity: 0.75;
-  cursor: pointer;
-  outline: none;
-  transition: color 0.15s, opacity 0.15s;
-}
-.metric-hint-dot:hover,
-.metric-hint-dot:focus-visible {
-  color: var(--text-2);
-  opacity: 1;
-}
-.metric-ico {
-  display: flex;
-  color: var(--text-3);
-}
-.metric-ico svg {
-  width: 20px;
-  height: 20px;
-  flex: none;
-}
-/* the icon carries the live tone — expressive at a glance */
-.metric-ico-ok {
-  color: var(--primary);
-}
-.metric-ico-warn {
-  color: var(--warn);
-}
-.metric-ico-danger {
-  color: var(--danger);
-}
-.metric-ico-off {
-  color: var(--text-3);
-  opacity: 0.6;
-}
-/* metric icons nudge on card hover — expressive micro-interaction */
-.metric .metric-ico svg {
-  transition: transform 0.2s var(--ease);
-}
-.metric:hover .metric-ico svg {
-  transform: scale(1.18);
-}
-.metric-name {
-  color: var(--text-3);
-  font-size: 12px;
-  font-weight: 600;
-}
-
 /* Start button: hover lift + icon nudge — one scale (1.18) shared
-   with metric/spec/sidebar glyphs */
+   with spec/sidebar glyphs */
 .btn svg {
   transition: transform 0.2s var(--ease);
 }
 .btn:hover:not(.is-disabled) svg {
   transform: scale(1.18);
-}
-.metric-val {
-  font-size: 20px;
-  font-weight: 600;
-}
-.metric.dim .metric-val {
-  color: var(--text-3);
-}
-
-/* Timeline */
-.timeline {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.timeline-head {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  color: var(--text-3);
-}
-.timeline-track {
-  position: relative;
-  height: 16px;
-  border-radius: 4px;
-  background: var(--elev-1);
-  border: 1px solid var(--border);
-  overflow: hidden;
-}
-.timeline-fill {
-  position: absolute;
-  inset: 0;
-  background: var(--fill-success);
-  transition: width 1s linear;
-}
-.tl-marker {
-  position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--fill-danger);
-  box-shadow: 0 0 0 4px var(--danger-dim);
 }
 
 /* NoteCard — solid highlighter fills (title, body, and fix box all in
@@ -505,77 +387,10 @@
   line-height: 1.6;
 }
 
-/* SummaryCard */
-/* SummaryCard — surface comes from .card, layout only below */
-.summary {
-  padding: 20px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-.summary-ico {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  flex: none;
-  background: var(--primary-dim);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.summary-ico svg {
-  width: 18px;
-  height: 18px;
-  color: var(--primary);
-  stroke-dasharray: 24;
-  stroke-dashoffset: 24;
-  animation: draw-check 0.5s var(--ease) 0.1s forwards;
-}
-@keyframes draw-check {
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-.summary-text h3 {
-  font-size: 15px;
-  font-weight: 700;
-  margin-bottom: 4px;
-}
-.summary-text p {
-  font-size: 12.5px;
-  color: var(--text-2);
-  line-height: 1.6;
-}
-.summary .btn {
-  margin-inline-start: auto;
-  flex: none;
-}
-
-/* instant dismiss — small quiet X at the card's edge */
-.summary-x {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--text-3);
-  cursor: pointer;
-  transition: color 0.15s, background 0.15s, border-color 0.15s;
-}
-.summary-x:hover {
-  color: var(--hover-text);
-  background: var(--hover-bg);
-  border-color: var(--hover-border);
-}
-
 /* IntroCard — one-shot page guidance: info fill with ink text (never a
    severity tone), borderless like every filled surface. The icon tile
-   rides the fill with the fill's own light ink; the X reuses the
-   summary dismiss control, retinted to the info ink. */
+   rides the fill with the fill's own light ink; the X owns its own
+   accessible name (Tip is visual-only). */
 .intro-card {
   background: var(--bg-info);
   border-color: transparent;
@@ -604,10 +419,32 @@
   color: var(--text-info);
   line-height: 1.6;
 }
-.summary-x.intro-x {
+/* instant dismiss — small quiet X. Its base rule is shared by every card
+   that offers a dismiss (IntroCard today); the intro variant only retints
+   it to the info ink. */
+.card-x {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.card-x:hover {
+  color: var(--hover-text);
+  background: var(--hover-bg);
+  border-color: var(--hover-border);
+}
+.card-x.intro-x {
   color: var(--text-info);
 }
-.summary-x.intro-x:hover {
+.card-x.intro-x:hover {
   color: var(--bg-info);
   background: var(--fill-info);
   border-color: transparent;

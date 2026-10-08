@@ -147,7 +147,6 @@ export const ar: Locale = {
   // explanatory sentences stay Arabic — the unit keys cover ONLY the
   // standalone measurements, never sentence copy.
   gbUnit: "GB",
-  ramUnit: "RAM",
   minUnit: "m",
   secUnit: "s",
 
@@ -533,8 +532,6 @@ export const ar: Locale = {
   updateExeFilter: "تطبيق",
 
   // ---- monitor: controls ----
-  startScanning: "ابدأ",
-  stop: "إيقاف",
   autoStop: "إيقاف تلقائي",
   min5: "5 دقائق",
   min10: "10 دقائق",
@@ -542,64 +539,50 @@ export const ar: Locale = {
   min60: "60 دقيقة",
   /** fallback for a stored duration outside the four presets */
   minutesShort: (n: number) => `${n} دقيقة`,
-  time: "الوقت",
-  timelineHint: "كل نقطة حمراء تمثل تقطيعة تم رصدها. يمتلئ الشريط كلما اقترب موعد الإيقاف التلقائي.",
-  timelineAutoStop: "الإيقاف التلقائي",
-  timelineDuration: "مدة الجلسة",
   fixLabel: "الحل:",
-
-  // ---- monitor: hero states ----
-  spikesCaptured: (n: number) => `تم رصد ${n === 1 ? "تقطيعة واحدة" : `${n} تقطيعات`}`,
-  sessionClean: "كانت الجلسة سليمة دون أي تقطيع",
-
-  // ---- monitor: metrics ----
-  cpu: "المعالج",
-  ram: "الذاكرة",
-  gpu: "كرت الشاشة",
-  disk: "القرص",
-  cpuHint:
-    "نسبة استخدام المعالج. من الطبيعي أن ترتفع أثناء تشغيل GameLoop للعبة، أما استمرارها فوق 95% مع حدوث تقطيع فهذا يعني أن المعالج غير كافٍ.",
-  ramHint:
-    "الذاكرة المستخدمة حاليًا. عند امتلائها، تبدأ اللعبة بنقل الملفات إلى القرص، وكل عملية نقل تسبب تقطيعًا.",
-  gpuHint:
-    "نسبة استخدام كرت الشاشة أثناء الرسم. قد تشير القيم المنخفضة أثناء المباراة إلى تقطيع ناتج عن وضع توفير الطاقة.",
-  diskHint:
-    "نشاط القرص. من الطبيعي أن يرتفع أثناء النزول إلى الخريطة، أما استمراره عند 100% مع حدوث تقطيع فهذا يعني ازدحامًا حقيقيًا في التحميل.",
-
-  // ---- monitor: activity feed ----
-  activity: "النشاط",
-  activityHint:
-    "كل ما ترصده الأداة أثناء اللعب، مرتّبًا من الأحدث إلى الأقدم. عند شعورك بأي تقطيع، راجع هذا القسم: سيوضّح لك ما حدث.",
-  nothingUnusual: "لا شيء غير معتاد حتى الآن، وهذا جيد.",
-  waitingGameloopFeed: "في انتظار بدء تشغيل PUBG Mobile...",
-  /** idle guidance panel (empty state before the first scan) */
-  idleGuideTitle: "اضغط زر البدء ثم العب كالمعتاد",
-  idleGuideHint:
-    "يُقاس المعالج والذاكرة وكرت الشاشة والقرص كل ثانية أثناء اللعب، وأي تقطيع يظهر هنا مشروحًا مع حله.",
-  /** collapsible event log toggle */
+  /** collapsible event log toggle (Reports shares the same pair) */
   showEventLog: "عرض سجل الأحداث",
   hideEventLog: "إخفاء سجل الأحداث",
 
-  // feed lines (by engine event kind)
-  feed: {
-    disk_queue: "ازدحام على القرص",
-    disk_busy: "القرص يعمل تحت ضغط",
-    hard_faults: "تحميل مكثّف من القرص",
-    cpu_saturation: "المعالج وصل إلى أقصى طاقته",
-    cpu_throttle: "المعالج خفّض سرعته بسبب الحمل",
-    mem_pressure: "الذاكرة تحت ضغط",
-    paging_churn: "نقل ملفات في الخلفية",
-    gpu_mem_idle: "كرت الشاشة في وضع توفير الطاقة أثناء الرسم",
-    gpu_activity_cliff: "انخفاض حاد في نشاط كرت الشاشة",
-    gpu_activity_cliff_loaded: "انخفاض في نشاط كرت الشاشة مع حمل عالٍ",
-    gpu_clock_low: "تردد كرت الشاشة منخفض",
-    gpu_temp: "ارتفاع حرارة كرت الشاشة",
-    spike: "تباطؤ مستمر في الأداء",
-  } as Record<string, string>,
+  // ---- monitor: idle state (one centered column: the session plan) ----
+  scanPlanKicker: "جاهز للفحص",
+  // Arabic needs the minutes for correct plurals (3-10 take دقائق, the
+  // rest take دقيقة): 5 and 10 read دقائق, 30 and 60 read دقيقة.
+  scanPlanUnit: (m: number) => `${m >= 3 && m <= 10 ? "دقائق" : "دقيقة"} للجلسة`,
+  scanStep1: "ابدأ الفحص",
+  scanStep2: "العب كالمعتاد",
+  scanStep3: "اقرأ التقرير",
+  scanIdleStart: "ابدأ الفحص",
+  scanIdleCloseApps: "أغلق المتصفح والتطبيقات الثقيلة. الفحص يقيس الجهاز بالكامل.",
 
-  // ---- monitor: summary ----
-  openReportBtn: "افتح التقرير الكامل",
-  summaryHint: (n: number) => `تم تسجيل ${n} عينة. افتح التقرير لمعرفة ما حدث.`,
+  // ---- monitor: running state (the user is away) ----
+  scanRunningTitle: "اترك هذه النافذة واذهب للعب",
+  scanRunningBody: "نحن نقيس الآن. ستحصل على النتيجة عند الانتهاء.",
+  // السؤال الحي الذي تجيب عنه هذه الشاشة: "هل يمكنني تصغيرها؟"
+  scanRunningNote:
+    "لا شيء للمشاهدة. يمكنك تصغير هذه النافذة وسيواصل الفحص عمله.",
+  scanElapsed: "الوقت المنقضي",
+  scanRemainingLabel: "الإيقاف التلقائي بعد",
+  scanRemaining: (m: number) => `${m} دقيقة متبقية`,
+  scanSamples: "العينات",
+  scanOfSession: "من مدة الفحص",
+  scanMeasuring: "جارٍ القياس",
+  scanRecentMoments: "أحدث اللحظات",
+  scanMoments: (n: number) => (n === 1 ? "تم رصد لحظة واحدة" : `تم رصد ${n} لحظات`),
+  scanStop: "إيقاف الفحص",
+  scanAllClear: "لا شيء غير طبيعي",
+
+  // ---- monitor: result state (never auto-dismisses) ----
+  scanResultLagTitle: "تم رصد تقطيع",
+  scanResultCleanTitle: "لا شيء غير معتاد",
+  scanResultOver: (m: number) => `خلال ${m} دقيقة من لعبك`,
+  scanResultSeconds: "ثانية",
+  scanResultMoments: "اللحظات",
+  scanResultTopSignal: "أبرز المؤشرات",
+  scanResultNone: "لا شيء",
+  scanResultOpenReport: "افتح التقرير الكامل",
+  scanResultAgain: "فحص جديد",
+  scanResultFootnote: "يحتوي التقرير على الخط الزمني وكل اللحظات وما ينبغي فعله بشأنها.",
 
   // ---- diagnoses (by engine key, mirrors the backend dictionary) ----
   diagnoses: {

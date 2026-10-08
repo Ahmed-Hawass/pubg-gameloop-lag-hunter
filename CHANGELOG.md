@@ -668,6 +668,18 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   with its own reads and guards. No visual or behavior change except
   one: the gaming page no longer pays the page file read (one fewer IPC
   round-trip, same pixels).
+- The Monitor tab is three states instead of a live instrument panel.
+  The metric tiles measured the whole machine rather than the game, so
+  they sat red during normal play and taught the user to ignore red;
+  the live feed is trimmed to a five minute window by the engine, so it
+  came back incomplete on a long scan. Idle is a session plan (big
+  duration number, pills, three steps, hero start button), running is a
+  centered radar with the clock and a stop button, and the result is one
+  verdict card that never auto-dismisses (the old 12 second TTL meant a
+  user returning from a 30 minute scan found an empty page). The
+  minimize reassurance moved to the running screen, where the doubt is
+  live; start and stop are filled lucide marks, and no custom SVG
+  remains anywhere in src.
 
 ### Removed
 - The Top Processes manual Refresh button is gone (a 2s native beat
@@ -680,6 +692,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   else needs): the struct fields, the Win32_LogicalDisk query line, the
   level helper with its test, the "storage" panel route, the card, and
   both locales. Storage Sense itself stays as a Tools switch.
+- The Monitor instrument panel is gone with its machinery: the MetricCard,
+  Timeline, MetricHint, and SummaryCard components, some forty locale
+  keys (including the whole feed table, whose kinds all survive in the
+  report highlights table), some sixty CSS rules, and the two idle spot
+  illustrations. Reports keeps the full event history; the engine
+  contract is untouched.
 
 ## [1.6.0] - 2026-09-11
 

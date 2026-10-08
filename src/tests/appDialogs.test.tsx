@@ -112,7 +112,7 @@ function boot(state: StatusPayload) {
 describe("App pushed dialogs", () => {
   it("a GameLoop death explains itself exactly once", async () => {
     boot({ status: "idle", ui: null });
-    await screen.findByText(en.startScanning);
+    await screen.findByText(en.scanIdleStart);
     const finished: StatusPayload = {
       status: "finished",
       ui: { ...idleUi, session: "session-1" },
@@ -132,7 +132,7 @@ describe("App pushed dialogs", () => {
       status: "running",
       ui: { ...idleUi, session: "session-1", samples_count: 10 },
     });
-    await screen.findByText(en.stop);
+    await screen.findByText(en.scanStop);
     await user.click(screen.getByLabelText(en.close));
     await screen.findByText(en.dialog.exitTitle);
     expect(screen.getByText(en.dialog.exitBodyScan)).toBeTruthy();
@@ -143,7 +143,7 @@ describe("App pushed dialogs", () => {
 
   it("zoom shortcuts step and reset through one state", async () => {
     boot({ status: "idle", ui: null });
-    await screen.findByText(en.startScanning);
+    await screen.findByText(en.scanIdleStart);
     // persisted 100%: Ctrl+= steps the ladder (browser convention)
     apiMock.setUiZoom.mockResolvedValue(125);
     fireEvent.keyDown(document, { key: "=", ctrlKey: true });

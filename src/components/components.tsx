@@ -4,7 +4,7 @@
 
 import { useEffect, useState, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, Check, Cpu, Database, FileText, Gauge, Image, Info, Layers, Lightbulb, MemoryStick, Thermometer, X, Zap } from "lucide-react";
+import { AlertTriangle, Cpu, Database, Gauge, Image, Info, Layers, Lightbulb, MemoryStick, Thermometer, X, Zap } from "lucide-react";
 import type { CardSeverity } from "../bridge";
 
 /** one fitting glyph per diagnosis key (verified in the engine's key
@@ -61,86 +61,6 @@ export function Button(props: {
       {icon}
       <span>{label}</span>
     </button>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// MetricCard — centered tile (icon, value, label) with a corner "?"
-// tooltip explaining what this metric measures.
-// ---------------------------------------------------------------------------
-export function MetricCard(props: {
-  label: string;
-  icon: ReactNode;
-  value: number | null;
-  /** what this metric measures — shown as a corner tooltip */
-  hint?: string;
-}) {
-  const { label, icon, value, hint } = props;
-  const dim = value === null;
-  const v = value ?? 0;
-  const tone = v >= 85 ? "danger" : v >= 60 ? "warn" : "ok";
-  return (
-    <div className={`card metric ${dim ? "dim" : ""}`}>
-      {hint ? <MetricHint text={hint} /> : null}
-      <div className={`metric-ico metric-ico-${dim ? "off" : tone}`}>{icon}</div>
-      <div className="metric-val num">{dim ? "--" : `${v}%`}</div>
-      <div className="metric-name">{label}</div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Timeline — session progress + real spike markers from engine events
-// ---------------------------------------------------------------------------
-export interface SpikeMarkView {
-  offsetMs: number;
-  kind: string;
-}
-
-export function Timeline(props: {
-  elapsedSec: number;
-  autoStopSec: number | null;
-  spikes: SpikeMarkView[];
-  hasData: boolean;
-  /** translates machine event kinds (e.g. "disk_queue") for spike tooltips;
-   *  falls back to the raw key when the locale lacks it */
-  kindLabel: (kind: string) => string;
-  /** the head label for the auto-stop target ("Auto-stop" / "Session duration") */
-  headLabel: string;
-  /** elapsed/target readout ("00:46 / 05:00"); null hides the target side */
-  targetSec: number | null;
-}) {
-  const { elapsedSec, autoStopSec, spikes, hasData, kindLabel, headLabel, targetSec } = props;
-  const total = autoStopSec ?? Math.max(elapsedSec, 60);
-  const pct = Math.min(100, (elapsedSec / Math.max(total, 1)) * 100);
-  return (
-    <div className="timeline">
-      {/* the whole timeline is LTR by design: it plots CLOCK TIME left-to-right
-          (numbers are LTR even in RTL locales); pinning it avoids the marker
-          drifting against the reading direction in Arabic */}
-      <div className="timeline-head" dir="ltr">
-        <span>{headLabel}</span>
-        <span className="num">
-          {fmtDur(elapsedSec)}
-          {targetSec != null ? ` / ${fmtDur(targetSec)}` : ""}
-        </span>
-      </div>
-      <div className="timeline-track" dir="ltr">
-        {autoStopSec ? <div className="timeline-fill" style={{ width: `${pct}%` }} /> : null}
-        {hasData
-          ? spikes.map((s, i) => (
-              <Tip key={i} text={kindLabel(s.kind)}>
-                <span
-                  className="tl-marker"
-                  style={{
-                    left: `${Math.min(100, (s.offsetMs / 1000 / Math.max(total, 1)) * 100)}%`,
-                  }}
-                />
-              </Tip>
-            ))
-          : null}
-      </div>
-    </div>
   );
 }
 
@@ -203,42 +123,11 @@ export function EmptyState(props: { icon: ReactNode; title: string; hint: string
 }
 
 // ---------------------------------------------------------------------------
-// SummaryCard — post-session result: report button + instant dismiss (X)
-// ---------------------------------------------------------------------------
-export function SummaryCard(props: {
-  title: string;
-  hint: string;
-  reportLabel: string;
-  dismissLabel: string;
-  onReport: () => void;
-  onDismiss: () => void;
-}) {
-  const { title, hint, reportLabel, dismissLabel, onReport, onDismiss } = props;
-  return (
-    <div className="card summary">
-      <div className="summary-ico">
-        <Check size={18} strokeWidth={2.2} />
-      </div>
-      <div className="summary-text">
-        <h3>{title}</h3>
-        <p>{hint}</p>
-      </div>
-      <Button label={reportLabel} icon={<FileText size={14} />} variant="ghost" onClick={onReport} />
-      <Tip text={dismissLabel}>
-        <button className="summary-x" onClick={onDismiss}>
-          <X size={14} />
-        </button>
-      </Tip>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // IntroCard — one-shot page guidance for new users: what lives on this
 // page and what to do first (never option mechanics: those stay behind
 // each row's (?) button). Dumb surface, parents own the once-ever
-// gating. Info fill, never a severity tone; the X reuses the summary
-// dismiss language with its own accessible name (Tip is visual-only).
+// gating. Info fill, never a severity tone; the X owns its own
+// accessible name (Tip is visual-only).
 // ---------------------------------------------------------------------------
 export function IntroCard(props: {
   icon: ReactNode;
@@ -258,7 +147,7 @@ export function IntroCard(props: {
       <Tip text={dismissLabel}>
         <button
           type="button"
-          className="summary-x intro-x"
+          className="card-x intro-x"
           aria-label={dismissLabel}
           onClick={onDismiss}
         >
@@ -373,7 +262,7 @@ export function Dialog(
 }
 
 // ---------------------------------------------------------------------------
-// useAnchoredTooltip — the ONE tooltip-positioning brain. Tip / MetricHint /
+// useAnchoredTooltip — the ONE tooltip-positioning brain. Tip /
 // Hint all render through it: the same estimated-width clamp, the same
 // bottom-anchored portal. A positioning fix lands everywhere at once.
 // ---------------------------------------------------------------------------
@@ -465,36 +354,6 @@ export function Tip(props: { text: string; children: ReactNode }) {
       onBlur={hide}
     >
       {children}
-      {anchor ? <TooltipBubble text={text} anchor={anchor} /> : null}
-    </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// MetricHint — the tiny corner tooltip inside MetricCard: the SAME Info icon
-// as the Hint button everywhere else (one hint glyph across the app), opening
-// the same portaled tooltip. Rendered by MetricCard (hint text), not callers.
-// ---------------------------------------------------------------------------
-function MetricHint(props: { text: string }) {
-  const { text } = props;
-  const ref = useRef<HTMLSpanElement>(null);
-  const { anchor, show, hide } = useAnchoredTooltip(ref, text);
-
-  return (
-    <span
-      ref={ref}
-      className="metric-hint-dot"
-      // a focusable span with an icon needs a name: the tooltip text
-      // paints on hover only, screen readers would announce nothing
-      role="button"
-      tabIndex={0}
-      aria-label={text}
-      onMouseEnter={show}
-      onFocus={show}
-      onMouseLeave={hide}
-      onBlur={hide}
-    >
-      <Info size={12} />
       {anchor ? <TooltipBubble text={text} anchor={anchor} /> : null}
     </span>
   );
