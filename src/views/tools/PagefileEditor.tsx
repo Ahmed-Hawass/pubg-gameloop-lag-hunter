@@ -17,6 +17,7 @@ import { errorDialog, type Notice } from "../../errors";
 import { useLang } from "../../i18n";
 import { useModalSignal, useYieldToAppDialog } from "./useModalSignals";
 import { summarizePagefileUsage } from "./summary";
+import { syncPagefileWorkingCopies } from "./pagefileSync";
 
 export function PagefileEditor(props: {
   active: boolean;
@@ -94,16 +95,13 @@ export function PagefileEditor(props: {
         // editing); the selection survives when the drive is still
         // there, the mode falls back to custom on an unreadable drive
         // (forces an explicit choice, validation guides from there)
+        const synced = syncPagefileWorkingCopies(pf, pfDriveRef.current);
+        pfDriveRef.current = synced.drive;
+        setPfDrive(synced.drive);
         setPfAutomatic(pf.automatic);
-        const drive = pf.drives.some((d) => d.drive === pfDriveRef.current)
-          ? pfDriveRef.current
-          : (pf.drives[0]?.drive ?? "");
-        pfDriveRef.current = drive;
-        setPfDrive(drive);
-        const live = pf.drives.find((d) => d.drive === drive);
-        setPfMode(live && live.mode !== "unknown" ? live.mode : "custom");
-        setMinInput(live?.min_mb?.toString() ?? "");
-        setMaxInput(live?.max_mb?.toString() ?? "");
+        setPfMode(synced.mode);
+        setMinInput(synced.minInput);
+        setMaxInput(synced.maxInput);
       }
       setPfSettled(true);
       onPfSettled(false);

@@ -5,14 +5,14 @@
 import { useEffect } from "react";
 import {
   APP_DIALOG_OPEN_EVENT,
-  MODAL_OPEN_EVENT,
+  dispatchModalOpen,
 } from "../../components/components";
 
 /** announce an open dialog so every tooltip hides (a dialog mounting
     under a parked cursor never fires mouseleave) */
 export function useModalSignal(open: boolean) {
   useEffect(() => {
-    if (open) window.dispatchEvent(new Event(MODAL_OPEN_EVENT));
+    if (open) dispatchModalOpen();
   }, [open]);
 }
 

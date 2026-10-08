@@ -8,6 +8,8 @@ import {
   cleanupHistoryLine,
   cleanupMb,
   cleanupWhen,
+  defaultCheckedIds,
+  formatSweepBytes,
   summarizePagefileUsage,
 } from "../views/tools/summary";
 import { pagefileSettings } from "./fixtures";
@@ -81,5 +83,25 @@ describe("sweep memory formatting", () => {
     expect(
       cleanupHistoryLine(en, { last_freed_bytes: 0, last_at: null, last_30d_bytes: 0 }, false, "en"),
     ).toBe(en.cleanupLastNever);
+  });
+});
+
+describe("sweep place display", () => {
+  it("reads GB above 1 GB, MB below, dashes when unreadable", () => {
+    expect(formatSweepBytes(null)).toBe("--");
+    expect(formatSweepBytes(0)).toBe("0.0 MB");
+    expect(formatSweepBytes(10485760)).toBe("10.0 MB");
+    expect(formatSweepBytes(2147483648)).toBe("2.0 GB");
+  });
+
+  it("ticks every non-empty place by default, never zero or unknown", () => {
+    expect(
+      defaultCheckedIds([
+        { id: "user_temp", bytes: 10485760 },
+        { id: "system_temp", bytes: 0 },
+        { id: "recycle_bin", bytes: null },
+      ]),
+    ).toEqual(["user_temp"]);
+    expect(defaultCheckedIds([])).toEqual([]);
   });
 });

@@ -11,7 +11,7 @@ import type { Notice } from "../../errors";
 import { useLang } from "../../i18n";
 import { useHour12 } from "../../useHour12";
 import { useIntroCard } from "../../useIntroCard";
-import { cleanupHistoryLine } from "./summary";
+import { cleanupHistoryLine, defaultCheckedIds, formatSweepBytes } from "./summary";
 import { useModalSignal, useYieldToAppDialog } from "./useModalSignals";
 
 export function SweepSection(props: {
@@ -116,11 +116,7 @@ export function SweepSection(props: {
     system_logs: t.cleanupCatLogsHint,
   };
   const clHintBody = (id: string) => clHintBodies[id] ?? t.cleanupDesc;
-  const clSize = (bytes: number | null) => {
-    if (bytes == null) return "--";
-    if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
-    return `${(bytes / 1048576).toFixed(1)} MB`;
-  };
+  const clSize = (bytes: number | null) => formatSweepBytes(bytes);
   const clProgress = (phase: "scan" | "clean") => (ev: { event: string; id: string; index: number; total: number }) => {
     if (ev.event !== "category") return;
     setClPhase(phase);
@@ -140,9 +136,7 @@ export function SweepSection(props: {
       setClMode("quick");
       // every non-empty place ticked by default (the user unticks, never
       // us); zero/unknown rows render muted with a disabled checkbox
-      setClChecked(
-        scan.categories.filter((c) => (c.bytes ?? 0) > 0).map((c) => c.id),
-      );
+      setClChecked(defaultCheckedIds(scan.categories));
       setClResult(null);
     } catch {
       setClScanError(t.cleanupScanFailed);

@@ -133,10 +133,10 @@ function IdleState(props: {
             </button>
           ))}
         </div>
-        <div className="plan-steps" aria-hidden="true">
-          <div className="step"><span className="disc">1</span><span>{t.scanStep1}</span></div>
-          <div className="step"><span className="disc">2</span><span>{t.scanStep2}</span></div>
-          <div className="step"><span className="disc">3</span><span>{t.scanStep3}</span></div>
+        <div className="plan-steps">
+          <div className="step"><span className="disc" aria-hidden="true">1</span><span>{t.scanStep1}</span></div>
+          <div className="step"><span className="disc" aria-hidden="true">2</span><span>{t.scanStep2}</span></div>
+          <div className="step"><span className="disc" aria-hidden="true">3</span><span>{t.scanStep3}</span></div>
         </div>
         {/* the hero action rides the shared .btn materials (hover nudge,
             press shrink, keyboard focus ring) with hero sizing on top */}

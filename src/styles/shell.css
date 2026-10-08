@@ -309,21 +309,21 @@
    view; visible only when the page actually overflows (overflow-y: auto
    above), so roomy screens stay clean. */
 :is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::-webkit-scrollbar,
-:is(.monitor, .feed-list)::-webkit-scrollbar {
+.monitor::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 :is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::-webkit-scrollbar-thumb,
-:is(.monitor, .feed-list)::-webkit-scrollbar-thumb {
+.monitor::-webkit-scrollbar-thumb {
   background: var(--border-2);
   border-radius: 4px;
 }
 :is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::-webkit-scrollbar-thumb:hover,
-:is(.monitor, .feed-list)::-webkit-scrollbar-thumb:hover {
+.monitor::-webkit-scrollbar-thumb:hover {
   background: var(--hover-border);
 }
 :is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::-webkit-scrollbar-track,
-:is(.monitor, .feed-list)::-webkit-scrollbar-track {
+.monitor::-webkit-scrollbar-track {
   background: transparent;
 }
 

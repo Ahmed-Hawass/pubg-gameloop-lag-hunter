@@ -16,7 +16,7 @@ import {
   Video,
   Zap,
 } from "lucide-react";
-import { Button, Dialog, EmptyState, IntroCard, MODAL_OPEN_EVENT, APP_DIALOG_OPEN_EVENT } from "../components/components";
+import { Button, Dialog, EmptyState, IntroCard, dispatchModalOpen, APP_DIALOG_OPEN_EVENT } from "../components/components";
 import { api, FEATURE_STATE_CHANGED_EVENT, type SystemChecks } from "../bridge";
 import { errorDialog } from "../errors";
 import { useLang } from "../i18n";
@@ -117,7 +117,7 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
   // every tooltip to hide the moment ours opens (same signal as the shell)
   useEffect(() => {
     if (hint) {
-      window.dispatchEvent(new Event(MODAL_OPEN_EVENT));
+      dispatchModalOpen();
     }
   }, [hint]);
 

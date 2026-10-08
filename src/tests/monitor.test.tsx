@@ -92,6 +92,15 @@ describe("MonitorView — idle state", () => {
     expect(screen.getByText(en.scanIdleCloseApps)).toBeTruthy();
   });
 
+  it("the 3-step path stays readable to assistive tech", async () => {
+    open({ status: "idle", ui: null });
+    // the steps container must not hide itself: only the number discs
+    // are decorative, the step sentences stay exposed
+    const step = screen.getByText(en.scanStep1).closest(".plan-steps")!;
+    expect(step.getAttribute("aria-hidden")).toBeNull();
+    expect(screen.getByText(en.scanStep2).closest(".step")).toBeTruthy();
+  });
+
   it("a busy Start is dead (no stacked sessions)", async () => {
     const user = userEvent.setup();
     const { onToggle } = open({ status: "idle", ui: null }, { busy: true });

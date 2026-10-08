@@ -205,6 +205,10 @@
   flex-direction: column;
   gap: 14px;
 }
+.procs-retry {
+  display: flex;
+  justify-content: flex-end;
+}
 .proc-list {
   list-style: none;
   display: flex;

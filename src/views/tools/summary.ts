@@ -73,6 +73,23 @@ export function cleanupMb(bytes: number): number {
   return Math.round((bytes / 1048576) * 10) / 10;
 }
 
+/** measured-bytes display for one sweep place: GB above 1 GB, MB
+    below, "--" when unreadable (never a guess). Latin units either
+    way, like every other measurement. Extracted from the sweep
+    section so faces share the shape. */
+export function formatSweepBytes(bytes: number | null): string {
+  if (bytes == null) return "--";
+  if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
+  return `${(bytes / 1048576).toFixed(1)} MB`;
+}
+
+/** default tick set after a quick scan: every non-empty place ticked
+    (the user unticks, never us); zero/unknown rows render muted with
+    a disabled checkbox. Extracted pure so the rule is pinned by test. */
+export function defaultCheckedIds(categories: { id: string; bytes: number | null }[]): string[] {
+  return categories.filter((c) => (c.bytes ?? 0) > 0).map((c) => c.id);
+}
+
 /** "YYYY-MM-DD" plus the wall time under the OS convention
     ("2026-09-20 2:30 PM" on a 12-hour machine). Null convention means
     the flag has not landed yet: raw 24-hour, the stored truth itself,

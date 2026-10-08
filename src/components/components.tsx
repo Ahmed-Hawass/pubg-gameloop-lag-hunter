@@ -2,7 +2,7 @@
 // Every screen is assembled ONLY from these. No placeholders — data-driven only.
 // ALL icons come from lucide-react — zero hand-drawn SVGs anywhere.
 
-import { useEffect, useState, useRef, type ReactNode } from "react";
+import { useEffect, useId, useState, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, Cpu, Database, Gauge, Image, Info, Layers, Lightbulb, MemoryStick, Thermometer, X, Zap } from "lucide-react";
 import type { CardSeverity } from "../bridge";
@@ -182,10 +182,12 @@ export function Dialog(
   const okLabel = props.kind === "notice" ? props.okLabel : "";
   const confirmLabel = props.kind === "confirm" ? props.confirmLabel : "";
   const cancelLabel = props.kind === "confirm" ? props.cancelLabel : "";
+  const titleId = useId();
+  const bodyId = useId();
 
   // focus trap: a keyboard user must never Tab out of a modal into the
-  // dead page behind it. Tab cycles between the dialog's own buttons; the
-  // initial focus stays on the first button (autoFocus below).
+  // dead page behind it. Tab cycles between the dialog's own focusables;
+  // the initial focus stays on the first button (autoFocus below).
   const boxRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -193,7 +195,9 @@ export function Dialog(
       if (e.key === "Tab") {
         const box = boxRef.current;
         if (!box) return;
-        const focusables = box.querySelectorAll<HTMLElement>("button:not([disabled])");
+        const focusables = box.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        );
         if (focusables.length === 0) return;
         const first = focusables[0];
         const last = focusables[focusables.length - 1];
@@ -222,10 +226,12 @@ export function Dialog(
         className="dialog-box"
         role="alertdialog"
         aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={bodyId}
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="dialog-title">{title}</h3>
-        <p className="dialog-body">{body}</p>
+        <h3 className="dialog-title" id={titleId}>{title}</h3>
+        <p className="dialog-body" id={bodyId}>{body}</p>
         <div className="dialog-actions">
           {kind === "confirm" ? (
             <>
@@ -284,22 +290,51 @@ export const MODAL_OPEN_EVENT = "laghunter:modal-open";
  */
 export const APP_DIALOG_OPEN_EVENT = "laghunter:app-dialog-open";
 
+/** typed dispatchers: call these instead of constructing Events by hand,
+    so a renamed signal breaks the build instead of going silent */
+export function dispatchModalOpen(): void {
+  window.dispatchEvent(new Event(MODAL_OPEN_EVENT));
+}
+
+export function dispatchAppDialogOpen(): void {
+  window.dispatchEvent(new Event(APP_DIALOG_OPEN_EVENT));
+}
+
 function useAnchoredTooltip(ref: React.RefObject<HTMLElement | null>, text: string) {
   const [anchor, setAnchor] = useState<{ left: number; bottom: number } | null>(null);
+  const rectRef = useRef<DOMRect | null>(null);
+
+  const place = (w: number) => {
+    const r = rectRef.current;
+    if (!r || !(w > 0)) return;
+    let left = r.left + r.width / 2 - w / 2;
+    left = Math.max(12, Math.min(left, window.innerWidth - w - 12));
+    const bottom = window.innerHeight - r.top + 8;
+    setAnchor((prev) =>
+      prev !== null && Math.abs(prev.left - left) < 1 && prev.bottom === bottom
+        ? prev
+        : { left, bottom },
+    );
+  };
 
   const show = () => {
     if (!text) return; // empty tip = no tooltip (expanded sidebar labels)
     const el = ref.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    // estimate width to clamp inside the window (max 280, small margin)
+    rectRef.current = r;
+    // first paint uses an estimate so the bubble never flashes at 0,0;
+    // the mounted bubble then reports its real width and re-centers.
+    // JSDOM reports offsetWidth 0, so the estimate stands in tests.
     const estW = Math.min(280, text.length * 6.5 + 28);
-    let left = r.left + r.width / 2 - estW / 2;
-    left = Math.max(12, Math.min(left, window.innerWidth - estW - 12));
-    // bottom-anchored: the tooltip's bottom edge sits 8px above the element
-    setAnchor({ left, bottom: window.innerHeight - r.top + 8 });
+    place(estW);
   };
-  const hide = () => setAnchor(null);
+  const hide = () => {
+    rectRef.current = null;
+    setAnchor(null);
+  };
+  /** re-center once the mounted bubble reports its real width */
+  const adjust = (w: number) => place(w);
 
   // belt-and-suspenders: mouseleave/blur alone stick the bubble whenever a
   // hover ends WITHOUT pointer movement — a modal mounting under a parked
@@ -320,14 +355,32 @@ function useAnchoredTooltip(ref: React.RefObject<HTMLElement | null>, text: stri
     };
   }, []);
 
-  return { anchor, show, hide };
+  return { anchor, show, hide, adjust };
 }
 
 /** The portaled tooltip bubble every anchored tooltip renders. */
-function TooltipBubble(props: { text: string; anchor: { left: number; bottom: number } }) {
-  const { text, anchor } = props;
+function TooltipBubble(props: {
+  text: string;
+  anchor: { left: number; bottom: number };
+  id?: string;
+  onMeasured?: (w: number) => void;
+}) {
+  const { text, anchor, id, onMeasured } = props;
+  const spanRef = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const w = spanRef.current?.offsetWidth ?? 0;
+    if (w > 0) onMeasured?.(w);
+    // measure once per mount: the text never changes under an open bubble
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return createPortal(
-    <span className="hint-tooltip" role="tooltip" style={{ left: anchor.left, bottom: anchor.bottom }}>
+    <span
+      ref={spanRef}
+      className="hint-tooltip"
+      role="tooltip"
+      id={id}
+      style={{ left: anchor.left, bottom: anchor.bottom }}
+    >
       {text}
     </span>,
     document.body
@@ -342,7 +395,8 @@ function TooltipBubble(props: { text: string; anchor: { left: number; bottom: nu
 export function Tip(props: { text: string; children: ReactNode }) {
   const { text, children } = props;
   const ref = useRef<HTMLSpanElement>(null);
-  const { anchor, show, hide } = useAnchoredTooltip(ref, text);
+  const { anchor, show, hide, adjust } = useAnchoredTooltip(ref, text);
+  const tipId = useId();
 
   return (
     <span
@@ -354,7 +408,7 @@ export function Tip(props: { text: string; children: ReactNode }) {
       onBlur={hide}
     >
       {children}
-      {anchor ? <TooltipBubble text={text} anchor={anchor} /> : null}
+      {anchor ? <TooltipBubble text={text} anchor={anchor} id={tipId} onMeasured={adjust} /> : null}
     </span>
   );
 }
@@ -367,7 +421,8 @@ export function Tip(props: { text: string; children: ReactNode }) {
 export function Hint(props: { text: string }) {
   const { text } = props;
   const ref = useRef<HTMLButtonElement>(null);
-  const { anchor, show, hide } = useAnchoredTooltip(ref, text);
+  const { anchor, show, hide, adjust } = useAnchoredTooltip(ref, text);
+  const tipId = useId();
 
   return (
     <button
@@ -375,13 +430,14 @@ export function Hint(props: { text: string }) {
       ref={ref}
       className="hint"
       aria-label={text}
+      aria-describedby={anchor ? tipId : undefined}
       onMouseEnter={show}
       onFocus={show}
       onMouseLeave={hide}
       onBlur={hide}
     >
-      <Info size={13} />
-      {anchor ? <TooltipBubble text={text} anchor={anchor} /> : null}
+      <Info size={13} aria-hidden="true" />
+      {anchor ? <TooltipBubble text={text} anchor={anchor} id={tipId} onMeasured={adjust} /> : null}
     </button>
   );
 }

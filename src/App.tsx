@@ -3,18 +3,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Activity,
-  ChevronsLeft,
-  ChevronsRight,
   Cpu,
   Crosshair,
   FolderOpen,
-  Info,
   Settings,
   ShieldCheck,
   Wrench,
 } from "lucide-react";
 import { TitleBar } from "./components/TitleBar";
-import { Dialog, MODAL_OPEN_EVENT, APP_DIALOG_OPEN_EVENT, Tip } from "./components/components";
+import { Dialog, dispatchAppDialogOpen, dispatchModalOpen } from "./components/components";
+import { AppSidebar, type SidebarTab } from "./components/AppSidebar";
 import { MonitorView } from "./views/MonitorView";
 import { ReportsView } from "./views/ReportsView";
 import { SystemView } from "./views/SystemView";
@@ -30,6 +28,7 @@ import { errorDialog } from "./errors";
 import { shouldShowUpdateModal } from "./updateFlow";
 import { resolveTheme, type ThemeSetting } from "./theme";
 import { useUiZoom } from "./useUiZoom";
+import { useExitGate } from "./useExitGate";
 import { UpdateModal } from "./components/UpdateModal";
 
 type View = "monitor" | "system" | "processes" | "checks" | "tools" | "reports" | "settings" | "about";
@@ -87,45 +86,9 @@ export default function App() {
   const [appVersion, setAppVersion] = useState<string>("");
   /** the update modal: shown at startup (once per version) or via manual check */
   const [updateModal, setUpdateModal] = useState(false);
-  /** exit confirm (null = no request): which in-flight work the X press
-      found (scan, download, cleaning). Empty = closeWindow directly. */
-  const [exitConfirm, setExitConfirm] = useState<{
-    scan: boolean;
-    download: boolean;
-    cleaning: boolean;
-  } | null>(null);
-  /** live mirrors for the exit gate (refs: the request reads them without
-      re-subscribing; running/stopping both count as an active scan) */
-  const statusRef = useRef(status);
-  useEffect(() => {
-    statusRef.current = status;
-  }, [status]);
-  const downloadActiveRef = useRef(false);
-  const cleaningActiveRef = useRef(false);
-  const onDownloadActivity = useCallback((active: boolean) => {
-    downloadActiveRef.current = active;
-  }, []);
-  const onCleaningActivity = useCallback((active: boolean) => {
-    cleaningActiveRef.current = active;
-  }, []);
-  /** the X button path: quiet work closes straight away; a running scan,
-      an active download, or a running cleanup names itself in one confirm
-      instead. Cancelling is non-destructive (nothing was ever requested
-      at OS level); confirming rides the normal close path, so the
-      backend safety net (cancel download, stop + save the session) runs. */
-  const requestExit = useCallback(() => {
-    const blockers = {
-      scan: statusRef.current.status === "running" || statusRef.current.status === "stopping",
-      download: downloadActiveRef.current,
-      cleaning: cleaningActiveRef.current,
-    };
-    if (!blockers.scan && !blockers.download && !blockers.cleaning) {
-      void closeWindow();
-      return;
-    }
-    setExitConfirm(blockers);
-    window.dispatchEvent(new Event(APP_DIALOG_OPEN_EVENT));
-  }, []);
+  /** exit confirm: owned by the gate hook (X names in-flight work) */
+  const { exitConfirm, setExitConfirm, onDownloadActivity, onCleaningActivity, requestExit } =
+    useExitGate(status);
   /** first-run advice is up RIGHT NOW — derived from the live dialog state,
       never a sticky flag: the update modal and the one-shot advices defer
       while this dialog is on screen, and stop deferring the moment it is
@@ -480,14 +443,14 @@ export default function App() {
   // bubble stuck). APP_DIALOG additionally yields view-level dialogs.
   useEffect(() => {
     if (dialogKey || (updateModal && updateInfo) || exitConfirm) {
-      window.dispatchEvent(new Event(MODAL_OPEN_EVENT));
+      dispatchModalOpen();
     }
     if (dialogKey || exitConfirm) {
-      window.dispatchEvent(new Event(APP_DIALOG_OPEN_EVENT));
+      dispatchAppDialogOpen();
     }
   }, [dialogKey, updateModal, updateInfo, exitConfirm]);
 
-  const tabs: { id: View; icon: React.ReactNode; label: string; beta?: boolean }[] = [
+  const tabs: SidebarTab[] = [
     { id: "monitor", icon: <Crosshair size={17} />, label: t.monitor },
     { id: "system", icon: <Cpu size={17} />, label: t.system },
     { id: "processes", icon: <Activity size={17} />, label: t.topProcesses },
@@ -521,79 +484,26 @@ export default function App() {
                 collapsed sidebar never flashes expanded on launch and vice
                 versa. The frames are too short to read as a layout jump. */}
             {collapsed == null ? null : (
-              <nav className={`sidebar ${collapsed ? "is-collapsed" : ""}`}>
-                <div className="sb-label">{t.menu}</div>
-                {tabs.map((tab) => (
-                  <Tip
-                    key={tab.id}
-                    // collapsed rail hides the beta pill: the tooltip
-                    // carries the signal instead (expanded labels show it)
-                    text={collapsed ? (tab.beta ? `${tab.label} (${t.toolsBeta})` : tab.label) : ""}
-                  >
-                    <button
-                      className={`sb-item ${view === tab.id ? "is-active" : ""}`}
-                      // the active tab is announced as current (visual
-                      // is-active styling is invisible to screen readers)
-                      aria-current={view === tab.id ? "page" : undefined}
-                      onClick={() => {
-                        setReportOpenId(null);
-                        setToolOpenId(null);
-                        setView(tab.id);
-                      }}
-                    >
-                      {tab.icon}
-                      {!collapsed ? <span>{tab.label}</span> : null}
-                      {/* beta pill: in-flow label (not the corner update
-                          dot), hidden with the labels on the collapsed
-                          rail; remove with the key when v2 goes stable */}
-                      {!collapsed && tab.beta ? (
-                        <span className="sb-beta">{t.toolsBeta}</span>
-                      ) : null}
-                    </button>
-                  </Tip>
-                ))}
-
-                <Tip text={collapsed ? t.about : ""}>
-                  <button
-                    className={`sb-item ${view === "about" ? "is-active" : ""}`}
-                    onClick={() => {
-                      // like every tab: a pending deep-link must not
-                      // survive a detour and fire on the way back
-                      setReportOpenId(null);
-                      setToolOpenId(null);
-                      setView("about");
-                    }}
-                  >
-                    <Info size={17} />
-                    {!collapsed ? <span>{t.about}</span> : null}
-                    {/* the update dot: hidden while About itself is open
-                        (the heading dot carries the signal there — never
-                        two yellows for one update) */}
-                    {updateInfo && view !== "about" ? (
-          <span
-            className="sb-dot"
-            // role+label: an aria-label on a plain span is invisible to
-            // assistive tech — status announces it politely
-            role="status"
-            aria-label={t.updateAvailableTitle}
-          />
-        ) : null}
-                  </button>
-                </Tip>
-
-                {/* spacer pushes the collapse control to the sidebar's floor */}
-                <div className="sb-spacer" />
-
-                {/* collapse control — pinned at the very bottom of the sidebar:
-                    flips direction when collapsed; no tooltip while
-                    expanded (the visible label says it already) */}
-                <Tip text={collapsed ? t.expandMenu : ""}>
-                  <button className="sb-collapse" onClick={toggleSidebar}>
-                    {collapsed ? <ChevronsRight size={15} /> : <ChevronsLeft size={15} />}
-                    {!collapsed ? <span>{t.collapseMenu}</span> : null}
-                  </button>
-                </Tip>
-              </nav>
+              <AppSidebar
+                t={t}
+                tabs={tabs}
+                view={view}
+                collapsed={collapsed}
+                updateInfo={updateInfo}
+                onSelect={(id) => {
+                  setReportOpenId(null);
+                  setToolOpenId(null);
+                  setView(id);
+                }}
+                onAbout={() => {
+                  // like every tab: a pending deep-link must not
+                  // survive a detour and fire on the way back
+                  setReportOpenId(null);
+                  setToolOpenId(null);
+                  setView("about");
+                }}
+                onToggleSidebar={toggleSidebar}
+              />
             )}
             <main className="content">
               {/* every view mounts ONCE and stays alive; switching only flips

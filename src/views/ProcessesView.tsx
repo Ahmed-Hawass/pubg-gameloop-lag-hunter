@@ -1,13 +1,13 @@
 // ProcessesView.tsx — who is eating the machine (the game is never a suspect).
-// A totals card answers "how bad is the background overall", then two
-// groups: user apps (safe to close before playing) and system tasks
-// (leave running). Stays live while the tab is open: silent refresh every
-// few seconds (the engine's TTL cache decides whether a real query is
-// needed).
+// A totals card answers "how bad is the background overall", then one
+// actionable apps list (system tasks stay in the honest totals above,
+// never as rows: nothing here is guidance-free, every row ends). Stays
+// live while the tab is open: silent refresh every few seconds (the
+// engine's TTL cache decides whether a real query is needed).
 
 import { useEffect, useRef, useState } from "react";
 import { Activity, AppWindow, RefreshCw } from "lucide-react";
-import { Dialog, EmptyState, IntroCard } from "../components/components";
+import { Button, Dialog, EmptyState, IntroCard } from "../components/components";
 import { api, type TopProcess, type TopProcesses } from "../bridge";
 import { errorDialog, type Notice } from "../errors";
 import { useLang } from "../i18n";
@@ -156,16 +156,25 @@ export function ProcessesView(props: { active: boolean }) {
           onDismiss={intro.dismiss}
         />
       ) : null}
-      {/* a LOAD failure is a page state (the totals card below re-reads
-          live every 2s; dead states with no data keep the silent poll
-          plus refocus) — never a modal, never an inline red line: the
-          one-modal surface stays for action failures */}
+      {/* a LOAD failure is a page state with a manual retry (the silent
+          2s poll keeps running underneath) — never a modal, never an
+          inline red line: the one-modal surface stays for action failures */}
       {error ? (
-        <EmptyState
-          icon={<Activity size={18} />}
-          title={t.dialog.somethingWrong}
-          hint={error}
-        />
+        <>
+          <div className="procs-retry">
+            <Button
+              label={t.refresh}
+              icon={<RefreshCw size={14} />}
+              variant="ghost"
+              onClick={() => void load(false, true)}
+            />
+          </div>
+          <EmptyState
+            icon={<Activity size={18} />}
+            title={t.dialog.somethingWrong}
+            hint={error}
+          />
+        </>
       ) : procs === null ? (
         <EmptyState icon={<RefreshCw size={20} />} title={t.loading} hint="" spin />
       ) : apps.length === 0 ? (
@@ -196,7 +205,7 @@ export function ProcessesView(props: { active: boolean }) {
               <ul className="card proc-list">
                 {apps.map((p) => (
                   <ProcRow
-                    key={p.name}
+                    key={p.pids[0] ?? p.pid ?? p.name}
                     proc={p}
                     art={icons[p.pids[0] ?? p.pid] ?? null}
                     glyph={<AppWindow size={15} />}

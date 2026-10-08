@@ -8,7 +8,7 @@
 
 import { useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
-import { Dialog, MODAL_OPEN_EVENT, APP_DIALOG_OPEN_EVENT } from "../components/components";
+import { Dialog, dispatchModalOpen, APP_DIALOG_OPEN_EVENT } from "../components/components";
 import { api, type CleanupHistory } from "../bridge";
 import type { Notice } from "../errors";
 import { useLang } from "../i18n";
@@ -133,7 +133,7 @@ export function ToolsView(props: {
   // every tooltip to hide the moment ours opens (same signal as the shell)
   useEffect(() => {
     if (notice || hint) {
-      window.dispatchEvent(new Event(MODAL_OPEN_EVENT));
+      dispatchModalOpen();
     }
   }, [notice, hint]);
 

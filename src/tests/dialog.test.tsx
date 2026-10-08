@@ -84,4 +84,13 @@ describe("Dialog", () => {
     expect(onConfirm).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it("links title and body for assistive tech", () => {
+    notice();
+    const box = document.querySelector(".dialog-box")!;
+    const titleId = box.querySelector(".dialog-title")!.getAttribute("id")!;
+    const bodyId = box.querySelector(".dialog-body")!.getAttribute("id")!;
+    expect(box.getAttribute("aria-labelledby")).toBe(titleId);
+    expect(box.getAttribute("aria-describedby")).toBe(bodyId);
+  });
 });

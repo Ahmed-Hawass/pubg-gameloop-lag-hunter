@@ -239,4 +239,35 @@ describe("ProcessesView", () => {
     expect(await screen.findAllByText("400 MB")).toHaveLength(2);
     expect(screen.getByText(en.endTask)).toBeTruthy();
   });
+
+  it("duplicate program names render every row (keys are PIDs, not names)", async () => {
+    apiMock.topProcesses.mockResolvedValue({
+      processes: [
+        { name: "helper", pid: 11, pids: [11], cpu_pct: 3.0, ram_mb: 100, kind: "app", display_key: null, display_name: "Helper" },
+        { name: "helper", pid: 22, pids: [22], cpu_pct: 4.0, ram_mb: 120, kind: "app", display_key: null, display_name: "Helper" },
+      ],
+      total_cpu: 7.0,
+      total_ram_mb: 220,
+    });
+    apiMock.getSettings.mockResolvedValue(settings());
+    render(React.createElement(ProcessesView, { active: false }));
+    // a name-keyed list would collapse these into one row
+    expect(await screen.findAllByText("Helper")).toHaveLength(2);
+    expect(screen.getAllByText(en.endTask)).toHaveLength(2);
+  });
+
+  it("a load failure offers a manual retry that forces a fresh read", async () => {
+    const user = userEvent.setup();
+    apiMock.topProcesses.mockRejectedValue("PS_TIMEOUT");
+    apiMock.getSettings.mockResolvedValue(settings());
+    render(React.createElement(ProcessesView, { active: false }));
+    await screen.findByText(en.dialog.somethingWrong);
+    apiMock.topProcesses.mockClear();
+    apiMock.topProcesses.mockResolvedValue(answer);
+    await user.click(screen.getByText(en.refresh));
+    await waitFor(() => {
+      expect(apiMock.topProcesses).toHaveBeenCalledWith(true);
+    });
+    await screen.findByText("chrome");
+  });
 });

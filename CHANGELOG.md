@@ -613,6 +613,27 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   the script gets its own Node globals block. CI adds the missing
   rustfmt gate, and the live typeperf test calls the production
   counter parser directly instead of a local copy.
+- Dialogs link title and body for assistive tech (the UpdateModal
+  already did), the focus trap covers links and inputs as well as
+  buttons, and Hint bubbles carry a describedby id while open (pinned
+  by dialog and modal-signal tests).
+- The Monitor 3-step path stays readable to assistive tech (only the
+  number discs are decorative now), and tooltips re-center on their
+  measured width instead of a per-character estimate (the estimate
+  remains the first-paint and JSDOM fallback).
+- Processes rows key on representative PID instead of program name
+  (duplicate names rendered as one row before), and a load failure
+  offers a manual Refresh next to the silent 2s poll (pinned by
+  processes tests).
+- Typed modal-signal dispatchers replace hand-built Events at every
+  call site, so a renamed signal breaks the build instead of going
+  silent. Dead scrollbar selectors for the removed feed list are gone.
+- The shell rail is a presentational sidebar now (App keeps the state),
+  and the X-button gate lives in its own hook with the same confirm
+  rule, both pinned by sidebar and gate tests.
+- Sweep display helpers live in one place (bytes shape plus the
+  default-tick rule), and the pagefile editor syncs working copies
+  through one pure function, both pinned by unit tests.
 
 ### Changed
 - The Tools tab's details page reads only the two switches it displays,
