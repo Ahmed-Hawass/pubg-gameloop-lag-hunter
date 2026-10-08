@@ -142,7 +142,7 @@ function IdleState(props: {
             press shrink, keyboard focus ring) with hero sizing on top */}
         <button
           type="button"
-          className="btn btn-primary btn-hero"
+          className={`btn btn-primary btn-hero ${busy || status === "stopping" ? "is-disabled" : ""}`}
           disabled={busy || status === "stopping"}
           onClick={onToggle}
         >

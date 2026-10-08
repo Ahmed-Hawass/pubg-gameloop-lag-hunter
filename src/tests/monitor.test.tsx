@@ -108,6 +108,13 @@ describe("MonitorView — idle state", () => {
     expect(onToggle).not.toHaveBeenCalled();
   });
 
+  it("a busy Start dims until the action lands", () => {
+    open({ status: "idle", ui: null }, { busy: true });
+    const btn = screen.getByText(en.scanIdleStart).closest("button")!;
+    expect(btn.hasAttribute("disabled")).toBe(true);
+    expect(btn.className).toContain("is-disabled");
+  });
+
   it("running locks the pills and offers Stop", async () => {
     const user = userEvent.setup();
     const { onToggle } = open({ status: "running", ui });

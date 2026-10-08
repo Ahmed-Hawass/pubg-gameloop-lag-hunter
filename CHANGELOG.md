@@ -634,6 +634,9 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - Sweep display helpers live in one place (bytes shape plus the
   default-tick rule), and the pagefile editor syncs working copies
   through one pure function, both pinned by unit tests.
+- The Monitor hero Start dims while the start action is in flight
+  (it disabled without dimming after the redesign, so presses read as
+  dead until the running screen arrived).
 
 ### Changed
 - The Tools tab's details page reads only the two switches it displays,
