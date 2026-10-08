@@ -210,7 +210,9 @@ async fn apply_pagefile_settings(
 /// IPC thread. Progress rides the channel (one event per category step);
 /// the final answer is the command's own return.
 #[tauri::command]
-async fn storage_scan(on_event: tauri::ipc::Channel<engine::cleanup::CleanupProgress>) -> engine::cleanup::CleanupScan {
+async fn storage_scan(
+    on_event: tauri::ipc::Channel<engine::cleanup::CleanupProgress>,
+) -> engine::cleanup::CleanupScan {
     let _t = engine::logging::timed("ipc: storage_scan");
     match tauri::async_runtime::spawn_blocking(move || {
         engine::cleanup::scan_with(|index, total, id| {
@@ -252,7 +254,9 @@ async fn storage_scan(on_event: tauri::ipc::Channel<engine::cleanup::CleanupProg
 /// memory. Same shape and contract as storage_scan: read-only, blocking
 /// pool, per-category progress over the channel.
 #[tauri::command]
-async fn storage_deep_scan(on_event: tauri::ipc::Channel<engine::cleanup::CleanupProgress>) -> engine::cleanup::CleanupScan {
+async fn storage_deep_scan(
+    on_event: tauri::ipc::Channel<engine::cleanup::CleanupProgress>,
+) -> engine::cleanup::CleanupScan {
     let _t = engine::logging::timed("ipc: storage_deep_scan");
     match tauri::async_runtime::spawn_blocking(move || {
         engine::cleanup::deep_scan_with(|index, total, id| {
@@ -321,7 +325,9 @@ async fn storage_clean(
                     format!(
                         "{}={}",
                         r.id,
-                        r.freed_bytes.map(|b| b.to_string()).unwrap_or_else(|| "-".into())
+                        r.freed_bytes
+                            .map(|b| b.to_string())
+                            .unwrap_or_else(|| "-".into())
                     )
                 })
                 .collect();
@@ -379,9 +385,11 @@ async fn session_start(
     // No explicit duration (headless callers) falls back to the USER's own
     // default from settings — never a second hardcoded number that can
     // drift from the 5-minute default the UI offers.
-    let user_default = (engine::settings::load().auto_stop_minutes as u64 * 60)
+    let user_default =
+        (engine::settings::load().auto_stop_minutes as u64 * 60).clamp(60, MAX_SESSION_SECS);
+    let bounded = auto_stop_secs
+        .unwrap_or(user_default)
         .clamp(60, MAX_SESSION_SECS);
-    let bounded = auto_stop_secs.unwrap_or(user_default).clamp(60, MAX_SESSION_SECS);
     let eng = session::init_global();
     let gen = tauri::async_runtime::spawn_blocking(move || {
         // probe BEFORE starting: if the game is already open, the first
@@ -471,8 +479,8 @@ async fn delete_session(id: String) -> Result<(), String> {
     let res = tauri::async_runtime::spawn_blocking(move || {
         session::init_global().delete_session_guarded(&id)
     })
-        .await
-        .map_err(|e| format!("delete task failed: {e}"));
+    .await
+    .map_err(|e| format!("delete task failed: {e}"));
     log_err("delete_session", &res);
     res?
 }
@@ -518,15 +526,18 @@ fn session_folder(id: &str) -> Result<String, String> {
 /// open the wrong folder the day the layout nests).
 #[tauri::command]
 fn sessions_root() -> String {
-    engine::storage::sessions_root().to_string_lossy().to_string()
+    engine::storage::sessions_root()
+        .to_string_lossy()
+        .to_string()
 }
 
 #[tauri::command]
 async fn open_windows_panel(panel: String) -> Result<(), String> {
     let _t = engine::logging::timed("ipc: open_windows_panel");
-    let res = tauri::async_runtime::spawn_blocking(move || engine::system::open_windows_panel(&panel))
-        .await
-        .map_err(|e| format!("open panel task failed: {e}"));
+    let res =
+        tauri::async_runtime::spawn_blocking(move || engine::system::open_windows_panel(&panel))
+            .await
+            .map_err(|e| format!("open panel task failed: {e}"));
     log_err("open_windows_panel", &res);
     res?
 }
@@ -728,9 +739,10 @@ fn cancel_update_download() {
 #[tauri::command]
 async fn open_download_folder(path: String) -> Result<(), String> {
     let _t = engine::logging::timed("ipc: open_download_folder");
-    let res = tauri::async_runtime::spawn_blocking(move || engine::update::open_folder_selected(&path))
-        .await
-        .map_err(|e| format!("open folder task failed: {e}"));
+    let res =
+        tauri::async_runtime::spawn_blocking(move || engine::update::open_folder_selected(&path))
+            .await
+            .map_err(|e| format!("open folder task failed: {e}"));
     log_err("open_download_folder", &res);
     res?
 }
@@ -954,7 +966,10 @@ pub fn run() {
                 let _ = win.center();
                 let _ = win.set_focus();
             }
-            engine::logging::perf("window centered (show is frontend-driven)", boot.elapsed().as_millis());
+            engine::logging::perf(
+                "window centered (show is frontend-driven)",
+                boot.elapsed().as_millis(),
+            );
 
             // Safety net for the frontend-driven show: if the UI never
             // reports first paint (a crash before React mounts), the window
@@ -981,10 +996,7 @@ pub fn run() {
             // cache and every later launch reads it in microseconds.
             tauri::async_runtime::spawn(async move {
                 engine::system::warm_system_caches().await;
-                engine::logging::info(&format!(
-                    "app ready in {}ms",
-                    boot.elapsed().as_millis()
-                ));
+                engine::logging::info(&format!("app ready in {}ms", boot.elapsed().as_millis()));
             });
             Ok(())
         })

@@ -59,7 +59,29 @@ They meet in exactly one place: a JSON state contract pushed over Tauri events.
 │  settings   schema v3, atomic writes, migration   │
 │                                                   │
 │  system     rig info (disk-cached across runs),  │
-│             top processes, checks                │
+│             top processes, checks, tweaks read  │
+│             (cheap Registry mirror of checks),  │
+│             pagefile editor read/validate/apply │
+│                                                   │
+│  tweaks     scoped writes behind explicit user  │
+│             action, verified by re-read, audited │
+│                                                   │
+│  cleanup    storage scan and sweep with measure  │
+│             before and after, plus history       │
+│                                                   │
+│  prockill   handle-pinned process end, GameLoop  │
+│             and self refuse by construction     │
+│                                                   │
+│  emulator   V6 and V7 client identity from live  │
+│             processes first, registry second     │
+│                                                   │
+│  elevate    same binary re-run with runas for   │
+│             privileged writes, no resident admin │
+│                                                   │
+│  icons      native program icons as data URLs,  │
+│             PIDs only, never paths               │
+│                                                   │
+│  display_names  ProductName for known OS staples │
 │                                                   │
 │  logging    the flight recorder: boot timing,    │
 │             panics, IPC durations, 7-day        │

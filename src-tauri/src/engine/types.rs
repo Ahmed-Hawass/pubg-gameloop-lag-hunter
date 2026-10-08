@@ -120,8 +120,12 @@ impl Thresholds {
         avail_mb: Option<f64>,
     ) -> bool {
         disk_queue.map(|q| q < self.disk_queue_len).unwrap_or(true)
-            && cpu_total.map(|c| c < self.cpu_saturation_pct).unwrap_or(true)
-            && avail_mb.map(|a| a > self.avail_mem_floor_mb).unwrap_or(true)
+            && cpu_total
+                .map(|c| c < self.cpu_saturation_pct)
+                .unwrap_or(true)
+            && avail_mb
+                .map(|a| a > self.avail_mem_floor_mb)
+                .unwrap_or(true)
     }
 }
 

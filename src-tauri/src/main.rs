@@ -7,7 +7,9 @@ fn main() {
     // Checked FIRST: the run is headless (no window, no session, no
     // single-instance focus steal) and exits with a machine code.
     let args: Vec<String> = std::env::args().collect();
-    if args.get(1).map(|s| s.as_str()) == Some(lag_hunter_lib::engine::elevate::ELEVATED_ACTION_FLAG) {
+    if args.get(1).map(|s| s.as_str())
+        == Some(lag_hunter_lib::engine::elevate::ELEVATED_ACTION_FLAG)
+    {
         std::process::exit(lag_hunter_lib::engine::elevate::run_elevated_action(
             &args[2..],
         ));
@@ -63,9 +65,7 @@ fn webview2_installed() -> bool {
     ];
     // per-user install: %LOCALAPPDATA%\Microsoft\EdgeWebView\Application
     if let Some(local) = std::env::var_os("LOCALAPPDATA") {
-        bases.push(
-            std::path::Path::new(&local).join(r"Microsoft\EdgeWebView\Application"),
-        );
+        bases.push(std::path::Path::new(&local).join(r"Microsoft\EdgeWebView\Application"));
     }
     for base in bases {
         let dir = std::path::Path::new(&base);

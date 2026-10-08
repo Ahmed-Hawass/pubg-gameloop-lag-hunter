@@ -8,9 +8,9 @@ It analyzes performance while they play, detects stutters, and uncovers what is 
 
 > **What caused it?**
 
-It is **not** a benchmark, a tweak utility, or an FPS counter.
+It is **not** a benchmark or an FPS counter.
 
-It is a **diagnostician with a memory**.
+It is a **diagnostician with a memory** that offers opt-in fixes the user flips by hand.
 
 ---
 
@@ -119,7 +119,7 @@ Every human-facing string lives in the locale files.
 ## Non-Goals
 
 * **No FPS overlay**, anti-cheat territory, and not our question.
-* **No system tweaking or repair**, diagnosis is the product; repair is the user's decision with our guidance.
+* **No automatic tweaking**, diagnosis paths never write; every fix is an explicit user action through a whitelisted command, verified by re-reading Windows and audit-logged. Repair is the user's decision with our guidance.
 * **No multi-emulator support**, GameLoop only. Identity beats reach.
 * **No telemetry**, the only thing written is on the user's own disk.
 

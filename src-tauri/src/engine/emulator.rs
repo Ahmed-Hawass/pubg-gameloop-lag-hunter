@@ -146,9 +146,9 @@ pub fn read_snapshot() -> RegistrySnapshot {
     // source that needs no per-version knowledge at all.
     let mut uninstall_dirs = Vec::new();
     for root in [&hklm, &hkcu] {
-        if let Ok(key) = root.open_subkey(
-            r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\GameLoop",
-        ) {
+        if let Ok(key) =
+            root.open_subkey(r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\GameLoop")
+        {
             if let Ok(icon) = key.get_value::<String, _>("DisplayIcon") {
                 let dir = PathBuf::from(icon.trim().trim_matches('"'));
                 if dir.is_absolute() {
@@ -243,9 +243,10 @@ pub enum Detected {
 /// Pure detection over a process-name list + a registry snapshot.
 /// Golden fixtures per generation live in the tests below.
 pub fn detect(running: &[String], reg: &RegistrySnapshot) -> Detected {
-    let lower: Vec<String> = running.iter().map(|n| {
-        n.trim_end_matches(".exe").to_ascii_lowercase()
-    }).collect();
+    let lower: Vec<String> = running
+        .iter()
+        .map(|n| n.trim_end_matches(".exe").to_ascii_lowercase())
+        .collect();
     let has_family = |names: &[&str]| {
         names.iter().any(|p| {
             let p = p.to_ascii_lowercase();
@@ -269,7 +270,10 @@ pub fn detect(running: &[String], reg: &RegistrySnapshot) -> Detected {
     }
     // a LIVE gameloop-ish process no profile matches (a future rename):
     // honest Unknown, never "not running".
-    if lower.iter().any(|n| UNKNOWN_HINTS.iter().any(|h| n.contains(h))) {
+    if lower
+        .iter()
+        .any(|n| UNKNOWN_HINTS.iter().any(|h| n.contains(h)))
+    {
         return Detected::Unknown;
     }
     // static install evidence alone (Uninstall entries persist whether
@@ -415,10 +419,7 @@ pub fn application_versions(root: &Path) -> Vec<String> {
 /// Pure version-change rule for the post-update re-flip notice:
 /// (notify_once, current_version_string). First sighting stores silently
 /// (fresh installs must never nag); unknown stays silent too.
-pub fn version_notice(
-    last_seen: Option<&str>,
-    current: Option<&str>,
-) -> (bool, String) {
+pub fn version_notice(last_seen: Option<&str>, current: Option<&str>) -> (bool, String) {
     match (last_seen, current) {
         (Some(seen), Some(cur)) if seen != cur => (true, cur.to_string()),
         (_, Some(cur)) => (false, cur.to_string()),
@@ -454,7 +455,13 @@ mod tests {
     fn detect_v7_game_with_version() {
         let d = detect(
             &["GameLoop.exe".into(), "GLABoxHeadless.exe".into()],
-            &reg(Some("7.0.19.05"), None, vec![], vec![], vec!["com.tencent.ig"]),
+            &reg(
+                Some("7.0.19.05"),
+                None,
+                vec![],
+                vec![],
+                vec!["com.tencent.ig"],
+            ),
         );
         assert_eq!(
             d,
@@ -526,7 +533,13 @@ mod tests {
         // other apps: counts plus the matched family, full stop
         let line = presence_evidence_summary(
             &["GameLoop.exe".into(), "explorer.exe".into()],
-            &reg(Some("7.0.167.0"), None, vec![], vec![r"C:\GL"], vec!["com.tencent.ig"]),
+            &reg(
+                Some("7.0.167.0"),
+                None,
+                vec![],
+                vec![r"C:\GL"],
+                vec!["com.tencent.ig"],
+            ),
         );
         assert!(line.contains("procs=2"), "{line}");
         assert!(line.contains("family=v7"), "{line}");
@@ -581,7 +594,10 @@ mod tests {
     #[test]
     fn version_notice_rules() {
         // first sighting stores silently (fresh installs never nag)
-        assert_eq!(version_notice(None, Some("7.0.19.05")), (false, "7.0.19.05".into()));
+        assert_eq!(
+            version_notice(None, Some("7.0.19.05")),
+            (false, "7.0.19.05".into())
+        );
         // same version: quiet
         assert_eq!(
             version_notice(Some("7.0.19.05"), Some("7.0.19.05")),
@@ -593,7 +609,10 @@ mod tests {
             (true, "7.0.19.05".into())
         );
         // unknown stays silent (nothing to name)
-        assert_eq!(version_notice(Some("7.0.19.05"), None), (false, String::new()));
+        assert_eq!(
+            version_notice(Some("7.0.19.05"), None),
+            (false, String::new())
+        );
         assert_eq!(version_notice(None, None), (false, String::new()));
     }
 
@@ -601,12 +620,16 @@ mod tests {
     fn candidates_cover_legacy_and_versioned_layouts() {
         let roots = vec![PathBuf::from(r"C:\G")];
         let out = candidate_paths(&roots, &["a.exe"], &[vec!["7.0.167.0".into()]]);
-        let names: Vec<String> =
-            out.iter().map(|p| p.to_string_lossy().to_string()).collect();
+        let names: Vec<String> = out
+            .iter()
+            .map(|p| p.to_string_lossy().to_string())
+            .collect();
         assert!(names.iter().any(|p| p.ends_with(r"C:\G\a.exe")));
         assert!(names.iter().any(|p| p.ends_with(r"C:\G\ui\a.exe")));
         assert!(names.iter().any(|p| p.ends_with(r"C:\G\Application\a.exe")));
-        assert!(names.iter().any(|p| p.ends_with(r"C:\G\Application\7.0.167.0\a.exe")));
+        assert!(names
+            .iter()
+            .any(|p| p.ends_with(r"C:\G\Application\7.0.167.0\a.exe")));
         // case-insensitive dedup across layouts
         let dup = candidate_paths(
             &[PathBuf::from(r"C:\G"), PathBuf::from(r"c:\g")],

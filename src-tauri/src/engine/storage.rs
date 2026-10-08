@@ -127,17 +127,25 @@ impl SessionWriter {
     }
 
     pub fn flush(&mut self) -> Result<(), String> {
-        self.samples.flush().map_err(|e| format!("flush samples: {e}"))
+        self.samples
+            .flush()
+            .map_err(|e| format!("flush samples: {e}"))
     }
 
     /// Autosafe: rewrite events + summary-lite periodically so a crash never loses data.
-    pub fn autosave(&self, events: &[EngineEvent], thresholds: &Thresholds, started_at: &str) -> Result<(), String> {
+    pub fn autosave(
+        &self,
+        events: &[EngineEvent],
+        thresholds: &Thresholds,
+        started_at: &str,
+    ) -> Result<(), String> {
         write_file_atomic(
             &self.dir.join("events.json"),
             serde_json::to_string_pretty(events)
                 .unwrap_or_default()
                 .as_bytes(),
-        ).map_err(|e| format!("autosave events: {e}"))?;
+        )
+        .map_err(|e| format!("autosave events: {e}"))?;
         let summary = serde_json::json!({
             "session": self.dir.file_name().and_then(|s| s.to_str()).unwrap_or(""),
             "startedAt": started_at,
@@ -150,7 +158,8 @@ impl SessionWriter {
             serde_json::to_string_pretty(&summary)
                 .unwrap_or_default()
                 .as_bytes(),
-        ).map_err(|e| format!("autosave summary: {e}"))?;
+        )
+        .map_err(|e| format!("autosave summary: {e}"))?;
         Ok(())
     }
 
@@ -1078,10 +1087,7 @@ mod tests {
     fn iso_ms_known_epoch() {
         // shared parser (types::iso_ms) keeps its epoch contract here
         assert_eq!(iso_ms("1970-01-01T00:00:00.000Z"), Some(0));
-        assert_eq!(
-            iso_ms("2026-08-31T00:00:00.000Z"),
-            Some(1_788_134_400_000)
-        );
+        assert_eq!(iso_ms("2026-08-31T00:00:00.000Z"), Some(1_788_134_400_000));
     }
 
     #[test]
@@ -1284,9 +1290,6 @@ mod tests {
         }
         // unknown kinds map to "" on BOTH sides (never mislabeled)
         assert_eq!(finding_key("mystery_kind"), "");
-        assert_eq!(
-            super::super::diagnoser::key_for(&mk_ev("mystery_kind")),
-            ""
-        );
+        assert_eq!(super::super::diagnoser::key_for(&mk_ev("mystery_kind")), "");
     }
 }

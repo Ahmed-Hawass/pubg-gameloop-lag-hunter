@@ -266,16 +266,16 @@ pub fn english_counters_work() -> bool {
     let ok = {
         let out = output_tracked(
             Command::new(super::system::system32_exe("typeperf.exe"))
-            .args([
-                COUNTER_PATHS[0],
-                "-si",
-                "1",
-                "-sc",
-                "1", // one sample then exit
-            ])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .creation_flags(NO_WINDOW),
+                .args([
+                    COUNTER_PATHS[0],
+                    "-si",
+                    "1",
+                    "-sc",
+                    "1", // one sample then exit
+                ])
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .creation_flags(NO_WINDOW),
             Duration::from_secs(5),
         );
         match out {
@@ -413,8 +413,7 @@ while ($true) {{
                 let Some(eq) = pair.find('=') else { continue };
                 let path = format!("\\{}", pair[..eq].trim());
                 let val = &pair[eq + 1..];
-                let (Some(key), Some(v)) = (key_of(&path), parse_counter_value_logged(val))
-                else {
+                let (Some(key), Some(v)) = (key_of(&path), parse_counter_value_logged(val)) else {
                     continue;
                 };
                 match key {
@@ -450,7 +449,8 @@ while ($true) {{
 /// then a strict digits,digits comma-decimal fallback. Anything else is
 /// None — a value we cannot confidently read is dropped, never guessed
 /// (dropping is honest; misreading is a manufactured diagnosis).
-fn parse_counter_value(raw: &str) -> Option<f64> {
+/// Public so the live integration test checks what actually runs.
+pub fn parse_counter_value(raw: &str) -> Option<f64> {
     let t = raw.trim().trim_matches('"');
     if let Ok(v) = t.parse::<f64>() {
         return Some(v);
@@ -479,7 +479,9 @@ fn parse_counter_value_logged(raw: &str) -> Option<f64> {
     if !raw.trim().trim_matches('"').parse::<f64>().is_ok()
         && !COMMA_CULTURE_SEEN.swap(true, Ordering::Relaxed)
     {
-        super::logging::info("counter values arrive in comma-decimal culture (converted per value)");
+        super::logging::info(
+            "counter values arrive in comma-decimal culture (converted per value)",
+        );
     }
     Some(v)
 }
@@ -536,9 +538,7 @@ where
                 break;
             }
             let Ok(line) = line else {
-                super::logging::error(&format!(
-                    "typeperf stream errored at line {line_no}"
-                ));
+                super::logging::error(&format!("typeperf stream errored at line {line_no}"));
                 break;
             };
             if line_no <= 3 {
@@ -584,7 +584,9 @@ where
             };
             for (i, key) in header.iter().enumerate() {
                 let raw = values.get(i).unwrap_or(&"");
-                let Some(v) = parse_counter_value_logged(raw) else { continue };
+                let Some(v) = parse_counter_value_logged(raw) else {
+                    continue;
+                };
                 match *key {
                     "cpu" => s.cpu_total = Some(v),
                     // % Processor Performance is a ratio: physically it cannot
@@ -605,9 +607,7 @@ where
                 emit(s);
             }
         }
-        super::logging::info(&format!(
-            "typeperf reader loop ended after {line_no} lines"
-        ));
+        super::logging::info(&format!("typeperf reader loop ended after {line_no} lines"));
         // _keep drops here: typeperf killed after the stream truly ends
     });
     Ok(())
@@ -622,12 +622,15 @@ where
     F: Fn(GpuSample) + Send + Sync + 'static,
 {
     // check availability quickly first
-    let probe = output_tracked(Command::new("nvidia-smi")
-        .arg("--query-gpu=clocks.max.gr")
-        .arg("--format=csv,noheader")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .creation_flags(NO_WINDOW), Duration::from_secs(5));
+    let probe = output_tracked(
+        Command::new("nvidia-smi")
+            .arg("--query-gpu=clocks.max.gr")
+            .arg("--format=csv,noheader")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .creation_flags(NO_WINDOW),
+        Duration::from_secs(5),
+    );
     let Ok(out) = probe else { return Ok(false) };
     if !out.status.success() {
         return Ok(false);
@@ -705,12 +708,15 @@ where
 /// zero resident cost — unlike spawning a full PowerShell every probe).
 /// PUBG Mobile on GameLoop only: the tool's entire identity.
 pub fn query_emulator_procs() -> Result<Vec<ProcInfo>, String> {
-    let out = output_tracked(Command::new(super::system::system32_exe("tasklist.exe"))
-        .args(["/FO", "CSV", "/NH"])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .creation_flags(NO_WINDOW), Duration::from_secs(5))
-        .map_err(|e| format!("tasklist spawn failed: {e}"))?;
+    let out = output_tracked(
+        Command::new(super::system::system32_exe("tasklist.exe"))
+            .args(["/FO", "CSV", "/NH"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .creation_flags(NO_WINDOW),
+        Duration::from_secs(5),
+    )
+    .map_err(|e| format!("tasklist spawn failed: {e}"))?;
     if !out.status.success() {
         return Ok(Vec::new());
     }
@@ -841,12 +847,15 @@ pub fn presence() -> Presence {
 /// Every process name on the box (unfiltered): the presence scan above.
 /// Fail-soft like the filtered query — an unreadable table reads as empty.
 pub fn query_all_proc_names() -> Result<Vec<String>, String> {
-    let out = output_tracked(Command::new(super::system::system32_exe("tasklist.exe"))
-        .args(["/FO", "CSV", "/NH"])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .creation_flags(NO_WINDOW), Duration::from_secs(5))
-        .map_err(|e| format!("tasklist spawn failed: {e}"))?;
+    let out = output_tracked(
+        Command::new(super::system::system32_exe("tasklist.exe"))
+            .args(["/FO", "CSV", "/NH"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .creation_flags(NO_WINDOW),
+        Duration::from_secs(5),
+    )
+    .map_err(|e| format!("tasklist spawn failed: {e}"))?;
     if !out.status.success() {
         return Ok(Vec::new());
     }
@@ -914,12 +923,15 @@ pub fn query_game_visible() -> Option<bool> {
          }}\n\
          \"visible|$vis\"\n"
     );
-    let out = super::sampler::output_tracked(Command::new(super::system::powershell_exe())
-        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .creation_flags(NO_WINDOW), Duration::from_secs(10))
-        .ok()?;
+    let out = super::sampler::output_tracked(
+        Command::new(super::system::powershell_exe())
+            .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .creation_flags(NO_WINDOW),
+        Duration::from_secs(10),
+    )
+    .ok()?;
     let text = String::from_utf8_lossy(&out.stdout);
     for line in text.lines() {
         let mut parts = line.trim().splitn(2, '|');
@@ -941,15 +953,18 @@ pub fn query_game_visible() -> Option<bool> {
 
 /// GPU max clocks (gr, mem) — called once at session start.
 pub fn query_gpu_max_clocks() -> Option<(f64, f64)> {
-    let out = super::sampler::output_tracked(Command::new("nvidia-smi")
-        .args([
-            "--query-gpu=clocks.max.gr,clocks.max.mem",
-            "--format=csv,noheader,nounits",
-        ])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .creation_flags(NO_WINDOW), Duration::from_secs(5))
-        .ok()?;
+    let out = super::sampler::output_tracked(
+        Command::new("nvidia-smi")
+            .args([
+                "--query-gpu=clocks.max.gr,clocks.max.mem",
+                "--format=csv,noheader,nounits",
+            ])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .creation_flags(NO_WINDOW),
+        Duration::from_secs(5),
+    )
+    .ok()?;
     let text = String::from_utf8_lossy(&out.stdout);
     let mut it = text.trim().split(',');
     let gr = it.next()?.trim().parse().ok()?;
@@ -1005,11 +1020,14 @@ fn local_utc_offset_secs() -> i64 {
         // DST-aware, no registry parsing — the same source .NET uses.
         const SCRIPT: &str =
             "[int][TimeZoneInfo]::Local.GetUtcOffset([DateTimeOffset]::Now).TotalSeconds";
-        let out = output_tracked(Command::new(super::system::powershell_exe())
-            .args(["-NoProfile", "-NonInteractive", "-Command", SCRIPT])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .creation_flags(NO_WINDOW), Duration::from_secs(5));
+        let out = output_tracked(
+            Command::new(super::system::powershell_exe())
+                .args(["-NoProfile", "-NonInteractive", "-Command", SCRIPT])
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null())
+                .creation_flags(NO_WINDOW),
+            Duration::from_secs(5),
+        );
         if let Ok(o) = out {
             if let Ok(v) = String::from_utf8_lossy(&o.stdout).trim().parse::<i64>() {
                 if v.abs() <= 14 * 3600 {

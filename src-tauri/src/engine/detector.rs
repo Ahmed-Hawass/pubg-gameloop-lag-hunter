@@ -509,8 +509,7 @@ impl Detector {
         if let (Some(mclk), Some(max)) = (g.mclk, self.gpu_observed_max_mclk) {
             if max > 0.0 {
                 let rendering_now = playing
-                    && g
-                        .sm_pct
+                    && g.sm_pct
                         .map(|sm| sm >= self.learned_baseline() * ACTIVITY_GATE_RATIO)
                         .unwrap_or(false);
                 let active = rendering_now && mclk < max * 0.5;
@@ -561,9 +560,7 @@ impl Detector {
                 // the classification is decided HERE, at emit time, and the
                 // event kind carries it. Nothing downstream re-derives it
                 // from later machine state.
-                let others_ok = self
-                    .th
-                    .others_ok(s.disk_queue, s.cpu_total, s.avail_mb);
+                let others_ok = self.th.others_ok(s.disk_queue, s.cpu_total, s.avail_mb);
                 let (kind, detail) = if others_ok {
                     (
                         "gpu_activity_cliff",
@@ -619,7 +616,7 @@ mod tests {
         assert!(!th.others_ok(Some(0.1), Some(50.0), Some(1024.0))); // RAM pressure
         assert!(!th.others_ok(Some(2.0), Some(50.0), Some(4096.0))); // disk load
         assert!(!th.others_ok(Some(0.1), Some(95.0), Some(4096.0))); // cpu load
-        // missing counters abstain as healthy — never blame load blind
+                                                                     // missing counters abstain as healthy — never blame load blind
         assert!(th.others_ok(None, None, None));
     }
 
@@ -891,7 +888,9 @@ mod tests {
             .any(|e| e.kind == "gpu_activity_cliff" && e.severity == Severity::Crit));
         let e2 = d.feed(&live_sample(4.0)); // tick 2 — no duplicate event
         assert_eq!(
-            e2.iter().filter(|e| e.kind.starts_with("gpu_activity_cliff")).count(),
+            e2.iter()
+                .filter(|e| e.kind.starts_with("gpu_activity_cliff"))
+                .count(),
             0,
             "one cliff = one event, not one per tick"
         );
@@ -923,7 +922,11 @@ mod tests {
         // combat bursts ride on top — P25 latches onto the quiet band (40)
         let quiet = 40.0;
         for i in 0..40 {
-            let s = if i % 4 == 0 { live_sample(48.0) } else { live_sample(quiet) };
+            let s = if i % 4 == 0 {
+                live_sample(48.0)
+            } else {
+                live_sample(quiet)
+            };
             d.feed(&s);
         }
         d.feed(&live_sample(48.0)); // last combat tick

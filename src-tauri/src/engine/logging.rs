@@ -37,7 +37,7 @@ fn logs_dir() -> PathBuf {
 fn log_path_in(dir: &Path) -> PathBuf {
     // one file per day: laghunter-2026-08-31.log
     let iso = sampler::iso_now(); // 2026-08-31T...
-    // never slice blindly: a malformed clock must not panic the logger itself
+                                  // never slice blindly: a malformed clock must not panic the logger itself
     let date = iso.get(0..10).unwrap_or("unknown");
     dir.join(format!("laghunter-{date}.log"))
 }
@@ -265,10 +265,8 @@ mod tests {
     /// the retention cleanup deletes files there. Every test below aims
     /// the same code at a throwaway temp dir instead.
     fn temp_logs_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "laghunter-log-test-{}-{name}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("laghunter-log-test-{}-{name}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let _ = fs::create_dir_all(&dir);
         dir
@@ -355,7 +353,8 @@ mod tests {
     #[test]
     fn cleanup_never_panics() {
         let dir = temp_logs_dir("cleanup");
-        fs::write(dir.join("laghunter-2099-01-01.log"), "recent").expect("temp log must be writable");
+        fs::write(dir.join("laghunter-2099-01-01.log"), "recent")
+            .expect("temp log must be writable");
         cleanup_old_logs_in(&dir);
         assert!(dir.join("laghunter-2099-01-01.log").is_file());
         let _ = fs::remove_dir_all(&dir);

@@ -7,31 +7,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-/// The production parser's contract, re-used by the live test: a value on
-/// a comma-decimal culture ("12,5") used to FAIL the old bare
-/// `parse::<f64>()` here while production accepted it — the test asserted
-/// a contract the engine does not have. Reach through the lib's public
-/// parser so the live check tests what actually runs.
+use lag_hunter_lib::engine::sampler::parse_counter_value;
+
+/// The production parser, used directly by the live test so the live
+/// check tests what actually runs. Unit tests in sampler.rs pin the
+/// comma-decimal and grouping edge cases.
 fn parse_value(raw: &str) -> Option<f64> {
-    // lag_hunter_lib::engine::sampler exposes map_counter_key publicly but
-    // keeps parse_counter_value private; the pdh path logs through it. The
-    // parser is behavior-pinned by unit tests in sampler.rs, so the live
-    // test only needs SHAPE checking (a value exists and parses in the
-    // current culture OR the dot form) — parity with production rules is
-    // the unit suite's job.
-    let t = raw.trim().trim_matches('"');
-    if let Ok(v) = t.parse::<f64>() {
-        return Some(v);
-    }
-    let (whole, frac) = t.split_once(',')?;
-    if !whole.is_empty()
-        && !frac.is_empty()
-        && whole.bytes().all(|b| b.is_ascii_digit())
-        && frac.bytes().all(|b| b.is_ascii_digit())
-    {
-        return format!("{whole}.{frac}").parse::<f64>().ok();
-    }
-    None
+    parse_counter_value(raw)
 }
 
 #[test]

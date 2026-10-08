@@ -2,7 +2,6 @@
 // Run with: node scripts/locale-key-check.mjs  (uses the installed TS via a
 // tiny transpile-to-temp approach). Exit 1 on any drift.
 
-import { execFileSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

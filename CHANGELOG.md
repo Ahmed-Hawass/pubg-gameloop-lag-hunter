@@ -594,6 +594,25 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - Tools landing first-row cards no longer clip at the top on hover or
   keyboard focus: the hover lift and the focus ring rendered outside
   the scrollport edge, so the scroller keeps top breathing room now.
+- Welcome cost tiles use the vivid signal for their glyphs instead of
+  the dark state ink: the dark green text token on a dark surface read
+  almost invisible in the dark theme, while the primary signal reads
+  in both themes (pinned by a manual dark/light checklist, visuals
+  have no mocked test).
+- Welcome Let's start uses the same filled Play mark as the Monitor
+  hero (the outline variant slipped in with the two-slide landing),
+  and the stale custom-disc comment above the hero button is gone:
+  the app speaks lucide only, with no bespoke SVG to maintain.
+- SPEC no longer describes a read-only tool: diagnosis paths never
+  write, and every Tools fix is an explicit user action through a
+  whitelisted command, verified by re-read and audit-logged. The
+  architecture page lists the missing engine modules (tweaks,
+  cleanup, prockill, emulator, elevate, icons, display names).
+- Lint covers the locale checker script now (it was excluded with the
+  whole scripts folder): the dead child-process import is out, and
+  the script gets its own Node globals block. CI adds the missing
+  rustfmt gate, and the live typeperf test calls the production
+  counter parser directly instead of a local copy.
 
 ### Changed
 - The Tools tab's details page reads only the two switches it displays,

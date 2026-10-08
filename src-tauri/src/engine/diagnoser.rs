@@ -1,9 +1,7 @@
 // diagnoser.rs — engine events → user-facing diagnoses (English, plain language)
 // The UI never shows engine jargon; it shows these.
 
-use super::types::{
-    iso_ms, Diagnosis, EngineEvent, Overall, Phase, Sample, Severity, UiState,
-};
+use super::types::{iso_ms, Diagnosis, EngineEvent, Overall, Phase, Sample, Severity, UiState};
 
 /// How recent an event must be to count as live evidence for a card.
 /// Was a bare inline `5 * 60 * 1000` — now named, and every window reads it.
@@ -151,7 +149,9 @@ fn diagnoses_from(events: &[EngineEvent], now_iso: &str) -> Vec<Diagnosis> {
         let Some(ev_ms) = iso_ms(&ev.t) else { continue };
         match ev.phase {
             Phase::Start => {
-                let slot = latest_start_by_kind.entry(ev.kind.as_str()).or_insert(ev_ms);
+                let slot = latest_start_by_kind
+                    .entry(ev.kind.as_str())
+                    .or_insert(ev_ms);
                 if ev_ms > *slot {
                     *slot = ev_ms;
                 }
@@ -185,7 +185,11 @@ fn diagnoses_from(events: &[EngineEvent], now_iso: &str) -> Vec<Diagnosis> {
         // window where lexicographic ISO ordering lies.
         ev.phase == Phase::Start
             && latest_start_by_kind.get(ev.kind.as_str()).copied() == Some(ev_ms)
-            && last_end_by_kind.get(ev.kind.as_str()).copied().unwrap_or(i64::MIN) < ev_ms
+            && last_end_by_kind
+                .get(ev.kind.as_str())
+                .copied()
+                .unwrap_or(i64::MIN)
+                < ev_ms
     };
     // window envelopes: for each Start, the first End at/after it (the
     // events arrive in order, so a binary search over the sorted End list
@@ -593,7 +597,7 @@ mod tests {
                 Some(12.0),
             ),
         ];
-                let now = "2026-08-31T05:00:13.000Z";
+        let now = "2026-08-31T05:00:13.000Z";
         let d = diagnoses_from(&events, now);
         assert_eq!(d.len(), 1, "one storm must produce exactly one card");
         assert_eq!(d[0].key, "disk_wait");
@@ -619,7 +623,7 @@ mod tests {
                 Some(1.0),
             ),
         ];
-                let now = "2026-08-31T05:00:02.000Z";
+        let now = "2026-08-31T05:00:02.000Z";
         let d = diagnoses_from(&events, now);
         assert!(d.is_empty(), "1s blip must not earn a card");
     }
@@ -688,7 +692,7 @@ mod tests {
                 Some(8.0),
             ),
         ];
-                let now = "2026-08-31T05:00:09.000Z";
+        let now = "2026-08-31T05:00:09.000Z";
         let d = diagnoses_from(&events, now);
         assert_eq!(d.len(), 1);
         assert_eq!(d[0].key, "cpu_throttle");
@@ -741,7 +745,7 @@ mod tests {
             "2026-08-31T04:54:00.000Z", // 6 minutes before now
             None,
         )];
-                let now = "2026-08-31T05:00:00.000Z";
+        let now = "2026-08-31T05:00:00.000Z";
         let d = diagnoses_from(&events, now);
         assert!(
             d.iter().any(|x| x.key == "mem_low"),
@@ -770,7 +774,7 @@ mod tests {
                 Some(60.0),
             ),
         ];
-                let now = "2026-08-31T05:00:00.000Z";
+        let now = "2026-08-31T05:00:00.000Z";
         let d = diagnoses_from(&events, now);
         assert!(
             !d.iter().any(|x| x.key == "cpu_busy"),
@@ -798,7 +802,7 @@ mod tests {
                 Some(20.0),
             ),
         ];
-                let now = "2026-08-31T05:00:21.000Z";
+        let now = "2026-08-31T05:00:21.000Z";
         let d = diagnoses_from(&events, now);
         assert!(
             !d.iter().any(|x| x.key == "gpu_wake"),
@@ -833,7 +837,7 @@ mod tests {
                 Some(20.0),
             ),
         ];
-                let now = "2026-08-31T05:00:21.000Z";
+        let now = "2026-08-31T05:00:21.000Z";
         let d = diagnoses_from(&events, now);
         assert!(
             d.iter().any(|x| x.key == "gpu_wake"),
@@ -869,7 +873,7 @@ mod tests {
                 Some(19.0),
             ),
         ];
-                let now = "2026-08-31T05:00:21.000Z";
+        let now = "2026-08-31T05:00:21.000Z";
         let d = diagnoses_from(&events, now);
         assert!(
             !d.iter().any(|x| x.key == "gpu_wake"),
@@ -916,7 +920,7 @@ mod tests {
                 None,
             ),
         ];
-                let now = "2026-08-31T05:05:10.000Z";
+        let now = "2026-08-31T05:05:10.000Z";
         let d = diagnoses_from(&events, now);
         assert!(
             d.iter().any(|x| x.key == "gpu_wake"),
@@ -969,7 +973,7 @@ mod tests {
                 Some(30.0),
             ),
         ];
-                let now = "2026-08-31T05:04:31.000Z";
+        let now = "2026-08-31T05:04:31.000Z";
         let d = diagnoses_from(&events, now);
         assert!(
             !d.iter().any(|x| x.key == "paging_churn"),
@@ -1000,7 +1004,7 @@ mod tests {
                 Some(40.0),
             ),
         ];
-                let now = "2026-08-31T05:00:41.000Z";
+        let now = "2026-08-31T05:00:41.000Z";
         let d = diagnoses_from(&events, now);
         assert!(
             !d.iter().any(|x| x.key == "paging_churn"),
@@ -1035,7 +1039,7 @@ mod tests {
                 Some(40.0),
             ),
         ];
-                let now = "2026-08-31T05:00:41.000Z";
+        let now = "2026-08-31T05:00:41.000Z";
         let d = diagnoses_from(&events, now);
         assert!(
             d.iter().any(|x| x.key == "paging_churn"),
@@ -1070,7 +1074,7 @@ mod tests {
                 None,
             ),
         ];
-                let now = "2026-08-31T05:00:51.000Z";
+        let now = "2026-08-31T05:00:51.000Z";
         let d = diagnoses_from(&events, now);
         assert!(
             !d.iter().any(|x| x.key == "paging_churn"),

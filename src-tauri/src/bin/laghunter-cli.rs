@@ -61,8 +61,11 @@ fn banner_rows() -> [String; 5] {
     for row in rows.iter_mut() {
         row.push_str("  ");
     }
-    let hunter: Vec<&[&str; 5]> =
-        ['H', 'U', 'N', 'T', 'E'].map(lookup).into_iter().chain(std::iter::once(&r)).collect();
+    let hunter: Vec<&[&str; 5]> = ['H', 'U', 'N', 'T', 'E']
+        .map(lookup)
+        .into_iter()
+        .chain(std::iter::once(&r))
+        .collect();
     word(&mut rows, &hunter);
     rows
 }
@@ -208,7 +211,10 @@ fn session_live(id: &str) -> bool {
         .ok()
         .and_then(|t| serde_json::from_str(&t).ok())
         .unwrap_or(serde_json::json!({}));
-    let partial = summary.get("partial").and_then(|p| p.as_bool()).unwrap_or(false);
+    let partial = summary
+        .get("partial")
+        .and_then(|p| p.as_bool())
+        .unwrap_or(false);
     if !partial {
         return false;
     }
@@ -233,7 +239,11 @@ fn cmd_sessions() -> i32 {
         "SESSION", "DATE", "DUR", "SAMPLES"
     );
     for e in entries {
-        let live = if session_live(&e.id) { "  (running)" } else { "" };
+        let live = if session_live(&e.id) {
+            "  (running)"
+        } else {
+            ""
+        };
         let dur = if e.duration_sec >= 60 {
             format!("{}m", e.duration_sec / 60)
         } else {
@@ -395,7 +405,10 @@ fn cmd_scan(minutes: u64, quiet: bool, no_color: bool) -> i32 {
                     ui.elapsed_sec,
                     ui.samples_count,
                     ui.game_running,
-                    ui.bars.cpu.map(|v| v.to_string()).unwrap_or_else(|| "--".into()),
+                    ui.bars
+                        .cpu
+                        .map(|v| v.to_string())
+                        .unwrap_or_else(|| "--".into()),
                     format!("{:?}", ui.overall),
                 );
                 last_count = ui.samples_count;
@@ -406,7 +419,10 @@ fn cmd_scan(minutes: u64, quiet: bool, no_color: bool) -> i32 {
     match eng.stop() {
         Ok(report) => {
             if !quiet {
-                println!("report: {}", report.as_deref().unwrap_or("(no report file)"));
+                println!(
+                    "report: {}",
+                    report.as_deref().unwrap_or("(no report file)")
+                );
             }
         }
         Err(e) => eprintln!("stop failed: {e}"),

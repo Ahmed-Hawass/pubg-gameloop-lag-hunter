@@ -26,10 +26,10 @@
 // with a deep link, never a button here.
 
 use serde::Serialize;
-use winreg::enums::HKEY_CURRENT_USER;
-use winreg::RegKey;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
+use winreg::enums::HKEY_CURRENT_USER;
+use winreg::RegKey;
 
 /// Registry home of the background-recording toggle ("Record what
 /// happened"): HKCU needs no elevation, takes effect immediately.
@@ -406,11 +406,8 @@ pub fn set_mouse_accel(value: u32) -> Result<TweakResult, String> {
         delete_value(MOUSE_SUBKEY, MOUSE_T2)?;
     }
     let r = |name| read_dword(MOUSE_SUBKEY, name).unwrap_or(None);
-    let verified =
-        super::system::mouse_accel_off(r(MOUSE_SPEED), r(MOUSE_T1), r(MOUSE_T2)) == on;
-    super::logging::info(&format!(
-        "tweak mouse set: on={on} verified={verified}"
-    ));
+    let verified = super::system::mouse_accel_off(r(MOUSE_SPEED), r(MOUSE_T1), r(MOUSE_T2)) == on;
+    super::logging::info(&format!("tweak mouse set: on={on} verified={verified}"));
     Ok(TweakResult {
         id: MOUSE_ID.into(),
         previous: current,
@@ -492,7 +489,11 @@ fn set_tweak_elevated(id: &str, value: u32) -> Result<TweakResult, String> {
 fn set_tweak_elevated_powerplan(value: u32) -> Result<TweakResult, String> {
     let on = value == 1;
     let active = super::system::power_active_guid();
-    let previous = if active.is_empty() { None } else { Some(active) };
+    let previous = if active.is_empty() {
+        None
+    } else {
+        Some(active)
+    };
     if on {
         // remember where OFF returns to (latest intent wins); skipped when
         // already on a performance plan — there is nothing to return to.
@@ -519,8 +520,7 @@ fn set_tweak_elevated_powerplan(value: u32) -> Result<TweakResult, String> {
     } else {
         let stored = super::settings::load().previous_power_guid;
         let list = super::system::power_list_guids();
-        super::system::power_active_guid()
-            == power_restore_target(stored.as_deref(), &list)
+        super::system::power_active_guid() == power_restore_target(stored.as_deref(), &list)
     };
     if !on && verified {
         // The restore target is consumed by a successful OFF transition;
@@ -530,9 +530,7 @@ fn set_tweak_elevated_powerplan(value: u32) -> Result<TweakResult, String> {
             s.previous_power_guid = None;
         });
     }
-    super::logging::info(&format!(
-        "tweak powerplan set: on={on} verified={verified}"
-    ));
+    super::logging::info(&format!("tweak powerplan set: on={on} verified={verified}"));
     // previous stays None: TweakResult.previous is a numeric leftover the
     // UI never reads; the real previous plan lives in settings and is
     // resolved at OFF time (it may change between flips).
@@ -572,12 +570,7 @@ fn powercfg(args: &[&str]) -> Result<String, String> {
 /// machine). Pure: the whole fallback policy in one testable place.
 fn power_restore_target(stored: Option<&str>, list: &[String]) -> String {
     match stored {
-        Some(g)
-            if !g.is_empty()
-                && list.iter().any(|x| x == g) =>
-        {
-            g.to_string()
-        }
+        Some(g) if !g.is_empty() && list.iter().any(|x| x == g) => g.to_string(),
         _ => super::system::POWER_GUID_BALANCED.to_string(),
     }
 }
@@ -650,9 +643,7 @@ pub fn set_power_plan(value: u32) -> Result<TweakResult, String> {
     };
     powercfg(&["/setactive", &target])?;
     let verified = super::system::power_active_guid() == target;
-    super::logging::info(&format!(
-        "tweak powerplan set: on={on} verified={verified}"
-    ));
+    super::logging::info(&format!("tweak powerplan set: on={on} verified={verified}"));
     Ok(TweakResult {
         id: POWERPLAN_ID.into(),
         previous: None,
@@ -832,13 +823,7 @@ fn write_pagefile_raw(valid: &ValidatedPagefileApply) -> Result<(), String> {
         // files Windows manages
         Err(_) => return Err("PF_WRITE_FAILED".into()),
     };
-    let entries = rebuild_pagefile_entries(
-        current,
-        &drive,
-        valid.mode,
-        valid.min_mb,
-        valid.max_mb,
-    );
+    let entries = rebuild_pagefile_entries(current, &drive, valid.mode, valid.min_mb, valid.max_mb);
     key.set_value("AutomaticManagedPagefile", &(valid.automatic as u32))
         .map_err(|_| "PF_WRITE_FAILED".to_string())?;
     if key.set_value("PagingFiles", &entries).is_err() {
@@ -934,15 +919,15 @@ pub fn set_pagefile_settings(
     if drives.is_empty() {
         return Err("PF_READ_FAILED".into());
     }
-    let normalized =
-        normalize_drive_id(drive_raw).ok_or_else(|| "PF_DRIVE_INVALID".to_string())?;
+    let normalized = normalize_drive_id(drive_raw).ok_or_else(|| "PF_DRIVE_INVALID".to_string())?;
     let free = if automatic {
         None
     } else {
         super::system::drive_free_mb_for(&drive_id_string(normalized))
     };
-    let valid =
-        validate_pagefile_apply(automatic, drive_raw, mode_raw, min_raw, max_raw, &drives, free)?;
+    let valid = validate_pagefile_apply(
+        automatic, drive_raw, mode_raw, min_raw, max_raw, &drives, free,
+    )?;
     write_pagefile_raw(&valid)?;
     let verified = pagefile_matches(&valid);
     super::logging::info(&format!(
@@ -975,8 +960,7 @@ pub fn validate_pagefile_settings(
     if drives.is_empty() {
         return Err("PF_READ_FAILED".into());
     }
-    let normalized =
-        normalize_drive_id(drive_raw).ok_or_else(|| "PF_DRIVE_INVALID".to_string())?;
+    let normalized = normalize_drive_id(drive_raw).ok_or_else(|| "PF_DRIVE_INVALID".to_string())?;
     let free = super::system::drive_free_mb_for(&drive_id_string(normalized));
     let valid =
         validate_pagefile_apply(false, drive_raw, mode_raw, min_raw, max_raw, &drives, free)?;
@@ -999,15 +983,15 @@ pub fn set_pagefile_settings_parent(
     if drives.is_empty() {
         return Err("PF_READ_FAILED".into());
     }
-    let normalized =
-        normalize_drive_id(drive_raw).ok_or_else(|| "PF_DRIVE_INVALID".to_string())?;
+    let normalized = normalize_drive_id(drive_raw).ok_or_else(|| "PF_DRIVE_INVALID".to_string())?;
     let free = if automatic {
         None
     } else {
         super::system::drive_free_mb_for(&drive_id_string(normalized))
     };
-    let valid =
-        validate_pagefile_apply(automatic, drive_raw, mode_raw, min_raw, max_raw, &drives, free)?;
+    let valid = validate_pagefile_apply(
+        automatic, drive_raw, mode_raw, min_raw, max_raw, &drives, free,
+    )?;
     if pagefile_matches(&valid) {
         return Ok(TweakResult {
             id: PAGEFILE_SETTINGS_ID.into(),
@@ -1082,14 +1066,7 @@ pub fn set_tweak_direct(id: &str, value: u32) -> Result<TweakResult, String> {
 pub fn is_known_id(id: &str) -> bool {
     matches!(
         id,
-        DVR_ID
-            | SS_ID
-            | GAMEMODE_ID
-            | GPUPREF_ID
-            | FSO_ID
-            | MOUSE_ID
-            | WGC_ID
-            | POWERPLAN_ID
+        DVR_ID | SS_ID | GAMEMODE_ID | GPUPREF_ID | FSO_ID | MOUSE_ID | WGC_ID | POWERPLAN_ID
     )
 }
 
@@ -1147,21 +1124,23 @@ mod tests {
             ("windowedopt", "windowedopt value must be 0 or 1"),
             ("powerplan", "powerplan value must be 0 or 1"),
         ] {
-            assert_eq!(set_tweak(id, 2).unwrap_err(), want, "id {id} mis-dispatched");
+            assert_eq!(
+                set_tweak(id, 2).unwrap_err(),
+                want,
+                "id {id} mis-dispatched"
+            );
         }
     }
 
     #[test]
-    fn power_restore_target_prefers_a_live_previous() {        let list = vec![
+    fn power_restore_target_prefers_a_live_previous() {
+        let list = vec![
             "381b4222-f694-41f0-9685-ff5bb260df2e".to_string(),
             "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c".to_string(),
         ];
         // stored + present = back to exactly it (even Power saver)
         assert_eq!(
-            power_restore_target(
-                Some("381b4222-f694-41f0-9685-ff5bb260df2e"),
-                &list
-            ),
+            power_restore_target(Some("381b4222-f694-41f0-9685-ff5bb260df2e"), &list),
             "381b4222-f694-41f0-9685-ff5bb260df2e"
         );
         // stored but vanished, never-stored, and garbage all fall back
@@ -1185,14 +1164,18 @@ mod tests {
     }
 
     #[test]
-    fn power_enable_target_never_duplicates_twice() {        // the litter bug: duplicatescheme mints a FRESH guid every run, so
+    fn power_enable_target_never_duplicates_twice() {
+        // the litter bug: duplicatescheme mints a FRESH guid every run, so
         // "builtin in list" as presence check re-created forever. Presence
         // is any performance-class plan; creation happens only at zero.
         let pair = |g: &str, n: &str| (g.to_string(), n.to_string());
         let builtin = super::super::system::POWER_GUID_HIGH_PERFORMANCE;
         let balanced = super::super::system::POWER_GUID_BALANCED;
         // builtin present: use it (no creation)
-        let list = vec![pair(balanced, "Balanced"), pair(builtin, "High performance")];
+        let list = vec![
+            pair(balanced, "Balanced"),
+            pair(builtin, "High performance"),
+        ];
         assert!(matches!(
             power_enable_target(&list),
             PowerEnableTarget::Existing(g) if g == builtin
@@ -1208,8 +1191,14 @@ mod tests {
         ));
         // zero performance plans: the single allowed creation
         let list = vec![pair(balanced, "Balanced")];
-        assert!(matches!(power_enable_target(&list), PowerEnableTarget::Create));
-        assert!(matches!(power_enable_target(&[]), PowerEnableTarget::Create));
+        assert!(matches!(
+            power_enable_target(&list),
+            PowerEnableTarget::Create
+        ));
+        assert!(matches!(
+            power_enable_target(&[]),
+            PowerEnableTarget::Create
+        ));
     }
 
     #[test]
@@ -1220,7 +1209,10 @@ mod tests {
         // fixture below (a real drive reading shape). Every refusal is a
         // machine key (the UI translates), never a sentence.
         let free = Some(350000u64);
-        assert_eq!(validate_pagefile_sizes("1024", "4096", free), Ok((1024, 4096)));
+        assert_eq!(
+            validate_pagefile_sizes("1024", "4096", free),
+            Ok((1024, 4096))
+        );
         assert_eq!(validate_pagefile_sizes("16", "16", free), Ok((16, 16)));
         // 10 digits overflowing u32: refused as out-of-range, never wrapped
         assert_eq!(
@@ -1297,15 +1289,13 @@ mod tests {
         // (surrounding whitespace trims; the id itself must be exact)
         for bad in ["", "C", "C:\\", "CC:", "1:", "E:"] {
             assert_eq!(
-                validate_pagefile_apply(false, bad, "system", "0", "0", &drives, free)
-                    .unwrap_err(),
+                validate_pagefile_apply(false, bad, "system", "0", "0", &drives, free).unwrap_err(),
                 "PF_DRIVE_INVALID",
                 "drive {bad:?} must refuse"
             );
         }
         // lowercase is the same drive, not a refusal
-        let v =
-            validate_pagefile_apply(false, "c:", "system", "0", "0", &drives, free).unwrap();
+        let v = validate_pagefile_apply(false, "c:", "system", "0", "0", &drives, free).unwrap();
         assert!(!v.automatic);
         assert_eq!(v.drive, [b'C', b':']);
         assert_eq!(v.mode, PagefileRequestMode::System);
@@ -1319,13 +1309,12 @@ mod tests {
             "PF_MODE_INVALID"
         );
         // system and off carry no sizes (garbage sizes never reach a write)
-        let v =
-            validate_pagefile_apply(false, "D:", "off", "zzz", "", &drives, free).unwrap();
+        let v = validate_pagefile_apply(false, "D:", "off", "zzz", "", &drives, free).unwrap();
         assert_eq!(v.mode, PagefileRequestMode::Off);
         assert_eq!((v.min_mb, v.max_mb), (0, 0));
         // custom validates sizes against the SELECTED drive's free space
-        let v = validate_pagefile_apply(false, "D:", "custom", "1024", "4096", &drives, free)
-            .unwrap();
+        let v =
+            validate_pagefile_apply(false, "D:", "custom", "1024", "4096", &drives, free).unwrap();
         assert_eq!((v.min_mb, v.max_mb), (1024, 4096));
         assert_eq!(
             validate_pagefile_apply(false, "D:", "custom", "1024", "4096", &drives, None)
@@ -1391,8 +1380,12 @@ mod tests {
     }
 
     #[test]
-    fn pagefile_warnings_fire_before_the_write() {        // off always warns (crash risk is real); small warns but allows
-        assert_eq!(pagefile_warning(PagefileRequestMode::Off, 0), Some("off".into()));
+    fn pagefile_warnings_fire_before_the_write() {
+        // off always warns (crash risk is real); small warns but allows
+        assert_eq!(
+            pagefile_warning(PagefileRequestMode::Off, 0),
+            Some("off".into())
+        );
         assert_eq!(
             pagefile_warning(PagefileRequestMode::Custom, 4096),
             Some("small".into())

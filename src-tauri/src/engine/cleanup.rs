@@ -226,7 +226,11 @@ pub fn clean_selected_with(
     // leaves the numbers in the sidecar; without it an admin verdict
     // would read 0 after a real multi-GB clean (a lie, never a number).
     let mut elevated: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
-    let admin: Vec<String> = ids.iter().filter(|id| is_admin_category(id)).cloned().collect();
+    let admin: Vec<String> = ids
+        .iter()
+        .filter(|id| is_admin_category(id))
+        .cloned()
+        .collect();
     if !admin.is_empty() {
         // one UAC prompt for the whole click; a denied prompt is
         // "cancelled" (quiet), a post-consent failure is a real error
@@ -843,7 +847,11 @@ fn dir_size_capped(root: PathBuf) -> Option<u64> {
             }
         }
     }
-    if seen_any { Some(total) } else { None }
+    if seen_any {
+        Some(total)
+    } else {
+        None
+    }
 }
 
 #[cfg(windows)]
@@ -988,7 +996,12 @@ mod tests {
 
     #[test]
     fn known_ids_accepted_unknown_refused() {
-        for id in [USER_TEMP_ID, SYSTEM_TEMP_ID, RECYCLE_BIN_ID, DELIVERY_OPT_ID] {
+        for id in [
+            USER_TEMP_ID,
+            SYSTEM_TEMP_ID,
+            RECYCLE_BIN_ID,
+            DELIVERY_OPT_ID,
+        ] {
             assert!(is_cleanup_id(id));
         }
         assert!(!is_cleanup_id("shader_cache"));
@@ -1038,7 +1051,13 @@ mod tests {
         // test-only: mklink is a cmd builtin with no exe of its own, so
         // the absolute cmd path is named here (never shipped code).
         let mk = std::process::Command::new(crate::engine::system::system32_exe("cmd.exe"))
-            .args(["/C", "mklink", "/J", link.to_str().unwrap(), target.to_str().unwrap()])
+            .args([
+                "/C",
+                "mklink",
+                "/J",
+                link.to_str().unwrap(),
+                target.to_str().unwrap(),
+            ])
             .output();
         if mk.map(|o| o.status.success()).unwrap_or(false) && root_is_link(&link) {
             empty_dir_contents(&link);
@@ -1058,7 +1077,10 @@ mod tests {
         let locked_path = dir.join("locked.tmp");
         std::fs::write(&locked_path, "data").unwrap();
         // an open handle without share-delete blocks Windows deletion
-        let _held = std::fs::OpenOptions::new().write(true).open(&locked_path).unwrap();
+        let _held = std::fs::OpenOptions::new()
+            .write(true)
+            .open(&locked_path)
+            .unwrap();
         empty_dir_contents(&dir);
         // either skipped (still there) or deleted after the handle made
         // it deletable: both are honest outcomes, never an error
@@ -1258,7 +1280,10 @@ mod tests {
             }],
         );
         let body = std::fs::read_to_string(&path).unwrap();
-        assert!(!body.contains("999"), "runs older than 90 days must be pruned");
+        assert!(
+            !body.contains("999"),
+            "runs older than 90 days must be pruned"
+        );
         assert!(!body.contains("not json"), "corrupt lines must be dropped");
         let totals = history_totals_in(&path);
         assert_eq!(totals.last_freed_bytes, 7);
@@ -1274,7 +1299,10 @@ mod tests {
             r#"{"system_temp": 100, "user_temp": 999, "nope": 5, "delivery_opt": "x"}"#,
         );
         assert_eq!(out.get("system_temp"), Some(&100));
-        assert!(!out.contains_key("user_temp"), "smuggled unprivileged id refused");
+        assert!(
+            !out.contains_key("user_temp"),
+            "smuggled unprivileged id refused"
+        );
         assert!(!out.contains_key("nope"), "unknown id refused");
         assert!(
             !out.contains_key("delivery_opt"),

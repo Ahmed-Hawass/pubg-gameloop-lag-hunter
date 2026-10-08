@@ -180,7 +180,7 @@
 .welcome-cost > :nth-child(2) { animation-delay: 0.1s; }
 .welcome-cost > :nth-child(3) { animation-delay: 0.15s; }
 .welcome-cost-tile svg {
-  color: var(--text-success);
+  color: var(--primary);
   margin-block-end: 4px;
 }
 .welcome-cost-val {

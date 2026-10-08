@@ -148,9 +148,7 @@ static ACTIVE_CANCEL: Mutex<Option<std::sync::Arc<AtomicBool>>> = Mutex::new(Non
 /// it. The command layer's "one modal" rule is UI convention; THIS is the
 /// engine's own enforcement.
 pub fn register_cancel(cancel: std::sync::Arc<AtomicBool>) -> Result<(), String> {
-    let mut slot = ACTIVE_CANCEL
-        .lock()
-        .unwrap_or_else(|p| p.into_inner());
+    let mut slot = ACTIVE_CANCEL.lock().unwrap_or_else(|p| p.into_inner());
     if slot.is_some() {
         return Err("a download is already registered".into());
     }
@@ -272,12 +270,8 @@ pub fn download_and_verify(
     }
     let result = download_inner(info, dest, cancel, &on_event);
     DOWNLOAD_RUNNING.store(false, Ordering::SeqCst);
-    *ACTIVE_DOWNLOAD
-        .lock()
-        .unwrap_or_else(|p| p.into_inner()) = None;
-    *ACTIVE_CANCEL
-        .lock()
-        .unwrap_or_else(|p| p.into_inner()) = None;
+    *ACTIVE_DOWNLOAD.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    *ACTIVE_CANCEL.lock().unwrap_or_else(|p| p.into_inner()) = None;
     result
 }
 
@@ -305,11 +299,11 @@ fn download_inner(
         .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or(0);
     if total > MAX_DOWNLOAD_BYTES {
-        return Err(format!("download exceeds the {MAX_DOWNLOAD_BYTES}-byte cap"));
+        return Err(format!(
+            "download exceeds the {MAX_DOWNLOAD_BYTES}-byte cap"
+        ));
     }
-    *ACTIVE_DOWNLOAD
-        .lock()
-        .unwrap_or_else(|p| p.into_inner()) = Some(dest.clone());
+    *ACTIVE_DOWNLOAD.lock().unwrap_or_else(|p| p.into_inner()) = Some(dest.clone());
     let mut hasher = Sha256::new();
     let mut body = resp.into_reader();
     let mut buf = Vec::new();
@@ -328,7 +322,9 @@ fn download_inner(
         hasher.update(&chunk[..n]);
         buf.extend_from_slice(&chunk[..n]);
         if buf.len() as u64 > MAX_DOWNLOAD_BYTES {
-            return Err(format!("download exceeds the {MAX_DOWNLOAD_BYTES}-byte cap"));
+            return Err(format!(
+                "download exceeds the {MAX_DOWNLOAD_BYTES}-byte cap"
+            ));
         }
         let now = std::time::Instant::now();
         if now.duration_since(last_event) >= Duration::from_millis(200) {
@@ -353,7 +349,9 @@ fn download_inner(
             "update {} hash mismatch: expected {expected}, got {actual}",
             info.version
         ));
-        return Err("verification failed — the downloaded file does not match its published hash".into());
+        return Err(
+            "verification failed — the downloaded file does not match its published hash".into(),
+        );
     }
 
     // write to a namespaced temp sibling, then rename over the
@@ -471,7 +469,10 @@ fn agent() -> ureq::Agent {
     if std::env::var_os("HTTPS_PROXY").is_none() && std::env::var_os("https_proxy").is_none() {
         if let Some(proxy_url) = windows_system_proxy() {
             if let Ok(p) = ureq::Proxy::new(&proxy_url) {
-                logging::info(&format!("update http: using system proxy {}", redact_proxy(&proxy_url)));
+                logging::info(&format!(
+                    "update http: using system proxy {}",
+                    redact_proxy(&proxy_url)
+                ));
                 builder = builder.proxy(p);
             }
         }
@@ -549,18 +550,18 @@ fn http_get(url: &str) -> Result<ureq::Response, String> {
                 current = next.to_string();
             }
             Err(ureq::Error::Status(code, resp)) => {
-            // 403/429 from the API: capture the reason line for the log —
-            // rate limit vs UA policy vs WARP egress IPs differ here, and
-            // "http 403" alone leaves us guessing in user reports
-            let body = resp.into_string().unwrap_or_default();
-            let reason = body
-                .lines()
-                .find(|l| l.contains("message"))
-                .unwrap_or("no body")
-                .trim()
-                .chars()
-                .take(160)
-                .collect::<String>();
+                // 403/429 from the API: capture the reason line for the log —
+                // rate limit vs UA policy vs WARP egress IPs differ here, and
+                // "http 403" alone leaves us guessing in user reports
+                let body = resp.into_string().unwrap_or_default();
+                let reason = body
+                    .lines()
+                    .find(|l| l.contains("message"))
+                    .unwrap_or("no body")
+                    .trim()
+                    .chars()
+                    .take(160)
+                    .collect::<String>();
                 return Err(format!("http {code}: {reason}"));
             }
             Err(other) => return Err(other.to_string()),
@@ -577,7 +578,9 @@ fn http_get_text(url: &str) -> Result<String, String> {
         .read_to_end(&mut bytes)
         .map_err(|e| format!("read body: {e}"))?;
     if bytes.len() as u64 > MAX_METADATA_BYTES {
-        return Err(format!("metadata exceeds the {MAX_METADATA_BYTES}-byte cap"));
+        return Err(format!(
+            "metadata exceeds the {MAX_METADATA_BYTES}-byte cap"
+        ));
     }
     String::from_utf8(bytes).map_err(|e| format!("metadata is not UTF-8: {e}"))
 }
@@ -620,7 +623,9 @@ mod tests {
 
     #[test]
     fn allowlist_enforced() {
-        assert!(url_allowed("https://api.github.com/repos/x/y/releases/latest"));
+        assert!(url_allowed(
+            "https://api.github.com/repos/x/y/releases/latest"
+        ));
         assert!(url_allowed(
             "https://release-assets.githubusercontent.com/abc/xyz.exe"
         ));
@@ -695,9 +700,7 @@ mod tests {
         std::fs::write(&dest, "user's own file").unwrap();
         std::fs::write(&ours, "partial bytes").unwrap();
         std::fs::write(&theirs, "user's own partial").unwrap();
-        *ACTIVE_DOWNLOAD
-            .lock()
-            .unwrap_or_else(|p| p.into_inner()) = Some(dest.clone());
+        *ACTIVE_DOWNLOAD.lock().unwrap_or_else(|p| p.into_inner()) = Some(dest.clone());
         cleanup_active_download();
         assert!(!ours.exists(), "our sibling must be removed");
         assert!(

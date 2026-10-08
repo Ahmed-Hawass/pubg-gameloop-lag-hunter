@@ -17,8 +17,7 @@ pub fn compare(remote: &str, local: &str) -> i64 {
     let len = a.len().max(b.len());
     let mut cmp = 0i64;
     for i in 0..len {
-        cmp = (a.get(i).copied().unwrap_or(0) as i64)
-            - (b.get(i).copied().unwrap_or(0) as i64);
+        cmp = (a.get(i).copied().unwrap_or(0) as i64) - (b.get(i).copied().unwrap_or(0) as i64);
         if cmp != 0 {
             return cmp;
         }

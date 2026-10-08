@@ -71,6 +71,9 @@ jobs:
       - name: Clippy (zero warnings)
         run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 
+      - name: Format (rustfmt)
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+
       - name: Dependency audit (Rust)
         # RustSec advisories for the engine's dependency tree (ureq, sha2,
         # tauri plugins...). Mirrors npm audit on the frontend job.

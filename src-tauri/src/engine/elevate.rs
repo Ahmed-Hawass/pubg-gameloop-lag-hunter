@@ -272,7 +272,10 @@ pub fn elevate_pagefile_settings(
 /// "cancelled" like every other refusal.
 #[cfg(windows)]
 pub fn elevate_storage_clean(cats: &[String]) -> Result<u32, String> {
-    if cats.is_empty() || cats.len() > 6 || cats.iter().any(|c| !super::cleanup::is_admin_category(c)) {
+    if cats.is_empty()
+        || cats.len() > 6
+        || cats.iter().any(|c| !super::cleanup::is_admin_category(c))
+    {
         return Err("elevated request refused before UAC: storage-clean".into());
     }
     let params = format!(
@@ -494,12 +497,18 @@ mod tests {
             run_elevated_action(&["dvr".into(), "1".into(), "x".into()]),
             EXIT_USAGE
         );
-        assert_eq!(run_elevated_action(&["nope".into(), "1".into()]), EXIT_USAGE);
+        assert_eq!(
+            run_elevated_action(&["nope".into(), "1".into()]),
+            EXIT_USAGE
+        );
         assert_eq!(run_elevated_action(&["".into(), "1".into()]), EXIT_USAGE);
         assert_eq!(run_elevated_action(&["DVR".into(), "1".into()]), EXIT_USAGE);
         assert_eq!(run_elevated_action(&["dvr".into(), "2".into()]), EXIT_USAGE);
         assert_eq!(run_elevated_action(&["dvr".into(), "x".into()]), EXIT_USAGE);
-        assert_eq!(run_elevated_action(&["dvr".into(), "-1".into()]), EXIT_USAGE);
+        assert_eq!(
+            run_elevated_action(&["dvr".into(), "-1".into()]),
+            EXIT_USAGE
+        );
         // editor arity: anything but exactly [id, auto, drive, mode, min,
         // max] is usage (a 2-arg editor call falls into the switch path,
         // where the dispatch has no such arm: honest failure, no effects)
@@ -508,16 +517,43 @@ mod tests {
         };
         assert_eq!(ed(&["pagefile-settings"]), EXIT_USAGE);
         assert_eq!(ed(&["pagefile-settings", "1"]), EXIT_USAGE);
-        assert_eq!(ed(&["pagefile-settings", "1", "C:", "system", "0"]), EXIT_USAGE);
+        assert_eq!(
+            ed(&["pagefile-settings", "1", "C:", "system", "0"]),
+            EXIT_USAGE
+        );
         // bad flag, drive, mode, and size shapes: usage, never attempted
-        assert_eq!(ed(&["pagefile-settings", "2", "C:", "system", "0", "0"]), EXIT_USAGE);
-        assert_eq!(ed(&["pagefile-settings", "x", "C:", "system", "0", "0"]), EXIT_USAGE);
-        assert_eq!(ed(&["pagefile-settings", "1", "C", "system", "0", "0"]), EXIT_USAGE);
-        assert_eq!(ed(&["pagefile-settings", "1", "C:\\", "system", "0", "0"]), EXIT_USAGE);
-        assert_eq!(ed(&["pagefile-settings", "1", "", "system", "0", "0"]), EXIT_USAGE);
-        assert_eq!(ed(&["pagefile-settings", "1", "C:", "bogus", "0", "0"]), EXIT_USAGE);
-        assert_eq!(ed(&["pagefile-settings", "1", "C:", "System", "0", "0"]), EXIT_USAGE);
-        assert_eq!(ed(&["pagefile-settings", "1", "C:", "custom", "a", "b"]), EXIT_USAGE);
+        assert_eq!(
+            ed(&["pagefile-settings", "2", "C:", "system", "0", "0"]),
+            EXIT_USAGE
+        );
+        assert_eq!(
+            ed(&["pagefile-settings", "x", "C:", "system", "0", "0"]),
+            EXIT_USAGE
+        );
+        assert_eq!(
+            ed(&["pagefile-settings", "1", "C", "system", "0", "0"]),
+            EXIT_USAGE
+        );
+        assert_eq!(
+            ed(&["pagefile-settings", "1", "C:\\", "system", "0", "0"]),
+            EXIT_USAGE
+        );
+        assert_eq!(
+            ed(&["pagefile-settings", "1", "", "system", "0", "0"]),
+            EXIT_USAGE
+        );
+        assert_eq!(
+            ed(&["pagefile-settings", "1", "C:", "bogus", "0", "0"]),
+            EXIT_USAGE
+        );
+        assert_eq!(
+            ed(&["pagefile-settings", "1", "C:", "System", "0", "0"]),
+            EXIT_USAGE
+        );
+        assert_eq!(
+            ed(&["pagefile-settings", "1", "C:", "custom", "a", "b"]),
+            EXIT_USAGE
+        );
         assert_eq!(
             ed(&["pagefile-settings", "1", "C:", "custom", "42949672960", "1"]),
             EXIT_USAGE

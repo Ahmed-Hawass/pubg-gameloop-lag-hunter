@@ -10,7 +10,7 @@ use super::diagnoser::build_ui_state;
 use super::sampler;
 use super::storage::SessionWriter;
 use super::types::{
-    EngineEvent, GpuSample, Sample, SessionStatus, StopReason, Thresholds, UiState, iso_ms,
+    iso_ms, EngineEvent, GpuSample, Sample, SessionStatus, StopReason, Thresholds, UiState,
 };
 
 /// Shared session state owned by the engine, locked by commands.
@@ -176,14 +176,9 @@ impl Engine {
         let live = self.live_session_id();
         let mut excluded = live;
         if excluded.is_none() {
-            excluded = exclude_id
-                .filter(|id| !id.is_empty())
-                .map(str::to_string);
+            excluded = exclude_id.filter(|id| !id.is_empty()).map(str::to_string);
         }
-        super::storage::delete_all_sessions(
-            &super::storage::sessions_root(),
-            excluded.as_deref(),
-        )
+        super::storage::delete_all_sessions(&super::storage::sessions_root(), excluded.as_deref())
     }
 
     /// Delete one saved session while holding the same filesystem guard as
@@ -319,7 +314,9 @@ impl Engine {
                 super::logging::info(&format!("gpu max clocks: gr={gr}MHz mem={mem}MHz"));
                 st.detector.set_gpu_max(gr, mem);
             }
-            None => super::logging::info("gpu max clocks unavailable (non-NVIDIA or nvidia-smi missing)"),
+            None => super::logging::info(
+                "gpu max clocks unavailable (non-NVIDIA or nvidia-smi missing)",
+            ),
         }
 
         st.emulator = sampler::detect_emulator();
@@ -349,7 +346,9 @@ impl Engine {
                 *LATEST_VISIBLE.lock().unwrap_or_else(|p| p.into_inner()) =
                     Some(Timestamped::fresh(vis, SNAPSHOT_TTLS.visible));
             }
-            None => super::logging::info("game window visibility unknown at start (probe returned None)"),
+            None => super::logging::info(
+                "game window visibility unknown at start (probe returned None)",
+            ),
         }
         // FRESH flag per session (not the shared one): the old stop→start
         // race leaked readers — stop() flips the flag false and sleeps 600ms,
@@ -379,7 +378,9 @@ impl Engine {
             route_on_gpu(g);
         }) {
             Ok(true) => super::logging::info("nvidia-smi dmon sampler: spawned"),
-            Ok(false) => super::logging::info("nvidia-smi dmon sampler: unavailable (non-NVIDIA machine)"),
+            Ok(false) => {
+                super::logging::info("nvidia-smi dmon sampler: unavailable (non-NVIDIA machine)")
+            }
             Err(e) => super::logging::error(&format!("nvidia-smi dmon sampler: SPAWN FAILED: {e}")),
         }
 
@@ -459,13 +460,8 @@ impl Engine {
                     "session stopping: {total} samples, {} events",
                     events.len()
                 ));
-                let path = w.finalize_from_disk(
-                    &events,
-                    &started,
-                    &th,
-                    total,
-                    storage_write_failed,
-                );
+                let path =
+                    w.finalize_from_disk(&events, &started, &th, total, storage_write_failed);
                 match &path {
                     Ok(p) => super::logging::info(&format!("report written: {}", p.display())),
                     Err(e) => super::logging::error(&format!("finalize failed: {e}")),
@@ -752,9 +748,7 @@ fn active_conditions(events: &[EngineEvent]) -> usize {
         }
     }
     const CORRELATION_GATED: [&str; 2] = ["gpu_mem_idle", "paging_churn"];
-    open.values()
-        .filter(|v| **v)
-        .count()
+    open.values().filter(|v| **v).count()
         - open
             .iter()
             .filter(|(k, v)| **v && CORRELATION_GATED.contains(k))
@@ -795,9 +789,7 @@ fn diagnosis_window(events: &[EngineEvent]) -> Vec<EngineEvent> {
     }
     events
         .iter()
-        .filter(|e| {
-            iso_ms(&e.t).unwrap_or(0) >= cutoff || open_kinds.contains(e.kind.as_str())
-        })
+        .filter(|e| iso_ms(&e.t).unwrap_or(0) >= cutoff || open_kinds.contains(e.kind.as_str()))
         .cloned()
         .collect()
 }
@@ -810,16 +802,19 @@ static FIRST_SAMPLE_AT: Mutex<Option<std::time::Instant>> = Mutex::new(None);
 
 fn total_ram_mb() -> f64 {
     use std::os::windows::process::CommandExt;
-    let out = super::sampler::output_tracked(std::process::Command::new(super::system::powershell_exe())
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            "[math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1MB,0)",
-        ])
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .creation_flags(0x0800_0000), std::time::Duration::from_secs(10));
+    let out = super::sampler::output_tracked(
+        std::process::Command::new(super::system::powershell_exe())
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "[math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1MB,0)",
+            ])
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .creation_flags(0x0800_0000),
+        std::time::Duration::from_secs(10),
+    );
     match out {
         Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
             .trim()
@@ -833,16 +828,19 @@ fn total_ram_mb() -> f64 {
 /// threshold: each device can legitimately serve ~1 parallel request.
 fn physical_disk_count() -> u32 {
     use std::os::windows::process::CommandExt;
-    let out = super::sampler::output_tracked(std::process::Command::new(super::system::powershell_exe())
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            "@(Get-PhysicalDisk).Count",
-        ])
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .creation_flags(0x0800_0000), std::time::Duration::from_secs(10));
+    let out = super::sampler::output_tracked(
+        std::process::Command::new(super::system::powershell_exe())
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "@(Get-PhysicalDisk).Count",
+            ])
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .creation_flags(0x0800_0000),
+        std::time::Duration::from_secs(10),
+    );
     match out {
         Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
             .trim()
@@ -1176,7 +1174,10 @@ mod tests {
         // observed the stop yet; with the shared-flag design, session 2's
         // start resurrected it to true and the old reader ran forever. With
         // per-session flags, the old flag STAYS false:
-        assert!(!first.load(Ordering::SeqCst), "old session's flag must stay false");
+        assert!(
+            !first.load(Ordering::SeqCst),
+            "old session's flag must stay false"
+        );
         assert!(second.load(Ordering::SeqCst), "new session's flag is true");
     }
 }

@@ -44,18 +44,20 @@ pub(crate) fn ps_with_timeout(
     #[cfg(windows)]
     let mut child = super::sampler::spawn_tracked(
         Command::new(powershell_exe())
-        .args(["-NoProfile", "-NonInteractive", "-Command", script])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .creation_flags(NO_WINDOW))
-        .map_err(|e| format!("powershell spawn failed: {e}"))?;
+            .args(["-NoProfile", "-NonInteractive", "-Command", script])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .creation_flags(NO_WINDOW),
+    )
+    .map_err(|e| format!("powershell spawn failed: {e}"))?;
     #[cfg(not(windows))]
     let mut child = super::sampler::spawn_tracked(
         Command::new(powershell_exe())
-        .args(["-NoProfile", "-NonInteractive", "-Command", script])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped()))
-        .map_err(|e| format!("powershell spawn failed: {e}"))?;
+            .args(["-NoProfile", "-NonInteractive", "-Command", script])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped()),
+    )
+    .map_err(|e| format!("powershell spawn failed: {e}"))?;
     // Drain both pipes concurrently while waiting: a child that fills
     // the 64KB pipe would otherwise block on write while we block on
     // exit (classic pipe deadlock). Reader threads own the handles.
@@ -86,15 +88,26 @@ pub(crate) fn ps_with_timeout(
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
-                let err = rx_err.recv_timeout(std::time::Duration::from_secs(5)).unwrap_or_default();
+                let err = rx_err
+                    .recv_timeout(std::time::Duration::from_secs(5))
+                    .unwrap_or_default();
                 if !status.success() {
-                    let hint: String = err.lines().next().unwrap_or("").trim().chars().take(160).collect();
+                    let hint: String = err
+                        .lines()
+                        .next()
+                        .unwrap_or("")
+                        .trim()
+                        .chars()
+                        .take(160)
+                        .collect();
                     if hint.is_empty() {
                         return Err("powershell exited nonzero".into());
                     }
                     return Err(format!("powershell exited nonzero: {hint}"));
                 }
-                let out = rx_out.recv_timeout(std::time::Duration::from_secs(5)).unwrap_or_default();
+                let out = rx_out
+                    .recv_timeout(std::time::Duration::from_secs(5))
+                    .unwrap_or_default();
                 return Ok(out);
             }
             Ok(None) => {
@@ -129,9 +142,11 @@ pub fn powershell_available() -> bool {
         if !ok {
             // one log line for user reports: everything downstream degrades
             // silently by design — this is the only trace of why
-            super::logging::info("PowerShell unavailable — limited mode: \
+            super::logging::info(
+                "PowerShell unavailable — limited mode: \
                 adaptive thresholds default, timestamps may read UTC, \
-                GPU window checks muted");
+                GPU window checks muted",
+            );
         }
         ok
     })
@@ -142,12 +157,18 @@ fn probe_powershell() -> bool {
     {
         use std::io::Read;
         use std::os::windows::process::CommandExt;
-        let Ok(mut child) = super::sampler::spawn_tracked(Command::new(powershell_exe())
-            .args(["-NoProfile", "-NonInteractive", "-Command", "Write-Output ok"])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .creation_flags(NO_WINDOW))
-        else {
+        let Ok(mut child) = super::sampler::spawn_tracked(
+            Command::new(powershell_exe())
+                .args([
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
+                    "Write-Output ok",
+                ])
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null())
+                .creation_flags(NO_WINDOW),
+        ) else {
             return false;
         };
         // bounded wait: a blocked PS must never hang the app startup
@@ -194,8 +215,8 @@ fn probe_powershell() -> bool {
 // hardware-inventory time — off the UI thread, never freezing the window.
 // ---------------------------------------------------------------------------
 
-use std::sync::{Mutex, OnceLock};
 use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
 
 static SYSTEM_CACHE: OnceLock<SystemInfo> = OnceLock::new();
 const SYSTEM_CACHE_MAX_AGE: std::time::Duration = std::time::Duration::from_secs(30 * 86_400);
@@ -258,9 +279,7 @@ pub async fn system_info_async() -> Result<SystemInfo, String> {
     let info = tauri::async_runtime::spawn_blocking(|| -> Result<SystemInfo, String> {
         // serialize: whoever got here first runs the inventory; the rest
         // find the cache filled when the lock reaches them
-        let _serial = SYSTEM_QUERY_LOCK
-            .lock()
-            .unwrap_or_else(|p| p.into_inner());
+        let _serial = SYSTEM_QUERY_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(cached) = SYSTEM_CACHE.get() {
             return Ok(cached.clone());
         }
@@ -632,12 +651,15 @@ pub struct SystemIdentity {
 /// an absolute-only lookup would miss valid installs.
 fn nvidia_vram_mb() -> Option<f64> {
     #[cfg(windows)]
-    let out = super::sampler::output_tracked(Command::new("nvidia-smi")
-        .args(["--query-gpu=memory.total", "--format=csv,noheader,nounits"])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .creation_flags(NO_WINDOW), std::time::Duration::from_secs(5))
-        .ok()?;
+    let out = super::sampler::output_tracked(
+        Command::new("nvidia-smi")
+            .args(["--query-gpu=memory.total", "--format=csv,noheader,nounits"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .creation_flags(NO_WINDOW),
+        std::time::Duration::from_secs(5),
+    )
+    .ok()?;
     #[cfg(not(windows))]
     return None;
     #[cfg(windows)]
@@ -824,8 +846,10 @@ $vr = (Get-CimInstance Win32_VideoController | Where-Object { $_.CurrentRefreshR
                 let caption = parts.next().unwrap_or("").trim().to_string();
                 if !caption.is_empty() {
                     // "Microsoft Windows 11 Pro" → compact display form
-                    info.system.os_caption =
-                        caption.strip_prefix("Microsoft ").unwrap_or(&caption).to_string();
+                    info.system.os_caption = caption
+                        .strip_prefix("Microsoft ")
+                        .unwrap_or(&caption)
+                        .to_string();
                 }
                 let build = parts.next().unwrap_or("").trim().to_string();
                 info.system.os_release = os_release_name(&build);
@@ -907,7 +931,9 @@ pub fn classify_process(session: Option<u32>, path: Option<&str>, windir: &str) 
     }
     match path {
         Some(p) if !p.is_empty() => {
-            if p.to_ascii_lowercase().starts_with(&windir.to_ascii_lowercase()) {
+            if p.to_ascii_lowercase()
+                .starts_with(&windir.to_ascii_lowercase())
+            {
                 "system"
             } else {
                 "app"
@@ -970,9 +996,7 @@ fn group_by_exe(rows: Vec<(TopProcess, Option<String>)>) -> Vec<(TopProcess, Opt
 /// is a delta (noisy across polls) — ranking by CPU reshuffled the list
 /// every refresh while ranking by RAM holds it still. Bounded at 12
 /// (bounded everything). Pure.
-fn rank_groups(
-    mut rows: Vec<(TopProcess, Option<String>)>,
-) -> Vec<(TopProcess, Option<String>)> {
+fn rank_groups(mut rows: Vec<(TopProcess, Option<String>)>) -> Vec<(TopProcess, Option<String>)> {
     rows.sort_by(|a, b| {
         b.0.ram_mb
             .partial_cmp(&a.0.ram_mb)
@@ -1055,27 +1079,19 @@ fn query_one(e: super::prockill::ProcEntry) -> Option<RawProc> {
         let mut exit = FILETIME { low: 0, high: 0 };
         let mut kernel = FILETIME { low: 0, high: 0 };
         let mut user = FILETIME { low: 0, high: 0 };
-        let times_ok = GetProcessTimes(
-            handle,
-            &mut creation,
-            &mut exit,
-            &mut kernel,
-            &mut user,
-        ) != 0;
+        let times_ok =
+            GetProcessTimes(handle, &mut creation, &mut exit, &mut kernel, &mut user) != 0;
         let mut counters: PROCESS_MEMORY_COUNTERS = std::mem::zeroed();
         counters.cb = std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32;
-        let mem_ok = GetProcessMemoryInfo(
-            handle,
-            &mut counters,
-            counters.cb,
-        ) != 0;
+        let mem_ok = GetProcessMemoryInfo(handle, &mut counters, counters.cb) != 0;
         let mut path_buf = vec![0u16; 1024];
         let mut path_len = 1024u32;
-        let path = if QueryFullProcessImageNameW(handle, 0, path_buf.as_mut_ptr(), &mut path_len) != 0 {
-            String::from_utf16(&path_buf[..path_len as usize]).ok()
-        } else {
-            None
-        };
+        let path =
+            if QueryFullProcessImageNameW(handle, 0, path_buf.as_mut_ptr(), &mut path_len) != 0 {
+                String::from_utf16(&path_buf[..path_len as usize]).ok()
+            } else {
+                None
+            };
         CloseHandle(handle);
         if !times_ok || !mem_ok {
             return None;
@@ -1086,8 +1102,8 @@ fn query_one(e: super::prockill::ProcEntry) -> Option<RawProc> {
         } else {
             None
         };
-        let cpu_100ns =
-            ((kernel.high as u64) << 32 | kernel.low as u64) + ((user.high as u64) << 32 | user.low as u64);
+        let cpu_100ns = ((kernel.high as u64) << 32 | kernel.low as u64)
+            + ((user.high as u64) << 32 | user.low as u64);
         Some(RawProc {
             pid: e.pid,
             name: e.name,
@@ -1437,7 +1453,9 @@ fn reg_string(root: winreg::HKEY, subkey: &str, name: &str) -> Option<String> {
 /// the user turns Storage Sense off — it zeroes `01`, verified live.)
 fn ss_policy_key_exists() -> bool {
     winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
-        .open_subkey(r"SOFTWARE\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy")
+        .open_subkey(
+            r"SOFTWARE\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy",
+        )
         .is_ok()
 }
 
@@ -1487,8 +1505,7 @@ $bat = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue
 if ($bat) { $ac = ($bat.BatteryStatus -contains 2); "battery|yes|$ac" } else { "battery|none|" }
 $vt = (Get-CimInstance Win32_Processor | Select-Object -First 1).VirtualizationFirmwareEnabled
 "vt|$vt"
-"#,
-    )
+"#)
     .map_err(|e| {
         super::logging::warn(&format!("system checks query failed: {e}"));
         map_ps_timeout(e)
@@ -1635,11 +1652,14 @@ fn looks_like_guid(s: &str) -> bool {
 /// fresh GUID every time, so GUID-only matching can never see it — the
 /// name fallback in is_performance_plan is what recognizes it.
 pub fn power_list() -> Vec<(String, String)> {
-    let out = super::sampler::output_tracked(Command::new(system32_exe("powercfg.exe"))
-        .arg("/list")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .creation_flags(NO_WINDOW), std::time::Duration::from_secs(5));
+    let out = super::sampler::output_tracked(
+        Command::new(system32_exe("powercfg.exe"))
+            .arg("/list")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .creation_flags(NO_WINDOW),
+        std::time::Duration::from_secs(5),
+    );
     let Ok(out) = out else { return Vec::new() };
     let text = String::from_utf8_lossy(&out.stdout);
     text.lines()
@@ -1668,11 +1688,14 @@ pub fn power_active_guid() -> String {
 /// Active scheme as (guid, display name): the verify step needs both
 /// (performance-class by GUID or by name fallback, like the row read).
 pub fn power_active_scheme() -> (String, String) {
-    let out = super::sampler::output_tracked(Command::new(system32_exe("powercfg.exe"))
-        .arg("/getactivescheme")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .creation_flags(NO_WINDOW), std::time::Duration::from_secs(5));
+    let out = super::sampler::output_tracked(
+        Command::new(system32_exe("powercfg.exe"))
+            .arg("/getactivescheme")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .creation_flags(NO_WINDOW),
+        std::time::Duration::from_secs(5),
+    );
     let Ok(out) = out else {
         return (String::new(), String::new());
     };
@@ -1689,11 +1712,14 @@ pub fn power_active_scheme() -> (String, String) {
 /// that cannot work fails honestly at verify time instead of hiding a
 /// working feature). Powercfg output is native-fast, no PowerShell.
 pub fn s0_standby_present() -> bool {
-    let out = super::sampler::output_tracked(Command::new(system32_exe("powercfg.exe"))
-        .arg("/a")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .creation_flags(NO_WINDOW), std::time::Duration::from_secs(5));
+    let out = super::sampler::output_tracked(
+        Command::new(system32_exe("powercfg.exe"))
+            .arg("/a")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .creation_flags(NO_WINDOW),
+        std::time::Duration::from_secs(5),
+    );
     let Ok(out) = out else { return false };
     let text = String::from_utf8_lossy(&out.stdout);
     s0_available_in(&text)
@@ -1738,9 +1764,7 @@ pub fn power_row_state(
     // presence = ANY performance-class plan (a duplicate's GUID is fresh
     // every creation, so builtin-only matching would re-create forever —
     // the exact bug that littered duplicate plans).
-    let perf_present = list
-        .iter()
-        .any(|(g, n)| is_performance_plan(n, g));
+    let perf_present = list.iter().any(|(g, n)| is_performance_plan(n, g));
     if perf_present || !s0 {
         return RowState::Off;
     }
@@ -1838,7 +1862,10 @@ pub(crate) fn read_pagefile_flag_and_entries() -> Option<(bool, Vec<String>)> {
 /// Strict like Windows on one point: an empty line ENDS the list (that is
 /// what "" means in a REG_MULTI_SZ), it is never skipped — a poisoned
 /// list reads as off, which is exactly what Windows activates.
-pub(crate) fn parse_drive_mode(raw: &[String], drive: &str) -> (PagefileMode, Option<u32>, Option<u32>) {
+pub(crate) fn parse_drive_mode(
+    raw: &[String],
+    drive: &str,
+) -> (PagefileMode, Option<u32>, Option<u32>) {
     let prefix = format!("{drive}\\").to_uppercase();
     let mut marker = false;
     for entry in raw {
@@ -1929,14 +1956,15 @@ pub fn pagefile_settings() -> Result<PagefileSettings, String> {
             }
         })
         .collect();
-    let pending = super::settings::load().pending_restart.as_ref().is_some_and(|p| {
-        p.tweak == super::tweaks::PAGEFILE_SETTINGS_ID
-            && restart_pending_visible(p.at_uptime_ms, boot_uptime_ms())
-    });
+    let pending = super::settings::load()
+        .pending_restart
+        .as_ref()
+        .is_some_and(|p| {
+            p.tweak == super::tweaks::PAGEFILE_SETTINGS_ID
+                && restart_pending_visible(p.at_uptime_ms, boot_uptime_ms())
+        });
     let ram_mb = ram_total_mb();
-    let (rec_min, rec_max) = ram_mb
-        .and_then(recommended_pagefile_mb)
-        .unzip();
+    let (rec_min, rec_max) = ram_mb.and_then(recommended_pagefile_mb).unzip();
     Ok(PagefileSettings {
         automatic: raw.automatic,
         drives: states,
@@ -2226,8 +2254,7 @@ pub(crate) fn with_gpu_pref(raw: Option<&str>, on: bool) -> Option<String> {
         .map(str::trim)
         .filter(|tok| !tok.is_empty())
         .filter(|tok| {
-            !tok
-                .split_once('=')
+            !tok.split_once('=')
                 .is_some_and(|(k, _)| k.trim().eq_ignore_ascii_case("GpuPreference"))
         })
         .collect();
@@ -2254,8 +2281,7 @@ pub(crate) fn with_wgc_token(raw: Option<&str>, on: bool) -> String {
         .map(str::trim)
         .filter(|tok| !tok.is_empty())
         .filter(|tok| {
-            !tok
-                .split_once('=')
+            !tok.split_once('=')
                 .is_some_and(|(k, _)| k.trim().eq_ignore_ascii_case(super::tweaks::WGC_TOKEN))
         })
         .collect();
@@ -2352,8 +2378,10 @@ pub(crate) fn gameloop_exe_paths() -> Vec<std::path::PathBuf> {
         .chain(emulator::V7.exe_names.iter())
         .copied()
         .collect::<Vec<_>>();
-    let versioned: Vec<Vec<String>> =
-        roots.iter().map(|r| emulator::application_versions(r)).collect();
+    let versioned: Vec<Vec<String>> = roots
+        .iter()
+        .map(|r| emulator::application_versions(r))
+        .collect();
     let mut out: Vec<std::path::PathBuf> = Vec::new();
     for cand in emulator::candidate_paths(&roots, &exes, &versioned) {
         // case-insensitive dedup: `UI\aow_exe.exe` and
@@ -2499,14 +2527,17 @@ pub fn query_tweak_states() -> TweakStates {
     // fixed args — the batch's 0.5-2s PowerShell cost stays untouched).
     // Active scheme line carries "GUID (Name)": the same parse the health
     // batch uses, so the row and the card can never disagree on what is on.
-    let power_active_raw = super::sampler::output_tracked(Command::new(system32_exe("powercfg.exe"))
-        .arg("/getactivescheme")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .creation_flags(NO_WINDOW), std::time::Duration::from_secs(5))
-        .ok()
-        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
-        .unwrap_or_default();
+    let power_active_raw = super::sampler::output_tracked(
+        Command::new(system32_exe("powercfg.exe"))
+            .arg("/getactivescheme")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .creation_flags(NO_WINDOW),
+        std::time::Duration::from_secs(5),
+    )
+    .ok()
+    .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+    .unwrap_or_default();
     let power_active_guid = extract_power_guid(&power_active_raw);
     let power_active_name = extract_power_name(&power_active_raw);
     let power_high_perf = power_row_state(
@@ -2521,10 +2552,9 @@ pub fn query_tweak_states() -> TweakStates {
     // fires once and persists on this read — the UI shows one dialog.
     let (emulator_updated, emulator_version) = {
         let current = super::emulator::read_snapshot().v7_version;
-        let stored = current.as_ref().and_then(|_| {
-            super::settings::load()
-                .last_seen_gameloop_version
-        });
+        let stored = current
+            .as_ref()
+            .and_then(|_| super::settings::load().last_seen_gameloop_version);
         let (fire, version) =
             super::emulator::version_notice(stored.as_deref(), current.as_deref());
         if fire || (stored.is_none() && current.is_some()) {
@@ -2676,7 +2706,10 @@ mod tests {
         assert!(!info.cpu.name.is_empty());
         assert!(info.ram.total_gb > 0.0);
         assert_eq!(info.ram_gb, info.ram.total_gb);
-        assert!(matches!(info.system.directx.as_str(), "DirectX 12" | "DirectX 11"));
+        assert!(matches!(
+            info.system.directx.as_str(),
+            "DirectX 12" | "DirectX 11"
+        ));
     }
 
     #[test]
@@ -2700,7 +2733,11 @@ mod tests {
         assert_eq!(classify_process(None, None, win), "system");
         // only a known non-system path earns the app label
         assert_eq!(
-            classify_process(Some(1), Some(r"C:\Program Files\BraveSoftware\brave.exe"), win),
+            classify_process(
+                Some(1),
+                Some(r"C:\Program Files\BraveSoftware\brave.exe"),
+                win
+            ),
             "app"
         );
         assert_eq!(
@@ -2709,7 +2746,13 @@ mod tests {
         );
     }
 
-    fn grouped_row(name: &str, pid: u32, cpu: f64, ram: f64, kind: &str) -> (TopProcess, Option<String>) {
+    fn grouped_row(
+        name: &str,
+        pid: u32,
+        cpu: f64,
+        ram: f64,
+        kind: &str,
+    ) -> (TopProcess, Option<String>) {
         (
             TopProcess {
                 name: name.into(),
@@ -2813,7 +2856,10 @@ mod tests {
         assert_eq!(p.file_name().and_then(|s| s.to_str()), Some("powercfg.exe"));
         let parent = p.parent().expect("system tool has a parent dir");
         assert_eq!(
-            parent.file_name().and_then(|s| s.to_str()).map(|s| s.to_ascii_lowercase()),
+            parent
+                .file_name()
+                .and_then(|s| s.to_str())
+                .map(|s| s.to_ascii_lowercase()),
             Some("system32".to_string())
         );
         assert!(windows_dir().is_absolute());
@@ -2876,7 +2922,8 @@ mod tests {
     }
 
     #[test]
-    fn power_name_extracted() {        assert_eq!(
+    fn power_name_extracted() {
+        assert_eq!(
             extract_power_name(
                 "Power Scheme GUID: e72c17b6-94d2-4509-adfc-8f2302229d1a  (High performance)"
             ),
@@ -2971,16 +3018,31 @@ mod tests {
             RowState::On
         );
         assert_eq!(
-            power_row_state("e72c17b6-94d2-4509-adfc-8f2302229d1a", "High performance", &list, false),
+            power_row_state(
+                "e72c17b6-94d2-4509-adfc-8f2302229d1a",
+                "High performance",
+                &list,
+                false
+            ),
             RowState::On
         );
         // Ultimate active (GUID or duplicate by name): hide, nothing above it
         assert_eq!(
-            power_row_state(POWER_GUID_ULTIMATE_PERFORMANCE, "Ultimate Performance", &list, false),
+            power_row_state(
+                POWER_GUID_ULTIMATE_PERFORMANCE,
+                "Ultimate Performance",
+                &list,
+                false
+            ),
             RowState::HiddenUltimate
         );
         assert_eq!(
-            power_row_state("223d3f55-7a5e-4b4f-9518-861f628282ba", "Ultimate Performance", &list, false),
+            power_row_state(
+                "223d3f55-7a5e-4b4f-9518-861f628282ba",
+                "Ultimate Performance",
+                &list,
+                false
+            ),
             RowState::HiddenUltimate
         );
         // Balanced, performance present or restorable: plain toggle
@@ -2994,7 +3056,12 @@ mod tests {
         );
         // Balanced-only on S0 firmware: hide, forcing fights the design
         assert_eq!(
-            power_row_state(&balanced, "Balanced", std::slice::from_ref(&pair(&balanced, "Balanced")), true),
+            power_row_state(
+                &balanced,
+                "Balanced",
+                std::slice::from_ref(&pair(&balanced, "Balanced")),
+                true
+            ),
             RowState::HiddenS0
         );
     }
@@ -3033,7 +3100,10 @@ mod tests {
         // an explicit entry beats the marker
         assert_eq!(
             parse_drive_mode(
-                &[r"?:\pagefile.sys".into(), "C:\\pagefile.sys 512 2048".into()],
+                &[
+                    r"?:\pagefile.sys".into(),
+                    "C:\\pagefile.sys 512 2048".into()
+                ],
                 "C:"
             ),
             (PagefileMode::Custom, Some(512), Some(2048))
@@ -3208,9 +3278,18 @@ mod tests {
         // doubles every write/verify with a lying count
         use std::path::PathBuf;
         let have = vec![PathBuf::from(r"C:\G\ui\aow_exe.exe")];
-        assert!(contains_case_insensitive(&have, &PathBuf::from(r"C:\G\UI\AOW_EXE.EXE")));
-        assert!(!contains_case_insensitive(&have, &PathBuf::from(r"C:\G\ui\other.exe")));
-        assert!(!contains_case_insensitive(&[], &PathBuf::from(r"C:\G\ui\aow_exe.exe")));
+        assert!(contains_case_insensitive(
+            &have,
+            &PathBuf::from(r"C:\G\UI\AOW_EXE.EXE")
+        ));
+        assert!(!contains_case_insensitive(
+            &have,
+            &PathBuf::from(r"C:\G\ui\other.exe")
+        ));
+        assert!(!contains_case_insensitive(
+            &[],
+            &PathBuf::from(r"C:\G\ui\aow_exe.exe")
+        ));
     }
 
     #[test]
@@ -3242,11 +3321,7 @@ mod tests {
             None
         );
         assert_eq!(
-            fso_with_flag(
-                Some("~ HIGHDPIAWARE DISABLEDXMAXIMIZEDWINDOWEDMODE"),
-                false
-            )
-            .as_deref(),
+            fso_with_flag(Some("~ HIGHDPIAWARE DISABLEDXMAXIMIZEDWINDOWEDMODE"), false).as_deref(),
             Some("~ HIGHDPIAWARE")
         );
         assert_eq!(fso_with_flag(None, false), None);
@@ -3278,10 +3353,7 @@ mod tests {
         // unlike the per-exe GPU preference (whose off DELETES the token),
         // off here writes `=0`: byte-for-byte what the Settings toggle
         // itself does (verified live — off leaves the value present)
-        assert_eq!(
-            with_wgc_token(None, true),
-            "SwapEffectUpgradeEnable=1;"
-        );
+        assert_eq!(with_wgc_token(None, true), "SwapEffectUpgradeEnable=1;");
         assert_eq!(
             with_wgc_token(Some("SwapEffectUpgradeEnable=0;"), true),
             "SwapEffectUpgradeEnable=1;"
@@ -3290,20 +3362,14 @@ mod tests {
             with_wgc_token(Some("SwapEffectUpgradeEnable=1;"), false),
             "SwapEffectUpgradeEnable=0;"
         );
-        assert_eq!(
-            with_wgc_token(None, false),
-            "SwapEffectUpgradeEnable=0;"
-        );
+        assert_eq!(with_wgc_token(None, false), "SwapEffectUpgradeEnable=0;");
         // sibling tokens survive both directions
         assert_eq!(
             with_wgc_token(Some("GpuPreference=2;"), true),
             "GpuPreference=2;SwapEffectUpgradeEnable=1;"
         );
         assert_eq!(
-            with_wgc_token(
-                Some("GpuPreference=2;SwapEffectUpgradeEnable=1;"),
-                false
-            ),
+            with_wgc_token(Some("GpuPreference=2;SwapEffectUpgradeEnable=1;"), false),
             "GpuPreference=2;SwapEffectUpgradeEnable=0;"
         );
     }
@@ -3324,10 +3390,22 @@ mod tests {
     fn pref_token_parser_is_generic() {
         // the shared parser behind both GPU and windowed prefs: exact key,
         // tolerant key case, strict value
-        assert_eq!(parse_pref_token("SwapEffectUpgradeEnable=1;", "SwapEffectUpgradeEnable"), Some(1));
-        assert_eq!(parse_pref_token("swapeffectupgradeenable=0;", "SwapEffectUpgradeEnable"), Some(0));
-        assert_eq!(parse_pref_token("GpuPreference=2;", "SwapEffectUpgradeEnable"), None);
-        assert_eq!(parse_pref_token("SwapEffectUpgradeEnable=x;", "SwapEffectUpgradeEnable"), None);
+        assert_eq!(
+            parse_pref_token("SwapEffectUpgradeEnable=1;", "SwapEffectUpgradeEnable"),
+            Some(1)
+        );
+        assert_eq!(
+            parse_pref_token("swapeffectupgradeenable=0;", "SwapEffectUpgradeEnable"),
+            Some(0)
+        );
+        assert_eq!(
+            parse_pref_token("GpuPreference=2;", "SwapEffectUpgradeEnable"),
+            None
+        );
+        assert_eq!(
+            parse_pref_token("SwapEffectUpgradeEnable=x;", "SwapEffectUpgradeEnable"),
+            None
+        );
         assert_eq!(parse_pref_token("", "SwapEffectUpgradeEnable"), None);
     }
 }

@@ -94,7 +94,13 @@ fn friendly_name_of(path: &str) -> Option<String> {
             return None;
         }
         let mut buf = vec![0u8; size as usize];
-        if GetFileVersionInfoW(wide.as_ptr(), 0, size, buf.as_mut_ptr() as *mut core::ffi::c_void) == 0 {
+        if GetFileVersionInfoW(
+            wide.as_ptr(),
+            0,
+            size,
+            buf.as_mut_ptr() as *mut core::ffi::c_void,
+        ) == 0
+        {
             return None;
         }
         let base = buf.as_ptr() as *const core::ffi::c_void;
@@ -231,9 +237,7 @@ pub fn resolve_cached(paths: &[String]) -> HashMap<String, String> {
     let mut out = HashMap::new();
     let mut missing = Vec::new();
     {
-        let mut cache = NAME_CACHE
-            .lock()
-            .unwrap_or_else(|p| p.into_inner());
+        let mut cache = NAME_CACHE.lock().unwrap_or_else(|p| p.into_inner());
         let map = cache.get_or_insert_with(HashMap::new);
         for p in paths {
             if let Some(name) = map.get(p) {
@@ -331,7 +335,9 @@ mod tests {
     fn friendly_name_reads_the_files_own_words() {
         // PowerShell's own exe: guaranteed present with a version resource
         // on every Windows (the read is native, no spawn to recurse into).
-        let root = super::super::system::windows_dir().to_string_lossy().into_owned();
+        let root = super::super::system::windows_dir()
+            .to_string_lossy()
+            .into_owned();
         let ps = format!(
             r"{root}\System32\WindowsPowerShell\v1.0\powershell.exe",
             root = root.trim_end_matches(['\\', '/'])
@@ -339,6 +345,9 @@ mod tests {
         let name = super::friendly_name_of(&ps);
         assert!(name.map(|s| !s.trim().is_empty()).unwrap_or(false));
         // missing files read as unknown, never invented
-        assert_eq!(super::friendly_name_of(r"C:\no-such-dir-xyz\nope.exe"), None);
+        assert_eq!(
+            super::friendly_name_of(r"C:\no-such-dir-xyz\nope.exe"),
+            None
+        );
     }
 }

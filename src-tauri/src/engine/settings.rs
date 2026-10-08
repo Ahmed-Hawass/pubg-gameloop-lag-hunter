@@ -196,7 +196,8 @@ fn sanitize_settings(mut s: Settings) -> Settings {
     if s.dismissed_cards.len() > 32 {
         s.dismissed_cards.truncate(32);
     }
-    s.dismissed_cards.retain(|c| !c.trim().is_empty() && c.len() <= 64);
+    s.dismissed_cards
+        .retain(|c| !c.trim().is_empty() && c.len() <= 64);
     if let Some(v) = s.announced_update_version.as_ref() {
         if v.len() > 32 {
             s.announced_update_version = None;
@@ -371,7 +372,10 @@ mod tests {
             migration_kind(r#"{"cpu_saturation_pct":90.0}"#),
             MigrationKind::Legacy
         );
-        assert_eq!(migration_kind("{ this is not json !!!"), MigrationKind::Legacy);
+        assert_eq!(
+            migration_kind("{ this is not json !!!"),
+            MigrationKind::Legacy
+        );
         assert_eq!(migration_kind(""), MigrationKind::Legacy);
     }
 
@@ -469,7 +473,10 @@ mod tests {
         assert_eq!(back.auto_stop_minutes, 60);
         assert_eq!(back.version, 3);
         assert_eq!(back.announced_update_version.as_deref(), Some("1.3.0"));
-        assert_eq!(back.last_seen_gameloop_version.as_deref(), Some("7.0.19.05"));
+        assert_eq!(
+            back.last_seen_gameloop_version.as_deref(),
+            Some("7.0.19.05")
+        );
         assert!(back.game_advice_done);
         assert!(back.background_advice_done);
         assert_eq!(back.dismissed_cards, vec!["health".to_string()]);
@@ -491,7 +498,8 @@ mod tests {
     }
 
     #[test]
-    fn dismissing_cards_appends_once_and_ignores_garbage() {        let mut list = Vec::new();
+    fn dismissing_cards_appends_once_and_ignores_garbage() {
+        let mut list = Vec::new();
         assert!(note_dismissed_cards(&mut list, "processes"));
         assert_eq!(list, vec!["processes".to_string()]);
         // repeats and padded repeats never duplicate the row

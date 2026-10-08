@@ -139,9 +139,7 @@ function IdleState(props: {
           <div className="step"><span className="disc">3</span><span>{t.scanStep3}</span></div>
         </div>
         {/* the hero action rides the shared .btn materials (hover nudge,
-            press shrink, keyboard focus ring) with hero sizing on top; the
-            glyph is a filled disc carrying its own triangle, never a
-            stroked outline like the lucide Play mark */}
+            press shrink, keyboard focus ring) with hero sizing on top */}
         <button
           type="button"
           className="btn btn-primary btn-hero"

@@ -153,7 +153,9 @@ fn end_process_windows(pid: u32) -> Result<(), String> {
                         return Ok(());
                     }
                     if std::time::Instant::now() >= deadline {
-                        super::logging::warn(&format!("end process still alive: {wanted} pid={pid}"));
+                        super::logging::warn(&format!(
+                            "end process still alive: {wanted} pid={pid}"
+                        ));
                         return Err(PROCESS_KILL_FAILED.into());
                     }
                     std::thread::sleep(std::time::Duration::from_millis(100));
