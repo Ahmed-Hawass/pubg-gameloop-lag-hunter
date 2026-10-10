@@ -24,13 +24,16 @@ pub const PROCESS_REFUSED: &str = "PROCESS_REFUSED";
 /// one honest answer: a denial anywhere reads access-denied (the group
 /// needs admin), any other failure reads kill-failed, vanished members
 /// count as done (the goal is them gone, however they left).
+/// Bounded to the first 200 PIDs: each member pays open-handle + verify
+/// re-reads, so an unbounded IPC list could stall the blocking pool
+/// (bounded everything).
 pub fn end_processes(pids: &[u32]) -> Result<(), String> {
     use std::collections::HashSet;
     let mut seen = HashSet::new();
     let mut denied = false;
     let mut failed = false;
     let mut attempted = false;
-    for &pid in pids {
+    for &pid in pids.iter().take(200) {
         if pid == 0 || !seen.insert(pid) {
             continue;
         }

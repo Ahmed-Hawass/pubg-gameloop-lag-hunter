@@ -42,6 +42,12 @@ fn main() {
                 )
             };
             if action == IDOK {
+                // Exception (documented): this fixed Microsoft WebView2 URL is
+                // opened via the native shell handler (ShellExecuteW), not via
+                // the open_url command, so the opener allowlist in lib.rs
+                // (github/api.github/paypal hosts) deliberately does not cover
+                // it. The URL is a hardcoded Microsoft download page, never
+                // user input, shown only when the runtime probe above fails.
                 open_url_native("https://developer.microsoft.com/microsoft-edge/webview2/");
             }
             std::process::exit(0);

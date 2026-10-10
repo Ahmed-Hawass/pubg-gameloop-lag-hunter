@@ -29,6 +29,11 @@ use super::logging;
 // ---------------------------------------------------------------------------
 // Allowlist — the same philosophy as OPEN_URL_ALLOWED_HOSTS in lib.rs.
 // Downloads redirect across these hosts; anything else is refused.
+//
+// NOTE (4 vs 3): this list has 4 hosts on purpose: the 2 GitHub hosts
+// shared with lib.rs plus the 2 release-asset CDN hosts below, because
+// asset downloads redirect onto the CDN. The browser-open path in lib.rs
+// never targets the CDN directly, so it stays at 3. Keep both https-only.
 // ---------------------------------------------------------------------------
 
 pub const ALLOWED_HOSTS: [&str; 4] = [
@@ -263,9 +268,13 @@ pub fn download_and_verify(
         return Err("a download is already running".into());
     }
     // validate the destination while DOWNLOAD_RUNNING is held: a bad path
-    // can never even register a cleanup entry (validate_dest never writes)
+    // can never even register a cleanup entry (validate_dest never writes).
+    // Clearing ACTIVE_CANCEL here is required: register_cancel ran before
+    // this call (lib.rs), so an early return without clearing would leave
+    // the slot occupied and every retry would fail with "already registered".
     if let Err(e) = validate_dest(&dest, &info.asset_name) {
         DOWNLOAD_RUNNING.store(false, Ordering::SeqCst);
+        *ACTIVE_CANCEL.lock().unwrap_or_else(|p| p.into_inner()) = None;
         return Err(e);
     }
     let result = download_inner(info, dest, cancel, &on_event);
@@ -310,7 +319,7 @@ fn download_inner(
     let mut chunk = [0u8; 64 * 1024];
     let mut last_event = std::time::Instant::now();
     loop {
-        if cancel.load(Ordering::Relaxed) {
+        if cancel.load(Ordering::SeqCst) {
             return Err("cancelled".into());
         }
         let n = body
@@ -338,7 +347,7 @@ fn download_inner(
 
     // a cancel landing after the last read still wins: the user closed
     // the modal, so nothing gets verified or saved afterwards
-    if cancel.load(Ordering::Relaxed) {
+    if cancel.load(Ordering::SeqCst) {
         return Err("cancelled".into());
     }
 
@@ -404,8 +413,15 @@ fn part_sibling(dest: &std::path::Path) -> std::path::PathBuf {
 
 /// Open Explorer with the downloaded file selected — the standard
 /// "/select," pattern every browser and installer uses. Read-only.
-/// The path must be a file we JUST verified and wrote (validate_dest ran
-/// before the download), and quote-unsafe characters are refused outright:
+///
+/// Honest scope: this accepts ANY existing absolute file (it only checks
+/// presence, absoluteness, and quote-safety), not just a file this module
+/// verified and wrote. Callers pass the freshly verified download, but the
+/// function itself performs no provenance check — it is a read-only
+/// reveal, never a trust assertion.
+/// Callers pass the file just verified and written (validate_dest ran
+/// before the download); the existence check below establishes presence
+/// only, not provenance. Quote-unsafe characters are refused outright:
 /// explorer re-parses its raw command line, so an embedded quote could
 /// break out of the /select argument. `raw_arg` with a validated,
 /// quote-free path keeps the argument boundary intact.
@@ -686,6 +702,42 @@ mod tests {
             redact_proxy("http://proxy.example:8080"),
             "http://proxy.example:8080"
         );
+    }
+
+    #[test]
+    fn failed_validate_frees_cancel_slot_for_retry() {
+        // register then fail validation: the slot must be freed so the
+        // next download can register (a stuck slot blocked every retry
+        // until restart or manual Cancel).
+        use std::sync::Arc;
+        // ensure a clean slate (a previous failed test must not leak)
+        *ACTIVE_CANCEL.lock().unwrap_or_else(|p| p.into_inner()) = None;
+        DOWNLOAD_RUNNING.store(false, Ordering::SeqCst);
+        let cancel = Arc::new(AtomicBool::new(false));
+        register_cancel(cancel.clone()).unwrap();
+        let info = UpdateInfo {
+            version: "0.0.0-test".into(),
+            notes: String::new(),
+            asset_url: "https://github.com/x/y.exe".into(),
+            asset_name: "laghunter-retry-test.exe".into(),
+            sums_url: "https://github.com/x/sums.txt".into(),
+        };
+        // relative path always fails validation without touching the net
+        let bad = std::path::PathBuf::from("relative.exe");
+        assert!(download_and_verify(&info, bad, &cancel, |_| {}).is_err());
+        assert!(
+            ACTIVE_CANCEL
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .is_none(),
+            "cancel slot must be cleared on validate failure"
+        );
+        assert!(!DOWNLOAD_RUNNING.load(Ordering::SeqCst));
+        // retry must be able to register again
+        let cancel2 = Arc::new(AtomicBool::new(false));
+        assert!(register_cancel(cancel2).is_ok());
+        // cleanup for other tests
+        *ACTIVE_CANCEL.lock().unwrap_or_else(|p| p.into_inner()) = None;
     }
 
     #[test]

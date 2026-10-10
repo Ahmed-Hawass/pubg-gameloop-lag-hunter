@@ -16,9 +16,12 @@
 // the useful lines under tens of thousands of fast ones. A per-day size
 // cap backs this up; WARN/ERROR/PANIC always get through.
 //
-// Writer rule: every public fn is lock-free-ish and NEVER blocks callers —
-// a logging failure is swallowed, never propagated (fail-soft, like the
-// rest of the engine).
+// Writer rule: normal writes serialize under LOG_LOCK (a slow-path file
+// append — fast callers never do I/O inline beyond the mutex handoff),
+// and a logging failure is swallowed, never propagated (fail-soft, like
+// the rest of the engine). Only the panic hook is truly lock-free: it
+// bypasses LOG_LOCK with a direct write because the panic may originate
+// while another thread holds the mutex (see init_panic_hook).
 
 use std::fs;
 use std::io::Write;

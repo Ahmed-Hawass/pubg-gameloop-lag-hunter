@@ -417,7 +417,14 @@ fn remove_old_files(dir: &Path, keep_ms: i64) {
     let Ok(canonical) = dir.canonicalize() else {
         return;
     };
-    let now = super::types::iso_ms(&super::sampler::iso_now()).unwrap_or(0);
+    // wall-clock independent age: file mtimes are true UTC epoch, while
+    // iso_now is LOCAL wall time (offset by hours). Comparing them mixed
+    // the timezone offset into every age gate and a manual/NTP jump could
+    // fresh-delete or stale-keep. SystemTime here matches the mtime clock.
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
@@ -778,7 +785,12 @@ fn old_minidumps_bytes() -> Option<u64> {
 /// delete what cannot be dated). An unreadable root is None (a missing
 /// CBS/Minidump listing must read "--", never 0).
 fn old_files_size(dir: &Path, keep_ms: i64) -> Option<u64> {
-    let now = super::types::iso_ms(&super::sampler::iso_now()).unwrap_or(0);
+    // same clock discipline as prune_old_files: SystemTime matches mtime,
+    // never the local wall clock (see above).
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
     let mut total = 0u64;
     let Ok(entries) = std::fs::read_dir(dir) else {
         return None;
@@ -856,11 +868,15 @@ fn dir_size_capped(root: PathBuf) -> Option<u64> {
 
 #[cfg(windows)]
 fn recycle_bin_bytes() -> Option<u64> {
-    // Measure through the same user-scoped PowerShell API used for deletion.
-    // Walking every SID under $Recycle.Bin could count other users' items
-    // that Clear-RecycleBin will not remove for this user.
+    // Measure the CURRENT user's SID folder under $Recycle.Bin (per-drive,
+    // system drive): walking every SID would count other users' items that
+    // Clear-RecycleBin will not remove for this user. Get-RecycleBin does
+    // not exist as a cmdlet, so measure the folder directly.
     let text = super::system::ps(
-        r#"$sum = (Get-RecycleBin -Force | Measure-Object -Property Size -Sum).Sum
+        r#"$sid = ([Security.Principal.WindowsIdentity]::GetCurrent().User.Value)
+$p = Join-Path (Join-Path $env:SystemDrive '$Recycle.Bin') $sid
+$sum = 0
+if (Test-Path -LiteralPath $p) { $sum = (Get-ChildItem -LiteralPath $p -Force -Recurse -File -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum }
 if ($null -eq $sum) { "0" } else { [math]::Floor($sum).ToString([Globalization.CultureInfo]::InvariantCulture) }"#,
     )
     .ok()?;

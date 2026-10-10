@@ -395,7 +395,9 @@ pub fn set_mouse_accel(value: u32) -> Result<TweakResult, String> {
         return Err("mouse value must be 0 or 1".into());
     }
     let on = value == 1;
-    let current = read_dword(MOUSE_SUBKEY, MOUSE_SPEED).unwrap_or(None);
+    // a read error reads as missing (OS default), like the verify re-read
+    // below: the write either verifies or reports verified=false.
+    let current = read_dword(MOUSE_SUBKEY, MOUSE_SPEED).ok().flatten();
     if on {
         write_dword(MOUSE_SUBKEY, MOUSE_SPEED, 0)?;
         write_dword(MOUSE_SUBKEY, MOUSE_T1, 0)?;
@@ -405,7 +407,7 @@ pub fn set_mouse_accel(value: u32) -> Result<TweakResult, String> {
         delete_value(MOUSE_SUBKEY, MOUSE_T1)?;
         delete_value(MOUSE_SUBKEY, MOUSE_T2)?;
     }
-    let r = |name| read_dword(MOUSE_SUBKEY, name).unwrap_or(None);
+    let r = |name| read_dword(MOUSE_SUBKEY, name).ok().flatten();
     let verified = super::system::mouse_accel_off(r(MOUSE_SPEED), r(MOUSE_T1), r(MOUSE_T2)) == on;
     super::logging::info(&format!("tweak mouse set: on={on} verified={verified}"));
     Ok(TweakResult {

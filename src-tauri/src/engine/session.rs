@@ -71,7 +71,10 @@ struct UiSnapshot {
     session_id: Option<String>,
     samples: Vec<Sample>,
     samples_total: u64,
+    // trimmed diagnosis view + open-condition count, computed UNDER the lock
+    // so the per-second clone stays bounded even when the full history grows
     events: Vec<EngineEvent>,
+    active_count: usize,
     game_running: bool,
     emulator: Option<String>,
     auto_stop_at: Option<Instant>,
@@ -124,9 +127,12 @@ impl Engine {
         // retire any guard/timer threads gated on the current generation,
         // including ones a racing start() is about to spawn
         self.generation.fetch_add(1, Ordering::SeqCst);
-        if let Ok(current) = self.running_flag.read() {
-            current.store(false, Ordering::SeqCst);
-        }
+        // recover from poison (same as everywhere else): a panicked holder
+        // must not leave a stale reader alive forever
+        self.running_flag
+            .read()
+            .unwrap_or_else(|p| p.into_inner())
+            .store(false, Ordering::SeqCst);
     }
 
     pub fn status(&self) -> SessionStatus {
@@ -306,20 +312,25 @@ impl Engine {
         st.writer = Some(writer);
         st.status = SessionStatus::Running;
         st.auto_stop_at = auto_stop_secs.map(|s| Instant::now() + Duration::from_secs(s));
+        drop(st);
+        // Slow probes run UNLOCKED: holding the state lock across 5-10s
+        // PowerShell spawns wedged stop()/status() for ~20s. Status is
+        // already Running so a concurrent stop() flips to Stopping and the
+        // re-lock below bails out instead of overwriting it.
 
         // GPU max clocks (best effort — logged: a silent miss here is why a
         // gpu_clock_low rule could fire with bogus ratios)
-        match sampler::query_gpu_max_clocks() {
+        let gpu_max = sampler::query_gpu_max_clocks();
+        match &gpu_max {
             Some((gr, mem)) => {
                 super::logging::info(&format!("gpu max clocks: gr={gr}MHz mem={mem}MHz"));
-                st.detector.set_gpu_max(gr, mem);
             }
             None => super::logging::info(
                 "gpu max clocks unavailable (non-NVIDIA or nvidia-smi missing)",
             ),
         }
 
-        st.emulator = sampler::detect_emulator();
+        let emulator = sampler::detect_emulator();
 
         // ---- spawn streaming sources ----
         // Routes thread callbacks to the global engine instance (set in lib.rs).
@@ -350,6 +361,20 @@ impl Engine {
                 "game window visibility unknown at start (probe returned None)",
             ),
         }
+        // Re-lock and publish probe results: a concurrent stop() may have
+        // flipped Running to Stopping while we probed unlocked. In that
+        // case bail out without spawning sources (their writer is not ours).
+        {
+            let mut st = self.state.lock().unwrap_or_else(|p| p.into_inner());
+            if st.status != SessionStatus::Running {
+                drop(_fs_guard);
+                return Err("SESSION_STOPPED_DURING_START".into());
+            }
+            if let Some((gr, mem)) = gpu_max {
+                st.detector.set_gpu_max(gr, mem);
+            }
+            st.emulator = emulator;
+        }
         // FRESH flag per session (not the shared one): the old stop→start
         // race leaked readers — stop() flips the flag false and sleeps 600ms,
         // but a start() in that window flips the SAME flag back to true
@@ -359,9 +384,7 @@ impl Engine {
         // Arc, it stays false forever, and the new session's readers get a
         // brand-new one.
         let running = Arc::new(AtomicBool::new(true));
-        if let Ok(mut slot) = self.running_flag.write() {
-            *slot = Arc::clone(&running);
-        }
+        *self.running_flag.write().unwrap_or_else(|p| p.into_inner()) = Arc::clone(&running);
         {
             let mut slot = FIRST_SAMPLE_AT.lock().unwrap_or_else(|p| p.into_inner());
             *slot = Some(Instant::now());
@@ -390,12 +413,12 @@ impl Engine {
         // window (lib.rs spawns guards only on Ok, so Err spawns nothing).
         if self.shutdown_requested.load(Ordering::SeqCst) {
             running.store(false, Ordering::SeqCst);
-            drop(st);
             drop(_fs_guard);
             let _ = self.stop_with_reason(StopReason::Manual);
             return Err("APP_SHUTTING_DOWN".into());
         }
 
+        drop(_fs_guard);
         Ok(gen)
     }
 
@@ -431,10 +454,12 @@ impl Engine {
         }
 
         // flip the CURRENT session's flag (read under the lock — never the
-        // same Arc an old session's readers hold)
-        if let Ok(current) = self.running_flag.read() {
-            current.store(false, Ordering::SeqCst);
-        }
+        // same Arc an old session's readers hold). Poison recovers: a stale
+        // flag must still be flipped or the samplers never die.
+        self.running_flag
+            .read()
+            .unwrap_or_else(|p| p.into_inner())
+            .store(false, Ordering::SeqCst);
         std::thread::sleep(Duration::from_millis(600)); // let sources die
 
         let mut st = self.state.lock().unwrap_or_else(|p| p.into_inner());
@@ -467,8 +492,17 @@ impl Engine {
                     Err(e) => super::logging::error(&format!("finalize failed: {e}")),
                 }
                 st.events = events;
-                path.ok().map(|p| p.to_string_lossy().to_string())
+                // a failed finalize is a real error (summary unwritten);
+                // an absent writer is a benign double-stop (already finished)
+                match path {
+                    Ok(p) => Some(p.to_string_lossy().to_string()),
+                    Err(e) => {
+                        st.status = SessionStatus::Finished;
+                        return Err(e);
+                    }
+                }
             }
+            // no writer: already stopped/finished — benign, not a save failure
             None => None,
         };
         st.status = SessionStatus::Finished;
@@ -584,7 +618,9 @@ impl Engine {
                 session_id: st.session_id.clone(),
                 samples: st.samples.clone(),
                 samples_total: st.samples_total,
-                events: st.events.clone(),
+                // bounded clone: the UI only ever sees the diagnosis window
+                events: diagnosis_window(&st.events),
+                active_count: active_conditions(&st.events),
                 game_running: st.game_running,
                 emulator: st.emulator.clone(),
                 auto_stop_at: st.auto_stop_at,
@@ -619,22 +655,16 @@ impl Engine {
             .auto_stop_at
             .and_then(|at| at.checked_duration_since(Instant::now()))
             .map(|rem| elapsed_sec + rem.as_secs());
-        // DIAGNOSIS VIEW WINDOW: the diagnoser only reads the live (5 min)
-        // and correlation (15 min) windows — but it used to walk the FULL
-        // event history to build its indexes, every tick, under this lock.
-        // A sustained paging storm (one instant per second, hours long)
-        // grew the per-tick walk without bound. The view below trims to
-        // what the windows can still see + one window of slack, WITHOUT
-        // touching the stored events themselves: the full history stays the
-        // source of truth for autosave, finalize, and the saved report.
-        let view_events = diagnosis_window(&inputs.events);
+        // inputs.events is already the bounded diagnosis window (trimmed
+        // under the lock): the full history stays the source of truth for
+        // autosave/finalize, the per-second UI work stays bounded.
         build_ui_state(super::diagnoser::UiStateInput {
             session: inputs.session_id.as_deref(),
             started_at: inputs.started_at.as_deref(),
             samples: &inputs.samples,
             samples_total: inputs.samples_total,
-            events: &view_events,
-            active_count: active_conditions(&inputs.events),
+            events: &inputs.events,
+            active_count: inputs.active_count,
             game_running: inputs.game_running,
             emulator: inputs.emulator.as_deref(),
             total_mem_mb: inputs.total_mem_mb,
@@ -683,8 +713,13 @@ impl Engine {
     /// Called by the probe loop: if GameLoop died mid-session, the scan has
     /// nothing left to measure — stop it cleanly and mark the reason.
     pub fn check_gameloop_alive(&self) -> bool {
-        let st = self.state.lock().unwrap_or_else(|p| p.into_inner());
-        if st.status != SessionStatus::Running {
+        // release the state lock before touching LATEST_EMU: holding both
+        // lengthens contention with stop()/status() for no reason.
+        let running = {
+            let st = self.state.lock().unwrap_or_else(|p| p.into_inner());
+            st.status == SessionStatus::Running
+        };
+        if !running {
             return true; // nothing to guard
         }
         // freshness matters: a stale "alive" snapshot would keep the session
@@ -716,7 +751,6 @@ impl Engine {
             0
         };
         let misses = self.gameloop_misses.load(Ordering::SeqCst);
-        drop(st);
         if misses >= 3 {
             super::logging::error("GameLoop closed mid-session — auto-stopping");
             let _ = self.stop_with_reason(StopReason::GameLoopClosed);

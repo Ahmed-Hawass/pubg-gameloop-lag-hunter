@@ -131,7 +131,7 @@ fn friendly_name_of(path: &str) -> Option<String> {
             ) != 0
                 && !val.is_null()
             {
-                let s = read_wide_str(val);
+                let s = read_wide_str(val, (val_len as usize).max(1));
                 if !s.trim().is_empty() && !is_vendor_boilerplate(&s) {
                     return Some(s);
                 }
@@ -189,11 +189,15 @@ pub fn pretty_stem(raw: &str) -> String {
 }
 
 /// Read a NUL-terminated wide string (lossy, never panics on odd data).
+/// `max_chars` bounds the scan (from VerQueryValueW's length): the old form
+/// dereferenced before checking the cap, so a corrupt resource without an
+/// early NUL read out of bounds.
 #[cfg(windows)]
-fn read_wide_str(ptr: *const u16) -> String {
+fn read_wide_str(ptr: *const u16, max_chars: usize) -> String {
     unsafe {
+        let cap = max_chars.clamp(1, 4096);
         let mut len = 0usize;
-        while *ptr.add(len) != 0 && len < 4096 {
+        while len < cap && *ptr.add(len) != 0 {
             len += 1;
         }
         String::from_utf16_lossy(std::slice::from_raw_parts(ptr, len))
@@ -315,6 +319,18 @@ mod tests {
         assert!(!super::is_vendor_boilerplate("Brave Browser"));
         assert!(!super::is_vendor_boilerplate("Google Chrome"));
         assert!(!super::is_vendor_boilerplate(""));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn wide_str_respects_bounds_and_nul() {
+        // NUL-terminated inside the cap
+        let buf: Vec<u16> = vec![0x0041, 0x0042, 0, 0x0043];
+        assert_eq!(super::read_wide_str(buf.as_ptr(), 4), "AB");
+        // no NUL inside max: capped, never reads past max
+        let full: Vec<u16> = vec![0x0058; 10];
+        assert_eq!(super::read_wide_str(full.as_ptr(), 10).len(), 10);
+        assert_eq!(super::read_wide_str(full.as_ptr(), 4).len(), 4);
     }
 
     #[cfg(windows)]

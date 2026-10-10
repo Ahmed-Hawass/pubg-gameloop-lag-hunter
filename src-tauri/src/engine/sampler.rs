@@ -704,6 +704,21 @@ where
     Ok(true)
 }
 
+/// Map Arabic-Indic digits (U+0660..U+0669) to ASCII before any numeric
+/// parse: on an Arabic-locale Windows tasklist can print memory with
+/// Eastern digits ("١١٧٬٠٠٠ K"), which `parse::<f64>()` rejects. Pure.
+fn normalize_arabic_digits(s: &str) -> String {
+    s.chars()
+        .map(|c| {
+            if ('\u{0660}'..='\u{0669}').contains(&c) {
+                ((c as u32 - 0x0660) as u8 + b'0') as char
+            } else {
+                c
+            }
+        })
+        .collect()
+}
+
 /// GameLoop process snapshot via `tasklist` (native, ~5MB transient per call,
 /// zero resident cost — unlike spawning a full PowerShell every probe).
 /// PUBG Mobile on GameLoop only: the tool's entire identity.
@@ -739,10 +754,11 @@ pub fn query_emulator_procs() -> Result<Vec<ProcInfo>, String> {
         let pid = parts.next().unwrap_or("").trim_matches('"').parse().ok();
         let _session = parts.next();
         let _sessionnum = parts.next();
-        // mem field: strip group separators. English/Arabic-Indic digits with
-        // any locale thousands-separator ("," and the Arabic U+066C ٬), the
-        // "K" unit and non-breaking spaces must all parse to plain kilobytes.
-        let mem_str = parts
+        // mem field: strip group separators, then map Arabic-Indic digits
+        // ٠١٢٣٤٥٦٧٨٩ to ASCII before the f64 parse. Any locale
+        // thousands-separator ("," and the Arabic U+066C), the "K" unit
+        // and non-breaking spaces must all parse to plain kilobytes.
+        let cleaned = parts
             .next()
             .unwrap_or("")
             .trim_matches('"')
@@ -750,6 +766,7 @@ pub fn query_emulator_procs() -> Result<Vec<ProcInfo>, String> {
             .trim_end_matches('K')
             .trim()
             .to_string();
+        let mem_str = normalize_arabic_digits(&cleaned);
         let ws_mb = mem_str.parse::<f64>().ok().map(|k| k / 1024.0);
         procs.push(ProcInfo {
             name: name.to_string(),
@@ -1065,6 +1082,18 @@ mod tests {
     }
 
     #[test]
+    fn arabic_indic_digits_normalize_to_ascii() {
+        // tasklist on Arabic-locale Windows prints memory with Eastern
+        // digits: ٠١٢٣٤٥٦٧٨٩ must read as 0123456789 before the f64 parse.
+        assert_eq!(normalize_arabic_digits("١١٧٠٠٠"), "117000");
+        assert_eq!(normalize_arabic_digits("٠١٢٣٤٥٦٧٨٩"), "0123456789");
+        // ASCII passes through untouched, mixed content converts in place
+        assert_eq!(normalize_arabic_digits("117,000 K"), "117,000 K");
+        assert_eq!(normalize_arabic_digits("ab١٢cd"), "ab12cd");
+        assert_eq!(normalize_arabic_digits(""), "");
+    }
+
+    #[test]
     fn counter_values_parse_in_both_cultures() {
         // dot-decimal (typeperf CSV + every locale we support today)
         assert_eq!(parse_counter_value("12.5"), Some(12.5));
@@ -1118,14 +1147,34 @@ mod tests {
             .expect("powershell spawn");
         let os = String::from_utf8_lossy(&out.stdout).trim().to_string();
         let ours_minute = format!("{}:{}", &ours[0..10], &ours[11..16]);
-        // compare at the minute level — the two clock reads happen a moment
-        // apart, so a second boundary is fine but a mismatch beyond that
-        // (the old UTC bug: hours apart) must fail loudly
+        // compare at the minute level with 1-minute tolerance: the two clock
+        // reads happen a moment apart, so a run crossing a minute boundary
+        // is fine, but a mismatch beyond that (the old UTC bug: hours apart)
+        // must fail loudly. Flaky without tolerance (minute rollover).
         let (os_hm, ours_hm) = (&os[11..16], &ours_minute[11..16]);
-        assert_eq!(
-            os_hm, ours_hm,
-            "iso_now must show wall-clock time (offset={offset}, os={os}, ours={ours_minute})"
-        );
+        let to_min = |hm: &str| -> Option<i32> {
+            let (h, m) = hm.split_once(':')?;
+            Some(h.parse::<i32>().ok()? * 60 + m.parse::<i32>().ok()?)
+        };
+        match (to_min(os_hm), to_min(ours_hm)) {
+            (Some(a), Some(b)) => {
+                let mut diff = (a - b).abs();
+                // midnight wrap: 23:59 vs 00:00 is 1 minute, not 1439
+                if diff > 720 {
+                    diff = 1440 - diff;
+                }
+                assert!(
+                    diff <= 1,
+                    "iso_now must show wall-clock time (offset={offset}, os={os}, ours={ours_minute})"
+                );
+            }
+            _ => {
+                assert_eq!(
+                    os_hm, ours_hm,
+                    "iso_now must show wall-clock time (offset={offset}, os={os}, ours={ours_minute})"
+                );
+            }
+        }
     }
 
     #[test]

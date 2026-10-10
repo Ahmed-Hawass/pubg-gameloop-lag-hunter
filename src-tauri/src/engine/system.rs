@@ -113,6 +113,7 @@ pub(crate) fn ps_with_timeout(
             Ok(None) => {
                 if std::time::Instant::now() >= deadline {
                     let _ = child.kill();
+                    let _ = child.wait();
                     return Err("powershell timed out".into());
                 }
                 std::thread::sleep(std::time::Duration::from_millis(50));
@@ -1391,6 +1392,26 @@ pub enum RowState {
     HiddenUltimate,
 }
 
+impl TweakStates {
+    /// Conservative fallback when the blocking task itself panics (JoinError):
+    /// rows hide or read off, never a false "on". Only the JoinError path
+    /// uses this; normal reads always go through query_tweak_states.
+    pub fn fallback() -> Self {
+        Self {
+            game_dvr_enabled: false,
+            storage_sense: None,
+            game_mode: true,
+            gpu_high_perf: RowState::Hidden,
+            fso_disabled: RowState::Hidden,
+            mouse_accel_off: false,
+            windowed_game_opt: None,
+            power_high_perf: RowState::Hidden,
+            emulator_updated: false,
+            emulator_version: String::new(),
+        }
+    }
+}
+
 /// Windows build number (e.g. 22631), None when unreadable. Same source
 /// as the boot-log identity line, factored out so feature gates can ask
 /// the OS a yes/no question without parsing a display string.
@@ -2585,6 +2606,12 @@ pub fn open_windows_panel(panel: &str) -> Result<(), String> {
     // control.exe with a non-applet and nothing appeared). Each arm
     // therefore builds its OWN command: CPLs go through control.exe,
     // real exes run directly (System32 is always on PATH).
+    // The whitelist lives OUTSIDE the cfg(windows) gate on purpose: a
+    // non-Windows build must refuse every name just like Windows refuses
+    // unknown ones (an Ok(()) for anything would lie to shared callers).
+    if !matches!(panel, "power" | "system" | "gaming-captures") {
+        return Err("unknown panel".into());
+    }
     #[cfg(windows)]
     {
         let mut cmd = match panel {
@@ -2625,7 +2652,9 @@ pub fn open_windows_panel(panel: &str) -> Result<(), String> {
     #[cfg(not(windows))]
     {
         let _ = panel;
+        return Err("unsupported on this platform".into());
     }
+    #[allow(unreachable_code)]
     Ok(())
 }
 

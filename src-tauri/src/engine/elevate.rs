@@ -197,6 +197,9 @@ pub fn map_exit_code(code: u32) -> Result<(), String> {
 /// for it. Returns the child's exit code. A denied UAC prompt is
 /// ERROR_CANCELLED (1223): Err("cancelled"), exact, for the UI's silent
 /// rollback — never a scary dialog for a deliberate No.
+/// Bounded wait (60s): an INFINITE wait wedged the IPC thread forever when
+/// the elevated child hung (registry/powercfg stall). On timeout the child
+/// is terminated and a timeout error is returned.
 #[cfg(windows)]
 pub fn elevate_self(id: &str, value: u32) -> Result<u32, String> {
     if !super::tweaks::is_known_id(id) || value > 1 {
@@ -204,20 +207,7 @@ pub fn elevate_self(id: &str, value: u32) -> Result<u32, String> {
     }
     let params = format!("{ELEVATED_ACTION_FLAG} {id} {value}");
     let process = spawn_elevated_raw(&params)?;
-    // SAFETY: hProcess is ours (NOCLOSEPROCESS); wait, read the code,
-    // then close — the only three handle calls this module ever makes.
-    unsafe {
-        WaitForSingleObject(process, INFINITE);
-        let mut code: u32 = 0;
-        // the read itself can fail (invalid handle): an unread code
-        // must never pass as 0/success — fail loudly instead.
-        if GetExitCodeProcess(process, &mut code) == 0 {
-            CloseHandle(process);
-            return Err("could not read elevated child exit code".into());
-        }
-        CloseHandle(process);
-        Ok(code)
-    }
+    wait_for_elevated_child(process)
 }
 
 /// Page file editor variant: same spawn, the whole validated request in
@@ -253,16 +243,7 @@ pub fn elevate_pagefile_settings(
         drive.to_uppercase()
     );
     let process = spawn_elevated_raw(&params)?;
-    unsafe {
-        WaitForSingleObject(process, INFINITE);
-        let mut code: u32 = 0;
-        if GetExitCodeProcess(process, &mut code) == 0 {
-            CloseHandle(process);
-            return Err("could not read elevated child exit code".into());
-        }
-        CloseHandle(process);
-        Ok(code)
-    }
+    wait_for_elevated_child(process)
 }
 
 /// Storage sweep variant (parent side): one UAC prompt for the whole
@@ -284,16 +265,7 @@ pub fn elevate_storage_clean(cats: &[String]) -> Result<u32, String> {
         cats.join(" ")
     );
     let process = spawn_elevated_raw(&params)?;
-    unsafe {
-        WaitForSingleObject(process, INFINITE);
-        let mut code: u32 = 0;
-        if GetExitCodeProcess(process, &mut code) == 0 {
-            CloseHandle(process);
-            return Err("could not read elevated child exit code".into());
-        }
-        CloseHandle(process);
-        Ok(code)
-    }
+    wait_for_elevated_child(process)
 }
 
 /// Reboot request (parent side): spawn ourselves elevated with the
@@ -437,9 +409,44 @@ const SEE_MASK_FLAG_NO_UI: u32 = 0x0000_0400;
 #[cfg(windows)]
 const SW_HIDE: i32 = 0;
 #[cfg(windows)]
-const INFINITE: u32 = 0xFFFF_FFFF;
-#[cfg(windows)]
 const ERROR_CANCELLED: u32 = 1223;
+/// Bounded wait for the elevated child: 60s then terminate. INFINITE is
+/// deliberately not used anymore (a hung child wedged the caller forever).
+#[cfg(windows)]
+const ELEVATED_TIMEOUT_MS: u32 = 60_000;
+#[cfg(windows)]
+const WAIT_OBJECT_0: u32 = 0;
+#[cfg(windows)]
+const WAIT_TIMEOUT: u32 = 258;
+
+/// Wait for an elevated child with timeout, read its exit code, close the
+/// handle. On timeout the child is terminated so no orphan survives.
+#[cfg(windows)]
+fn wait_for_elevated_child(process: *mut core::ffi::c_void) -> Result<u32, String> {
+    // SAFETY: process is ours (NOCLOSEPROCESS); wait, read the code,
+    // then close — the only handle calls this module ever makes.
+    unsafe {
+        let waited = WaitForSingleObject(process, ELEVATED_TIMEOUT_MS);
+        if waited == WAIT_TIMEOUT {
+            TerminateProcess(process, 1);
+            CloseHandle(process);
+            return Err("elevated action timed out after 60s".into());
+        }
+        if waited != WAIT_OBJECT_0 {
+            CloseHandle(process);
+            return Err(format!("elevated wait failed (wait result {waited})"));
+        }
+        let mut code: u32 = 0;
+        // the read itself can fail (invalid handle): an unread code
+        // must never pass as 0/success — fail loudly instead.
+        if GetExitCodeProcess(process, &mut code) == 0 {
+            CloseHandle(process);
+            return Err("could not read elevated child exit code".into());
+        }
+        CloseHandle(process);
+        Ok(code)
+    }
+}
 
 /// SHELLEXECUTEINFOW layout (field order and pointer widths matter;
 /// repr(C) pads like the C struct on both 32- and 64-bit). The name keeps
@@ -481,6 +488,7 @@ extern "system" {
     fn WaitForSingleObject(handle: *mut core::ffi::c_void, millis: u32) -> u32;
     fn GetExitCodeProcess(handle: *mut core::ffi::c_void, code: *mut u32) -> i32;
     fn CloseHandle(handle: *mut core::ffi::c_void) -> i32;
+    fn TerminateProcess(handle: *mut core::ffi::c_void, code: u32) -> i32;
     fn GetLastError() -> u32;
 }
 
@@ -642,5 +650,15 @@ mod tests {
         // turns silent rollbacks into scary dialogs or vice versa
         assert_eq!(CANCELLED, "cancelled");
         assert_eq!(ELEVATED_ACTION_FLAG, "--laghunter-elevated");
+    }
+
+    #[test]
+    fn elevated_wait_is_bounded() {
+        // a hung elevated child must never wedge the caller forever:
+        // compile-time bound (60s), not INFINITE.
+        const _: () = {
+            assert!(ELEVATED_TIMEOUT_MS >= 30_000 && ELEVATED_TIMEOUT_MS <= 120_000);
+        };
+        assert_ne!(WAIT_OBJECT_0, WAIT_TIMEOUT);
     }
 }

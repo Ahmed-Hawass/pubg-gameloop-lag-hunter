@@ -140,14 +140,17 @@ async fn process_icons(pids: Vec<u32>) -> Vec<engine::icons::ProcessIcon> {
         .unwrap_or_default()
 }
 
-/// The Tools tab's switches, live from the registry (microseconds,
-/// in-process — no PowerShell spawn). SYNC by the codebase's own rule:
-/// only commands slower than a few milliseconds go async. The full
-/// system_checks batch costs 0.5–2s and the Tools page displays none of
-/// its rows; this command reads only what the switches mirror.
+/// The Tools tab's switches, live from the registry + three native powercfg
+/// reads (tens of ms each, up to 5s timeouts on hung boxes). ASYNC on the
+/// blocking pool by the codebase's own rule: anything slower than a few
+/// milliseconds stays off the IPC thread. The full system_checks batch
+/// costs 0.5–2s and the Tools page displays none of its rows; this command
+/// reads only what the switches mirror.
 #[tauri::command]
-fn tweak_states() -> engine::system::TweakStates {
-    engine::system::query_tweak_states()
+async fn tweak_states() -> engine::system::TweakStates {
+    tauri::async_runtime::spawn_blocking(engine::system::query_tweak_states)
+        .await
+        .unwrap_or_else(|_| engine::system::TweakStates::fallback())
 }
 
 #[tauri::command]
@@ -244,7 +247,14 @@ async fn storage_scan(
         }
         Err(e) => {
             engine::logging::warn(&format!("storage_scan task failed: {e}"));
-            engine::cleanup::scan()
+            // fallback stays on the blocking pool too: a direct scan() call
+            // here would run the dir walks on the async runtime thread.
+            tauri::async_runtime::spawn_blocking(engine::cleanup::scan)
+                .await
+                .unwrap_or_else(|_| engine::cleanup::CleanupScan {
+                    categories: Vec::new(),
+                    history: Default::default(),
+                })
         }
     }
 }
@@ -420,14 +430,13 @@ async fn session_stop(app: tauri::AppHandle) -> Result<StatusPayload, String> {
     let _t = engine::logging::timed_with("ipc: session_stop", 3_000);
     // the stop path sleeps 600ms + reads the whole samples file back from
     // disk — genuinely blocking work, parked on the blocking pool so the
-    // async runtime never stalls (the UI keeps breathing meanwhile)
+    // async runtime never stalls (the UI keeps breathing meanwhile).
+    // Idempotent: a second Stop when already Finished returns the current
+    // state (Ok), never SESSION_SAVE_FAILED — only a real finalize error fails.
     let eng = session::init_global();
-    let report = tauri::async_runtime::spawn_blocking(move || eng.stop())
+    let _report = tauri::async_runtime::spawn_blocking(move || eng.stop())
         .await
         .map_err(|e| format!("stop task failed: {e}"))??;
-    if report.is_none() && session::init_global().status() == SessionStatus::Finished {
-        return Err("SESSION_SAVE_FAILED".into());
-    }
     // the report path is intentionally unread here: the UI loads the
     // finished session's report via load_report when the user opens it
     let _ = push_state(&app);
@@ -793,6 +802,13 @@ fn get_version() -> String {
 /// plugin capabilities only guard the JS-side command path, while this
 /// command is invoked from our own frontend anyway. Anything outside
 /// these hosts is refused, end of story.
+///
+/// NOTE (3 vs 4): this list has 3 hosts on purpose. The updater's
+/// ALLOWED_HOSTS in engine/update.rs has 4 (these 2 GitHub hosts plus the
+/// 2 release-asset CDN hosts objects.githubusercontent.com and
+/// release-assets.githubusercontent.com) because downloads redirect onto
+/// the CDN. The browser-open path never targets the CDN directly, so it
+/// stays at 3. Keep both lists https-only.
 const OPEN_URL_ALLOWED_HOSTS: [&str; 3] = ["github.com", "api.github.com", "paypal.me"];
 
 #[tauri::command]

@@ -50,12 +50,18 @@ pub(crate) const MAX_LOCAL_META_BYTES: u64 = 2 * 1024 * 1024;
 /// Bounded file read: None when missing, oversized, or unreadable.
 /// Every session/settings/history reader goes through this so no single
 /// planted file can exhaust memory (panic=abort would kill the app).
+/// TOCTOU-safe: the cap is enforced DURING the read via take(), not by a
+/// prior metadata check (a file growing between stat and read can't bypass).
 pub(crate) fn read_limited(path: &Path) -> Option<String> {
-    let meta = fs::metadata(path).ok()?;
-    if meta.len() > MAX_LOCAL_META_BYTES {
+    use std::io::Read;
+    let file = fs::File::open(path).ok()?;
+    let mut limited = file.take(MAX_LOCAL_META_BYTES + 1);
+    let mut buf = String::new();
+    limited.read_to_string(&mut buf).ok()?;
+    if buf.len() as u64 > MAX_LOCAL_META_BYTES {
         return None;
     }
-    fs::read_to_string(path).ok()
+    Some(buf)
 }
 
 /// Create a new session directory named by local time: session-YYYY-MM-DD_HHMMSS
@@ -68,17 +74,36 @@ pub(crate) fn read_limited(path: &Path) -> Option<String> {
 pub fn new_session_dir() -> Result<(String, PathBuf), String> {
     let base_id = session_id_from(&super::sampler::iso_now());
     let root = sessions_root();
-    let mut id = base_id.clone();
+    // the root may not exist yet (first run): create it once, then use
+    // atomic create_dir per session so two writers (GUI + CLI) can never
+    // claim the same id (exists()+create_dir_all was a TOCTOU: both could
+    // see "free" then share a dir while File::create truncated samples).
+    fs::create_dir_all(&root).map_err(|e| format!("cannot create sessions root: {e}"))?;
+    claim_session_dir(&root, &base_id)
+}
+
+/// Pure-ish claim step (testable): atomically claim base_id or the next
+/// -N suffix inside an existing root. create_dir fails on existing, so the
+/// check-and-create is one syscall, never a TOCTOU window.
+fn claim_session_dir(root: &Path, base_id: &str) -> Result<(String, PathBuf), String> {
+    let mut id = base_id.to_string();
     let mut n = 2;
-    // File::create below TRUNCATES — writing into an existing dir would
-    // silently destroy the previous session's samples. Never reuse a dir.
-    while root.join(&id).exists() {
-        id = format!("{base_id}-{n}");
-        n += 1;
+    loop {
+        let dir = root.join(&id);
+        match fs::create_dir(&dir) {
+            Ok(()) => return Ok((id, dir)),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                id = format!("{base_id}-{n}");
+                n += 1;
+                // bound the suffix walk: a pathological folder with
+                // thousands of collisions must fail, never loop forever
+                if n > 10000 {
+                    return Err("too many session collisions".into());
+                }
+            }
+            Err(e) => return Err(format!("cannot create session dir: {e}")),
+        }
     }
-    let dir = root.join(&id);
-    fs::create_dir_all(&dir).map_err(|e| format!("cannot create session dir: {e}"))?;
-    Ok((id, dir))
 }
 
 fn session_id_from(iso: &str) -> String {
@@ -180,21 +205,59 @@ impl SessionWriter {
     ) -> Result<PathBuf, String> {
         let _ = self.flush();
 
-        // read all samples from disk — the file is the source of truth;
-        // an unreadable file finalizes as an empty (partial) session
-        let samples: Vec<Sample> = fs::read_to_string(self.dir.join("samples.jsonl"))
-            .map(|text| {
-                text.lines()
-                    .filter_map(|l| {
-                        if l.trim().is_empty() {
-                            None
-                        } else {
-                            serde_json::from_str(l).ok()
+        // Stream samples from disk (never read_to_string the whole file):
+        // a planted multi-GB jsonl must finalize as empty/partial, never
+        // as an OOM that aborts the app. Cap: 32 MB or 200k samples.
+        // The byte counter below (not the metadata pre-check) is the real
+        // guard: the file can grow between stat and read (TOCTOU), so every
+        // successfully parsed line accumulates its length and crossing the
+        // cap discards everything and stops collecting (empty/partial out).
+        let samples: Vec<Sample> = {
+            use std::io::{BufRead, BufReader};
+            const MAX_SAMPLE_BYTES: u64 = 32 * 1024 * 1024;
+            const MAX_SAMPLES: usize = 200_000;
+            let mut out = Vec::new();
+            if let Ok(f) = fs::File::open(self.dir.join("samples.jsonl")) {
+                let meta_len = f.metadata().map(|m| m.len()).unwrap_or(0);
+                if meta_len <= MAX_SAMPLE_BYTES {
+                    let mut reader = BufReader::new(f);
+                    let mut line = String::new();
+                    let mut parsed_bytes: u64 = 0;
+                    loop {
+                        line.clear();
+                        match reader.read_line(&mut line) {
+                            Ok(0) => break,
+                            Ok(_) => {
+                                if out.len() >= MAX_SAMPLES {
+                                    break;
+                                }
+                                let t = line.trim();
+                                if t.is_empty() {
+                                    continue;
+                                }
+                                // bound each line: a single GB line can't OOM us
+                                if t.len() > 64 * 1024 {
+                                    continue;
+                                }
+                                if let Ok(s) = serde_json::from_str(t) {
+                                    parsed_bytes += t.len() as u64;
+                                    if parsed_bytes > MAX_SAMPLE_BYTES {
+                                        // TOCTOU growth: file was small at
+                                        // stat but streamed past the cap —
+                                        // drop everything, finalize empty.
+                                        out.clear();
+                                        break;
+                                    }
+                                    out.push(s);
+                                }
+                            }
+                            Err(_) => break,
                         }
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
+                    }
+                }
+            }
+            out
+        };
 
         let mut failed = storage_write_failed;
         // events.json
@@ -1244,6 +1307,23 @@ mod tests {
     }
 
     #[test]
+    fn claim_session_dir_is_atomic_on_collision() {
+        // pre-claim base id: the next claim must take -2 without reusing
+        let root = std::env::temp_dir().join(format!("lh-claim-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let base = "session-2026-08-31_001952";
+        let (first, _) = claim_session_dir(&root, base).unwrap();
+        assert_eq!(first, base);
+        let (second, second_dir) = claim_session_dir(&root, base).unwrap();
+        assert_eq!(second, format!("{base}-2"));
+        assert!(second_dir.is_dir());
+        // the first dir was never truncated/reused
+        assert!(root.join(base).is_dir());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn highlight_allowlist_skips_planted_kinds() {
         assert!(is_known_highlight_kind("disk_queue"));
         assert!(is_known_highlight_kind("spike"));
@@ -1291,5 +1371,59 @@ mod tests {
         // unknown kinds map to "" on BOTH sides (never mislabeled)
         assert_eq!(finding_key("mystery_kind"), "");
         assert_eq!(super::super::diagnoser::key_for(&mk_ev("mystery_kind")), "");
+    }
+
+    #[test]
+    fn huge_samples_file_finalizes_empty_without_oom() {
+        // a planted multi-GB jsonl must finalize as empty/partial, never as
+        // an OOM: the streaming byte counter drops everything past 32 MB.
+        // The file here is just over the cap (padded valid samples so every
+        // line parses and accumulates); finalize must still succeed with a
+        // zero-sample summary and a report on disk.
+        use std::io::Write;
+        let dir = std::env::temp_dir().join(format!("lh-huge-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let pad = "x".repeat(8192);
+        let line =
+            format!("{{\"t\":\"2026-08-31T05:00:00.000Z\",\"cpu_total\":50.0,\"pad\":\"{pad}\"}}");
+        let line_len = line.len() as u64;
+        // just over 32 MB worth of parsed bytes
+        let target: u64 = 32 * 1024 * 1024 + 64 * 1024;
+        let n = (target / line_len + 1) as usize;
+        let f = fs::File::create(dir.join("samples.jsonl")).unwrap();
+        let mut w = std::io::BufWriter::new(f);
+        for _ in 0..n {
+            w.write_all(line.as_bytes()).unwrap();
+            w.write_all(b"\n").unwrap();
+        }
+        w.flush().unwrap();
+        drop(w);
+        let handle = fs::OpenOptions::new()
+            .append(true)
+            .open(dir.join("samples.jsonl"))
+            .unwrap();
+        let mut sw = SessionWriter {
+            samples: handle,
+            dir: dir.clone(),
+        };
+        let rp = sw
+            .finalize_from_disk(
+                &[],
+                "2026-08-31T05:00:00.000Z",
+                &Thresholds::default(),
+                n as u64,
+                false,
+            )
+            .expect("huge file must still finalize");
+        assert!(rp.is_file());
+        let summary: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(dir.join("summary.json")).unwrap()).unwrap();
+        assert_eq!(
+            summary.get("samplesCount").and_then(|v| v.as_u64()),
+            Some(0),
+            "over-cap stream must finalize with zero samples"
+        );
+        let _ = fs::remove_dir_all(&dir);
     }
 }

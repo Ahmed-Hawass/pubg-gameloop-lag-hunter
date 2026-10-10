@@ -30,6 +30,10 @@ pub struct Detector {
     churn_acc: u32,
     /// rolling SM history for the activity gate (true rendering vs idle lobby)
     sm_hist: Vec<f64>,
+    /// last instant emission per kind (wall ms): sustained storms emit one
+    /// instant per minute, not one per tick (a 10-min storm was ~600
+    /// identical instants bloating events.json and the per-tick UI walk)
+    last_instant: HashMap<String, i64>,
 }
 
 /// The SM average (over ~60s) that separates "real rendering" from a static
@@ -82,6 +86,7 @@ impl Detector {
             cliff_fired: false,
             churn_acc: 0,
             sm_hist: Vec::new(),
+            last_instant: HashMap::new(),
         }
     }
 
@@ -126,8 +131,15 @@ impl Detector {
         self.check_memory(s, &mut evs);
         self.check_disk(s, &mut evs);
         self.check_cpu_perf_cliff(s, &mut evs);
-        self.check_gpu(s, &mut evs, playing);
-        self.check_gpu_activity_cliff(s, &mut evs, playing);
+        // one baseline per tick for the GPU rules below (was: one sort per
+        // rule). playing() above keeps its own pre-push computation on
+        // purpose: it must decide on PAST history before this tick enters
+        // it (see its feedback-loop comment), so sharing that value here
+        // would change behavior. The two GPU rules both read post-push
+        // history, so they share this one.
+        let baseline = self.learned_baseline();
+        self.check_gpu(s, &mut evs, playing, baseline);
+        self.check_gpu_activity_cliff(s, &mut evs, playing, baseline);
         evs
     }
 
@@ -223,6 +235,21 @@ impl Detector {
     }
 
     // ---- condition helpers: hysteresis via active map ----------------------
+
+    /// Rate gate for instant events: first emission passes, repeats within
+    /// 60s are suppressed (the open condition, if any, already tells the
+    /// story). Returns true when this tick may emit.
+    fn instant_allowed(&mut self, key: &str) -> bool {
+        const MIN_GAP_MS: i64 = 60_000;
+        let now = now_ms();
+        match self.last_instant.get(key) {
+            Some(&last) if now - last < MIN_GAP_MS => false,
+            _ => {
+                self.last_instant.insert(key.to_string(), now);
+                true
+            }
+        }
+    }
 
     fn condition(
         &mut self,
@@ -346,6 +373,7 @@ impl Detector {
             if pi > self.th.hard_faults_per_sec
                 && !self.active.contains_key("paging_churn")
                 && !self.active.contains_key("disk_queue")
+                && self.instant_allowed("hard_faults")
             {
                 evs.push(EngineEvent {
                     kind: "hard_faults".into(),
@@ -435,7 +463,7 @@ impl Detector {
         self.condition("disk_queue", sev, active, detail, &s.t, evs);
 
         if let Some(busy) = s.disk_busy_pct {
-            if busy >= self.th.disk_busy_pct {
+            if busy >= self.th.disk_busy_pct && self.instant_allowed("disk_busy") {
                 evs.push(EngineEvent {
                     kind: "disk_busy".into(),
                     phase: Phase::Instant,
@@ -448,7 +476,7 @@ impl Detector {
         }
     }
 
-    fn check_gpu(&mut self, s: &Sample, evs: &mut Vec<EngineEvent>, playing: bool) {
+    fn check_gpu(&mut self, s: &Sample, evs: &mut Vec<EngineEvent>, playing: bool, baseline: f64) {
         let Some(g) = s.gpu.as_ref() else { return };
 
         // GPU rules are only meaningful in real play. Minimized window or a
@@ -510,7 +538,7 @@ impl Detector {
             if max > 0.0 {
                 let rendering_now = playing
                     && g.sm_pct
-                        .map(|sm| sm >= self.learned_baseline() * ACTIVITY_GATE_RATIO)
+                        .map(|sm| sm >= baseline * ACTIVITY_GATE_RATIO)
                         .unwrap_or(false);
                 let active = rendering_now && mclk < max * 0.5;
                 let detail = if active {
@@ -532,7 +560,13 @@ impl Detector {
     /// transitions (12-15% quiet band vs a 40s combat-flavored baseline),
     /// the absolute axis alone misfires on light scenes of low-baseline
     /// GPUs. One event per collapse: continuation ticks never re-emit.
-    fn check_gpu_activity_cliff(&mut self, s: &Sample, evs: &mut Vec<EngineEvent>, playing: bool) {
+    fn check_gpu_activity_cliff(
+        &mut self,
+        s: &Sample,
+        evs: &mut Vec<EngineEvent>,
+        playing: bool,
+        baseline: f64,
+    ) {
         let Some(g) = s.gpu.as_ref() else { return };
         // not in real play: reset the running comparison so the return to
         // the game never reads as one giant cliff (idle SM -> live SM)
@@ -546,7 +580,6 @@ impl Detector {
             self.cliff_fired = false;
             return;
         };
-        let baseline = self.learned_baseline();
         let deep_floor = baseline * CLIFF_DEEP_RATIO;
         let prev = self.prev_sm.replace(sm);
 
@@ -604,6 +637,42 @@ fn now_ms() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sustained_disk_busy_rate_limited_to_one_per_minute() {
+        // 10 ticks of sustained disk_busy must emit 1 instant, not 10
+        let th = Thresholds {
+            disk_busy_pct: 10.0,
+            ..Thresholds::default()
+        };
+        let mut d = Detector::new(th);
+        let mk = |t: &str| Sample {
+            t: t.into(),
+            cpu_total: Some(10.0),
+            proc_perf: Some(100.0),
+            avail_mb: Some(8192.0),
+            pages_in: Some(0.0),
+            disk_queue: Some(0.0),
+            disk_busy_pct: Some(99.0),
+            gpu: None,
+            emu: vec![],
+            game_visible: None,
+        };
+        let first = d.feed(&mk("2026-08-31T00:00:00.000Z"));
+        assert_eq!(
+            first.iter().filter(|e| e.kind == "disk_busy").count(),
+            1,
+            "first storm tick emits"
+        );
+        for i in 1..10 {
+            let evs = d.feed(&mk(&format!("2026-08-31T00:00:{i:02}.000Z")));
+            assert_eq!(
+                evs.iter().filter(|e| e.kind == "disk_busy").count(),
+                0,
+                "sustained storm must not re-emit within the minute (tick {i})"
+            );
+        }
+    }
 
     #[test]
     fn others_ok_gate_agrees_on_ram_pressure() {

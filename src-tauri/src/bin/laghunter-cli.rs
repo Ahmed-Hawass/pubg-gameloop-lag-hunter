@@ -228,12 +228,13 @@ fn session_live(id: &str) -> bool {
 }
 
 fn cmd_sessions() -> i32 {
-    let mut entries = storage::session_entries(None);
+    let entries = storage::session_entries(None);
     if entries.is_empty() {
         println!("No sessions yet. Run: laghunter scan");
         return 0;
     }
-    entries.reverse(); // newest first (ids sort chronological)
+    // session_entries is already newest-first (reversed inside storage.rs):
+    // no reverse here (the old reverse flipped it back to oldest-first).
     println!(
         "{:<28} {:<16} {:>8} {:>8}  OUTCOME",
         "SESSION", "DATE", "DUR", "SAMPLES"

@@ -28,11 +28,13 @@ static ICON_CACHE: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
 const CACHE_CEILING: usize = 500;
 
 /// Icons for PIDs: best-effort per PID, misses simply absent (the UI
-/// keeps the glyph). Duplicates asked once.
+/// keeps the glyph). Duplicates asked once. Bounded to the first 200 PIDs:
+/// each miss pays a native handle + extraction, so an unbounded IPC list
+/// could stall the blocking pool (bounded everything).
 pub fn process_icons(pids: &[u32]) -> Vec<ProcessIcon> {
     let mut out = Vec::new();
     let mut seen = std::collections::HashSet::new();
-    for &pid in pids {
+    for &pid in pids.iter().take(200) {
         if pid == 0 || !seen.insert(pid) {
             continue;
         }
@@ -147,7 +149,12 @@ fn hicon_to_data_url(hicon: *mut core::ffi::c_void) -> Option<String> {
         info[8..12].copy_from_slice(&h.to_le_bytes());
         info[12..14].copy_from_slice(&1u16.to_le_bytes());
         info[14..16].copy_from_slice(&32u16.to_le_bytes());
-        let mut pixels = vec![0u8; (w * h * 4) as usize];
+        // checked alloc: GDI dims are small in practice, but w*h*4 must
+        // never wrap before the vec! (rgba_top_down already uses checked_mul)
+        let pixels_len = (w as usize)
+            .checked_mul(h as usize)
+            .and_then(|n| n.checked_mul(4))?;
+        let mut pixels = vec![0u8; pixels_len];
         let hdc = GetDC(std::ptr::null_mut());
         let lines = GetDIBits(
             hdc,
