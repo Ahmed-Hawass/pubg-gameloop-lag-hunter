@@ -4,7 +4,7 @@
 // own grouping (never guessed in the UI).
 
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { en } from "../locales/en";
@@ -124,6 +124,44 @@ describe("ProcessesView", () => {
     apiMock.getSettings.mockResolvedValue(settings());
     window.dispatchEvent(new Event(INTRO_CARDS_EVENT));
     await screen.findByText(en.introProcessesTitle);
+  });
+
+  it("pauses the live poll while the document is hidden", async () => {
+    // sync act flushes (welcome.test.tsx pattern): waitFor deadlocks
+    // under fake timers and hung this file once, so no waits here.
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => "visible",
+    });
+    vi.useFakeTimers();
+    try {
+      apiMock.topProcesses.mockResolvedValue(answer);
+      apiMock.getSettings.mockResolvedValue(settings());
+      render(React.createElement(ProcessesView, { active: true }));
+      await act(async () => {});
+      const before = apiMock.topProcesses.mock.calls.length;
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+      await act(async () => {});
+      const ticked = apiMock.topProcesses.mock.calls.length;
+      expect(ticked).toBeGreaterThan(before);
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        get: () => "hidden",
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(6000);
+      });
+      await act(async () => {});
+      expect(apiMock.topProcesses.mock.calls.length).toBe(ticked);
+    } finally {
+      vi.useRealTimers();
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        get: () => "visible",
+      });
+    }
   });
 
   it("app rows carry an end-task action, system rows carry none", async () => {

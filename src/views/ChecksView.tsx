@@ -147,17 +147,13 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
     );
   }
   if (!checks) {
+    // loading owns no retry button: the mount fetch is in flight and the
+    // silent poll plus window-focus re-reads rescue it. A button here
+    // would stack a second query behind the first.
     return (
       <div className="checks">
         <div className="checks-head">
           <p className="checks-hint">{t.checksHint}</p>
-          <Button
-            label={busy ? t.loading : t.refresh}
-            icon={<RefreshCw size={14} className={busy ? "spin" : ""} />}
-            variant="ghost"
-            disabled={busy}
-            onClick={() => void load(false, true)}
-          />
         </div>
         <EmptyState icon={<RefreshCw size={20} />} title={t.loading} hint="" spin />
       </div>
@@ -260,9 +256,10 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
       ) : null}
 
       {/* one-glance verdict: derived from the five checks above, zero
-          backend cost (counts warn cards, nothing more). The re-read is
-          a quiet back-button in the banner tail (same control as the
-          Tools/Reports back buttons): no box to clash with the fill. */}
+          backend cost (counts warn cards, nothing more). No manual
+          refresh here: the silent 30s poll plus window-focus and
+          feature-state re-reads own freshness, and the error state keeps
+          the only retry button (the one place no poll can rescue). */}
       <div className={`health-banner ${warnItems.length === 0 ? "ok" : "warn"}`}>
         {warnItems.length === 0 ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
         <div>
@@ -271,15 +268,6 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
           </div>
           <div className="hb-sub">{warnItems.length === 0 ? t.healthAllGoodSub : t.healthNeedsSub}</div>
         </div>
-        <button
-          type="button"
-          className="back-btn"
-          disabled={busy}
-          onClick={() => void load(false, true)}
-        >
-          <RefreshCw size={14} className={busy ? "spin" : ""} />
-          {busy ? t.loading : t.refresh}
-        </button>
       </div>
       {/* featured warnings: the same cards as the archive below, repeated
           deliberately (summary + archive, not summary instead of it) */}

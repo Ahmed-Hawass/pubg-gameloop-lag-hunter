@@ -198,6 +198,15 @@
   display: flex;
   align-self: flex-start;
 }
+/* fixed width: the label flips between copySpecs (longest) and the
+   shorter copiedSpecs on click — without this the button breathes and
+   the page scrollbar flickers. Must fit the longest label in both
+   locales ("Copy all specs" / "نسخ كل المواصفات") plus the icon. */
+.sys-actions .btn {
+  min-width: 13em;
+  justify-content: center;
+  white-space: nowrap;
+}
 
 /* ---- top processes tab ---- */
 .procs {

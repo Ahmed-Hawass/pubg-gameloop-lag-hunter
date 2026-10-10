@@ -74,6 +74,23 @@ export function GamingSection(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
+  // slow backstop poll: an external change while the page sits open
+  // (GameLoop client update, another tool, group policy) would otherwise
+  // lie until re-entry. 60s of cheap reads (registry plus three native
+  // powercfg calls, tens of ms on the blocking pool); skipped mid-flip,
+  // off-tab, and while the document is hidden.
+  useEffect(() => {
+    if (!active) return;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      if (tweaks.isBusy()) return;
+      void tweaks.reloadSwitches();
+    }, 60000);
+    return () => window.clearInterval(timer);
+    // same as above: reload's identity is not part of the subscription
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
+
   // deep-link: a health card jumps to a row here. The parent opened this
   // page first (the open effect above fired the live read); this effect
   // scrolls once data arrives.

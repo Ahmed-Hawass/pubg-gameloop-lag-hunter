@@ -108,11 +108,12 @@ export function useTweaks(failNotice: (notice: Notice | null) => void) {
     },
   };
 
-  /** fresh switch positions, live from the registry: Windows is the
+  /** fresh switch positions, live from the OS: Windows is the
       single source of truth, so every entry point (open the details page
-      / window focus) re-reads live. The read is tweak_states (a handful
-      of registry values, microseconds), never the full system_checks
-      batch whose rows this page does not display. */
+      / window focus / the slow backstop poll) re-reads live. The read is
+      tweak_states (registry plus three native powercfg reads, tens of
+      ms on the blocking pool), never the full system_checks batch
+      whose rows this page does not display. */
   const reloadSwitches = async () => {
     // generation at START: if a flip begins while this read is in flight,
     // the completion below applies nothing (stale truth must never paint

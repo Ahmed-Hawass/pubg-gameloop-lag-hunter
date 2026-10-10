@@ -44,6 +44,20 @@ export function StorageSection(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
+  // slow backstop poll, same contract as the gaming page: external
+  // changes while open must surface within a minute, cheaply.
+  useEffect(() => {
+    if (!active) return;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      if (tweaks.isBusy()) return;
+      void tweaks.reloadSwitches();
+    }, 60000);
+    return () => window.clearInterval(timer);
+    // same as above: reload's identity is not part of the subscription
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
+
   if (!tweaks.ready) {
     // nothing has landed yet: the loading shell, never a dead page
     // and never an error for a read still in flight (a failed read

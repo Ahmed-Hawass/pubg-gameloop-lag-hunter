@@ -97,6 +97,24 @@ describe("ChecksView health summary", () => {
     expect(screen.getAllByText(en.openInTools)).toHaveLength(6);
   });
 
+  it("the banner carries no manual refresh (poll plus focus own it)", async () => {
+    apiMock.systemChecks.mockResolvedValue(allGood);
+    apiMock.getSettings.mockResolvedValue(settings());
+    render(React.createElement(ChecksView, { active: false, onOpenTool: vi.fn() }));
+    await screen.findByText(en.healthAllGood);
+    // the verdict banner is display-only; the error state below owns
+    // the single retry button
+    expect(document.querySelector(".health-banner button")).toBeNull();
+  });
+
+  it("the error state keeps its retry button", async () => {
+    apiMock.systemChecks.mockRejectedValue("boom");
+    apiMock.getSettings.mockResolvedValue(settings());
+    render(React.createElement(ChecksView, { active: false, onOpenTool: vi.fn() }));
+    await screen.findByText(en.dialog.somethingWrong);
+    expect(screen.getByRole("button", { name: en.refresh })).toBeTruthy();
+  });
+
   it("hint buttons announce their context, never a bare duplicate", async () => {
     apiMock.systemChecks.mockResolvedValue(allGood);
     apiMock.getSettings.mockResolvedValue(settings());

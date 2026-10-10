@@ -51,10 +51,14 @@ export function ProcessesView(props: { active: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // live while this tab is the active one — paused otherwise
+  // live while this tab is the active one — paused otherwise, and while
+  // the document is hidden (minimized window keeps polling otherwise)
   useEffect(() => {
     if (!active) return;
-    const timer = window.setInterval(() => void load(true), LIVE_INTERVAL_MS);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      void load(true);
+    }, LIVE_INTERVAL_MS);
     return () => window.clearInterval(timer);
     // load guards itself through busyRef; its identity is not part of
     // the interval contract
