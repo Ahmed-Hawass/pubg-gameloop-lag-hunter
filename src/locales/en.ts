@@ -191,8 +191,6 @@ export const en = {
   specThreads: "Threads",
   specDedicated: "dedicated",
   specDriver: "Driver",
-  specResolution: "Resolution",
-  specRefresh: "Refresh",
   specScale: "Scale",
   /** device and system row labels */
   specModel: "Model",
@@ -280,6 +278,9 @@ export const en = {
   dvrWarn: "On: turn off Record what happened in Gaming settings",
   checkOkBadge: "Good",
   checkWarnBadge: "Needs attention",
+  /** (?) buttons: screen-reader name carries the "about" context so it is
+      not announced as a bare duplicate of the row name */
+  hintAbout: (name: string) => `About ${name}`,
   /** summary banner: one-glance verdict above the cards, derived in the
       UI from the five checks (no backend change — counts warn cards) */
   healthAllGood: "All good",
@@ -587,11 +588,8 @@ export const en = {
   scanRemaining: (m: number) => `${m} min left`,
   scanSamples: "Samples",
   scanOfSession: "of session",
-  scanMeasuring: "measuring",
-  scanRecentMoments: "Recent moments",
   scanMoments: (n: number) => `${n} moment${n === 1 ? "" : "s"} captured`,
   scanStop: "Stop the scan",
-  scanAllClear: "All clear",
 
   // ---- monitor: result state (never auto-dismisses) ----
   scanResultLagTitle: "Lag was captured",

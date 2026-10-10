@@ -192,7 +192,6 @@ export const api = {
   deleteSession: (id: string) => invoke<void>("delete_session", { id }),
   deleteAllSessions: (excludeId: string | null) =>
     invoke<string[]>("delete_all_sessions", { excludeId }),
-  sessionFolder: (id: string) => invoke<string>("session_folder", { id }),
   sessionsRoot: () => invoke<string>("sessions_root"),
   getSettings: () => invoke<Settings>("get_settings"),
   setLanguage: (lang: string) => invoke<string>("set_language", { lang }),

@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { Button, Dialog, EmptyState } from "../components/components";
 import { api, type SystemInfo } from "../bridge";
-import { errorDialog } from "../errors";
+import { toErrorBody } from "../errors";
 import { useLang } from "../i18n";
 import type { Locale } from "../locales/en";
 
@@ -45,15 +45,7 @@ export function SystemView() {
       // known backend keys render their locale copy (substring match, so an
       // "engine error: CODE" wrapper still resolves); novel failures fall
       // back to the generic copy with the raw message as technical line
-      const raw = typeof e === "string" ? e : String(e);
-      setError(
-        errorDialog(raw, t.errors, {
-          somethingWrong: t.dialog.somethingWrong,
-          scanNeedsGame: t.dialog.scanNeedsGame,
-          scanNeedsGameBody: t.dialog.scanNeedsGameBody,
-          unknownErrorBody: t.dialog.unknownErrorBody,
-        }).body,
-      );
+      setError(toErrorBody(e, t));
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -64,7 +56,6 @@ export function SystemView() {
   // dead until app restart (single mount-time fetch, keep-alive tab, no
   // retry path) — now the error state carries a retry button and a
   // window-focus re-read.
-  const errorNow = error;
   useEffect(() => {
     void load();
     // mount-time fetch only: the retry button and focus handler below
@@ -73,14 +64,14 @@ export function SystemView() {
   }, []);
 
   useEffect(() => {
-    if (!errorNow) return;
+    if (!error) return;
     const onFocus = () => void load();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
     // load re-resolves the fresh locale through its closure on every
     // focus fire — its identity is not part of the subscription contract
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [errorNow]);
+  }, [error]);
 
   // copy-all: the exact on-screen strings as plain lines (locale-aware),
   // clipboard first with a notice fallback (never a silent dead button)

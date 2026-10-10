@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronDown, Clock, FileText, FileWarning, Folder, RefreshCw, Trash2 } from "lucide-react";
 import { Button, Dialog, EmptyState, Hint, NoteCard, Tip, diagnosisIcon, APP_DIALOG_OPEN_EVENT } from "../components/components";
 import { api, type FriendlyReport, type SessionEntry } from "../bridge";
+import { errorDialog, toErrorBody, type Notice } from "../errors";
 import { useLang } from "../i18n";
 import { useHour12 } from "../useHour12";
 import { formatClockTime } from "../clock";
@@ -31,11 +32,12 @@ function highlightTone(kind: string): "hl-bad" | "hl-warn" | "" {
   }
 }
 
-/** "Xm Ys" report-row duration –” a deliberately different shape from the
- *  live session's mm:ss clock (this one reads naturally in a list row).
+/** "Xm Ys" report-row duration: a deliberately different shape from the
+ *  live session's mm:ss clock in components.tsx fmtDur (this one reads
+ *  naturally in a list row, hence the fmtListDur name to prevent confusion).
  *  Units come from the locale (Latin m/s read as English inside Arabic
  *  rows). */
-function fmtDur(sec: number, units: { m: string; s: string }) {
+function fmtListDur(sec: number, units: { m: string; s: string }) {
   if (sec <= 0) return "--";
   const m = Math.floor(sec / 60);
   const s = sec % 60;
@@ -82,8 +84,9 @@ export function ReportsView(props: {
       asked for something and it did not happen; that deserves the one
       modal surface, exactly like the Tools tab's failed-write notice. */
   const [loadFailed, setLoadFailed] = useState<string | null>(null);
-  /** action-failure notice body (null = no notice) */
-  const [notice, setNotice] = useState<string | null>(null);
+  /** action-failure notice (null = no notice): full title+body so known
+      backend codes get their locale copy, not just the unknown fallback */
+  const [notice, setNotice] = useState<Notice | null>(null);
 
   const refresh = () => {
     api
@@ -93,16 +96,22 @@ export function ReportsView(props: {
         setLoadFailed(null);
       })
       .catch((e) => {
-        const raw = typeof e === "string" ? e : String(e);
-        setLoadFailed(t.dialog.unknownErrorBody(raw));
+        setLoadFailed(toErrorBody(e, t));
       });
   };
 
-  /** an action failed: localized copy + the raw message as a technical
-      line, shown as the view's Dialog (never bare English, never inline) */
+  /** an action failed: known backend codes get their locale copy via
+      errorDialog, novel failures get the localized unknown-error body
+      with the raw message as technical line */
   const actionFailed = (e: unknown) => {
-    const raw = typeof e === "string" ? e : String(e);
-    setNotice(t.dialog.unknownErrorBody(raw));
+    const msg = typeof e === "string" ? e : String(e);
+    const d = errorDialog(msg, t.errors, {
+      somethingWrong: t.dialog.somethingWrong,
+      scanNeedsGame: t.dialog.scanNeedsGame,
+      scanNeedsGameBody: t.dialog.scanNeedsGameBody,
+      unknownErrorBody: t.dialog.unknownErrorBody,
+    });
+    setNotice({ title: d.title, body: d.body });
   };
 
   // mount-time fetch only; the visibility effect and the deep-link below
@@ -147,7 +156,7 @@ export function ReportsView(props: {
         // onOpened() must still fire: the App-level link is one-shot, and
         // leaving it set would re-raise this error on every list refresh.
         if (entries.length > 0) {
-          setNotice(t.reportNotFound);
+          setNotice({ title: t.dialog.somethingWrong, body: t.reportNotFound });
         }
         onOpened();
         return;
@@ -247,7 +256,7 @@ export function ReportsView(props: {
           <div className="report-head-title">
             <h2>{t.sessionReport}</h2>
             <p>
-              {report.date} · {fmtDur(report.duration_sec, { m: t.minUnit, s: t.secUnit })} · {report.samples} {t.samples}
+              {report.date} · {fmtListDur(report.duration_sec, { m: t.minUnit, s: t.secUnit })} · {report.samples} {t.samples}
             </p>
           </div>
           <div className={`badge report-badge badge-${meta.tone}`}>
@@ -305,7 +314,7 @@ export function ReportsView(props: {
                 // empty clocks ride summary entries (nothing happened at a
                 // time); live ones follow the OS convention like the feed
                 const clock = h.clock ? ` (${formatClockTime(h.clock, hour12 ?? false, lang)})` : "";
-                const dur = h.dur_sec ? ` - ${fmtDur(Math.round(h.dur_sec), { m: t.minUnit, s: t.secUnit })}` : "";
+                const dur = h.dur_sec ? ` - ${fmtListDur(Math.round(h.dur_sec), { m: t.minUnit, s: t.secUnit })}` : "";
                 const tone = highlightTone(h.kind);
                 return (
                   <li key={i} className={tone === "" ? undefined : tone}>
@@ -422,7 +431,7 @@ export function ReportsView(props: {
                     <span className="sl-main">
                       <span className="sl-date">{e.date}</span>
                       <span className="sl-sub">
-                        {fmtDur(e.duration_sec, { m: t.minUnit, s: t.secUnit })} · {e.samples} {t.samples}
+                        {fmtListDur(e.duration_sec, { m: t.minUnit, s: t.secUnit })} · {e.samples} {t.samples}
                       </span>
                     </span>
                     <span className={`badge sl-badge sl-badge-${meta.tone}`}>
@@ -509,8 +518,8 @@ export function ReportsView(props: {
           notice: the user asked for something and it did not happen */}
       {notice ? (
         <Dialog
-          title={t.dialog.somethingWrong}
-          body={notice}
+          title={notice.title}
+          body={notice.body}
           kind="notice"
           okLabel={t.dialog.ok}
           onClose={() => setNotice(null)}
@@ -527,7 +536,7 @@ export function ReportsView(props: {
 /** the APP_DIALOG_OPEN_EVENT subscription for the notice (a tiny
  *  component so the effect's deps stay honest without dragging the whole
  *  view into it) */
-function NoticeYield(props: { notice: string | null; setNotice: (v: string | null) => void }) {
+function NoticeYield(props: { notice: Notice | null; setNotice: (v: Notice | null) => void }) {
   const { notice, setNotice } = props;
   useEffect(() => {
     if (!notice) return;

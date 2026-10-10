@@ -49,3 +49,30 @@ export function errorDialog(
     key: raw,
   };
 }
+
+/** locale slice needed to map a backend error to its dialog body */
+export interface ErrorLocale {
+  errors: Record<string, string>;
+  dialog: {
+    somethingWrong: string;
+    scanNeedsGame: string;
+    scanNeedsGameBody: string;
+    unknownErrorBody: (raw: string) => string;
+  };
+}
+
+/**
+ * One-line backend error to dialog body: known codes get their locale copy,
+ * novel failures get the localized unknown-error body with the raw message
+ * as the technical line. Replaces the repeated raw/errorDialog block in
+ * ChecksView, SystemView, ProcessesView, and PagefileEditor.
+ */
+export function toErrorBody(raw: unknown, t: ErrorLocale): string {
+  const msg = typeof raw === "string" ? raw : String(raw);
+  return errorDialog(msg, t.errors, {
+    somethingWrong: t.dialog.somethingWrong,
+    scanNeedsGame: t.dialog.scanNeedsGame,
+    scanNeedsGameBody: t.dialog.scanNeedsGameBody,
+    unknownErrorBody: t.dialog.unknownErrorBody,
+  }).body;
+}

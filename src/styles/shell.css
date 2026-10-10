@@ -327,10 +327,6 @@
   background: transparent;
 }
 
-.content > div > .monitor {
-  max-width: none;
-}
-
 /* HIDDEN beats the flex layout above — same specificity class + element
    chain would lose to `.content > div`; this wins regardless of order */
 .content > div.is-hidden-view {

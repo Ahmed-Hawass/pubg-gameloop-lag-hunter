@@ -193,8 +193,6 @@ export const ar: Locale = {
   specThreads: "الخيوط",
   specDedicated: "مخصصة",
   specDriver: "درايفر",
-  specResolution: "الدقة",
-  specRefresh: "التحديث",
   specScale: "مقياس",
   /** device and system row labels */
   specModel: "الموديل",
@@ -278,6 +276,9 @@ export const ar: Locale = {
   dvrWarn: "يعمل: أغلق تسجيل ما حدث من إعدادات الألعاب",
   checkOkBadge: "جيد",
   checkWarnBadge: "يحتاج إلى انتباه",
+  /** (?) buttons: screen-reader name carries the "about" context so it is
+      not announced as a bare duplicate of the row name */
+  hintAbout: (name: string) => `عن ${name}`,
   /** summary banner: one-glance verdict above the cards, derived in the
       UI from the five checks (no backend change — counts warn cards).
       Arabic keeps the count as a trailing numeral (بنود...: N) so no
@@ -566,11 +567,8 @@ export const ar: Locale = {
   scanRemaining: (m: number) => `${m} دقيقة متبقية`,
   scanSamples: "العينات",
   scanOfSession: "من مدة الفحص",
-  scanMeasuring: "جارٍ القياس",
-  scanRecentMoments: "أحدث اللحظات",
   scanMoments: (n: number) => (n === 1 ? "تم رصد لحظة واحدة" : `تم رصد ${n} لحظات`),
   scanStop: "إيقاف الفحص",
-  scanAllClear: "لا شيء غير طبيعي",
 
   // ---- monitor: result state (never auto-dismisses) ----
   scanResultLagTitle: "تم رصد تقطيع",

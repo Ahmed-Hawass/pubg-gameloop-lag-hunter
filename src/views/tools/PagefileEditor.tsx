@@ -13,7 +13,7 @@ import {
   notifyFeatureStateChanged,
   type PagefileSettings,
 } from "../../bridge";
-import { errorDialog, type Notice } from "../../errors";
+import { toErrorBody, type Notice } from "../../errors";
 import { useLang } from "../../i18n";
 import { useModalSignal, useYieldToAppDialog } from "./useModalSignals";
 import { summarizePagefileUsage } from "./summary";
@@ -52,9 +52,6 @@ export function PagefileEditor(props: {
   /** reboot offer after a verified page file write (once per write,
       never on load — Later dismisses for good until the next write) */
   const [rebootModal, setRebootModal] = useState(false);
-  /** settled once the first read lands (the section gate waits on the
-      callback, not this flag) */
-  const [, setPfSettled] = useState(false);
   /** write busy gate: an elevated apply in flight (focus reads skip it,
       like the switch flips above) */
   const [writeBusy, setWriteBusy] = useState(false);
@@ -73,13 +70,7 @@ export function PagefileEditor(props: {
   /** backend machine key to dialog body (known keys get their copy; a
       novel message rides along as the technical line, never raw English
       into an Arabic dialog) */
-  const pfErrorBody = (raw: string) =>
-    errorDialog(raw, t.errors, {
-      somethingWrong: t.dialog.somethingWrong,
-      scanNeedsGame: t.dialog.scanNeedsGame,
-      scanNeedsGameBody: t.dialog.scanNeedsGameBody,
-      unknownErrorBody: t.dialog.unknownErrorBody,
-    }).body;
+  const pfErrorBody = (raw: unknown) => toErrorBody(raw, t);
 
   /** fresh page file read + working-copy sync (never while the user is
       editing: dirty working copies win over live truth until applied) */
@@ -103,7 +94,6 @@ export function PagefileEditor(props: {
         setMinInput(synced.minInput);
         setMaxInput(synced.maxInput);
       }
-      setPfSettled(true);
       onPfSettled(false);
     } catch (e) {
       if (gen !== genRef.current) return;
@@ -112,7 +102,6 @@ export function PagefileEditor(props: {
       const raw = typeof e === "string" ? e : String(e);
       setPfSettings(null);
       setPfError(pfErrorBody(raw));
-      setPfSettled(true);
       onPfSettled(true);
     }
   };

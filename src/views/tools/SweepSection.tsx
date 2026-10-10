@@ -11,8 +11,52 @@ import type { Notice } from "../../errors";
 import { useLang } from "../../i18n";
 import { useHour12 } from "../../useHour12";
 import { useIntroCard } from "../../useIntroCard";
-import { cleanupHistoryLine, defaultCheckedIds, formatSweepBytes } from "./summary";
+import { cleanupHistoryLine, defaultCheckedIds, formatSweepBytes, BYTES_PER_GB } from "./summary";
 import { useModalSignal, useYieldToAppDialog } from "./useModalSignals";
+import type { Locale } from "../../locales/en";
+
+/** categorical dot/bar color per place (identity, never severity:
+    fixed hues readable on both themes, unknown ids fall muted).
+    Module-level: never recreated per render. */
+const CL_CATEGORY_COLORS: Record<string, string> = {
+  user_temp: "#58B368",
+  system_temp: "#45B8AC",
+  recycle_bin: "#8A8F98",
+  delivery_opt: "#4FA8D8",
+  thumb_cache: "#D8A64F",
+  error_reports: "#E07A5F",
+  old_minidumps: "#9B7EBD",
+  update_download: "#D48BC0",
+  system_logs: "#A3C14A",
+};
+
+/** machine id to translated name/hint via locale getters.
+    Module-level getter maps: the functions never change, only the
+    locale passed per call does, so no per-render object is built.
+    Unknown ids fall back to the raw id (never a sibling's name). */
+const CL_NAME_GETTERS: Record<string, (t: Locale) => string> = {
+  user_temp: (t) => t.cleanupCatUserTemp,
+  system_temp: (t) => t.cleanupCatSystemTemp,
+  recycle_bin: (t) => t.cleanupCatRecycle,
+  delivery_opt: (t) => t.cleanupCatDelivery,
+  thumb_cache: (t) => t.cleanupCatThumb,
+  error_reports: (t) => t.cleanupCatReports,
+  old_minidumps: (t) => t.cleanupCatDumps,
+  update_download: (t) => t.cleanupCatDownload,
+  system_logs: (t) => t.cleanupCatLogs,
+};
+
+const CL_HINT_GETTERS: Record<string, (t: Locale) => string> = {
+  user_temp: (t) => t.cleanupCatUserTempHint,
+  system_temp: (t) => t.cleanupCatSystemTempHint,
+  recycle_bin: (t) => t.cleanupCatRecycleHint,
+  delivery_opt: (t) => t.cleanupCatDeliveryHint,
+  thumb_cache: (t) => t.cleanupCatThumbHint,
+  error_reports: (t) => t.cleanupCatReportsHint,
+  old_minidumps: (t) => t.cleanupCatDumpsHint,
+  update_download: (t) => t.cleanupCatDownloadHint,
+  system_logs: (t) => t.cleanupCatLogsHint,
+};
 
 export function SweepSection(props: {
   showHint: (title: string, body: string) => void;
@@ -76,46 +120,9 @@ export function SweepSection(props: {
   /** sweep helpers: machine id to translated name/hint, measured bytes
       to a Latin-unit size (units stay Latin in Arabic, like every other
       measurement), and the scan/clean runners with the ref busy gate */
-  // the backend only ever sends the known ids; an unknown one
-  // falls back to the raw id itself (never a sibling's name)
-  const clNames: Record<string, string> = {
-    user_temp: t.cleanupCatUserTemp,
-    system_temp: t.cleanupCatSystemTemp,
-    recycle_bin: t.cleanupCatRecycle,
-    delivery_opt: t.cleanupCatDelivery,
-    thumb_cache: t.cleanupCatThumb,
-    error_reports: t.cleanupCatReports,
-    old_minidumps: t.cleanupCatDumps,
-    update_download: t.cleanupCatDownload,
-    system_logs: t.cleanupCatLogs,
-  };
-  const clName = (id: string) => clNames[id] ?? id;
-  /** categorical dot/bar color per place (identity, never severity:
-      fixed hues readable on both themes, unknown ids fall muted) */
-  const CL_CATEGORY_COLORS: Record<string, string> = {
-    user_temp: "#58B368",
-    system_temp: "#45B8AC",
-    recycle_bin: "#8A8F98",
-    delivery_opt: "#4FA8D8",
-    thumb_cache: "#D8A64F",
-    error_reports: "#E07A5F",
-    old_minidumps: "#9B7EBD",
-    update_download: "#D48BC0",
-    system_logs: "#A3C14A",
-  };
+  const clName = (id: string) => CL_NAME_GETTERS[id]?.(t) ?? id;
   const clColor = (id: string) => CL_CATEGORY_COLORS[id] ?? "#8A8F98";
-  const clHintBodies: Record<string, string> = {
-    user_temp: t.cleanupCatUserTempHint,
-    system_temp: t.cleanupCatSystemTempHint,
-    recycle_bin: t.cleanupCatRecycleHint,
-    delivery_opt: t.cleanupCatDeliveryHint,
-    thumb_cache: t.cleanupCatThumbHint,
-    error_reports: t.cleanupCatReportsHint,
-    old_minidumps: t.cleanupCatDumpsHint,
-    update_download: t.cleanupCatDownloadHint,
-    system_logs: t.cleanupCatLogsHint,
-  };
-  const clHintBody = (id: string) => clHintBodies[id] ?? t.cleanupDesc;
+  const clHintBody = (id: string) => CL_HINT_GETTERS[id]?.(t) ?? t.cleanupDesc;
   const clSize = (bytes: number | null) => formatSweepBytes(bytes);
   const clProgress = (phase: "scan" | "clean") => (ev: { event: string; id: string; index: number; total: number }) => {
     if (ev.event !== "category") return;
@@ -228,8 +235,8 @@ export function SweepSection(props: {
   const clUnmeasured = clResult?.some((r) => r.freed_bytes == null) ?? false;
   /** hero number: GB above 1 GB, MB below (Latin units either way) */
   const clHero =
-    clFreedBytes >= 1073741824
-      ? { num: (clFreedBytes / 1073741824).toFixed(1), unit: "GB" }
+    clFreedBytes >= BYTES_PER_GB
+      ? { num: (clFreedBytes / BYTES_PER_GB).toFixed(1), unit: "GB" }
       : { num: (clFreedBytes / 1048576).toFixed(1), unit: "MB" };
   const clFreedMb = Math.round((clFreedBytes / 1048576) * 10) / 10;
   /** one row per measured place (shared by both groups so the two lists
@@ -413,12 +420,12 @@ export function SweepSection(props: {
             <>
               <div className="cleanup-hero">
                 <span className="cleanup-hero-num">
-                  {clSelectedBytes >= 1073741824
-                    ? (clSelectedBytes / 1073741824).toFixed(1)
+                  {clSelectedBytes >= BYTES_PER_GB
+                    ? (clSelectedBytes / BYTES_PER_GB).toFixed(1)
                     : (clSelectedBytes / 1048576).toFixed(1)}
                 </span>
                 <span className="cleanup-hero-unit">
-                  {clSelectedBytes >= 1073741824 ? "GB" : "MB"}
+                  {clSelectedBytes >= BYTES_PER_GB ? "GB" : "MB"}
                 </span>
               </div>
               <p className="cleanup-result">{t.cleanupReadyToFree}</p>

@@ -77,9 +77,11 @@ export function cleanupMb(bytes: number): number {
     below, "--" when unreadable (never a guess). Latin units either
     way, like every other measurement. Extracted from the sweep
     section so faces share the shape. */
+/** bytes in one GiB: the single threshold/divisor for GB display */
+export const BYTES_PER_GB = 1073741824;
 export function formatSweepBytes(bytes: number | null): string {
   if (bytes == null) return "--";
-  if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
+  if (bytes >= BYTES_PER_GB) return `${(bytes / BYTES_PER_GB).toFixed(1)} GB`;
   return `${(bytes / 1048576).toFixed(1)} MB`;
 }
 

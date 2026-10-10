@@ -102,10 +102,6 @@
   background: var(--warn-dim);
   border-color: transparent;
 }
-.verdict-bad {
-  background: var(--danger-dim);
-  border-color: transparent;
-}
 /* pill: layout only (font size/padding stay per component, tones stay
    per component); every badge in the app shares this shape */
 .badge {
