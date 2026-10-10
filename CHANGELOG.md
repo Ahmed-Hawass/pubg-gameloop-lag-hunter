@@ -32,6 +32,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   freezing the app forever.
 - Report rows are keyboard accessible, durations use your language units, and Arabic counts and units read naturally.
 - Error dialogs follow one rule: failed actions explain in a dialog, failed page loads show a retry state.
+- Keyboard focus rings now sit inside their control instead of outside it, so they are never clipped by a page or window edge (About footer links, the System copy button, titlebar controls, tool cards).
+- Tool cards no longer keep a stuck faint highlight after a touch tap (hover treatments apply on hover-capable pointers only, with no press lift).
+- Tool details re-read within a minute while open: an outside change (GameLoop update, another tool) surfaces without leaving and re-entering.
+- Processes pauses its live poll while the window is hidden instead of waking every 2s unseen.
+- The health banner and loading state carry no manual refresh (the silent poll plus focus re-reads own freshness); the error state keeps the only retry.
+- The System copy button keeps a fixed width, so confirming the copy no longer flickers the scrollbar.
+- Keyboard focus is one explicit red tone everywhere (green already dresses resting states like switch ON, so a green ring vanished where it matters most): one shared utility turns the border of bordered controls and paints a single inset ring on the rest.
 
 ### Changed
 - Tools and health pages share one look: a summary banner, featured warnings, and the full list below.
