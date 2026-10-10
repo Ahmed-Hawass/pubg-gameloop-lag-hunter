@@ -1,9 +1,30 @@
+import { readFileSync } from "node:fs";
+import type { Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
+// The boot splash theme (src/splash-theme.js) is a classic script, not a
+// module, so it runs during HTML parse before first paint. Vite only
+// bundles module scripts from index.html, so the build emits this file
+// verbatim at the same path the tag points to (dev serves /src/*
+// natively, no plugin needed there).
+function splashThemeScript(): Plugin {
+  return {
+    name: "splash-theme-external",
+    apply: "build",
+    generateBundle() {
+      this.emitFile({
+        type: "asset",
+        fileName: "src/splash-theme.js",
+        source: readFileSync("src/splash-theme.js", "utf8"),
+      });
+    },
+  };
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), splashThemeScript()],
   clearScreen: false,
   server: {
     port: 5173,
@@ -31,6 +52,9 @@ export default defineConfig({
         "src/tests/**",
         "src/vite-env.d.ts",
         "src/assets/**",
+        // locale dictionaries are data (every key is imported by each test):
+        // counting them inflates statements without measuring logic
+        "src/locales/**",
         "**/*.d.ts",
       ],
       // coverage floor: a change that drops below these fails the suite,

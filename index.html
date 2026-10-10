@@ -53,15 +53,7 @@
         100% { margin-inline-start: 100%; }
       }
     </style>
-    <script>
-      // splash theme before first paint (no IPC yet): follow the OS.
-      // A saved app theme contradicting the OS flips one frame later
-      // with the main.tsx seed — same accepted caveat, still no requests.
-      try {
-        document.documentElement.dataset.splash =
-          window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
-      } catch (e) {}
-    </script>
+    <script src="/src/splash-theme.js"></script>
   </head>
   <body>
     <div id="root">

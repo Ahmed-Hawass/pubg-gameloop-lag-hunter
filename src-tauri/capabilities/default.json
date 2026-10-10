@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "window controls for the custom title bar + opening links",
+  "description": "window controls for the custom title bar, file-save dialog, webview zoom, and opening links",
   "windows": ["main"],
   "permissions": [
     "core:default",

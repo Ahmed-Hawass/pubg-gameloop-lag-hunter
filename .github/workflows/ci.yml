@@ -13,6 +13,11 @@ on:
 permissions:
   contents: read
 
+# one run per branch/PR at a time: a new push cancels the stale run
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -20,6 +25,7 @@ jobs:
   frontend:
     name: Frontend (typecheck + build)
     runs-on: windows-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -35,11 +41,11 @@ jobs:
       - name: Lint (eslint + react-hooks)
         run: npm run lint
 
-      # --coverage is the point, not decoration: vite.config.ts carries a
-      # v8 threshold floor, and a plain `npm test` skips coverage entirely,
-      # so the floor never gated anything. CONTRIBUTING promises this gate.
+      # coverage is built into `npm test` (vitest run --coverage):
+      # vite.config.ts carries a v8 threshold floor, so the floor always
+      # gates the suite. CONTRIBUTING promises this gate.
       - name: Unit tests (vitest + coverage floor)
-        run: npm test -- --coverage
+        run: npm test
 
       # tsc runs as part of the build script, this is also the locale
       # type bond check (ar.ts must match en.ts key-for-key)
@@ -54,12 +60,13 @@ jobs:
   engine:
     name: Engine (tests + clippy + audit)
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          components: clippy, rustfmt
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -74,17 +81,30 @@ jobs:
       - name: Format (rustfmt)
         run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
 
+      - name: Cache cargo-audit binary
+        id: cache-audit
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/cargo-audit
+            ~/.cargo/bin/cargo-audit.exe
+          key: cargo-audit-0.21.0-${{ runner.os }}
+
       - name: Dependency audit (Rust)
         # RustSec advisories for the engine's dependency tree (ureq, sha2,
         # tauri plugins...). Mirrors npm audit on the frontend job.
-        # (prebuilt binary install, ~2s, no cargo install compile wait)
+        # Pinned version + locked install: the old curl-pipe-sh fetched
+        # latest unpinned with no hash check.
+        # The binary install is cached: a warm key skips the reinstall.
+        shell: bash
         run: |
-          curl -LsSf https://github.com/rustsec/rustsec/releases/latest/download/cargo-audit-installer.sh | sh
+          if [ "${{ steps.cache-audit.outputs.cache-hit }}" != "true" ]; then cargo install cargo-audit --version 0.21.0 --locked; fi
           cargo audit --manifest-path src-tauri/Cargo.toml
 
   version-sync:
     name: Version sync (package / tauri / cargo / changelog)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -121,6 +141,7 @@ jobs:
     # the profile unit tests never touch, built on demand until proven stable
     if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
