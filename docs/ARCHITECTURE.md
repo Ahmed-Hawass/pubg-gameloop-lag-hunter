@@ -185,13 +185,15 @@ The disk-storm test is literally the session that started this project.
 
 A crashed session can **never** be reported as `"clean"`.
 
-`npm test` (Vitest) covers the frontend's pure logic:
+`npm test -- --coverage` (Vitest) covers the frontend:
 
 * Update-modal decision flow (the once-per-version rule)
-* Error-code → dialog mapping
-* Theme resolution
-* Browser-shortcut blocking
+* Error-code to dialog mapping
+* Theme, zoom, and clock logic
+* Tools, sweep, pagefile, processes, checks, and reports behavior
+* App shell dialogs and advice flows
 * Locale key parity between en and ar
 
-CI (`.github/workflows/ci.yml`) runs both suites plus clippy
-(`-D warnings`) on every push and PR.
+CI (`.github/workflows/ci.yml`) runs typecheck, lint, tests with coverage
+floor, build, engine tests with all targets, clippy (`-D warnings`), fmt
+check, both audits, and the version sync gate on every push and PR.

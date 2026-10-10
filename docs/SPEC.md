@@ -69,7 +69,12 @@ tasklist (GameLoop probe)       ─┘
 ### Sessions
 
 * Every sample is written to disk immediately.
-* The RAM window is bounded at **300 ticks**.
+* The RAM window is bounded at **300 ticks** (raw samples, about 5 minutes
+  at 1 Hz, for the detector and the live UI). This is not the diagnosis
+  lookback: engine events keep a separate **15 minute** correlation window
+  (`CORRELATION_WINDOW_MS` in diagnoser.rs, mirrored by the session
+  `diagnosis_window` plus 30 s slack) for pairing wake and churn windows
+  with their confirming cliffs. Samples bound memory, events bound history.
 * Reports are generated from the file, never from memory.
 * Per-source evidence (GPU / emulator / window visibility) carries a **TTL**, a stale snapshot is dropped, never worn as fresh.
 * Each session's sampling readers own a **per-session stop flag**: a fast stop→start can never resurrect the old readers (no double sampling).
@@ -125,7 +130,7 @@ Every human-facing string lives in the locale files.
 
 ---
 
-## Success Criteria for v1
+## Success Criteria for v1.6
 
 A player finishes a laggy match and opens the report.
 

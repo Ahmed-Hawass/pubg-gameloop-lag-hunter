@@ -13,7 +13,11 @@
 
 ## See It in Action
 
-Live monitoring during a scan, CPU, RAM, GPU, and disk every second, with the session timeline and activity feed. Dark and light themes included.
+The Monitor page is the scan, in three states: idle (the session plan
+with its duration picker and Start), running (the radar with live CPU,
+RAM, GPU, and disk every second, plus the session timeline and activity
+feed), and result (one verdict with its supporting numbers). Dark and
+light themes included.
 
 <p align="center">
   <img src="docs/screenshots/monitor-light.png" width="560" alt="Monitor screen during a live scan.">
@@ -89,7 +93,7 @@ Download `pubg-gameloop-lag-hunter-<version>.exe` from the [Releases](https://gi
 For example:
 
 ```text
-pubg-gameloop-lag-hunter-1.5.0.exe
+pubg-gameloop-lag-hunter-1.6.0.exe
 ```
 
 **No installer. No setup.**

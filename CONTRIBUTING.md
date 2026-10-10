@@ -48,10 +48,13 @@ Anything that samples, caches, or stores must have a cap.
 ## Development
 
 ```bash
-npx tauri dev              # dev mode
-cd src-tauri && cargo test # the engine test suite, must stay green
-npm test                   # frontend unit tests (Vitest)
-npx tsc                    # frontend typecheck, zero errors tolerated
+npx tauri dev                                            # dev mode
+cargo test --manifest-path src-tauri/Cargo.toml --all-targets  # engine tests, must stay green
+npm test                                                 # frontend tests with coverage floor
+npm run lint                                           # eslint with zero warnings tolerated
+npm run build                                          # typecheck (both configs) plus vite build
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+cargo fmt --manifest-path src-tauri/Cargo.toml --check
 ```
 
 ---
@@ -60,9 +63,11 @@ npx tsc                    # frontend typecheck, zero errors tolerated
 
 Make sure:
 
-* CI passes, it runs the same things on `windows-latest`: vitest, the frontend
+* CI passes, it runs the same things on `windows-latest`: eslint, vitest
+  with coverage floor, the frontend
   build (which type-checks the locale bond: `ar.ts` must match `en.ts`
-  key-for-key), engine tests, and clippy with `-D warnings`
+  key-for-key), engine tests with all targets, clippy with `-D warnings`,
+  fmt check, both audits, and the version sync gate
 * New user-facing strings exist in **both** locales (the build enforces this,
   but the copy itself is on you)
 * Slow IPC commands are `async` and park blocking work on
@@ -70,12 +75,15 @@ Make sure:
   slow command freezes the window (the original "Not Responding" bug)
 * New engine operations log what happened: spawn results, durations
   (`logging::timed`), failures, the log is how we diagnose user machines
-* New IPC commands are added to `capabilities/default.json` **only if the UI truly needs them**
+* New IPC commands are registered in `lib.rs` (`generate_handler`), no
+  capability entry needed for them: `capabilities/default.json` holds
+  plugin permissions only (window, dialog, webview zoom, opener
+  allowlist), add a line there only when the UI needs a new plugin API
 
 ## Testing Contract
 
 Every user-facing behavior ships with its test, at the same level as the
-existing suite (`src/tests`, run with `npm test -- --coverage`):
+existing suite (`src/tests`, run with `npm test`):
 
 * Pure logic: unit test (`errors.test.ts` pattern).
 * Component behavior: component test with a mocked `bridge` (`toolsGaming.test.tsx`
@@ -88,6 +96,6 @@ existing suite (`src/tests`, run with `npm test -- --coverage`):
 * Deliberately manual (never mocked as covered): real UAC prompts, the real
   backend, and visual appearance. A PR touching those lists its manual
   checklist instead of claiming coverage.
-* Stopping line (documented, not accidental): static one-shot screens such
-  as `WelcomeView` and pure display branches carry no tests; everything
-  behavioral does.
+* Stopping line (documented, not accidental): pure display branches carry
+  no tests; everything behavioral does (WelcomeView carries a dots
+  announcement test because its page state is user facing).

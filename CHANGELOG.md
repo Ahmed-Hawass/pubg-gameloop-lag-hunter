@@ -320,6 +320,25 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - A cancel landing after the last download read still wins: nothing is
   verified or saved afterwards (the check used to live inside the read
   loop only).
+- The Storage deep scan measures the Recycle Bin again: the old gauge
+  called a cmdlet that does not exist, so the row always read "--".
+  It now sums the current user's SID folder on the system drive.
+- Starting a session no longer wedges Stop: the slow start probes (GPU
+  clocks, emulator list, window visibility) run off the state lock, so
+  stop and status answer while they work. A stop landing mid-start
+  retires the newborn session instead of corrupting it.
+- Sidebar tooltips no longer stick or orphan: a tooltip whose label
+  flips to empty on expand is dismissed with the flip, and resize and
+  Escape dismiss any live bubble. The collapsed collapse control also
+  carries its name to screen readers now.
+- A failed update download explains itself in the app language: the
+  failure state resolves backend codes like every other surface
+  instead of printing the raw reason.
+- The Processes End button names its app to screen readers (it used to
+  announce a bare "End" per row), and the Checks and Tools (?) buttons
+  announce their context instead of repeating the row name.
+- The CLI sessions list is newest-first again like Reports (it used to
+  print oldest-first after the storage reader learned its own order).
 - Session dates never panic on foreign folder names: the two raw byte
   slices became one shared `.get()` helper with a crafted-name test
   (the app builds with panic=abort, so any slice is a crash).
