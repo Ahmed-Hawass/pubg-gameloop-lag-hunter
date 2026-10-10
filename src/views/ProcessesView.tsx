@@ -7,11 +7,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Activity, AppWindow, RefreshCw } from "lucide-react";
-import { Button, Dialog, EmptyState, IntroCard } from "../components/components";
+import { Button, Dialog, EmptyState } from "../components/components";
+import { PageIntro } from "../components/sections";
+import { useIntervalTick } from "../useIntervalTick";
 import { api, type TopProcess, type TopProcesses } from "../bridge";
 import { errorDialog, toErrorBody, type Notice } from "../errors";
 import { useLang } from "../i18n";
-import { useIntroCard } from "../useIntroCard";
 import { useModalSignal, useYieldToAppDialog } from "./tools/useModalSignals";
 
 /** live refresh cadence while the tab is visible (native snapshot costs
@@ -52,18 +53,9 @@ export function ProcessesView(props: { active: boolean }) {
   }, []);
 
   // live while this tab is the active one — paused otherwise, and while
-  // the document is hidden (minimized window keeps polling otherwise)
-  useEffect(() => {
-    if (!active) return;
-    const timer = window.setInterval(() => {
-      if (document.visibilityState !== "visible") return;
-      void load(true);
-    }, LIVE_INTERVAL_MS);
-    return () => window.clearInterval(timer);
-    // load guards itself through busyRef; its identity is not part of
-    // the interval contract
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active]);
+  // the document is hidden (minimized window keeps polling otherwise).
+  // Wiring lives in one hook; the silent body keeps its own busy guard.
+  useIntervalTick(active, LIVE_INTERVAL_MS, () => void load(true));
 
   const procs = answer?.processes ?? null;
   // apps only on screen (system rows stay in the honest totals above,
@@ -112,7 +104,6 @@ export function ProcessesView(props: { active: boolean }) {
   /** one-shot page guidance (replaces the static header line): the
       close-before-playing decision for the single apps list. Transient
       states below keep no card. */
-  const intro = useIntroCard("processes");
   /** real artwork by representative PID (glyph until it lands): asked
       once per new PID, kept across polls like the name cache */
   const [icons, setIcons] = useState<Record<number, string>>({});
@@ -143,15 +134,12 @@ export function ProcessesView(props: { active: boolean }) {
 
   return (
     <div className="procs">
-      {intro.show ? (
-        <IntroCard
-          icon={<Activity size={16} />}
-          title={t.introProcessesTitle}
-          body={t.introProcessesBody}
-          dismissLabel={t.dialog.dismiss}
-          onDismiss={intro.dismiss}
-        />
-      ) : null}
+      <PageIntro
+        id="processes"
+        icon={<Activity size={16} />}
+        title={t.introProcessesTitle}
+        body={t.introProcessesBody}
+      />
       {/* a LOAD failure is a page state with a manual retry (the silent
           2s poll keeps running underneath) — never a modal, never an
           inline red line: the one-modal surface stays for action failures */}

@@ -5,12 +5,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, Info, Trash2 } from "lucide-react";
-import { Button, Dialog, IntroCard } from "../../components/components";
+import { Button, Dialog } from "../../components/components";
+import { PageIntro } from "../../components/sections";
 import { api, type CleanupCategory, type CleanupHistory, type CleanupResult, type CleanupScan } from "../../bridge";
 import type { Notice } from "../../errors";
 import { useLang } from "../../i18n";
 import { useHour12 } from "../../useHour12";
-import { useIntroCard } from "../../useIntroCard";
 import { cleanupHistoryLine, defaultCheckedIds, formatSweepBytes, BYTES_PER_GB } from "./summary";
 import { useModalSignal, useYieldToAppDialog } from "./useModalSignals";
 import type { Locale } from "../../locales/en";
@@ -68,8 +68,7 @@ export function SweepSection(props: {
   const { t, lang } = useLang();
   const hour12 = useHour12();
   /** one-shot page guidance (the header keeps its title only): the
-      trust rule and what counts as leftovers */
-  const intro = useIntroCard("cleanup");
+      trust rule and what counts as leftovers (owned by PageIntro below) */
   /** storage sweep: measured places + memory (null = never scanned),
       ticked ids, last clean result, confirm gate, and scan-read failure.
       Own busy ref so a scan/clean never blocks the switches above. */
@@ -324,26 +323,24 @@ export function SweepSection(props: {
       {/* one header per page, always: the intro card replaces the plain
           page header until dismissed (it carries its own icon and title,
           a second header under it would only repeat both) */}
-      {intro.show ? (
-        <IntroCard
-          icon={<Trash2 size={16} />}
-          title={t.introCleanupTitle}
-          body={t.introCleanupBody}
-          dismissLabel={t.dialog.dismiss}
-          onDismiss={intro.dismiss}
-        />
-      ) : (
-        /* plain page header (not a card, not collapsible): the shell
-           back button above already says where this lives */
-        <div className="page-head">
-          <span className="icon-tile">
-            <Trash2 size={18} />
-          </span>
-          <span className="page-head-text">
-            <span className="page-head-title">{t.toolCleanup}</span>
-          </span>
-        </div>
-      )}
+      <PageIntro
+        id="cleanup"
+        icon={<Trash2 size={16} />}
+        title={t.introCleanupTitle}
+        body={t.introCleanupBody}
+        fallback={
+          /* plain page header (not a card, not collapsible): the shell
+             back button above already says where this lives */
+          <div className="page-head">
+            <span className="icon-tile">
+              <Trash2 size={18} />
+            </span>
+            <span className="page-head-text">
+              <span className="page-head-title">{t.toolCleanup}</span>
+            </span>
+          </div>
+        }
+      />
       {/* sweep memory under the header (last run plus last-30-days):
           past measured truth, never a reason to scan */}
       {clHistory ? (

@@ -4,9 +4,7 @@
 
 import { useEffect, useRef, useState, type ReactNode, Fragment } from "react";
 import {
-  AlertTriangle,
   AppWindow,
-  CheckCircle2,
   Expand,
   Eye,
   Gamepad2,
@@ -18,6 +16,8 @@ import {
   Zap,
 } from "lucide-react";
 import { Button, EmptyState } from "../../components/components";
+import { SummaryArchive, VerdictBanner } from "../../components/sections";
+import { useIntervalTick } from "../../useIntervalTick";
 import type { Notice } from "../../errors";
 import { useLang } from "../../i18n";
 import { SwitchRow } from "./SwitchRow";
@@ -79,17 +79,14 @@ export function GamingSection(props: {
   // lie until re-entry. 60s of cheap reads (registry plus three native
   // powercfg calls, tens of ms on the blocking pool); skipped mid-flip,
   // off-tab, and while the document is hidden.
-  useEffect(() => {
-    if (!active) return;
-    const timer = window.setInterval(() => {
-      if (document.visibilityState !== "visible") return;
+  useIntervalTick(
+    active,
+    60000,
+    () => {
       if (tweaks.isBusy()) return;
       void tweaks.reloadSwitches();
-    }, 60000);
-    return () => window.clearInterval(timer);
-    // same as above: reload's identity is not part of the subscription
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active]);
+    },
+  );
 
   // deep-link: a health card jumps to a row here. The parent opened this
   // page first (the open effect above fired the live read); this effect
@@ -376,17 +373,11 @@ export function GamingSection(props: {
     <>
       {/* one-glance verdict, same pattern as the health tab: derived
           from the rendered rows, zero backend cost */}
-      <div className={`health-banner ${offRows.length === 0 ? "ok" : "warn"}`}>
-        {offRows.length === 0 ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
-        <div>
-          <div className="hb-title">
-            {offRows.length === 0 ? t.tweakBannerGood : t.tweakBannerNeeds(offRows.length)}
-          </div>
-          <div className="hb-sub">
-            {offRows.length === 0 ? t.tweakBannerGoodSub : t.tweakBannerNeedsSub}
-          </div>
-        </div>
-      </div>
+      <VerdictBanner
+        ok={offRows.length === 0}
+        title={offRows.length === 0 ? t.tweakBannerGood : t.tweakBannerNeeds(offRows.length)}
+        sub={offRows.length === 0 ? t.tweakBannerGoodSub : t.tweakBannerNeedsSub}
+      />
 
       {/* discover line: hidden rows are invisible by design, so without
           this no one could ever learn the preference exists */}
@@ -401,33 +392,18 @@ export function GamingSection(props: {
 
       {/* featured off-rows: the same rows as the archive below,
           repeated deliberately (summary + archive, not instead of it) */}
-      {offRows.length > 0 ? (
-        <section>
-          <h3 className="health-section-title">{t.checkWarnBadge}</h3>
-          <div className="check-list">
-            {offRows.map((r) => (
-              <Fragment key={`${r.id}-featured`}>{r.el}</Fragment>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      <section>
-        <h3 className="health-section-title">{t.tweakAllTweaks}</h3>
-        <div className="check-list" ref={listRef}>
-          {/* hidden until read; a feature the Windows build lacks stays
-              hidden — a dead switch must never be shown. No area dividers:
-              every row here targets gaming, subdivision would be noise. */}
-          {rows.map((r) => (
-            <Fragment key={`${r.id}-archive`}>{r.el}</Fragment>
-          ))}
-          {/* revealed unavailable rows ride the archive tail (greyed,
-              never counted above): future rows join without restructuring */}
-          {unsupported.map((r) => (
-            <Fragment key={`${r.id}-unsupported`}>{r.el}</Fragment>
-          ))}
-        </div>
-      </section>
+      {/* hidden until read: a feature the Windows build lacks stays
+          hidden — a dead switch must never be shown */}
+      <SummaryArchive
+        warnTitle={t.checkWarnBadge}
+        archiveTitle={t.tweakAllTweaks}
+        warn={offRows.map((r) => ({ id: r.id, el: r.el }))}
+        all={rows.map((r) => ({ id: r.id, el: r.el }))}
+        tail={unsupported.map((r) => (
+          <Fragment key={`${r.id}-unsupported`}>{r.el}</Fragment>
+        ))}
+        listRef={listRef}
+      />
     </>
   );
 }

@@ -4,8 +4,6 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  AlertTriangle,
-  CheckCircle2,
   Cpu,
   Database,
   Info,
@@ -17,6 +15,8 @@ import {
   Zap,
 } from "lucide-react";
 import { Button, Dialog, EmptyState, IntroCard, dispatchModalOpen, APP_DIALOG_OPEN_EVENT } from "../components/components";
+import { SummaryArchive, VerdictBanner } from "../components/sections";
+import { useIntervalTick } from "../useIntervalTick";
 import { api, FEATURE_STATE_CHANGED_EVENT, type SystemChecks } from "../bridge";
 import { toErrorBody } from "../errors";
 import { useLang } from "../i18n";
@@ -44,8 +44,9 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
   /** one-shot page guidance (replaces the static header line below):
       the smooth-or-stuttering verdict and the one-click fix path.
       Declared with every other hook (never past the error/loading early
-      returns): hook order must not shift between renders. Transient
-      error/loading headers above keep their own hint line. */
+      returns): the intro read must fire on mount, not one tick after the
+      data lands, or the card pops in late. Transient error/loading
+      headers above keep their own hint line. */
   const intro = useIntroCard("health");
 
   const load = async (silent: boolean, force = false) => {
@@ -85,10 +86,14 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // live poll wiring lives in one hook (interval plus off-tab plus
+  // hidden-document skip); the silent body stays here with its own
+  // busy and error contract
+  useIntervalTick(active, LIVE_INTERVAL_MS, () => void load(true));
+
   useEffect(() => {
     if (!active) return;
     void load(true, true);
-    const timer = window.setInterval(() => void load(true), LIVE_INTERVAL_MS);
     // returning from Windows Settings (after flipping a toggle) refreshes
     // immediately: force pays one PowerShell spawn, skipped while busy
     const onFocus = () => void load(true, true);
@@ -96,7 +101,6 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
     window.addEventListener("focus", onFocus);
     window.addEventListener(FEATURE_STATE_CHANGED_EVENT, onFeatureStateChanged);
     return () => {
-      window.clearInterval(timer);
       window.removeEventListener("focus", onFocus);
       window.removeEventListener(FEATURE_STATE_CHANGED_EVENT, onFeatureStateChanged);
     };
@@ -260,36 +264,23 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
           refresh here: the silent 30s poll plus window-focus and
           feature-state re-reads own freshness, and the error state keeps
           the only retry button (the one place no poll can rescue). */}
-      <div className={`health-banner ${warnItems.length === 0 ? "ok" : "warn"}`}>
-        {warnItems.length === 0 ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
-        <div>
-          <div className="hb-title">
-            {warnItems.length === 0 ? t.healthAllGood : t.healthNeedsTitle(warnItems.length)}
-          </div>
-          <div className="hb-sub">{warnItems.length === 0 ? t.healthAllGoodSub : t.healthNeedsSub}</div>
-        </div>
-      </div>
-      {/* featured warnings: the same cards as the archive below, repeated
-          deliberately (summary + archive, not summary instead of it) */}
-      {warnItems.length > 0 ? (
-        <section>
-          <h3 className="health-section-title">{t.checkWarnBadge}</h3>
-          <div className="check-list">
-            {warnItems.map((item) => (
-              <CheckCard key={item.id} item={item} openLabel={openLabel} onHint={setHint} />
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      <section>
-        <h3 className="health-section-title">{t.healthAllSettings}</h3>
-        <div className="check-list">
-          {items.map((item) => (
-            <CheckCard key={item.id} item={item} openLabel={openLabel} onHint={setHint} />
-          ))}
-        </div>
-      </section>
+      <VerdictBanner
+        ok={warnItems.length === 0}
+        title={warnItems.length === 0 ? t.healthAllGood : t.healthNeedsTitle(warnItems.length)}
+        sub={warnItems.length === 0 ? t.healthAllGoodSub : t.healthNeedsSub}
+      />
+      <SummaryArchive
+        warnTitle={t.checkWarnBadge}
+        archiveTitle={t.healthAllSettings}
+        warn={warnItems.map((item) => ({
+          id: item.id,
+          el: <CheckCard item={item} openLabel={openLabel} onHint={setHint} />,
+        }))}
+        all={items.map((item) => ({
+          id: item.id,
+          el: <CheckCard item={item} openLabel={openLabel} onHint={setHint} />,
+        }))}
+      />
       {/* background note behind a card's (?) button — the one unified
           Dialog, notice only */}
       {hint ? (

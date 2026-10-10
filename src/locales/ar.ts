@@ -60,7 +60,6 @@ export const ar: Locale = {
     SESSION_ALREADY_RUNNING: "هناك فحص قيد التشغيل بالفعل.",
     SESSION_STOPPING: "الفحص السابق لا يزال قيد الحفظ، حاول مرة أخرى بعد قليل.",
     SESSION_RUNNING: "لا يمكن حذف الفحص النشط.",
-    SESSION_SAVE_FAILED: "تعذّر حفظ تقرير الجلسة. تحقق من توفر مساحة كافية على القرص، ثم حاول مرة أخرى.",
     APP_SHUTTING_DOWN: "التطبيق يغلق الآن. حاول مرة أخرى.",
     PF_READ_FAILED: "تعذّر قراءة إعدادات page file.",
     PF_DRIVE_INVALID: "هذا القرص غير متاح لـ page file.",

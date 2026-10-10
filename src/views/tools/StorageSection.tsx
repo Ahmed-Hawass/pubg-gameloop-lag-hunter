@@ -4,9 +4,11 @@
 // options join the rows below, nothing restructures. The rows own
 // their read through useTweaks; this shell only gates the first paint.
 
-import { Fragment, useEffect, type ReactNode } from "react";
-import { AlertTriangle, CheckCircle2, Recycle, RefreshCw, SlidersHorizontal } from "lucide-react";
+import { useEffect, type ReactNode } from "react";
+import { Recycle, RefreshCw, SlidersHorizontal } from "lucide-react";
 import { EmptyState } from "../../components/components";
+import { SummaryArchive, VerdictBanner } from "../../components/sections";
+import { useIntervalTick } from "../../useIntervalTick";
 import type { Notice } from "../../errors";
 import { useLang } from "../../i18n";
 import { SwitchRow } from "./SwitchRow";
@@ -46,17 +48,14 @@ export function StorageSection(props: {
 
   // slow backstop poll, same contract as the gaming page: external
   // changes while open must surface within a minute, cheaply.
-  useEffect(() => {
-    if (!active) return;
-    const timer = window.setInterval(() => {
-      if (document.visibilityState !== "visible") return;
+  useIntervalTick(
+    active,
+    60000,
+    () => {
       if (tweaks.isBusy()) return;
       void tweaks.reloadSwitches();
-    }, 60000);
-    return () => window.clearInterval(timer);
-    // same as above: reload's identity is not part of the subscription
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active]);
+    },
+  );
 
   if (!tweaks.ready) {
     // nothing has landed yet: the loading shell, never a dead page
@@ -110,39 +109,21 @@ export function StorageSection(props: {
           unread (a badge that cannot be read is hidden, like every
           landing badge). */}
       {rows.length > 0 ? (
-        <div className={`health-banner ${offRows.length === 0 ? "ok" : "warn"}`}>
-          {offRows.length === 0 ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
-          <div>
-            <div className="hb-title">
-              {offRows.length === 0 ? t.tweakBannerGood : t.tweakBannerNeeds(offRows.length)}
-            </div>
-            <div className="hb-sub">
-              {offRows.length === 0 ? t.tweakBannerGoodSub : t.tweakBannerNeedsSub}
-            </div>
-          </div>
-        </div>
+        <VerdictBanner
+          ok={offRows.length === 0}
+          title={offRows.length === 0 ? t.tweakBannerGood : t.tweakBannerNeeds(offRows.length)}
+          sub={offRows.length === 0 ? t.tweakBannerGoodSub : t.tweakBannerNeedsSub}
+        />
       ) : null}
       {/* featured off-rows: the same rows as the archive below,
           repeated deliberately (summary plus archive, not instead of it) */}
-      {offRows.length > 0 ? (
-        <section>
-          <h3 className="health-section-title">{t.checkWarnBadge}</h3>
-          <div className="check-list">
-            {offRows.map((r) => (
-              <Fragment key={`${r.id}-featured`}>{r.el}</Fragment>
-            ))}
-          </div>
-        </section>
-      ) : null}
       {rows.length > 0 ? (
-        <section>
-          <h3 className="health-section-title">{t.storageAllTitle}</h3>
-          <div className="check-list">
-            {rows.map((r) => (
-              <Fragment key={`${r.id}-archive`}>{r.el}</Fragment>
-            ))}
-          </div>
-        </section>
+        <SummaryArchive
+          warnTitle={t.checkWarnBadge}
+          archiveTitle={t.storageAllTitle}
+          warn={offRows.map((r) => ({ id: r.id, el: r.el }))}
+          all={rows.map((r) => ({ id: r.id, el: r.el }))}
+        />
       ) : null}
     </>
   );
