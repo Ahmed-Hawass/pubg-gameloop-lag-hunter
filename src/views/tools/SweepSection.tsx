@@ -273,7 +273,7 @@ export function SweepSection(props: {
               {clName(c.id)}
               <button
                 type="button"
-                className="switch-hint"
+                className="focus-ring-inset switch-hint"
                 aria-label={clName(c.id)}
                 onClick={() => {
                   showHint(clName(c.id), clHintBody(c.id));
@@ -406,7 +406,7 @@ export function SweepSection(props: {
                 type="button"
                 role="radio"
                 aria-checked={clMode === m}
-                className={`lang-seg${clMode === m ? " is-active" : ""}`}
+                className={`focus-ring-inset lang-seg${clMode === m ? " is-active" : ""}`}
                 disabled={clBusy}
                 onClick={() => setClMode(m)}
               >

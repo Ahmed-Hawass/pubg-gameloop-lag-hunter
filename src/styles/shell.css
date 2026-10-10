@@ -292,6 +292,12 @@
   max-width: min(100%, 1100px);
   margin-inline: auto;
   padding-inline-end: 4px;
+  /* bottom breathing room inside every scroller: the focus ring reaches
+     4px past its control (2px outline plus 2px offset) and outlines never
+     push the scrollport, so a last-child button (About footer links, the
+     System copy button) had its ring and descenders clipped at scroll-end.
+     Same family as the tools top-room rule in pages.css. */
+  padding-block-end: 8px;
   scrollbar-width: thin;
   scrollbar-color: var(--border-2) transparent;
   scrollbar-gutter: stable;

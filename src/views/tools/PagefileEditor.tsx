@@ -283,7 +283,7 @@ export function PagefileEditor(props: {
             ) : null}
             <button
               type="button"
-              className="switch-hint"
+              className="focus-ring-inset switch-hint"
               aria-label={t.tweakPfTitle}
               onClick={() => showHint(t.tweakPfTitle, t.tweakPfHint)}
             >
@@ -311,7 +311,7 @@ export function PagefileEditor(props: {
                   type="button"
                   role="radio"
                   aria-checked={d.drive === pfDrive}
-                  className={`pf-drive${d.drive === pfDrive ? " is-selected" : ""}`}
+                  className={`focus-ring pf-drive${d.drive === pfDrive ? " is-selected" : ""}`}
                   disabled={writeBusy || pfAutomatic}
                   onClick={() => selectPfDrive(d.drive)}
                 >
@@ -344,7 +344,7 @@ export function PagefileEditor(props: {
                   type="button"
                   role="radio"
                   aria-checked={pfMode === mode}
-                  className={`lang-seg${pfMode === mode ? " is-active" : ""}`}
+                  className={`focus-ring-inset lang-seg${pfMode === mode ? " is-active" : ""}`}
                   disabled={writeBusy || pfAutomatic}
                   onClick={() => {
                     dirtyRef.current = true;
@@ -360,6 +360,7 @@ export function PagefileEditor(props: {
                 <span>{t.tweakPfMinLabel}</span>
                 <input
                   type="text"
+                  className="focus-ring"
                   inputMode="numeric"
                   maxLength={10}
                   value={minInput}
@@ -371,6 +372,7 @@ export function PagefileEditor(props: {
                 <span>{t.tweakPfMaxLabel}</span>
                 <input
                   type="text"
+                  className="focus-ring"
                   inputMode="numeric"
                   maxLength={10}
                   value={maxInput}

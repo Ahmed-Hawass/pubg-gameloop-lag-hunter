@@ -33,15 +33,34 @@ describe("modal-surface signals", () => {
 });
 
 describe("Hint", () => {
-  it("exposes its bubble to assistive tech while open", () => {
+  it("exposes its bubble to assistive tech while open (keyboard focus)", () => {
+    // programmatic focus in jsdom is non-keyboard, so the bubble stays
+    // shut unless :focus-visible says keyboard: stub that one selector.
+    const real = window.HTMLElement.prototype.matches;
+    const spy = vi
+      .spyOn(window.HTMLElement.prototype, "matches")
+      .mockImplementation(function (this: HTMLElement, sel: string) {
+        return sel === ":focus-visible" ? true : real.call(this, sel);
+      });
+    try {
+      render(React.createElement(Hint, { text: "closed apps run cooler" }));
+      const btn = screen.getByRole("button", { name: "closed apps run cooler" });
+      fireEvent.focus(btn);
+      const tip = screen.getByRole("tooltip");
+      expect(tip.textContent).toBe("closed apps run cooler");
+      expect(btn.getAttribute("aria-describedby")).toBe(tip.getAttribute("id"));
+      fireEvent.blur(btn);
+      expect(screen.queryByRole("tooltip")).toBeNull();
+      expect(btn.getAttribute("aria-describedby")).toBeNull();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("non-keyboard focus opens nothing (restored-window orphan)", () => {
     render(React.createElement(Hint, { text: "closed apps run cooler" }));
     const btn = screen.getByRole("button", { name: "closed apps run cooler" });
     fireEvent.focus(btn);
-    const tip = screen.getByRole("tooltip");
-    expect(tip.textContent).toBe("closed apps run cooler");
-    expect(btn.getAttribute("aria-describedby")).toBe(tip.getAttribute("id"));
-    fireEvent.blur(btn);
     expect(screen.queryByRole("tooltip")).toBeNull();
-    expect(btn.getAttribute("aria-describedby")).toBeNull();
   });
 });

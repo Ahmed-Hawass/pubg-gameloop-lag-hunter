@@ -47,7 +47,7 @@ export function AppSidebar(props: {
           text={collapsed ? (tab.beta ? `${tab.label} (${t.toolsBeta})` : tab.label) : ""}
         >
           <button
-            className={`sb-item ${view === tab.id ? "is-active" : ""}`}
+            className={`focus-ring sb-item ${view === tab.id ? "is-active" : ""}`}
             // the active tab is announced as current (visual
             // is-active styling is invisible to screen readers)
             aria-current={view === tab.id ? "page" : undefined}
@@ -67,7 +67,7 @@ export function AppSidebar(props: {
 
       <Tip text={collapsed ? t.about : ""}>
         <button
-          className={`sb-item ${view === "about" ? "is-active" : ""}`}
+          className={`focus-ring sb-item ${view === "about" ? "is-active" : ""}`}
           onClick={onAbout}
         >
           <Info size={17} />
@@ -95,7 +95,7 @@ export function AppSidebar(props: {
           expanded (the visible label says it already) */}
       <Tip text={collapsed ? t.expandMenu : ""}>
         <button
-          className="sb-collapse"
+          className="focus-ring sb-collapse"
           onClick={onToggleSidebar}
           aria-label={collapsed ? t.expandMenu : t.collapseMenu}
           aria-expanded={!collapsed}

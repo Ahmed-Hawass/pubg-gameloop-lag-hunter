@@ -210,11 +210,11 @@ export function UpdateModal(props: {
     );
     actions = (
       <>
-        <button className="btn btn-md btn-ghost" onClick={close}>
+        <button className="focus-ring btn btn-md btn-ghost" onClick={close}>
           {t.updateClose}
         </button>
         <button
-          className="btn btn-md btn-primary"
+          className="focus-ring btn btn-md btn-primary"
           autoFocus
           disabled={offerBusy}
           onClick={() => void startDownload()}
@@ -236,7 +236,7 @@ export function UpdateModal(props: {
       </div>
     );
     actions = (
-      <button className="btn btn-md btn-ghost" onClick={cancel}>
+      <button className="focus-ring btn btn-md btn-ghost" onClick={cancel}>
         {t.updateCancel}
       </button>
     );
@@ -255,11 +255,11 @@ export function UpdateModal(props: {
     );
     actions = (
       <>
-        <button className="btn btn-md btn-ghost" onClick={close}>
+        <button className="focus-ring btn btn-md btn-ghost" onClick={close}>
           {t.updateOk}
         </button>
         <button
-          className="btn btn-md btn-primary"
+          className="focus-ring btn btn-md btn-primary"
           onClick={() => void api.openDownloadFolder(phase.path)}
         >
           <FolderOpen size={14} />
@@ -291,11 +291,11 @@ export function UpdateModal(props: {
     );
     actions = (
       <>
-        <button className="btn btn-md btn-ghost" onClick={close}>
+        <button className="focus-ring btn btn-md btn-ghost" onClick={close}>
           {t.updateClose}
         </button>
         <button
-          className="btn btn-md btn-primary"
+          className="focus-ring btn btn-md btn-primary"
           disabled={offerBusy}
           onClick={() => void startDownload()}
         >

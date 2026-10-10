@@ -2,7 +2,7 @@
 // Every screen is assembled ONLY from these. No placeholders — data-driven only.
 // ALL icons come from lucide-react — zero hand-drawn SVGs anywhere.
 
-import { useEffect, useId, useState, useRef, type ReactNode } from "react";
+import { useEffect, useId, useState, useRef, type FocusEvent as ReactFocusEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, Cpu, Database, Gauge, Image, Info, Layers, Lightbulb, MemoryStick, Thermometer, X, Zap } from "lucide-react";
 import type { CardSeverity } from "../bridge";
@@ -48,6 +48,7 @@ export function Button(props: {
 }) {
   const { label, icon, onClick, variant = "primary", size = "md", disabled, className } = props;
   const cls = [
+    "focus-ring",
     "btn",
     `btn-${variant}`,
     `btn-${size}`,
@@ -147,7 +148,7 @@ export function IntroCard(props: {
       <Tip text={dismissLabel}>
         <button
           type="button"
-          className="card-x intro-x"
+          className="card-x intro-x focus-ring"
           aria-label={dismissLabel}
           onClick={onDismiss}
         >
@@ -239,11 +240,11 @@ export function Dialog(
                   autofocus, focus stayed on the trigger BEHIND the modal
                   (a WAI-ARIA violation) and Enter re-fired the delete
                   button through the overlay. Safe side + keyboard-first. */}
-              <button className="btn btn-md btn-ghost" onClick={onClose} autoFocus>
+              <button className="focus-ring btn btn-md btn-ghost" onClick={onClose} autoFocus>
                 {cancelLabel}
               </button>
               <button
-                className={`btn btn-md ${danger ? "btn-danger-filled" : "btn-primary"}`}
+                className={`focus-ring btn btn-md ${danger ? "btn-danger-filled" : "btn-primary"}`}
                 onClick={() => {
                   onConfirm?.();
                   onClose();
@@ -254,7 +255,7 @@ export function Dialog(
             </>
           ) : (
             <button
-              className="btn btn-md btn-primary"
+              className="focus-ring btn btn-md btn-primary"
               onClick={onClose}
               autoFocus
             >
@@ -333,6 +334,24 @@ function useAnchoredTooltip(ref: React.RefObject<HTMLElement | null>, text: stri
     rectRef.current = null;
     setAnchor(null);
   };
+  /** focus opens for keyboard modality only (Tab): restoring a minimized
+      window returns focus to the last control with no pointer anywhere,
+      and that synthetic focus must not resurrect a bubble nobody hovers
+      (it stuck until the next hover cycle). :focus-visible is the
+      browser's own keyboard heuristic, so real Tab users keep the tip. */
+  const showForFocus = (e: ReactFocusEvent) => {
+    const target = e.target as HTMLElement | null;
+    let keyboard: boolean;
+    try {
+      keyboard =
+        !!target &&
+        typeof target.matches === "function" &&
+        target.matches(":focus-visible");
+    } catch {
+      keyboard = false;
+    }
+    if (keyboard) show();
+  };
   /** re-center once the mounted bubble reports its real width */
   const adjust = (w: number) => place(w);
 
@@ -373,7 +392,7 @@ function useAnchoredTooltip(ref: React.RefObject<HTMLElement | null>, text: stri
     };
   }, []);
 
-  return { anchor, show, hide, adjust };
+  return { anchor, show, showForFocus, hide, adjust };
 }
 
 /** The portaled tooltip bubble every anchored tooltip renders. */
@@ -417,7 +436,7 @@ function TooltipBubble(props: {
 export function Tip(props: { text: string; children: ReactNode }) {
   const { text, children } = props;
   const ref = useRef<HTMLSpanElement>(null);
-  const { anchor, show, hide, adjust } = useAnchoredTooltip(ref, text);
+  const { anchor, show, showForFocus, hide, adjust } = useAnchoredTooltip(ref, text);
   const tipId = useId();
 
   return (
@@ -425,7 +444,7 @@ export function Tip(props: { text: string; children: ReactNode }) {
       ref={ref}
       className="tip-wrap"
       onMouseEnter={show}
-      onFocus={show}
+      onFocus={(e) => showForFocus(e)}
       onMouseLeave={hide}
       onBlur={hide}
     >
@@ -445,18 +464,18 @@ export function Tip(props: { text: string; children: ReactNode }) {
 export function Hint(props: { text: string }) {
   const { text } = props;
   const ref = useRef<HTMLButtonElement>(null);
-  const { anchor, show, hide, adjust } = useAnchoredTooltip(ref, text);
+  const { anchor, show, showForFocus, hide, adjust } = useAnchoredTooltip(ref, text);
   const tipId = useId();
 
   return (
     <button
       type="button"
       ref={ref}
-      className="hint"
+      className="hint focus-ring"
       aria-label={text}
       aria-describedby={anchor ? tipId : undefined}
       onMouseEnter={show}
-      onFocus={show}
+      onFocus={(e) => showForFocus(e)}
       onMouseLeave={hide}
       onBlur={hide}
     >

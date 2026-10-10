@@ -52,7 +52,7 @@ export function WelcomeView(props: { onDone: () => void }) {
             to) — from the locale files like every other string */}
         <Tip text={lang === "ar" ? t.langEn : t.langAr}>
           <button
-            className="welcome-lang-btn"
+            className="focus-ring welcome-lang-btn"
             onClick={() => setLanguage(lang === "ar" ? "en" : "ar")}
             aria-label={lang === "ar" ? t.langEn : t.langAr}
           >
@@ -63,7 +63,7 @@ export function WelcomeView(props: { onDone: () => void }) {
       {/* skip: bottom end-corner (the proceed side), language owns the
           start corner — both logical, both mirror with RTL */}
       {page === 0 ? (
-        <button type="button" className="welcome-skip" onClick={props.onDone}>
+        <button type="button" className="focus-ring-inset welcome-skip" onClick={props.onDone}>
           {t.welcomeSkip}
         </button>
       ) : null}
@@ -100,7 +100,7 @@ export function WelcomeView(props: { onDone: () => void }) {
             </div>
           </div>
 
-          <button className="btn btn-primary btn-lg welcome-cta" onClick={() => setPage(1)}>
+          <button className="focus-ring btn btn-primary btn-lg welcome-cta" onClick={() => setPage(1)}>
             {t.welcomeNextBtn}
           </button>
         </>
@@ -152,10 +152,10 @@ export function WelcomeView(props: { onDone: () => void }) {
           </div>
 
           <div className="welcome-nav">
-            <button className="btn btn-ghost btn-lg" onClick={() => setPage(0)}>
+            <button className="focus-ring btn btn-ghost btn-lg" onClick={() => setPage(0)}>
               {t.welcomeBack}
             </button>
-            <button className="btn btn-primary btn-lg welcome-cta" onClick={props.onDone}>
+            <button className="focus-ring btn btn-primary btn-lg welcome-cta" onClick={props.onDone}>
               <Play size={16} fill="currentColor" stroke="none" aria-hidden="true" />
               {t.welcomeBegin}
             </button>

@@ -83,6 +83,7 @@ export function TitleBar(props: {
             controls are unnamed for screen readers and keyboard users */}
         <Tip text={t.minimize}>
           <button
+            className="focus-ring-inset"
             aria-label={t.minimize}
             onClick={() => {
               void minimizeWindow();
@@ -93,6 +94,7 @@ export function TitleBar(props: {
         </Tip>
         <Tip text={maximized ? t.restore : t.maximize}>
           <button
+            className="focus-ring-inset"
             aria-label={maximized ? t.restore : t.maximize}
             onClick={() => {
               void toggleMaximizeWindow();
@@ -103,7 +105,7 @@ export function TitleBar(props: {
         </Tip>
         <Tip text={t.close}>
           <button
-            className="close"
+            className="focus-ring-inset close"
             aria-label={t.close}
             onClick={() => {
               onRequestExit();

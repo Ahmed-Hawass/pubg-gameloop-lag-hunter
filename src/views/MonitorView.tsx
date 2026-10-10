@@ -124,7 +124,7 @@ function IdleState(props: {
           {[300, 600, 1800, 3600].map((v) => (
             <button
               key={v}
-              className={`scan-dur-btn ${durationSecs === v ? "is-active" : ""}`}
+              className={`focus-ring-inset scan-dur-btn ${durationSecs === v ? "is-active" : ""}`}
               role="radio"
               aria-checked={durationSecs === v}
               onClick={() => onDurationChange(v)}
@@ -142,7 +142,7 @@ function IdleState(props: {
             press shrink, keyboard focus ring) with hero sizing on top */}
         <button
           type="button"
-          className={`btn btn-primary btn-hero ${busy || status === "stopping" ? "is-disabled" : ""}`}
+          className={`focus-ring btn btn-primary btn-hero ${busy || status === "stopping" ? "is-disabled" : ""}`}
           disabled={busy || status === "stopping"}
           onClick={onToggle}
         >

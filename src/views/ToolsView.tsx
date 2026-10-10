@@ -155,7 +155,7 @@ export function ToolsView(props: {
   if (openCard) {
     return (
       <div className="tools">
-        <button className="back-btn" onClick={() => setOpenCard(null)}>
+        <button className="focus-ring-inset back-btn" onClick={() => setOpenCard(null)}>
           <ArrowLeft size={16} />
           {t.toolsBack}
         </button>
@@ -221,7 +221,7 @@ export function ToolsView(props: {
       {/* no intro paragraph: it duplicated the card description below
           almost verbatim — the card carries the meaning alone */}
       <div className="tools-grid">
-        <button className="card tool-card" onClick={() => setOpenCard("gaming")}>
+        <button className="focus-ring card tool-card" onClick={() => setOpenCard("gaming")}>
           <img
             className="tool-spot"
             src={spotTheme === "light" ? spotGamingLight : spotGamingDark}
@@ -239,7 +239,7 @@ export function ToolsView(props: {
             </span>
           ) : null}
         </button>
-        <button className="card tool-card" onClick={() => setOpenCard("pagefile")}>
+        <button className="focus-ring card tool-card" onClick={() => setOpenCard("pagefile")}>
           <img
             className="tool-spot"
             src={spotTheme === "light" ? spotPagefileLight : spotPagefileDark}
@@ -257,7 +257,7 @@ export function ToolsView(props: {
             </span>
           ) : null}
         </button>
-        <button className="card tool-card" onClick={() => setOpenCard("cleanup")}>
+        <button className="focus-ring card tool-card" onClick={() => setOpenCard("cleanup")}>
           <img
             className="tool-spot"
             src={spotTheme === "light" ? spotCleanupLight : spotCleanupDark}
@@ -280,7 +280,7 @@ export function ToolsView(props: {
             </span>
           ) : null}
         </button>
-        <button className="card tool-card" onClick={() => setOpenCard("storage")}>
+        <button className="focus-ring card tool-card" onClick={() => setOpenCard("storage")}>
           <img
             className="tool-spot"
             src={spotTheme === "light" ? spotStorageLight : spotStorageDark}

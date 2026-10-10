@@ -347,7 +347,7 @@ function CheckCard(props: {
         </span>
         <button
           type="button"
-          className="switch-hint"
+          className="focus-ring-inset switch-hint"
           aria-label={t.hintAbout(item.name)}
           onClick={() => onHint(item.hint)}
         >
@@ -355,7 +355,7 @@ function CheckCard(props: {
         </button>
       </div>
       {!item.ok && item.onOpen ? (
-        <button className="row-act check-open" onClick={item.onOpen}>
+        <button className="focus-ring-inset row-act check-open" onClick={item.onOpen}>
           {openLabel}
         </button>
       ) : null}

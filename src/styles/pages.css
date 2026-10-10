@@ -492,17 +492,20 @@
   font: inherit;
   text-align: start;
   color: var(--text-1);
-  transition: border-color 0.12s, background 0.12s, transform 0.12s;
+  transition: border-color 0.12s, background 0.12s;
 }
-.tool-card:hover {
-  background: var(--hover-bg);
-  border-color: var(--hover-border);
-  transform: translateY(-1px);
+/* hover only where a pointer can leave (hover-capable devices): on touch
+   a tap sticks :hover with no mouseleave, painting a permanent faint
+   highlight until the next tap elsewhere. No lift either: translateY
+   extends the scrollable overflow and flashed the page scrollbar, while
+   color alone never moves layout. */
+@media (hover: hover) {
+  .tool-card:hover {
+    background: var(--hover-bg);
+    border-color: var(--hover-border);
+  }
 }
-.tool-card:focus-visible {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-dim);
-}
+/* (focus ring comes from the shared .focus-ring utility) */
 /* spot illustration: theme-picked SVG asset, one comfortable reading size */
 .tool-spot {
   width: 168px;
@@ -885,11 +888,7 @@
 .pf-field input:disabled {
   opacity: 0.5;
 }
-.pf-field input:focus-visible {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-dim);
-  outline: none;
-}
+/* (focus ring comes from the shared .focus-ring utility) */
 /* Tools back button uses the shared .back-btn primitive (see components.css) */
 
 /* ---- switch rows (Tools details): icon + title + desc + badge + switch.
@@ -971,10 +970,7 @@
 .switch-hint:hover {
   color: var(--text-2);
 }
-.switch-hint:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 1px;
-}
+/* (focus ring comes from the shared .focus-ring-inset utility) */
 .switch-desc {
   font-size: 12px;
   color: var(--text-2);
@@ -1003,10 +999,7 @@
   opacity: 0.5;
   cursor: default;
 }
-.switch:focus-visible {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-dim);
-}
+/* (focus ring comes from the shared .focus-ring utility) */
 .switch-knob {
   width: 20px;
   height: 20px;

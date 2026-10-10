@@ -98,7 +98,7 @@ export function SettingsView(props: {
             {options.map((o) => (
               <button
                 key={o.key}
-                className={`lang-seg ${setting === o.key ? "is-active" : ""}`}
+                className={`focus-ring-inset lang-seg ${setting === o.key ? "is-active" : ""}`}
                 // radio semantics for screen readers: without role/checked
                 // the group announces no selectable state at all
                 role="radio"
@@ -119,7 +119,7 @@ export function SettingsView(props: {
             {themeOptions.map((o) => (
               <button
                 key={o.key}
-                className={`lang-seg ${theme === o.key ? "is-active" : ""}`}
+                className={`focus-ring-inset lang-seg ${theme === o.key ? "is-active" : ""}`}
                 role="radio"
                 aria-checked={theme === o.key}
                 onClick={() => onThemeChange(o.key)}
@@ -138,7 +138,7 @@ export function SettingsView(props: {
             {ZOOM_LEVELS.map((level) => (
               <button
                 key={level}
-                className={`lang-seg ${zoom === level ? "is-active" : ""}`}
+                className={`focus-ring-inset lang-seg ${zoom === level ? "is-active" : ""}`}
                 role="radio"
                 aria-checked={zoom === level}
                 onClick={() => onZoomChange(level)}
@@ -178,7 +178,7 @@ export function SettingsView(props: {
             ).map((o) => (
               <button
                 key={o.value ? "on" : "off"}
-                className={`lang-seg ${showUnsupported === o.value ? "is-active" : ""}`}
+                className={`focus-ring-inset lang-seg ${showUnsupported === o.value ? "is-active" : ""}`}
                 role="radio"
                 aria-checked={showUnsupported === o.value}
                 onClick={() => onShowUnsupportedChange(o.value)}

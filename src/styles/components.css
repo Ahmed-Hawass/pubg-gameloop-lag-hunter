@@ -14,7 +14,12 @@
   color: var(--text-1);
 }
 .btn:active {
-  transform: translateY(1px) scale(0.99);
+  /* press feel without layout motion: the old translateY(1px) pushed the
+     button a pixel down while held, which flashed the page scrollbar on
+     pages standing exactly at its edge (transforms extend the scrollable
+     overflow; outlines do not). Scale-only shrinks, so it never adds
+     overflow. */
+  transform: scale(0.98);
 }
 .btn-md {
   padding: 9px 16px;
@@ -62,25 +67,39 @@
    keep only layout and padding; materials live here. Load order
    (components before views/reports/pages) plus equal specificity keeps
    these authoritative wherever they are combined. */
-/* keyboard focus: one visible language (primary outline) for every
-   clickable that lacks its own — components with bespoke rings
-   (tool-card, switch, inputs, hints) keep theirs */
-.btn:focus-visible,
-.sb-item:focus-visible,
-.sb-collapse:focus-visible,
-.scan-dur-btn:focus-visible,
-.lang-seg:focus-visible,
-.feed-toggle:focus-visible,
-.sl-act:focus-visible,
-.check-open:focus-visible,
-.row-act:focus-visible,
-.back-btn:focus-visible,
-.welcome-skip:focus-visible,
-.pf-drive:focus-visible,
-.card-x:focus-visible,
-.win-controls button:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
+/* THE focus language (single source; replaces every bespoke ring).
+   Explicit danger red per theme, exactly one tone: .focus-ring turns the
+   element's own border (bordered controls), .focus-ring-inset paints a
+   2px inner ring (borderless pills, bare buttons, caption controls,
+   glyph-only triggers). Inset and same-box borders never leave their
+   box, so no scrollport or window edge can clip them. */
+.focus-ring:focus-visible,
+.focus-ring-inset:focus-visible {
+  outline: none;
+  border-color: transparent;
+  box-shadow: inset 0 0 0 2px #ff5a52;
+}
+[data-theme="light"] .focus-ring:focus-visible,
+[data-theme="light"] .focus-ring-inset:focus-visible {
+  border-color: transparent;
+  box-shadow: inset 0 0 0 2px #d92d20;
+}
+/* red-on-red exception: a danger-filled button wearing the red ring
+   would vanish, so it takes a white inner line (max contrast on red). */
+.btn-danger-filled:focus-visible {
+  border-color: transparent;
+  box-shadow: inset 0 0 0 2px #fff;
+}
+/* forced-colors (Windows High Contrast): box-shadow paints nothing
+   there, so every ring falls back to a real outline both modes share. */
+@media (forced-colors: active) {
+  .focus-ring:focus-visible,
+  .focus-ring-inset:focus-visible,
+  .btn-danger-filled:focus-visible {
+    box-shadow: none;
+    border-color: transparent;
+    outline: 2px solid ButtonText;
+  }
 }
 .card {
   background: var(--elev-1);
@@ -621,13 +640,8 @@
   background: transparent;
   transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
-.hint:hover,
-.hint:focus-visible {
+.hint:hover {
   color: var(--text-2);
-}
-.hint:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 1px;
 }
 .hint:hover svg {
   opacity: 1;

@@ -130,7 +130,7 @@ export function AboutView(props: {
             <div className="about-update-result">
               {result === "latest" ? <span className="about-result ok">{t.aboutUpToDate}</span> : null}
               {updateInfo ? (
-                <button className="about-result update" onClick={onOpenUpdateModal}>
+                <button className="focus-ring-inset about-result update" onClick={onOpenUpdateModal}>
                   {t.aboutNewVersion} (v{updateInfo.version})
                 </button>
               ) : null}

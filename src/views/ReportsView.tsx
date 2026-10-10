@@ -247,7 +247,7 @@ export function ReportsView(props: {
     // findings carry keys –” translate; fall back to the backend's English text
     return (
       <div className="reports">
-        <button className="back-btn" onClick={() => setReport(null)}>
+        <button className="focus-ring-inset back-btn" onClick={() => setReport(null)}>
           <ArrowLeft size={16} />
           {t.allSessions}
         </button>
@@ -300,7 +300,7 @@ export function ReportsView(props: {
           <h3>{t.keyMoments}</h3>
           <button
             type="button"
-            className="feed-toggle"
+            className="focus-ring feed-toggle"
             aria-expanded={momentsOpen}
             onClick={() => setMomentsOpen(!momentsOpen)}
           >
@@ -415,7 +415,7 @@ export function ReportsView(props: {
                       button, never nested interactives inside a clickable li */}
                   <button
                     type="button"
-                    className="sl-open"
+                    className="focus-ring-inset sl-open"
                     aria-label={`${e.date}, ${meta.label}`}
                     onClick={() => openReport(e.id)}
                   >
@@ -442,7 +442,7 @@ export function ReportsView(props: {
                     <Tip text={t.deleteSession}>
                       <button
                         type="button"
-                        className="row-act sl-act sl-act-danger"
+                        className="focus-ring-inset row-act sl-act sl-act-danger"
                         aria-label={t.deleteSession}
                         onClick={() => setConfirmDelete(e.id)}
                       >

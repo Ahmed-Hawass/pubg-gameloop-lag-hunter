@@ -294,7 +294,7 @@ function ProcRow(props: {
       {onEnd ? (
         <button
           type="button"
-          className="row-act proc-end"
+          className="focus-ring row-act proc-end"
           disabled={ending}
           aria-label={`${ending ? endingLabel : endLabel} ${label}`}
           onClick={onEnd}

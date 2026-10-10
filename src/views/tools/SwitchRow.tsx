@@ -50,7 +50,7 @@ export function SwitchRow(props: {
           {name}
           <button
             type="button"
-            className="switch-hint"
+            className="focus-ring-inset switch-hint"
             aria-label={t.hintAbout(hintTitle)}
             onClick={() => onHint(hintTitle, hintBody)}
           >
@@ -70,7 +70,7 @@ export function SwitchRow(props: {
         aria-checked={on}
         aria-label={name}
         aria-disabled={disabled}
-        className="switch"
+        className="focus-ring switch"
         disabled={busy || disabled}
         onClick={() => void onFlip?.(!on)}
       >
