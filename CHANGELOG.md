@@ -658,9 +658,10 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   dead until the running screen arrived).
 
 ### Changed
-- The Tools tab's details page reads only the two switches it displays,
-  live from the registry in microseconds (a new tweak_states command):
-  every visit used to pay a full system_checks PowerShell batch
+- The Tools tab's details page reads only the two switches it displays
+  (a dedicated tweak_states command, async off the IPC thread since the
+  power row needs native powercfg reads): every visit used to pay a
+  full system_checks PowerShell batch
   (powercfg + CIM queries, 0.5-2s) for rows the page never shows, on tab
   open and on every window focus. The freshness guarantee is unchanged
   (still a live read on details open and on focus return), and the
