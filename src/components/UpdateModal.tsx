@@ -11,6 +11,8 @@ import { useEffect, useId, useRef, useState } from "react";
 import { FolderOpen, ShieldCheck, TriangleAlert } from "lucide-react";
 import { api, saveDialog, type UpdateInfo } from "../bridge";
 import { useLang } from "../i18n";
+import { errorDialog } from "../errors";
+import { formatSweepBytes } from "../views/tools/summary";
 
 type Phase =
   | { kind: "offer" }
@@ -18,10 +20,9 @@ type Phase =
   | { kind: "done"; path: string }
   | { kind: "failed"; reason: string };
 
-function fmtMB(bytes: number): string {
-  const mb = bytes / (1024 * 1024);
-  return mb >= 10 ? `${mb.toFixed(0)}` : `${mb.toFixed(1)}`;
-}
+/** download progress size uses the shared sweep byte formatter
+    (GB above 1 GiB, MB below) soMB/GB shapes never drift between
+    the update modal and the storage sweep. */
 
 export function UpdateModal(props: {
   info: UpdateInfo;
@@ -73,15 +74,18 @@ export function UpdateModal(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onClose, phase.kind, suspended]);
 
-  // focus trap: same contract as Dialog, a keyboard user must never Tab
-  // out of the update modal into the dead page behind it.
+  // focus trap: same contract as Dialog (buttons, links, inputs,
+  // tabindex), a keyboard user must never Tab out of the update modal
+  // into the dead page behind it.
   useEffect(() => {
     if (suspended) return;
     const onTab = (e: KeyboardEvent) => {
       if (e.key !== "Tab") return;
       const box = boxRef.current;
       if (!box) return;
-      const focusables = box.querySelectorAll<HTMLElement>("button:not([disabled])");
+      const focusables = box.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), a[href], input, [tabindex]:not([tabindex="-1"])',
+      );
       if (focusables.length === 0) return;
       const first = focusables[0];
       const last = focusables[focusables.length - 1];
@@ -142,14 +146,14 @@ export function UpdateModal(props: {
       // stream — same guard the failure branch uses
       if (closedRef.current) return;
 
-      setPhase({ kind: "downloading", pct: 0, mb: "0.0" });
+      setPhase({ kind: "downloading", pct: 0, mb: formatSweepBytes(0) });
       const finalPath = await api.downloadUpdate(info, dest, (ev) => {
         if (ev.event === "progress") {
           const pct = ev.total > 0 ? Math.round((ev.downloaded / ev.total) * 100) : 0;
           setPhase({
             kind: "downloading",
             pct,
-            mb: fmtMB(ev.downloaded),
+            mb: formatSweepBytes(ev.downloaded),
           });
         }
         // done/failed also arrive via the command's own return — handled below
@@ -227,7 +231,7 @@ export function UpdateModal(props: {
           <div className="progress-fill" style={{ width: `${phase.pct}%` }} />
         </div>
         <div className="um-progress-text num">
-          {phase.pct}% · {phase.mb} MB
+          {phase.pct}% · {phase.mb}
         </div>
       </div>
     );
@@ -265,11 +269,23 @@ export function UpdateModal(props: {
     );
   } else {
     title = t.updateFailedTitle;
+    // known backend codes get their locale copy, novel failures get the
+    // localized unknown-error body with the raw message as technical line
+    const failBody = errorDialog(
+      phase.reason,
+      t.errors,
+      {
+        somethingWrong: t.dialog.somethingWrong,
+        scanNeedsGame: t.dialog.scanNeedsGame,
+        scanNeedsGameBody: t.dialog.scanNeedsGameBody,
+        unknownErrorBody: t.dialog.unknownErrorBody,
+      },
+    ).body;
     body = (
       <div className="um-body">
         <div className="um-fail">
           <TriangleAlert size={16} />
-          <span>{phase.reason}</span>
+          <span>{failBody}</span>
         </div>
       </div>
     );

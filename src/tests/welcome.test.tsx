@@ -89,6 +89,15 @@ describe("WelcomeView slides", () => {
     }
   });
 
+  it("announces the slide position to screen readers", async () => {
+    open();
+    await screen.findByText(en.welcomeFindsLabel);
+    expect(screen.getByRole("status").getAttribute("aria-label")).toBe("1 / 2");
+    fireEvent.click(screen.getByText(en.welcomeNextBtn));
+    await screen.findByText(en.welcomeHowTitle);
+    expect(screen.getByRole("status").getAttribute("aria-label")).toBe("2 / 2");
+  });
+
   it("reduced motion freezes the sample on the first finding", async () => {
     const matchMedia = window.matchMedia;
     window.matchMedia = (() => ({ matches: true })) as unknown as typeof window.matchMedia;

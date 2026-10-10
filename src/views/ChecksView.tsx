@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { Button, Dialog, EmptyState, IntroCard, dispatchModalOpen, APP_DIALOG_OPEN_EVENT } from "../components/components";
 import { api, FEATURE_STATE_CHANGED_EVENT, type SystemChecks } from "../bridge";
-import { errorDialog } from "../errors";
+import { toErrorBody } from "../errors";
 import { useLang } from "../i18n";
 import { useIntroCard } from "../useIntroCard";
 
@@ -65,15 +65,7 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
       // the locale copy for known backend keys, with the raw message riding
       // along as a technical line only for novel failures
       if (!silent) {
-        const raw = typeof e === "string" ? e : String(e);
-        setError(
-          errorDialog(raw, t.errors, {
-            somethingWrong: t.dialog.somethingWrong,
-            scanNeedsGame: t.dialog.scanNeedsGame,
-            scanNeedsGameBody: t.dialog.scanNeedsGameBody,
-            unknownErrorBody: t.dialog.unknownErrorBody,
-          }).body,
-        );
+        setError(toErrorBody(e, t));
       }
     } finally {
       busyRef.current = false;
@@ -356,7 +348,7 @@ function CheckCard(props: {
         <button
           type="button"
           className="switch-hint"
-          aria-label={item.name}
+          aria-label={t.hintAbout(item.name)}
           onClick={() => onHint(item.hint)}
         >
           <Info size={13} />

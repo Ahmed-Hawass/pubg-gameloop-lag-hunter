@@ -229,6 +229,11 @@
 .tip-disc svg {
   transform: translateX(0.5px);
 }
+/* RTL mirror of the optical correction above: the glyph leans the other
+   way under RTL, so the half-pixel nudge flips sign. */
+html[dir="rtl"] .tip-disc svg {
+  transform: translateX(-0.5px);
+}
 
 /* ---- running: one centered column, like idle and result ----
    The rail used to sit in a 208px side column, which left the 208px radar

@@ -162,9 +162,9 @@ export function WelcomeView(props: { onDone: () => void }) {
           </div>
         </>
       )}
-      <div className="welcome-dots" aria-hidden="true">
-        <span className={page === 0 ? "dot on" : "dot"} />
-        <span className={page === 1 ? "dot on" : "dot"} />
+      <div className="welcome-dots" role="status" aria-label={`${page + 1} / 2`}>
+        <span className={page === 0 ? "dot on" : "dot"} aria-hidden="true" />
+        <span className={page === 1 ? "dot on" : "dot"} aria-hidden="true" />
       </div>
     </div>
   );

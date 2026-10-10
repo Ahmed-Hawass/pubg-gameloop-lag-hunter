@@ -72,4 +72,14 @@ describe("AppSidebar", () => {
     open({ updateInfo: info, view: "about" });
     expect(document.querySelector(".sb-dot")).toBeNull();
   });
+
+  it("names the collapse control in both states", () => {
+    open({ collapsed: false });
+    const expanded = screen.getByRole("button", { name: en.collapseMenu });
+    expect(expanded.getAttribute("aria-expanded")).toBe("true");
+    cleanup();
+    open({ collapsed: true });
+    const collapsedBtn = screen.getByRole("button", { name: en.expandMenu });
+    expect(collapsedBtn.getAttribute("aria-expanded")).toBe("false");
+  });
 });

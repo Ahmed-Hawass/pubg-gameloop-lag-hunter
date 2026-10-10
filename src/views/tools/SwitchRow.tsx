@@ -51,7 +51,7 @@ export function SwitchRow(props: {
           <button
             type="button"
             className="switch-hint"
-            aria-label={hintTitle}
+            aria-label={t.hintAbout(hintTitle)}
             onClick={() => onHint(hintTitle, hintBody)}
           >
             <Info size={13} />

@@ -94,7 +94,12 @@ export function AppSidebar(props: {
           flips direction when collapsed; no tooltip while
           expanded (the visible label says it already) */}
       <Tip text={collapsed ? t.expandMenu : ""}>
-        <button className="sb-collapse" onClick={onToggleSidebar}>
+        <button
+          className="sb-collapse"
+          onClick={onToggleSidebar}
+          aria-label={collapsed ? t.expandMenu : t.collapseMenu}
+          aria-expanded={!collapsed}
+        >
           {collapsed ? <ChevronsRight size={15} /> : <ChevronsLeft size={15} />}
           {!collapsed ? <span>{t.collapseMenu}</span> : null}
         </button>

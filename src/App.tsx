@@ -1,6 +1,6 @@
 // App.tsx — shell: custom title bar + collapsible sidebar + all views.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   Cpu,
@@ -266,11 +266,14 @@ export default function App() {
         if (s.onboarding_done) wasOnboardedRef.current = true;
       })
       .catch(() => {
+        // IPC dead: keep the loading shell (onboarding NOT marked done) so
+        // a first-run user still sees Welcome once the backend answers,
+        // instead of skipping it due to a transient failure.
         setCollapsed(false);
-        setOnboardingDone(true);
-        setGameAdviceDone(true);
-        setBackgroundAdviceDone(true);
-        wasOnboardedRef.current = true;
+        setOnboardingDone(false);
+        setGameAdviceDone(false);
+        setBackgroundAdviceDone(false);
+        wasOnboardedRef.current = false;
       });
     api
       .psAvailable()
@@ -450,15 +453,18 @@ export default function App() {
     }
   }, [dialogKey, updateModal, updateInfo, exitConfirm]);
 
-  const tabs: SidebarTab[] = [
-    { id: "monitor", icon: <Crosshair size={17} />, label: t.monitor },
-    { id: "system", icon: <Cpu size={17} />, label: t.system },
-    { id: "processes", icon: <Activity size={17} />, label: t.topProcesses },
-    { id: "checks", icon: <ShieldCheck size={17} />, label: t.systemHealth },
-    { id: "tools", icon: <Wrench size={17} />, label: t.tools, beta: true },
-    { id: "reports", icon: <FolderOpen size={17} />, label: t.reports },
-    { id: "settings", icon: <Settings size={17} />, label: t.settings },
-  ];
+  const tabs: SidebarTab[] = useMemo(
+    () => [
+      { id: "monitor", icon: <Crosshair size={17} />, label: t.monitor },
+      { id: "system", icon: <Cpu size={17} />, label: t.system },
+      { id: "processes", icon: <Activity size={17} />, label: t.topProcesses },
+      { id: "checks", icon: <ShieldCheck size={17} />, label: t.systemHealth },
+      { id: "tools", icon: <Wrench size={17} />, label: t.tools, beta: true },
+      { id: "reports", icon: <FolderOpen size={17} />, label: t.reports },
+      { id: "settings", icon: <Settings size={17} />, label: t.settings },
+    ],
+    [t],
+  );
 
   return (
     <div className="shell">

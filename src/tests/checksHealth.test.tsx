@@ -96,4 +96,17 @@ describe("ChecksView health summary", () => {
     // it would silently cut the archive's deep-links in half
     expect(screen.getAllByText(en.openInTools)).toHaveLength(6);
   });
+
+  it("hint buttons announce their context, never a bare duplicate", async () => {
+    apiMock.systemChecks.mockResolvedValue(allGood);
+    apiMock.getSettings.mockResolvedValue(settings());
+    render(React.createElement(ChecksView, { active: false, onOpenTool: vi.fn() }));
+    await screen.findByText(en.healthAllGood);
+    const hints = document.querySelectorAll(".switch-hint");
+    expect(hints.length).toBeGreaterThan(0);
+    hints.forEach((b) => {
+      const label = b.getAttribute("aria-label") ?? "";
+      expect(label.startsWith("About ")).toBe(true);
+    });
+  });
 });

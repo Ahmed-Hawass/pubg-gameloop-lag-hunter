@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { Activity, AppWindow, RefreshCw } from "lucide-react";
 import { Button, Dialog, EmptyState, IntroCard } from "../components/components";
 import { api, type TopProcess, type TopProcesses } from "../bridge";
-import { errorDialog, type Notice } from "../errors";
+import { errorDialog, toErrorBody, type Notice } from "../errors";
 import { useLang } from "../i18n";
 import { useIntroCard } from "../useIntroCard";
 import { useModalSignal, useYieldToAppDialog } from "./tools/useModalSignals";
@@ -37,15 +37,7 @@ export function ProcessesView(props: { active: boolean }) {
       // polling failures stay quiet; manual failures prefer the locale copy
       // for known backend keys, novel failures keep the raw technical line
       if (!silent) {
-        const raw = typeof e === "string" ? e : String(e);
-        setError(
-          errorDialog(raw, t.errors, {
-            somethingWrong: t.dialog.somethingWrong,
-            scanNeedsGame: t.dialog.scanNeedsGame,
-            scanNeedsGameBody: t.dialog.scanNeedsGameBody,
-            unknownErrorBody: t.dialog.unknownErrorBody,
-          }).body,
-        );
+        setError(toErrorBody(e, t));
       }
     } finally {
       busyRef.current = false;
@@ -304,6 +296,7 @@ function ProcRow(props: {
           type="button"
           className="row-act proc-end"
           disabled={ending}
+          aria-label={`${ending ? endingLabel : endLabel} ${label}`}
           onClick={onEnd}
         >
           {ending ? endingLabel : endLabel}

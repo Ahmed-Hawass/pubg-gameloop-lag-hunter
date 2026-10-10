@@ -57,7 +57,7 @@ export function Button(props: {
     .filter(Boolean)
     .join(" ");
   return (
-    <button className={cls} onClick={onClick} disabled={disabled}>
+    <button type="button" className={cls} onClick={onClick} disabled={disabled}>
       {icon}
       <span>{label}</span>
     </button>
@@ -336,6 +336,15 @@ function useAnchoredTooltip(ref: React.RefObject<HTMLElement | null>, text: stri
   /** re-center once the mounted bubble reports its real width */
   const adjust = (w: number) => place(w);
 
+  // invalidate on text change: the sidebar flips text between a label and
+  // "" on collapse/expand, so a stale anchor would render an orphan bubble
+  // (empty after expand, wrong label/position after collapse) or stick
+  // after the trigger moved.
+  useEffect(() => {
+    rectRef.current = null;
+    setAnchor(null);
+  }, [text]);
+
   // belt-and-suspenders: mouseleave/blur alone stick the bubble whenever a
   // hover ends WITHOUT pointer movement — a modal mounting under a parked
   // cursor, the window losing focus (Alt+Tab), or wheel-scroll detaching
@@ -343,14 +352,23 @@ function useAnchoredTooltip(ref: React.RefObject<HTMLElement | null>, text: stri
   // (Press hides too — native tooltips vanish on press as well.)
   useEffect(() => {
     const hideAll = () => setAnchor(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") hideAll();
+    };
     window.addEventListener("blur", hideAll);
+    window.addEventListener("resize", hideAll);
     document.addEventListener("scroll", hideAll, true); // capture: any scroller
     document.addEventListener("pointerdown", hideAll, true); // capture: before click handlers
+    document.addEventListener("pointercancel", hideAll, true);
+    document.addEventListener("keydown", onKey, true);
     window.addEventListener(MODAL_OPEN_EVENT, hideAll);
     return () => {
       window.removeEventListener("blur", hideAll);
+      window.removeEventListener("resize", hideAll);
       document.removeEventListener("scroll", hideAll, true);
       document.removeEventListener("pointerdown", hideAll, true);
+      document.removeEventListener("pointercancel", hideAll, true);
+      document.removeEventListener("keydown", onKey, true);
       window.removeEventListener(MODAL_OPEN_EVENT, hideAll);
     };
   }, []);
@@ -379,6 +397,10 @@ function TooltipBubble(props: {
       className="hint-tooltip"
       role="tooltip"
       id={id}
+      // Documented exception to the logical-property rule: `left` here is
+      // a viewport coordinate from getBoundingClientRect (already mirrored
+      // by the browser in RTL), not a layout side, so inset-inline-start
+      // would place it wrong.
       style={{ left: anchor.left, bottom: anchor.bottom }}
     >
       {text}
@@ -408,7 +430,9 @@ export function Tip(props: { text: string; children: ReactNode }) {
       onBlur={hide}
     >
       {children}
-      {anchor ? <TooltipBubble text={text} anchor={anchor} id={tipId} onMeasured={adjust} /> : null}
+      {anchor && text ? (
+        <TooltipBubble text={text} anchor={anchor} id={tipId} onMeasured={adjust} />
+      ) : null}
     </span>
   );
 }
