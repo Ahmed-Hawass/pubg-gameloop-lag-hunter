@@ -12,8 +12,10 @@ export type LangSetting = LangCode | "auto";
 
 const LOCALES: Record<LangCode, Locale> = { en, ar };
 
-/** OS locale → our languages. Windows Arabic variants all map to "ar". */
-function osLanguage(): LangCode {
+/** OS locale → our languages. Windows Arabic variants all map to "ar".
+    Exported for tests: the mapping is pure logic, the provider around it
+    needs the engine. */
+export function osLanguage(): LangCode {
   const langs = typeof navigator !== "undefined" ? navigator.languages ?? [navigator.language] : [];
   for (const l of langs) {
     const lower = (l ?? "").toLowerCase();
@@ -64,8 +66,15 @@ export function LanguageProvider(props: { children: ReactNode }) {
   }, [t]);
 
   const setLanguage = (s: LangSetting) => {
+    const previous = setting;
     setSetting(s);
-    void api.setLanguage(s).catch(() => {});
+    // silent rollback is intentional: the UI visibly stays in the previous
+    // language, so a modal would add noise to a self-evident state. Theme
+    // and other settings use the app dialog because their failure is not
+    // self-evident.
+    void api.setLanguage(s).catch(() => {
+      setSetting(previous);
+    });
   };
 
   // don't render until the persisted language arrives — avoids a visible flip

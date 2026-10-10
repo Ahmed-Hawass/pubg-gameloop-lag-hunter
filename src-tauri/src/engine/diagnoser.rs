@@ -1,7 +1,7 @@
 // diagnoser.rs — engine events → user-facing diagnoses (English, plain language)
 // The UI never shows engine jargon; it shows these.
 
-use super::types::{iso_ms, others_ok, Diagnosis, EngineEvent, Overall, Phase, Sample, Severity, UiState};
+use super::types::{iso_ms, Diagnosis, EngineEvent, Overall, Phase, Sample, Severity, UiState};
 
 /// How recent an event must be to count as live evidence for a card.
 /// Was a bare inline `5 * 60 * 1000` — now named, and every window reads it.
@@ -9,10 +9,22 @@ const LIVE_WINDOW_MS: i64 = 5 * 60 * 1000;
 /// How far back the correlator looks for a cliff that could confirm a wake
 /// card. Must be ≥ LIVE_WINDOW_MS (a cliff can age out of the live window
 /// while the wake it confirmed is still open — the pairing survives here).
+/// Checked at COMPILE time: the day someone tightens this below the live
+/// window, the build itself refuses (a test could be skipped; this cannot).
 const CORRELATION_WINDOW_MS: i64 = 15 * 60 * 1000;
+const _: () = assert!(
+    CORRELATION_WINDOW_MS >= LIVE_WINDOW_MS,
+    "CORRELATION_WINDOW_MS must be >= LIVE_WINDOW_MS (the wake/churn pairing reads cliffs the live window has aged out)"
+);
 
-/// Map an engine event to a diagnosis key.
-fn key_for(ev: &EngineEvent, latest: &Sample) -> &'static str {
+/// Map an engine event to a diagnosis key. The classification was decided
+/// by the DETECTOR at emit time and is already encoded in the event kind
+/// (`gpu_activity_cliff` vs `gpu_activity_cliff_loaded`): re-deriving it
+/// here from the LATEST sample re-classified the same collapse with
+/// machine state from minutes later (a cliff that fired while healthy
+/// retroactively read as gpu_busy once the machine dipped, and vice
+/// versa). The kind carries the answer; we read it, we don't re-decide.
+pub(crate) fn key_for(ev: &EngineEvent) -> &'static str {
     match ev.kind.as_str() {
         "disk_queue" | "disk_busy" | "hard_faults" => "disk_wait",
         "cpu_saturation" => "cpu_busy",
@@ -20,17 +32,7 @@ fn key_for(ev: &EngineEvent, latest: &Sample) -> &'static str {
         "mem_pressure" => "mem_low",
         "paging_churn" => "paging_churn",
         "gpu_mem_idle" => "gpu_wake",
-        "gpu_activity_cliff" => {
-            // healthy elsewhere → scene hitch; loaded → gpu busy. Same
-            // shared gate the detector used at emit time (RAM included) —
-            // a collapse under memory pressure must never read as a
-            // harmless first-load hitch.
-            if others_ok(latest.disk_queue, latest.cpu_total, latest.avail_mb) {
-                "scene_hitch"
-            } else {
-                "gpu_busy"
-            }
-        }
+        "gpu_activity_cliff" => "scene_hitch",
         "gpu_activity_cliff_loaded" => "gpu_busy",
         "gpu_clock_low" | "gpu_temp" => "gpu_busy",
         _ => "",
@@ -120,11 +122,91 @@ pub fn diagnosis_copy(
 ///    blips live in the Activity feed only — cards mean "confirmed problem".
 /// 3. ACTIVE-ONLY: once a condition truly ends and stayed ended, its card
 ///    goes away (the UI keeps history in the feed and the report).
-fn diagnoses_from(events: &[EngineEvent], latest: &Sample, now_iso: &str) -> Vec<Diagnosis> {
+fn diagnoses_from(events: &[EngineEvent], now_iso: &str) -> Vec<Diagnosis> {
     let now_ms = iso_ms(now_iso).unwrap_or(0);
 
-    // pass 1: group events into root-cause buckets with duration evidence
+    // ONE pass over the history builds every index the correlator needs:
+    // the old shape ran a nested full scan (events × starts) for each of
+    // the still-open / wake-window / churn-window questions on EVERY tick,
+    // inside the session lock — a 60-min paging session (thousands of
+    // events, hundreds of Starts) burned millions of string compares per
+    // second while stop()/status() waited on the same lock.
+    //
+    // kind → (last_end_ms, latest_start_ms): the still-open rescue asks
+    // "does ANY End of this kind come at/after this Start?" — the newest
+    // Start paired with the newest End answers it: a Start with a newer
+    // End is closed, the newest Start without one is open.
     use std::collections::BTreeMap;
+    let mut last_end_by_kind: BTreeMap<&str, i64> = BTreeMap::new();
+    let mut latest_start_by_kind: BTreeMap<&str, i64> = BTreeMap::new();
+    // per-kind open window list (start, matching end) for the correlation
+    // envelopes — matching End = the first End at/after the Start
+    let mut wake_starts: Vec<i64> = Vec::new();
+    let mut wake_ends: Vec<i64> = Vec::new();
+    let mut churn_starts: Vec<i64> = Vec::new();
+    let mut churn_ends: Vec<i64> = Vec::new();
+    for ev in events {
+        let Some(ev_ms) = iso_ms(&ev.t) else { continue };
+        match ev.phase {
+            Phase::Start => {
+                let slot = latest_start_by_kind
+                    .entry(ev.kind.as_str())
+                    .or_insert(ev_ms);
+                if ev_ms > *slot {
+                    *slot = ev_ms;
+                }
+                if ev.kind == "gpu_mem_idle" {
+                    wake_starts.push(ev_ms);
+                }
+                if ev.kind == "paging_churn" {
+                    churn_starts.push(ev_ms);
+                }
+            }
+            Phase::End => {
+                let slot = last_end_by_kind.entry(ev.kind.as_str()).or_insert(ev_ms);
+                if ev_ms >= *slot {
+                    *slot = ev_ms;
+                }
+                if ev.kind == "gpu_mem_idle" {
+                    wake_ends.push(ev_ms);
+                }
+                if ev.kind == "paging_churn" {
+                    churn_ends.push(ev_ms);
+                }
+            }
+            Phase::Instant => {}
+        }
+    }
+    let still_open = |ev: &EngineEvent, ev_ms: i64| -> bool {
+        // numeric >=, not string >: two events inside the same millisecond
+        // (a zero-duration condition closed in one tick's batch) must pair
+        // as closed — the strict string compare left the Start "open"
+        // forever. iso_ms values are also immune to the DST fall-back
+        // window where lexicographic ISO ordering lies.
+        ev.phase == Phase::Start
+            && latest_start_by_kind.get(ev.kind.as_str()).copied() == Some(ev_ms)
+            && last_end_by_kind
+                .get(ev.kind.as_str())
+                .copied()
+                .unwrap_or(i64::MIN)
+                < ev_ms
+    };
+    // window envelopes: for each Start, the first End at/after it (the
+    // events arrive in order, so a binary search over the sorted End list
+    // finds it; an open window ends at None = extends to now)
+    let windows = |starts: &[i64], ends: &[i64]| -> Vec<(i64, Option<i64>)> {
+        starts
+            .iter()
+            .map(|&s| {
+                let end = ends.iter().find(|&&e| e >= s).copied();
+                (s, end)
+            })
+            .collect()
+    };
+    let wake_windows = windows(&wake_starts, &wake_ends);
+    let churn_windows = windows(&churn_starts, &churn_ends);
+
+    // pass 1: group events into root-cause buckets with duration evidence
     // bucket → (total_sustained_ms, last_seen_ms, worst_sev)
     let mut buckets: BTreeMap<&'static str, (i64, i64, &'static str)> = BTreeMap::new();
     // open Start events per bucket: start_ms (to pair with the matching End)
@@ -135,10 +217,18 @@ fn diagnoses_from(events: &[EngineEvent], latest: &Sample, now_iso: &str) -> Vec
             continue;
         }
         let ev_ms = iso_ms(&ev.t).unwrap_or(0);
-        if now_ms.saturating_sub(ev_ms) > LIVE_WINDOW_MS {
+        // OUTSIDE the live window — but a condition that is STILL OPEN is
+        // never stale: its Start keeps earning its card until the problem
+        // actually ends. Skipping open Starts made long conditions
+        // (mem_pressure open for 20 min) emit ONE Start, age it out of the
+        // window after 5 min, and the card VANISHED while the problem was
+        // ongoing — Overall stayed "lag" with no explanatory card at all.
+        // The open/closed pairing below resolves this Start when its End
+        // arrives (Ends are never skipped, whatever their age).
+        if now_ms.saturating_sub(ev_ms) > LIVE_WINDOW_MS && !still_open(ev, ev_ms) {
             continue; // outside the live window
         }
-        let key = key_for(ev, latest);
+        let key = key_for(ev);
         if key.is_empty() {
             continue;
         }
@@ -181,18 +271,14 @@ fn diagnoses_from(events: &[EngineEvent], latest: &Sample, now_iso: &str) -> Vec
 
     // pass 2: a bucket earns a card only with ≥3s of confirmed evidence
     let mut out: Vec<Diagnosis> = Vec::new();
-    // CORRELATION EVIDENCE: did a real activity collapse happen in the live
-    // window, and did it happen DURING or AFTER the wake it explains? A
-    // cliff from BEFORE the wake started is not evidence for it — the old
-    // 15-minute window used to let a stall from 12 minutes prior "confirm"
-    // a wake card (false correlation).
-    // First: the EARLIEST wake start in the evidence stream (open or closed),
-    // so a cliff that precedes every wake cannot ride on any of them.
-    let wake_first_start_ms = events
-        .iter()
-        .filter(|e| e.kind == "gpu_mem_idle" && e.phase == Phase::Start)
-        .filter_map(|e| iso_ms(&e.t))
-        .min();
+    // CORRELATION EVIDENCE: did a real activity collapse happen, and did it
+    // happen DURING a wake it could explain? A cliff from BEFORE a wake
+    // started is not evidence for it — the old 15-minute window used to
+    // let a stall from 12 minutes prior "confirm" a wake card (false
+    // correlation). Pairing is PER WINDOW: a cliff confirms a wake only if
+    // it falls inside THAT wake's [start, end] envelope (an open wake
+    // extends to now). The envelopes come from the single-pass index
+    // above, not a nested scan per cliff.
     let stall_evidence = events.iter().any(|e| {
         if !e.kind.starts_with("gpu_activity_cliff") {
             return false;
@@ -203,27 +289,18 @@ fn diagnoses_from(events: &[EngineEvent], latest: &Sample, now_iso: &str) -> Vec
         if now_ms.saturating_sub(ev_ms) > CORRELATION_WINDOW_MS {
             return false; // too old to matter
         }
-        // the cliff must fall inside (or after) a wake window: an earlier
-        // collapse explains nothing about a later wake
-        match wake_first_start_ms {
-            Some(wake_start_ms) => ev_ms >= wake_start_ms,
-            None => false, // no wake at all — nothing for a cliff to confirm
-        }
+        // the cliff must fall inside a wake window: an earlier collapse
+        // explains nothing about a later wake (open wake runs to now)
+        wake_windows
+            .iter()
+            .any(|&(start, end)| ev_ms >= start && end.map(|t| ev_ms <= t).unwrap_or(true))
     });
     // PAGING CORRELATION: a churn card must be backed by a cliff that fell
     // INSIDE a churn window (same direction as the wake rule: the evidence
-    // must occur during the condition it explains). A churn with zero
-    // correlated stutters is background behavior — feed-only observation.
-    let churn_first_start_ms = events
-        .iter()
-        .filter(|e| e.kind == "paging_churn" && e.phase == Phase::Start)
-        .filter_map(|e| iso_ms(&e.t))
-        .min();
-    let churn_last_end_ms = events
-        .iter()
-        .filter(|e| e.kind == "paging_churn" && e.phase == Phase::End)
-        .filter_map(|e| iso_ms(&e.t))
-        .max();
+    // must occur during the condition it explains). PER WINDOW, like the
+    // wake rule — the old first-start/last-end ENVELOPE counted a cliff in
+    // the GAP between two churn windows as inside the churn. A churn with
+    // zero correlated stutters is background behavior — feed-only.
     let churn_evidence = events.iter().any(|e| {
         if !e.kind.starts_with("gpu_activity_cliff") {
             return false;
@@ -232,13 +309,11 @@ fn diagnoses_from(events: &[EngineEvent], latest: &Sample, now_iso: &str) -> Vec
             return false;
         };
         if now_ms.saturating_sub(ev_ms) > CORRELATION_WINDOW_MS {
-            return false;
+            return false; // too old to matter
         }
-        match (churn_first_start_ms, churn_last_end_ms) {
-            (Some(start), Some(end)) => ev_ms >= start && ev_ms <= end,
-            (Some(start), None) => ev_ms >= start,
-            _ => false,
-        }
+        churn_windows
+            .iter()
+            .any(|&(start, end)| ev_ms >= start && end.map(|t| ev_ms <= t).unwrap_or(true))
     });
     for (key, (sustained_ms, _last, raw_sev)) in &buckets {
         if *sustained_ms < 3000 {
@@ -324,18 +399,31 @@ pub fn build_ui_state(inp: UiStateInput) -> UiState {
     } = inp;
     let latest = samples.last().cloned().unwrap_or_default();
     let now_iso = super::sampler::iso_now();
-    let diagnoses = diagnoses_from(events, &latest, &now_iso);
+    let diagnoses = diagnoses_from(events, &now_iso);
     let lag_count = events
         .iter()
         .filter(|e| e.kind.starts_with("gpu_activity_cliff") || e.kind == "spike")
         .count() as u32;
 
     let pct = |v: Option<f64>| -> Option<u8> { v.map(|x| x.clamp(0.0, 100.0) as u8) };
+    // RAM bar: when avail ≥ the assumed total, the numbers are an
+    // implausible pair — the 8 GB fallback total (rig cache missing +
+    // PowerShell unavailable) meeting a 32 GB machine's real reading.
+    // Clamping painted the bar permanently 0% ("full"); None paints "--",
+    // the honest no-data state. Events are unaffected (their floor clamps
+    // independently).
+    let ram_pct = |avail: Option<f64>| -> Option<u8> {
+        avail.and_then(|a| {
+            if a >= total_mem_mb {
+                None
+            } else {
+                Some((100.0 - (a / total_mem_mb) * 100.0).clamp(0.0, 100.0) as u8)
+            }
+        })
+    };
     let bars = super::types::Bars {
         cpu: pct(latest.cpu_total),
-        ram: latest
-            .avail_mb
-            .map(|a| (100.0 - (a / total_mem_mb) * 100.0).clamp(0.0, 100.0) as u8),
+        ram: ram_pct(latest.avail_mb),
         gpu: latest
             .gpu
             .as_ref()
@@ -351,9 +439,17 @@ pub fn build_ui_state(inp: UiStateInput) -> UiState {
         history
             .cpu
             .push(s.cpu_total.map(|v| v.clamp(0.0, 100.0) as u8).unwrap_or(0));
+        // same implausible-pair gate as the bar: a fallback total smaller
+        // than the reading is missing data, not a full stick of RAM
         let ram = s
             .avail_mb
-            .map(|a| (100.0 - (a / total_mem_mb) * 100.0).clamp(0.0, 100.0) as u8)
+            .and_then(|a| {
+                if a >= total_mem_mb {
+                    None
+                } else {
+                    Some((100.0 - (a / total_mem_mb) * 100.0).clamp(0.0, 100.0) as u8)
+                }
+            })
             .unwrap_or(0);
         history.ram.push(ram);
         let gpu = s
@@ -501,9 +597,8 @@ mod tests {
                 Some(12.0),
             ),
         ];
-        let latest = Sample::default();
         let now = "2026-08-31T05:00:13.000Z";
-        let d = diagnoses_from(&events, &latest, now);
+        let d = diagnoses_from(&events, now);
         assert_eq!(d.len(), 1, "one storm must produce exactly one card");
         assert_eq!(d[0].key, "disk_wait");
         assert_eq!(d[0].severity, "high");
@@ -528,10 +623,55 @@ mod tests {
                 Some(1.0),
             ),
         ];
-        let latest = Sample::default();
         let now = "2026-08-31T05:00:02.000Z";
-        let d = diagnoses_from(&events, &latest, now);
+        let d = diagnoses_from(&events, now);
         assert!(d.is_empty(), "1s blip must not earn a card");
+    }
+
+    #[test]
+    fn cliff_classification_is_frozen_at_emit_time() {
+        // the drift bug: a plain gpu_activity_cliff (fired while the rest
+        // of the machine was HEALTHY — the detector checked at emit time)
+        // must stay a scene_hitch even when the machine dips under load
+        // MINUTES LATER. The old code re-derived the classification from
+        // the latest sample and retroactively relabeled the event.
+        let events = vec![ev(
+            "gpu_activity_cliff",
+            Phase::Instant,
+            Severity::Crit,
+            "2026-08-31T05:00:05.000Z",
+            None,
+        )];
+        // the machine NOW: disk queued, CPU pegged, RAM tight. The OLD
+        // logic re-derived the classification from this data and called
+        // the cliff "gpu_busy"; the kind is frozen at emit time, so this
+        // sample shapes nothing. (Kept as documentation of the shape the
+        // old bug fed in — the assert proves it no longer matters.)
+        let _loaded_now = Sample {
+            disk_queue: Some(5.0),
+            cpu_total: Some(96.0),
+            avail_mb: Some(1024.0),
+            ..Default::default()
+        };
+        let now = "2026-08-31T05:02:00.000Z";
+        let d = diagnoses_from(&events, now);
+        assert!(
+            d.iter().all(|x| x.key != "gpu_busy"),
+            "a healthy-elsewhere cliff keeps its emit-time classification"
+        );
+        // and the loaded variant stays loaded even after the machine heals
+        let events2 = vec![ev(
+            "gpu_activity_cliff_loaded",
+            Phase::Instant,
+            Severity::Crit,
+            "2026-08-31T05:00:05.000Z",
+            None,
+        )];
+        let d2 = diagnoses_from(&events2, now);
+        assert!(
+            d2.iter().all(|x| x.key != "scene_hitch"),
+            "a loaded cliff keeps its emit-time classification too"
+        );
     }
 
     #[test]
@@ -552,11 +692,94 @@ mod tests {
                 Some(8.0),
             ),
         ];
-        let latest = Sample::default();
         let now = "2026-08-31T05:00:09.000Z";
-        let d = diagnoses_from(&events, &latest, now);
+        let d = diagnoses_from(&events, now);
         assert_eq!(d.len(), 1);
         assert_eq!(d[0].key, "cpu_throttle");
+    }
+
+    #[test]
+    fn zero_duration_start_end_same_ms_pairs_as_closed() {
+        // the same-millisecond pairing bug: a condition opened and closed
+        // within one tick's event batch (Start and End stamped the same
+        // ms — finish() stamps its Ends with one now_iso) read as
+        // still-open under the strict string `>` compare and never let
+        // the card expire. Numeric >= must pair them as closed.
+        let events = vec![
+            ev(
+                "mem_pressure",
+                Phase::Start,
+                Severity::Warn,
+                "2026-08-31T05:00:00.000Z",
+                None,
+            ),
+            ev(
+                "mem_pressure",
+                Phase::End,
+                Severity::Ok,
+                "2026-08-31T05:00:00.000Z",
+                Some(0.0),
+            ),
+        ];
+        // the End is 6 minutes old (outside the live window) — the Start
+        // must NOT be rescued as still-open, or the card lives forever
+        let now = "2026-08-31T05:06:00.000Z";
+        let d = diagnoses_from(&events, now);
+        assert!(
+            !d.iter().any(|x| x.key == "mem_low"),
+            "a condition closed in the same ms it opened must never read as still-open"
+        );
+    }
+
+    #[test]
+    fn open_condition_keeps_its_card_beyond_the_window() {
+        // the vanishing-card bug: a condition that STAYS open emits one
+        // Start and nothing else. Six minutes in, the Start is older than
+        // the 5-minute live window — but the problem is ONGOING. The card
+        // must stay; skipping open Starts made it vanish with Overall still
+        // red and nothing explaining why.
+        let events = vec![ev(
+            "mem_pressure",
+            Phase::Start,
+            Severity::Warn,
+            "2026-08-31T04:54:00.000Z", // 6 minutes before now
+            None,
+        )];
+        let now = "2026-08-31T05:00:00.000Z";
+        let d = diagnoses_from(&events, now);
+        assert!(
+            d.iter().any(|x| x.key == "mem_low"),
+            "a still-open condition keeps its card no matter how old the Start is"
+        );
+    }
+
+    #[test]
+    fn closed_old_condition_still_expires() {
+        // the flip side: an ENDED condition from before the window is
+        // really over — the still-open rescue must not resurrect history.
+        // Start 10 min ago, End 9 min ago, nothing open now.
+        let events = vec![
+            ev(
+                "cpu_saturation",
+                Phase::Start,
+                Severity::Warn,
+                "2026-08-31T04:50:00.000Z",
+                None,
+            ),
+            ev(
+                "cpu_saturation",
+                Phase::End,
+                Severity::Ok,
+                "2026-08-31T04:51:00.000Z",
+                Some(60.0),
+            ),
+        ];
+        let now = "2026-08-31T05:00:00.000Z";
+        let d = diagnoses_from(&events, now);
+        assert!(
+            !d.iter().any(|x| x.key == "cpu_busy"),
+            "an ended condition outside the window stays expired"
+        );
     }
 
     #[test]
@@ -579,9 +802,8 @@ mod tests {
                 Some(20.0),
             ),
         ];
-        let latest = Sample::default();
         let now = "2026-08-31T05:00:21.000Z";
-        let d = diagnoses_from(&events, &latest, now);
+        let d = diagnoses_from(&events, now);
         assert!(
             !d.iter().any(|x| x.key == "gpu_wake"),
             "a wake story without a measured freeze is not a confirmed problem"
@@ -615,9 +837,8 @@ mod tests {
                 Some(20.0),
             ),
         ];
-        let latest = Sample::default();
         let now = "2026-08-31T05:00:21.000Z";
-        let d = diagnoses_from(&events, &latest, now);
+        let d = diagnoses_from(&events, now);
         assert!(
             d.iter().any(|x| x.key == "gpu_wake"),
             "a wake followed by a measured activity cliff is a confirmed hitch"
@@ -652,12 +873,111 @@ mod tests {
                 Some(19.0),
             ),
         ];
-        let latest = Sample::default();
         let now = "2026-08-31T05:00:21.000Z";
-        let d = diagnoses_from(&events, &latest, now);
+        let d = diagnoses_from(&events, now);
         assert!(
             !d.iter().any(|x| x.key == "gpu_wake"),
             "evidence must fall inside the window it explains, not before it"
+        );
+    }
+
+    #[test]
+    fn cliff_after_an_older_wake_ended_is_not_evidence_for_a_newer_one() {
+        // the envelope bug: wake #1 ended at 05:00:20, a NEW wake starts at
+        // 05:04, and a cliff lands at 05:05 — after the new wake began.
+        // The old earliest-wake check compared against wake #1's start
+        // only, so this cliff confirmed... whichever wake the card was
+        // for. The cliff IS inside wake #2's window, so the card stands —
+        // but the mirror case below (cliff in the GAP between wakes)
+        // must not.
+        let events = vec![
+            ev(
+                "gpu_mem_idle",
+                Phase::Start,
+                Severity::Warn,
+                "2026-08-31T05:00:00.000Z",
+                None,
+            ),
+            ev(
+                "gpu_mem_idle",
+                Phase::End,
+                Severity::Ok,
+                "2026-08-31T05:00:20.000Z",
+                Some(20.0),
+            ),
+            ev(
+                "gpu_mem_idle",
+                Phase::Start,
+                Severity::Warn,
+                "2026-08-31T05:04:00.000Z",
+                None,
+            ),
+            ev(
+                "gpu_activity_cliff",
+                Phase::Instant,
+                Severity::Crit,
+                "2026-08-31T05:05:00.000Z", // inside wake #2 (still open)
+                None,
+            ),
+        ];
+        let now = "2026-08-31T05:05:10.000Z";
+        let d = diagnoses_from(&events, now);
+        assert!(
+            d.iter().any(|x| x.key == "gpu_wake"),
+            "a cliff inside the CURRENT wake window confirms it"
+        );
+    }
+
+    #[test]
+    fn cliff_in_the_gap_between_churn_windows_is_not_evidence() {
+        // the churn envelope bug: churn #1 (05:00:00-05:00:30), a quiet
+        // gap, churn #2 opens at 05:04, and a cliff lands at 05:02 — in
+        // the GAP, before churn #2 even started. The old first-start/
+        // last-end envelope spanned 05:00:00..(churn#2's end) and counted
+        // this gap cliff as inside the churn. It explains nothing: no
+        // churn was running when it happened.
+        let events = vec![
+            ev(
+                "paging_churn",
+                Phase::Start,
+                Severity::Warn,
+                "2026-08-31T05:00:00.000Z",
+                None,
+            ),
+            ev(
+                "paging_churn",
+                Phase::End,
+                Severity::Ok,
+                "2026-08-31T05:00:30.000Z",
+                Some(30.0),
+            ),
+            ev(
+                "gpu_activity_cliff",
+                Phase::Instant,
+                Severity::Crit,
+                "2026-08-31T05:02:00.000Z", // the GAP
+                None,
+            ),
+            ev(
+                "paging_churn",
+                Phase::Start,
+                Severity::Warn,
+                "2026-08-31T05:04:00.000Z",
+                None,
+            ),
+            ev(
+                "paging_churn",
+                Phase::End,
+                Severity::Ok,
+                "2026-08-31T05:04:30.000Z",
+                Some(30.0),
+            ),
+        ];
+        let now = "2026-08-31T05:04:31.000Z";
+        let d = diagnoses_from(&events, now);
+        assert!(
+            !d.iter().any(|x| x.key == "paging_churn"),
+            "a cliff between churn windows confirms neither"
         );
     }
 
@@ -684,9 +1004,8 @@ mod tests {
                 Some(40.0),
             ),
         ];
-        let latest = Sample::default();
         let now = "2026-08-31T05:00:41.000Z";
-        let d = diagnoses_from(&events, &latest, now);
+        let d = diagnoses_from(&events, now);
         assert!(
             !d.iter().any(|x| x.key == "paging_churn"),
             "churn without a correlated stutter is an observation, not a card"
@@ -720,9 +1039,8 @@ mod tests {
                 Some(40.0),
             ),
         ];
-        let latest = Sample::default();
         let now = "2026-08-31T05:00:41.000Z";
-        let d = diagnoses_from(&events, &latest, now);
+        let d = diagnoses_from(&events, now);
         assert!(
             d.iter().any(|x| x.key == "paging_churn"),
             "churn with a stutter inside it is a confirmed, explained problem"
@@ -756,9 +1074,8 @@ mod tests {
                 None,
             ),
         ];
-        let latest = Sample::default();
         let now = "2026-08-31T05:00:51.000Z";
-        let d = diagnoses_from(&events, &latest, now);
+        let d = diagnoses_from(&events, now);
         assert!(
             !d.iter().any(|x| x.key == "paging_churn"),
             "a stutter after the churn ended does not explain the churn"

@@ -13,7 +13,11 @@
 
 ## See It in Action
 
-Live monitoring during a scan, CPU, RAM, GPU, and disk every second, with the session timeline and activity feed. Dark and light themes included.
+The Monitor page is the scan, in three states: idle (the session plan
+with its duration picker and Start), running (the radar with live CPU,
+RAM, GPU, and disk every second, plus the session timeline and activity
+feed), and result (one verdict with its supporting numbers). Dark and
+light themes included.
 
 <p align="center">
   <img src="docs/screenshots/monitor-light.png" width="560" alt="Monitor screen during a live scan.">
@@ -53,9 +57,9 @@ CPU, RAM, GPU, and disk are sampled every second while you play.
 
 Stop the scan, or let auto-stop finish it, and review the findings, key moments, and measurements.
 
-The **Reports** tab keeps every finished session with its full report. **System** shows your rig as the tool sees it, **Processes** shows what's eating the machine right now, and **Checks** points at Windows settings that silently cause lag (it only opens the right page, you flip the switch).
+The **Reports** tab keeps every finished session with its full report. **System** shows your rig as the tool sees it, **Processes** shows what's eating the machine right now, **Checks** shows your machine's most important settings (most fixes open the right Windows page, background recording jumps straight to its switch in **Tools**), and **Tools** holds every performance switch grouped by area.
 
-> **Read-only by design:** Lag Hunter diagnoses and advises. It never changes Windows settings.
+> **Honest by design:** monitoring and diagnosis never change anything. A setting changes only when you flip its switch yourself, and every change is verified by re-reading Windows.
 
 ---
 
@@ -73,7 +77,7 @@ The **Reports** tab keeps every finished session with its full report. **System*
 ## Requirements
 
 * **Windows 10 or 11 (64-bit)**
-* **GameLoop with PUBG Mobile**
+* **GameLoop with PUBG Mobile** (classic v6 and Androws v7 clients, 32-bit and 64-bit)
 * **NVIDIA GPU** for GPU counters
 
 On AMD/Intel, GPU counter availability is limited. The tool reports this honestly and continues measuring everything else.
@@ -89,14 +93,18 @@ Download `pubg-gameloop-lag-hunter-<version>.exe` from the [Releases](https://gi
 For example:
 
 ```text
-pubg-gameloop-lag-hunter-1.5.0.exe
+pubg-gameloop-lag-hunter-1.6.0.exe
 ```
 
 **No installer. No setup.**
 
 Every release includes `SHA256SUMS.txt` so you can verify the downloaded file.
 
-The app also checks for updates itself and offers new releases from inside the About tab, same signed-by-hash files, no auto-install, no restart.
+Prefer the terminal? Every release also ships `laghunter-cli.exe` (same
+engine, scanning only) with a stable `laghunter.cmd` alias beside it.
+See [CLI and headless testing](docs/CLI.md).
+
+The app also checks for updates itself and offers new releases from inside the About tab, same hash-verified files (SHA-256, no code signature), no auto-install, no restart.
 
 ### First Run on Windows 10
 

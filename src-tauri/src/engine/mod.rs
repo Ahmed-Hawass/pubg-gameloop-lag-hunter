@@ -1,12 +1,19 @@
-// engine/mod.rs — the brain: sampling, detection, diagnosis, session, storage, settings, logging, system
+// engine/mod.rs — the brain: sampling, detection, diagnosis, session, storage, settings, logging, system, tweaks, elevation, cleanup
+pub mod cleanup;
 pub mod detector;
 pub mod diagnoser;
+pub mod display_names;
+pub mod elevate;
+pub mod emulator;
+pub mod icons;
 pub mod logging;
+pub mod prockill;
 pub mod sampler;
 pub mod session;
 pub mod settings;
 pub mod storage;
 pub mod system;
+pub mod tweaks;
 pub mod types;
 pub mod update;
 pub mod version;

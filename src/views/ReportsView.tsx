@@ -1,19 +1,47 @@
-// ReportsView.tsx — saved sessions list + in-app friendly report reader.
+// ReportsView.tsx –” saved sessions list + in-app friendly report reader.
 // Content comes from the engine (keys + English fallbacks); the UI translates.
 
-import { useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, ChevronLeft, Clock, FileText, FileWarning, Folder, Gauge, Trash2 } from "lucide-react";
-import { Button, Dialog, EmptyState, Hint, NoteCard, Tip } from "../components/components";
+import { useEffect, useRef, useState } from "react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronDown, Clock, FileText, FileWarning, Folder, RefreshCw, Trash2 } from "lucide-react";
+import { Button, Dialog, EmptyState, Hint, NoteCard, Tip, diagnosisIcon, APP_DIALOG_OPEN_EVENT } from "../components/components";
 import { api, type FriendlyReport, type SessionEntry } from "../bridge";
+import { errorDialog, toErrorBody, type Notice } from "../errors";
 import { useLang } from "../i18n";
+import { useHour12 } from "../useHour12";
+import { formatClockTime } from "../clock";
 
-/** "Xm Ys" report-row duration — a deliberately different shape from the
- *  live session's mm:ss clock (this one reads naturally in a list row). */
-function fmtDur(sec: number) {
+/** moment dot severity from the engine kind (no backend change — the
+    kinds are a closed, documented set): sustained drops read danger,
+    load warnings read warn, session notes stay neutral. Unknown future
+    kinds read warn (a highlight the engine bothered to emit is worth a
+    glance, never a muted shrug). */
+function highlightTone(kind: string): "hl-bad" | "hl-warn" | "" {
+  switch (kind) {
+    case "spike":
+    case "cpu_saturation":
+    case "gpu_activity_cliff":
+    case "gpu_activity_cliff_loaded":
+    case "hard_faults":
+      return "hl-bad";
+    case "nothing":
+    case "noSamples":
+    case "mostly_background":
+      return "";
+    default:
+      return "hl-warn";
+  }
+}
+
+/** "Xm Ys" report-row duration: a deliberately different shape from the
+ *  live session's mm:ss clock in components.tsx fmtDur (this one reads
+ *  naturally in a list row, hence the fmtListDur name to prevent confusion).
+ *  Units come from the locale (Latin m/s read as English inside Arabic
+ *  rows). */
+function fmtListDur(sec: number, units: { m: string; s: string }) {
   if (sec <= 0) return "--";
   const m = Math.floor(sec / 60);
   const s = sec % 60;
-  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+  return m > 0 ? `${m}${units.m} ${s}${units.s}` : `${s}${units.s}`;
 }
 
 export function ReportsView(props: {
@@ -29,49 +57,106 @@ export function ReportsView(props: {
   active?: boolean;
 }) {
   const { openId, onOpened, onDeleted, onDeletedAll, runningSessionId, active } = props;
-  const { t } = useLang();
+  const { t, lang } = useLang();
+  /** OS clock convention for the key-moment clocks (null until the
+      read lands: raw 24-hour meanwhile, the stored truth itself) */
+  const hour12 = useHour12();
   const [entries, setEntries] = useState<SessionEntry[] | null>(null);
   const [report, setReport] = useState<FriendlyReport | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  /** key moments collapse (same toggle as the monitor feed, open by
+      default: a report is a record, hiding its moments takes a tap) */
+  const [momentsOpen, setMomentsOpen] = useState(true);
 
-  const outcomeMeta: Record<string, { label: string; tone: "ok" | "bad" | "mid" }> = {
+  const outcomeMeta: Record<string, { label: string; tone: "ok" | "bad" | "warn" }> = {
     clean: { label: t.clean, tone: "ok" },
-    issues: { label: t.findings, tone: "mid" },
+    issues: { label: t.findings, tone: "warn" },
     laggy: { label: t.lagCaptured, tone: "bad" },
-    partial: { label: t.partial, tone: "mid" },
+    partial: { label: t.partial, tone: "warn" },
   };
+
+  /** LOAD failures (the list itself) are a PAGE state: EmptyState + retry,
+      per the app's one-modal-surface rule - an action failure must never
+      grab the modal while the page itself can carry the bad news. ACTION
+      failures (open report, delete, open folder) are dialogs: the user
+      asked for something and it did not happen; that deserves the one
+      modal surface, exactly like the Tools tab's failed-write notice. */
+  const [loadFailed, setLoadFailed] = useState<string | null>(null);
+  /** action-failure notice (null = no notice): full title+body so known
+      backend codes get their locale copy, not just the unknown fallback */
+  const [notice, setNotice] = useState<Notice | null>(null);
 
   const refresh = () => {
     api
       .sessionEntries()
-      .then(setEntries)
-      .catch((e) => setError(String(e)));
+      .then((e) => {
+        setEntries(e);
+        setLoadFailed(null);
+      })
+      .catch((e) => {
+        setLoadFailed(toErrorBody(e, t));
+      });
   };
 
+  /** an action failed: known backend codes get their locale copy via
+      errorDialog, novel failures get the localized unknown-error body
+      with the raw message as technical line */
+  const actionFailed = (e: unknown) => {
+    const msg = typeof e === "string" ? e : String(e);
+    const d = errorDialog(msg, t.errors, {
+      somethingWrong: t.dialog.somethingWrong,
+      scanNeedsGame: t.dialog.scanNeedsGame,
+      scanNeedsGameBody: t.dialog.scanNeedsGameBody,
+      unknownErrorBody: t.dialog.unknownErrorBody,
+    });
+    setNotice({ title: d.title, body: d.body });
+  };
+
+  // mount-time fetch only; the visibility effect and the deep-link below
+  // own every later attempt - refresh's identity is not part of the contract
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(refresh, []);
 
   // The view stays MOUNTED (tab switch = CSS visibility only), so a session
   // that just finished would never appear without this: re-read the list
-  // every time the tab becomes visible — the report of the session the user
+  // every time the tab becomes visible - the report of the session the user
   // just ran is there the moment they switch to it.
   useEffect(() => {
     if (active) refresh();
+    // same as above: the interval-of-visibility contract reads `active`,
+    // refresh re-resolves t/refs through the fresh closure each fire
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
-  // deep-link: "Open full report" on the Monitor tab jumps here + opens the session
+  // deep-link: "Open full report" on the Monitor tab jumps here + opens the session.
+  // The link can arrive with a STALE list (the tab refreshes on visibility,
+  // so a just-finished session is never in it yet): a first miss triggers
+  // one fresh re-read and resolves on it. Only a miss on the fresh list
+  // reports "no longer saved".
+  const linkRetriedRef = useRef(false);
+  useEffect(() => {
+    if (!openId) linkRetriedRef.current = false;
+  }, [openId]);
+
   useEffect(() => {
     if (openId && entries) {
       if (!entries.some((e) => e.id === openId)) {
+        if (!linkRetriedRef.current) {
+          linkRetriedRef.current = true;
+          setLoadingId(openId);
+          refresh();
+          return;
+        }
+        setLoadingId(null);
         // the linked session is gone (deleted meanwhile): say so instead
         // of silently opening somebody else's report. An empty list with
-        // the "latest" fallback link is not an error — just clear it.
+        // the "latest" fallback link is not an error - just clear it.
         // onOpened() must still fire: the App-level link is one-shot, and
         // leaving it set would re-raise this error on every list refresh.
         if (entries.length > 0) {
-          setError(t.reportNotFound);
+          setNotice({ title: t.dialog.somethingWrong, body: t.reportNotFound });
         }
         onOpened();
         return;
@@ -81,21 +166,24 @@ export function ReportsView(props: {
       api
         .loadReport(target)
         .then(setReport)
-        .catch((e) => setError(String(e)))
+        .catch(actionFailed)
         .finally(() => {
           setLoadingId(null);
           onOpened();
         });
     }
+    // deliberate: the deep-link runs once per openId/entries change; the
+    // copy deps would re-run a finished deep-link on a language switch
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openId, entries]);
 
   const openReport = (id: string) => {
     setLoadingId(id);
-    setError(null);
+    setNotice(null);
     api
       .loadReport(id)
       .then(setReport)
-      .catch((e) => setError(String(e)))
+      .catch(actionFailed)
       .finally(() => setLoadingId(null));
   };
 
@@ -107,7 +195,7 @@ export function ReportsView(props: {
       onDeleted?.(id);
       refresh();
     } catch (e) {
-      setError(String(e));
+      actionFailed(e);
     }
   };
 
@@ -119,49 +207,64 @@ export function ReportsView(props: {
       onDeletedAll?.(ids);
       refresh();
     } catch (e) {
-      setError(String(e));
+      actionFailed(e);
     }
   };
 
   const openRootFolder = async () => {
     try {
-      const any = entries?.[0];
-      if (!any) return;
-      const p = await api.sessionFolder(any.id);
-      const idx = p.lastIndexOf("\\");
-      if (idx <= 0) return; // no parent separator — never open a bogus path
-      const root = p.substring(0, idx);
+      // the ENGINE names the sessions root - no path string surgery in
+      // the UI (the old lastIndexOf("\") derivation assumed a flat
+      // layout). The buttons render only with saved sessions, but the
+      // engine names the folder regardless.
+      const root = await api.sessionsRoot();
       if (!root) return;
       await api.openPath(root);
     } catch (e) {
-      setError(String(e));
+      actionFailed(e);
     }
   };
+
+  // one modal surface, app-wide: when the App-level dialog (gameloop
+  // closed, an advice, an error) opens while OUR delete confirmation is
+  // up, two overlays stack and one Escape keydown closes BOTH. App
+  // broadcasts APP_DIALOG_OPEN_EVENT for exactly this class of moment -
+  // our confirmation yields (the delete is re-askable, the pushed dialog
+  // is not). No state is destroyed: closing the confirm is a plain cancel.
+  useEffect(() => {
+    if (!confirmDelete && !confirmDeleteAll) return;
+    const onAppDialog = () => {
+      setConfirmDelete(null);
+      setConfirmDeleteAll(false);
+    };
+    window.addEventListener(APP_DIALOG_OPEN_EVENT, onAppDialog);
+    return () => window.removeEventListener(APP_DIALOG_OPEN_EVENT, onAppDialog);
+  }, [confirmDelete, confirmDeleteAll]);
 
   // ---- report reader ------------------------------------------------
   if (report) {
     const meta = outcomeMeta[report.outcome] ?? outcomeMeta.partial;
-    // findings carry keys — translate; fall back to the backend's English text
+    // findings carry keys –” translate; fall back to the backend's English text
     return (
       <div className="reports">
-        <button className="reports-back" onClick={() => setReport(null)}>
-          <ChevronLeft size={16} />
+        <button className="focus-ring-inset back-btn" onClick={() => setReport(null)}>
+          <ArrowLeft size={16} />
           {t.allSessions}
         </button>
 
-        <div className="report-head">
+        <div className="card report-head">
           <div className="report-head-title">
             <h2>{t.sessionReport}</h2>
             <p>
-              {report.date} · {fmtDur(report.duration_sec)} · {report.samples} {t.samples}
+              {report.date} · {fmtListDur(report.duration_sec, { m: t.minUnit, s: t.secUnit })} · {report.samples} {t.samples}
             </p>
           </div>
-          <div className={`report-badge badge-${meta.tone}`}>
+          <div className={`badge report-badge badge-${meta.tone}`}>
             {report.lag_spikes > 0 ? t.spikeCount(report.lag_spikes) : meta.label}
           </div>
         </div>
 
-        {/* findings — translated from engine keys */}
+        {/* findings –” translated from engine keys */}
         {report.findings.length > 0 ? (
           <section className="report-section">
             <h3>{t.whatWeFound}</h3>
@@ -175,6 +278,7 @@ export function ReportsView(props: {
                   fix={copy.fix}
                   severity={f.severity}
                   fixLabel={t.fixLabel}
+                  icon={diagnosisIcon(f.key)}
                 />
               );
             })}
@@ -190,27 +294,51 @@ export function ReportsView(props: {
           </section>
         )}
 
-        {/* key moments — composed in the user's language from raw facts */}
+        {/* key moments –” composed in the user's language from raw facts,
+            behind the same toggle as the monitor feed */}
         <section className="report-section">
           <h3>{t.keyMoments}</h3>
-          <ul className="report-moments">
-            {report.highlights.map((h, i) => {
-              const base = t.highlights[h.kind] ?? h.kind;
-              const clock = h.clock ? ` (${h.clock})` : "";
-              const dur = h.dur_sec ? ` — ${Math.round(h.dur_sec)}s` : "";
-              return <li key={i}>{`${base}${dur}${clock}`}</li>;
-            })}
-          </ul>
+          <button
+            type="button"
+            className="focus-ring feed-toggle"
+            aria-expanded={momentsOpen}
+            onClick={() => setMomentsOpen(!momentsOpen)}
+          >
+            <ChevronDown size={14} />
+            {momentsOpen ? t.hideEventLog : t.showEventLog}
+          </button>
+          {momentsOpen ? (
+            <ul className="card report-moments">
+              {report.highlights.map((h, i) => {
+                const base = t.highlights[h.kind] ?? h.kind;
+                // empty clocks ride summary entries (nothing happened at a
+                // time); live ones follow the OS convention like the feed
+                const clock = h.clock ? ` (${formatClockTime(h.clock, hour12 ?? false, lang)})` : "";
+                const dur = h.dur_sec ? ` - ${fmtListDur(Math.round(h.dur_sec), { m: t.minUnit, s: t.secUnit })}` : "";
+                const tone = highlightTone(h.kind);
+                return (
+                  <li key={i} className={tone === "" ? undefined : tone}>
+                    {`${base}${dur}${clock}`}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
         </section>
 
-        {/* metrics in plain language */}
+        {/* metrics in plain language –” composed from machine keys + numbers */}
         {report.metrics_summary.length > 0 ? (
           <section className="report-section">
             <h3>{t.theNumbers}</h3>
-            <ul className="report-metrics">
-              {report.metrics_summary.map((m, i) => (
-                <li key={i}>{m}</li>
-              ))}
+            <ul className="card report-metrics">
+              {report.metrics_summary.map((m, i) => {
+                const fmt = t.metrics[m.key];
+                return (
+                  <li key={i}>
+                    {fmt ? fmt(Math.round(m.value)) : `${m.key}: ${m.value}`}
+                  </li>
+                );
+              })}
             </ul>
           </section>
         ) : null}
@@ -220,9 +348,12 @@ export function ReportsView(props: {
             label={t.openReportFile}
             icon={<FileText size={15} />}
             variant="ghost"
-            onClick={() => {
-              void api.openPath(report.raw_path);
-            }}
+              onClick={() => {
+                // open the report file externally — an action, so a
+                // failure lands in the notice dialog (never an unhandled
+                // rejection leaving the user with a silently dead button)
+                api.openPath(report.raw_path).catch(actionFailed);
+              }}
           />
         </div>
       </div>
@@ -236,9 +367,17 @@ export function ReportsView(props: {
         <h2 className="reports-title">{t.sessions}</h2>
         <Hint text={t.sessionsHint} />
       </div>
-      {error ? <div className="reports-error">{error}</div> : null}
-      {entries === null ? (
-        <EmptyState icon={<Gauge size={18} />} title={t.loadingSessions} hint="" />
+      {loadFailed ? (
+        // the LIST failed to load: a page state with a retry (never a
+        // modal - the one surface stays free for action failures), same
+        // shape as SystemView's honest error state
+        <EmptyState
+          icon={<FileWarning size={18} />}
+          title={t.dialog.somethingWrong}
+          hint={loadFailed}
+        />
+      ) : entries === null ? (
+        <EmptyState icon={<RefreshCw size={20} />} title={t.loadingSessions} hint="" spin />
       ) : entries.length === 0 ? (
         <EmptyState
           icon={<FileWarning size={18} />}
@@ -246,53 +385,83 @@ export function ReportsView(props: {
           hint={t.noSessionsHint}
         />
       ) : (
-        <ul className="session-list">
-          {entries.map((e) => {
-            const meta = outcomeMeta[e.outcome] ?? outcomeMeta.partial;
-            return (
-              <li
-                key={e.id}
-                className={loadingId === e.id ? "is-loading" : ""}
-                onClick={() => openReport(e.id)}
-              >
-                <span className={`sl-icon sl-icon-${meta.tone}`}>
-                  {meta.tone === "ok" ? (
-                    <CheckCircle2 size={17} />
-                  ) : meta.tone === "bad" ? (
-                    <AlertTriangle size={17} />
-                  ) : (
-                    <Clock size={17} />
-                  )}
-                </span>
-                <span className="sl-main">
-                  <span className="sl-date">{e.date}</span>
-                  <span className="sl-sub">
-                    {fmtDur(e.duration_sec)} · {e.samples} {t.samples}
+        <>
+          {/* one-glance totals over the saved sessions: how many, and how
+              many had issues (spikes or an issue/laggy outcome — a partial
+              scan is interrupted, not an issue, so it stays out) */}
+          <div className="card totals">
+            <div className="total">
+              <div className="total-num num">{entries.length}</div>
+              <div className="total-label">{t.reportTotalSessions}</div>
+            </div>
+            <div className="total">
+              <div className="total-num num total-warn">
+                {
+                  entries.filter(
+                    (e) =>
+                      e.lag_spikes > 0 || e.outcome === "issues" || e.outcome === "laggy",
+                  ).length
+                }
+              </div>
+              <div className="total-label">{t.reportTotalIssues}</div>
+            </div>
+          </div>
+          <ul className="card session-list">
+            {entries.map((e) => {
+              const meta = outcomeMeta[e.outcome] ?? outcomeMeta.partial;
+              return (
+                <li key={e.id} className={loadingId === e.id ? "is-loading" : ""}>
+                  {/* accessible row: a dedicated open button plus a delete
+                      button, never nested interactives inside a clickable li */}
+                  <button
+                    type="button"
+                    className="focus-ring-inset sl-open"
+                    aria-label={`${e.date}, ${meta.label}`}
+                    onClick={() => openReport(e.id)}
+                  >
+                    <span className={`sl-icon sl-icon-${meta.tone}`}>
+                      {meta.tone === "ok" ? (
+                        <CheckCircle2 size={17} />
+                      ) : meta.tone === "bad" ? (
+                        <AlertTriangle size={17} />
+                      ) : (
+                        <Clock size={17} />
+                      )}
+                    </span>
+                    <span className="sl-main">
+                      <span className="sl-date">{e.date}</span>
+                      <span className="sl-sub">
+                        {fmtListDur(e.duration_sec, { m: t.minUnit, s: t.secUnit })} · {e.samples} {t.samples}
+                      </span>
+                    </span>
+                    <span className={`badge sl-badge sl-badge-${meta.tone}`}>
+                      {e.lag_spikes > 0 ? t.spikeCount(e.lag_spikes) : meta.label}
+                    </span>
+                  </button>
+                  <span className="sl-actions">
+                    <Tip text={t.deleteSession}>
+                      <button
+                        type="button"
+                        className="focus-ring-inset row-act sl-act sl-act-danger"
+                        aria-label={t.deleteSession}
+                        onClick={() => setConfirmDelete(e.id)}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </Tip>
                   </span>
-                </span>
-                <span className={`sl-badge sl-badge-${meta.tone}`}>
-                  {e.lag_spikes > 0 ? t.spikeCount(e.lag_spikes) : meta.label}
-                </span>
-                <span className="sl-actions">
-                  <Tip text={t.deleteSession}>
-                    <button
-                      className="sl-act sl-act-danger"
-                      onClick={(ev) => {
-                        ev.stopPropagation();
-                        setConfirmDelete(e.id);
-                      }}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </Tip>
-                </span>
-              </li>
-            );
-          })}
-        </ul>
+                </li>
+              );
+            })}
+          </ul>
+        </>
       )}
 
-      {/* one global folder button at the bottom of the sessions list */}
+      {/* one global folder button at the bottom of the sessions list -
+          shown ONLY with saved sessions (a fresh user meets the empty
+          state, not action buttons over an empty folder). The engine
+          still names the root itself: no path string surgery here, and
+          the button never depends on a session existing to derive it */}
       {entries && entries.length > 0 ? (
         <div className="reports-actions">
           <Button
@@ -312,7 +481,7 @@ export function ReportsView(props: {
         </div>
       ) : null}
 
-      {/* delete confirmation — the unified Dialog component */}
+      {/* delete confirmation –” the unified Dialog component */}
       {confirmDelete ? (
         <Dialog
           title={t.dialog.deleteTitle}
@@ -321,7 +490,6 @@ export function ReportsView(props: {
           danger
           confirmLabel={t.dialog.delete}
           cancelLabel={t.dialog.cancel}
-          okLabel={t.dialog.ok}
           onConfirm={() => {
             void removeSession(confirmDelete);
           }}
@@ -329,7 +497,7 @@ export function ReportsView(props: {
         />
       ) : null}
 
-      {/* delete-all confirmation — same Dialog, dynamic count in the body */}
+      {/* delete-all confirmation –” same Dialog, dynamic count in the body */}
       {confirmDeleteAll ? (
         <Dialog
           title={t.dialog.deleteAllTitle}
@@ -338,13 +506,43 @@ export function ReportsView(props: {
           danger
           confirmLabel={t.dialog.delete}
           cancelLabel={t.dialog.cancel}
-          okLabel={t.dialog.ok}
           onConfirm={() => {
             void removeAllSessions();
           }}
           onClose={() => setConfirmDeleteAll(false)}
         />
       ) : null}
+
+      {/* action failure (open report / delete / open folder) - the
+          unified Dialog, exactly like the Tools tab's failed-write
+          notice: the user asked for something and it did not happen */}
+      {notice ? (
+        <Dialog
+          title={notice.title}
+          body={notice.body}
+          kind="notice"
+          okLabel={t.dialog.ok}
+          onClose={() => setNotice(null)}
+        />
+      ) : null}
+
+      {/* the notice yields to the app-level dialog, same as the confirms
+          above - one modal surface, one Escape closing one thing */}
+      <NoticeYield notice={notice} setNotice={setNotice} />
     </div>
   );
+}
+
+/** the APP_DIALOG_OPEN_EVENT subscription for the notice (a tiny
+ *  component so the effect's deps stay honest without dragging the whole
+ *  view into it) */
+function NoticeYield(props: { notice: Notice | null; setNotice: (v: Notice | null) => void }) {
+  const { notice, setNotice } = props;
+  useEffect(() => {
+    if (!notice) return;
+    const onAppDialog = () => setNotice(null);
+    window.addEventListener(APP_DIALOG_OPEN_EVENT, onAppDialog);
+    return () => window.removeEventListener(APP_DIALOG_OPEN_EVENT, onAppDialog);
+  }, [notice, setNotice]);
+  return null;
 }

@@ -1,12 +1,18 @@
 // UpdateModal.tsx — the update dialog: offer → download (progress, cancellable)
 // → verified success (open folder) → failure (retry). Four states, one surface.
+// Own overlay + trap (a second structural root beside Dialog); the App shows
+// only one visible surface at a time via `suspended`. Offer pins the dialog
+// (no click-outside) and autofocuses Download: a deliberate exception to the
+// safe-side rule, the offer IS the point here, not a destructive confirm.
 // Scope contract (engine/update.rs): no self-replace, no restart — the most
 // this modal does is put a VERIFIED file next to the user and open its folder.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { FolderOpen, ShieldCheck, TriangleAlert } from "lucide-react";
-import { api, type UpdateInfo } from "../bridge";
+import { api, saveDialog, type UpdateInfo } from "../bridge";
 import { useLang } from "../i18n";
+import { errorDialog } from "../errors";
+import { formatSweepBytes } from "../views/tools/summary";
 
 type Phase =
   | { kind: "offer" }
@@ -14,22 +20,33 @@ type Phase =
   | { kind: "done"; path: string }
   | { kind: "failed"; reason: string };
 
-function fmtMB(bytes: number): string {
-  const mb = bytes / (1024 * 1024);
-  return mb >= 10 ? `${mb.toFixed(0)}` : `${mb.toFixed(1)}`;
-}
+/** download progress size uses the shared sweep byte formatter
+    (GB above 1 GiB, MB below) soMB/GB shapes never drift between
+    the update modal and the storage sweep. */
 
 export function UpdateModal(props: {
   info: UpdateInfo;
   onClose: () => void;
+  /** reports download activity to the shell (the exit confirm needs it) */
+  onDownloadingChange?: (active: boolean) => void;
+  /** hidden but mounted under the exit confirm: keeps the download alive
+      (unmounting would cancel it) while hiding the offer/progress UI */
+  suspended?: boolean;
 }) {
-  const { info, onClose } = props;
+  const { info, onClose, onDownloadingChange, suspended } = props;
   const { t } = useLang();
+  // true while the offer's Download action is in flight (the OS save
+  // dialog does not block the WebView — without the gate a second click
+  // opened a second dialog and raced two downloads)
   const [phase, setPhase] = useState<Phase>({ kind: "offer" });
+  const [offerBusy, setOfferBusy] = useState(false);
   // closes exactly once: Escape-during-download closes the modal, then the
   // cancelled download's promise rejects LATER and would call onClose again
   // (on an unmounted component) — the ref keeps the second call a no-op
   const closedRef = useRef(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const bodyId = useId();
   const close = () => {
     if (closedRef.current) return;
     closedRef.current = true;
@@ -37,8 +54,11 @@ export function UpdateModal(props: {
   };
 
   // Escape closes the offer; while downloading it CANCELS (closing the modal
-  // mid-download must never leave an orphaned stream — cancel kills it)
+  // mid-download must never leave an orphaned stream — cancel kills it).
+  // Suspended (under the exit confirm) the modal owns no keys: Escape
+  // belongs to the confirm alone, or it would cancel the download behind it.
   useEffect(() => {
+    if (suspended) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         if (phase.kind === "downloading") {
@@ -49,27 +69,91 @@ export function UpdateModal(props: {
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose, phase.kind]);
+    // close is a stable-once wrapper (closedRef guards the double call);
+    // re-running the effect on its identity would re-arm a fired Escape
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onClose, phase.kind, suspended]);
+
+  // focus trap: same contract as Dialog (buttons, links, inputs,
+  // tabindex), a keyboard user must never Tab out of the update modal
+  // into the dead page behind it.
+  useEffect(() => {
+    if (suspended) return;
+    const onTab = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const box = boxRef.current;
+      if (!box) return;
+      const focusables = box.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), a[href], input, [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onTab);
+    return () => document.removeEventListener("keydown", onTab);
+  }, [suspended]);
+
+  // report download activity to the shell (ref-stable callback from App)
+  useEffect(() => {
+    onDownloadingChange?.(phase.kind === "downloading");
+  }, [phase.kind, onDownloadingChange]);
+
+  // UNMOUNT mid-download = the same orphan the Escape path guards against:
+  // App can swap this modal out for the advice/error dialog while the
+  // stream runs (gameloop_closed push, a one-shot advice). The component
+  // dies, but the engine-side download keeps streaming — cancel it here,
+  // exactly like Escape does. App-level re-mounts start a fresh offer.
+  useEffect(() => {
+    return () => {
+      if (closedRef.current) return; // an explicit close already cancelled
+      // a download in flight when the modal vanished without a click:
+      // the engine's cancel is idempotent, so calling it whenever a
+      // downloading phase was live is safe (no download = no-op)
+      if (phase.kind === "downloading") {
+        void api.cancelUpdateDownload();
+      }
+    };
+    // phase is the only reactive input and it IS the dep — no directive
+    // needed; the cleanup intentionally reads the phase from THIS closure
+  }, [phase.kind]);
 
   const startDownload = async () => {
-    // the Windows save dialog (official plugin): the user picks the location,
-    // the official asset name comes pre-filled
-    const { save } = await import("@tauri-apps/plugin-dialog");
-    const dest = await save({
-      defaultPath: info.asset_name,
-      filters: [{ name: "Application", extensions: ["exe"] }],
-    });
-    if (!dest) return; // save dialog cancelled — back to the offer state
-
-    setPhase({ kind: "downloading", pct: 0, mb: "0.0" });
+    // one flight at a time: the OS save dialog does NOT block the WebView,
+    // so a second click while it is open would open a second dialog and
+    // race two downloads. The engine refuses the second registration, but
+    // the UI must not even try (the same busy pattern every other button
+    // in the app uses).
+    if (offerBusy) return;
+    setOfferBusy(true);
     try {
+      // the Windows save dialog (official plugin, through the bridge): the
+      // user picks the location, the official asset name comes pre-filled
+      const dest = await saveDialog({
+        defaultPath: info.asset_name,
+        filters: [{ name: t.updateExeFilter, extensions: ["exe"] }],
+      });
+      if (!dest) return; // save dialog cancelled — back to the offer state
+      // the modal may have been closed (Escape) while the OS dialog was
+      // up: starting a download with no attached UI would orphan the
+      // stream — same guard the failure branch uses
+      if (closedRef.current) return;
+
+      setPhase({ kind: "downloading", pct: 0, mb: formatSweepBytes(0) });
       const finalPath = await api.downloadUpdate(info, dest, (ev) => {
         if (ev.event === "progress") {
           const pct = ev.total > 0 ? Math.round((ev.downloaded / ev.total) * 100) : 0;
           setPhase({
             kind: "downloading",
             pct,
-            mb: fmtMB(ev.downloaded),
+            mb: formatSweepBytes(ev.downloaded),
           });
         }
         // done/failed also arrive via the command's own return — handled below
@@ -87,6 +171,12 @@ export function UpdateModal(props: {
       if (!closedRef.current) {
         setPhase({ kind: "failed", reason });
       }
+    } finally {
+      // the busy gate covers the whole offer→save-dialog→download handoff;
+      // once a phase transition happened (downloading/done/failed) the
+      // button is gone anyway — only a cancelled save dialog lands back on
+      // the offer, and it re-opens the gate here
+      setOfferBusy(false);
     }
   };
 
@@ -97,9 +187,15 @@ export function UpdateModal(props: {
 
   // ---- render per phase -----------------------------------------------
 
+  // suspended under the exit confirm: mounted (so the download survives)
+  // but painting nothing, with keys already yielded above
+  if (suspended) return null;
+
   let title = t.updateAvailableTitle;
-  let actions: React.ReactNode = null;
-  let body: React.ReactNode = null;
+  // declared with a definite null and reassigned in every branch below —
+  // the initializers exist for type widening, not as values anyone reads
+  let actions: React.ReactNode;
+  let body: React.ReactNode;
 
   if (phase.kind === "offer") {
     body = (
@@ -114,12 +210,13 @@ export function UpdateModal(props: {
     );
     actions = (
       <>
-        <button className="btn btn-md btn-ghost" onClick={close}>
+        <button className="focus-ring btn btn-md btn-ghost" onClick={close}>
           {t.updateClose}
         </button>
         <button
-          className="btn btn-md btn-primary"
+          className="focus-ring btn btn-md btn-primary"
           autoFocus
+          disabled={offerBusy}
           onClick={() => void startDownload()}
         >
           {t.updateDownload}
@@ -130,16 +227,16 @@ export function UpdateModal(props: {
     title = t.updateDownloading;
     body = (
       <div className="um-body">
-        <div className="um-progress">
-          <div className="um-progress-fill" style={{ width: `${phase.pct}%` }} />
+        <div className="progress">
+          <div className="progress-fill" style={{ width: `${phase.pct}%` }} />
         </div>
         <div className="um-progress-text num">
-          {phase.pct}% · {phase.mb} MB
+          {phase.pct}% · {phase.mb}
         </div>
       </div>
     );
     actions = (
-      <button className="btn btn-md btn-ghost" onClick={cancel}>
+      <button className="focus-ring btn btn-md btn-ghost" onClick={cancel}>
         {t.updateCancel}
       </button>
     );
@@ -158,11 +255,11 @@ export function UpdateModal(props: {
     );
     actions = (
       <>
-        <button className="btn btn-md btn-ghost" onClick={close}>
+        <button className="focus-ring btn btn-md btn-ghost" onClick={close}>
           {t.updateOk}
         </button>
         <button
-          className="btn btn-md btn-primary"
+          className="focus-ring btn btn-md btn-primary"
           onClick={() => void api.openDownloadFolder(phase.path)}
         >
           <FolderOpen size={14} />
@@ -172,20 +269,36 @@ export function UpdateModal(props: {
     );
   } else {
     title = t.updateFailedTitle;
+    // known backend codes get their locale copy, novel failures get the
+    // localized unknown-error body with the raw message as technical line
+    const failBody = errorDialog(
+      phase.reason,
+      t.errors,
+      {
+        somethingWrong: t.dialog.somethingWrong,
+        scanNeedsGame: t.dialog.scanNeedsGame,
+        scanNeedsGameBody: t.dialog.scanNeedsGameBody,
+        unknownErrorBody: t.dialog.unknownErrorBody,
+      },
+    ).body;
     body = (
       <div className="um-body">
         <div className="um-fail">
           <TriangleAlert size={16} />
-          <span>{phase.reason}</span>
+          <span>{failBody}</span>
         </div>
       </div>
     );
     actions = (
       <>
-        <button className="btn btn-md btn-ghost" onClick={close}>
+        <button className="focus-ring btn btn-md btn-ghost" onClick={close}>
           {t.updateClose}
         </button>
-        <button className="btn btn-md btn-primary" onClick={() => void startDownload()}>
+        <button
+          className="focus-ring btn btn-md btn-primary"
+          disabled={offerBusy}
+          onClick={() => void startDownload()}
+        >
           {t.updateRetry}
         </button>
       </>
@@ -194,9 +307,16 @@ export function UpdateModal(props: {
 
   return (
     <div className="dialog-overlay" onClick={(e) => e.stopPropagation()}>
-      <div className="dialog-box um-box" role="alertdialog" aria-modal="true">
-        <h3 className="dialog-title">{title}</h3>
-        {body}
+      <div
+        ref={boxRef}
+        className="dialog-box um-box"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={bodyId}
+      >
+        <h3 id={titleId} className="dialog-title">{title}</h3>
+        <div id={bodyId}>{body}</div>
         <div className="dialog-actions">{actions}</div>
       </div>
     </div>

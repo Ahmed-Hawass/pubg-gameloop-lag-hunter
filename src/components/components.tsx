@@ -2,10 +2,36 @@
 // Every screen is assembled ONLY from these. No placeholders — data-driven only.
 // ALL icons come from lucide-react — zero hand-drawn SVGs anywhere.
 
-import { useEffect, useState, useRef, type ReactNode } from "react";
+import { useEffect, useId, useState, useRef, type FocusEvent as ReactFocusEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Check, FileText, Info, X } from "lucide-react";
+import { AlertTriangle, Cpu, Database, Gauge, Image, Info, Layers, Lightbulb, MemoryStick, Thermometer, X, Zap } from "lucide-react";
 import type { CardSeverity } from "../bridge";
+
+/** one fitting glyph per diagnosis key (verified in the engine's key
+    set): unknown or future keys fall back to the severity triangle,
+    never a blank title. */
+export function diagnosisIcon(key: string): ReactNode {
+  switch (key) {
+    case "disk_wait":
+      return <Database size={18} aria-hidden="true" />;
+    case "cpu_busy":
+      return <Cpu size={18} aria-hidden="true" />;
+    case "cpu_throttle":
+      return <Thermometer size={18} aria-hidden="true" />;
+    case "mem_low":
+      return <MemoryStick size={18} aria-hidden="true" />;
+    case "paging_churn":
+      return <Layers size={18} aria-hidden="true" />;
+    case "gpu_wake":
+      return <Zap size={18} aria-hidden="true" />;
+    case "scene_hitch":
+      return <Image size={18} aria-hidden="true" />;
+    case "gpu_busy":
+      return <Gauge size={18} aria-hidden="true" />;
+    default:
+      return <AlertTriangle size={18} aria-hidden="true" />;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Button — every action in the app
@@ -22,6 +48,7 @@ export function Button(props: {
 }) {
   const { label, icon, onClick, variant = "primary", size = "md", disabled, className } = props;
   const cls = [
+    "focus-ring",
     "btn",
     `btn-${variant}`,
     `btn-${size}`,
@@ -31,122 +58,10 @@ export function Button(props: {
     .filter(Boolean)
     .join(" ");
   return (
-    <button className={cls} onClick={onClick} disabled={disabled}>
+    <button type="button" className={cls} onClick={onClick} disabled={disabled}>
       {icon}
       <span>{label}</span>
     </button>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// MetricCard — labeled meter with real sparkline from engine history.
-// A small corner "?" tooltip explains what this metric means.
-// ---------------------------------------------------------------------------
-export function MetricCard(props: {
-  label: string;
-  icon: ReactNode;
-  value: number | null;
-  /** 0-100 history, newest last; null history = dim "no data" state */
-  history: number[] | null;
-  /** what this metric measures — shown as a corner tooltip */
-  hint?: string;
-}) {
-  const { label, icon, value, history, hint } = props;
-  const dim = value === null || history === null;
-  const v = value ?? 0;
-  const tone = v >= 85 ? "danger" : v >= 60 ? "warn" : "ok";
-  return (
-    <div className={`metric ${dim ? "dim" : ""}`}>
-      <div className="metric-top">
-        <div className={`metric-name metric-name-${dim ? "off" : tone}`}>
-          {icon}
-          {label}
-        </div>
-        <div className="metric-head-right">
-          {hint ? <MetricHint text={hint} /> : null}
-          <div className="metric-val num">{dim ? "--" : `${v}%`}</div>
-        </div>
-      </div>
-      <div className="bar-track">
-        {/* clamped like the Top Processes rows: a >100 reading must never
-            overflow its track (the numeric value beside it stays truthful) */}
-        <div className={`bar-fill bar-${tone}`} style={{ width: dim ? 0 : `${Math.min(100, v)}%` }} />
-      </div>
-      <Sparkline values={history} dim={dim} />
-    </div>
-  );
-}
-
-/** Sparkline drawn from real history — no fake data. */
-function Sparkline(props: { values: number[] | null; dim: boolean }) {
-  const { values, dim } = props;
-  if (dim || !values || values.length < 2) {
-    return (
-      <svg className="spark" viewBox="0 0 100 22" preserveAspectRatio="none">
-        <polyline points="0,11 100,11" fill="none" stroke="var(--text-3)" strokeWidth="1.4" strokeDasharray="3 4" />
-      </svg>
-    );
-  }
-  const w = 100;
-  const h = 22;
-  const step = w / (values.length - 1);
-  const y = (v: number) => h - 2 - (v / 100) * (h - 4);
-  const pts = values.map((v, i) => `${(i * step).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
-  return (
-    <svg className="spark" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
-      <polyline points={pts} fill="none" stroke="var(--primary)" strokeWidth="1.6" opacity="0.85" />
-    </svg>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Timeline — session progress + real spike markers from engine events
-// ---------------------------------------------------------------------------
-export interface SpikeMarkView {
-  offsetMs: number;
-  kind: string;
-}
-
-export function Timeline(props: {
-  elapsedSec: number;
-  autoStopSec: number | null;
-  spikes: SpikeMarkView[];
-  hasData: boolean;
-  /** translates machine event kinds (e.g. "disk_queue") for spike tooltips;
-   *  falls back to the raw key when the locale lacks it */
-  kindLabel: (kind: string) => string;
-  /** the head label for the auto-stop target ("Auto-stop" / "Session duration") */
-  headLabel: string;
-}) {
-  const { elapsedSec, autoStopSec, spikes, hasData, kindLabel, headLabel } = props;
-  const total = autoStopSec ?? Math.max(elapsedSec, 60);
-  const pct = Math.min(100, (elapsedSec / Math.max(total, 1)) * 100);
-  return (
-    <div className="timeline">
-      {/* the whole timeline is LTR by design: it plots CLOCK TIME left-to-right
-          (numbers are LTR even in RTL locales); pinning it avoids the marker
-          drifting against the reading direction in Arabic */}
-      <div className="timeline-head" dir="ltr">
-        <span className="num">00:00</span>
-        <span>{headLabel}</span>
-        <span className="num">{fmtDur(elapsedSec)}</span>
-      </div>
-      <div className="timeline-track" dir="ltr">
-        {autoStopSec ? <div className="timeline-fill" style={{ width: `${pct}%` }} /> : null}
-        {hasData
-          ? spikes.map((s, i) => (
-              <Tip key={i} text={kindLabel(s.kind)}>
-                <span
-                  className="tl-marker"
-                  style={{
-                    left: `${Math.min(100, (s.offsetMs / 1000 / Math.max(total, 1)) * 100)}%`,
-                  }}
-                />
-              </Tip>
-            ))
-          : null}
-      </div>
-    </div>
   );
 }
 
@@ -159,27 +74,33 @@ export function fmtDur(sec: number) {
 }
 
 // ---------------------------------------------------------------------------
-// NoteCard — one diagnosis: title / explanation / fix (sev-aware colors)
+// NoteCard — one diagnosis: title / explanation / fix in a solid
+// highlighter fill (severity icon + card ink; the fix rides a white
+// inset box). Used by the monitor diagnoses and the report findings.
 // ---------------------------------------------------------------------------
 export function NoteCard(props: {
   title: string;
   simple: string;
   fix: string;
-  /** card severity ("high" | "medium" | "low") — drives the note/dot severity classes */
+  /** card severity ("high" | "medium" | "low") — drives the fill + icon */
   severity: CardSeverity;
   /** localized "Fix:" prefix for the fix block (e.g. "الحل:") */
-  fixLabel?: string;
+  fixLabel: string;
+  /** title glyph (the caller maps its diagnosis key; severity triangle
+      when omitted) */
+  icon?: ReactNode;
 }) {
-  const { title, simple, fix, severity, fixLabel } = props;
+  const { title, simple, fix, severity, fixLabel, icon } = props;
   return (
-    <div className={`note note-${severity}`}>
+    <div className={`card-sm note note-${severity}`}>
       <div className="note-title">
-        <span className={`note-dot note-dot-${severity}`} />
+        {icon ?? (severity === "low" ? null : <AlertTriangle size={16} aria-hidden="true" />)}
         {title}
       </div>
       <div className="note-body">{simple}</div>
-      <div className="note-fix">
-        <span className="note-fix-label">{fixLabel ?? "Fix"}</span>
+      <div className="note-fix-box">
+        <Lightbulb size={14} aria-hidden="true" />
+        <span className="note-fix-label">{fixLabel}</span>
         {fix}
       </div>
     </div>
@@ -187,13 +108,15 @@ export function NoteCard(props: {
 }
 
 // ---------------------------------------------------------------------------
-// EmptyState — friendly nothing-yet (data-driven, never fake)
+// EmptyState — friendly nothing-yet (data-driven, never fake). The
+// loading moment reuses the same panel with a spinning glyph
+// (spin=true): one specimen everywhere, titles stay per-tab copy.
 // ---------------------------------------------------------------------------
-export function EmptyState(props: { icon: ReactNode; title: string; hint: string }) {
-  const { icon, title, hint } = props;
+export function EmptyState(props: { icon: ReactNode; title: string; hint: string; spin?: boolean }) {
+  const { icon, title, hint, spin } = props;
   return (
     <div className="empty">
-      <div className="empty-ico">{icon}</div>
+      <div className={`empty-ico${spin ? " spin" : ""}`}>{icon}</div>
       <div className="empty-title">{title}</div>
       <div className="empty-hint">{hint}</div>
     </div>
@@ -201,29 +124,34 @@ export function EmptyState(props: { icon: ReactNode; title: string; hint: string
 }
 
 // ---------------------------------------------------------------------------
-// SummaryCard — post-session result: report button + instant dismiss (X)
+// IntroCard — one-shot page guidance for new users: what lives on this
+// page and what to do first (never option mechanics: those stay behind
+// each row's (?) button). Dumb surface, parents own the once-ever
+// gating. Info fill, never a severity tone; the X owns its own
+// accessible name (Tip is visual-only).
 // ---------------------------------------------------------------------------
-export function SummaryCard(props: {
+export function IntroCard(props: {
+  icon: ReactNode;
   title: string;
-  hint: string;
-  reportLabel: string;
+  body: string;
   dismissLabel: string;
-  onReport: () => void;
   onDismiss: () => void;
 }) {
-  const { title, hint, reportLabel, dismissLabel, onReport, onDismiss } = props;
+  const { icon, title, body, dismissLabel, onDismiss } = props;
   return (
-    <div className="summary">
-      <div className="summary-ico">
-        <Check size={18} strokeWidth={2.2} />
+    <div className="card-sm intro-card">
+      <span className="icon-tile intro-ico">{icon}</span>
+      <div className="intro-text">
+        <span className="intro-title">{title}</span>
+        <p>{body}</p>
       </div>
-      <div className="summary-text">
-        <h3>{title}</h3>
-        <p>{hint}</p>
-      </div>
-      <Button label={reportLabel} icon={<FileText size={14} />} variant="ghost" onClick={onReport} />
       <Tip text={dismissLabel}>
-        <button className="summary-x" onClick={onDismiss}>
+        <button
+          type="button"
+          className="card-x intro-x focus-ring"
+          aria-label={dismissLabel}
+          onClick={onDismiss}
+        >
           <X size={14} />
         </button>
       </Tip>
@@ -232,26 +160,35 @@ export function SummaryCard(props: {
 }
 
 // ---------------------------------------------------------------------------
-// Dialog — the ONE modal surface for anything that needs the user's eyes:
-// errors, confirmations, notices. Replaces every toast. Native-window feel:
-// centered, dimmed backdrop, Escape to dismiss, click-outside for notices.
+// Dialog — the one VISIBLE modal surface for anything that needs the
+// user's eyes: errors, confirmations, notices. (Structurally there are
+// two roots — this plus UpdateModal's own overlay with its own trap —
+// kept to one visible surface by yielding: only one ever shows.)
+// Replaces every toast system. Native-window feel: centered, dimmed
+// backdrop, Escape to dismiss, click-outside for notices.
 // ---------------------------------------------------------------------------
-export function Dialog(props: {
-  title: string;
-  body: string;
-  kind: "notice" | "confirm";
-  okLabel?: string;
-  confirmLabel?: string;
-  cancelLabel?: string;
-  danger?: boolean;
-  onConfirm?: () => void;
-  onClose: () => void;
-}) {
-  const { title, body, kind, okLabel, confirmLabel, cancelLabel, danger, onConfirm, onClose } = props;
+export function Dialog(
+  props: {
+    title: string;
+    body: string;
+    danger?: boolean;
+    onConfirm?: () => void;
+    onClose: () => void;
+  } & (
+    | { kind: "notice"; okLabel: string }
+    | { kind: "confirm"; confirmLabel: string; cancelLabel: string }
+  ),
+) {
+  const { title, body, kind, danger, onConfirm, onClose } = props;
+  const okLabel = props.kind === "notice" ? props.okLabel : "";
+  const confirmLabel = props.kind === "confirm" ? props.confirmLabel : "";
+  const cancelLabel = props.kind === "confirm" ? props.cancelLabel : "";
+  const titleId = useId();
+  const bodyId = useId();
 
   // focus trap: a keyboard user must never Tab out of a modal into the
-  // dead page behind it. Tab cycles between the dialog's own buttons; the
-  // initial focus stays on the first button (autoFocus below).
+  // dead page behind it. Tab cycles between the dialog's own focusables;
+  // the initial focus stays on the first button (autoFocus below).
   const boxRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -259,7 +196,9 @@ export function Dialog(props: {
       if (e.key === "Tab") {
         const box = boxRef.current;
         if (!box) return;
-        const focusables = box.querySelectorAll<HTMLElement>("button:not([disabled])");
+        const focusables = box.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        );
         if (focusables.length === 0) return;
         const first = focusables[0];
         const last = focusables[focusables.length - 1];
@@ -285,36 +224,42 @@ export function Dialog(props: {
     >
       <div
         ref={boxRef}
-        className={`dialog-box ${danger ? "dialog-danger" : ""}`}
+        className="dialog-box"
         role="alertdialog"
         aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={bodyId}
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="dialog-title">{title}</h3>
-        <p className="dialog-body">{body}</p>
+        <h3 className="dialog-title" id={titleId}>{title}</h3>
+        <p className="dialog-body" id={bodyId}>{body}</p>
         <div className="dialog-actions">
           {kind === "confirm" ? (
             <>
-              <button className="btn btn-md btn-ghost" onClick={onClose}>
-                {cancelLabel ?? "Cancel"}
+              {/* focus STARTS on the destructive choice's CANCEL: with no
+                  autofocus, focus stayed on the trigger BEHIND the modal
+                  (a WAI-ARIA violation) and Enter re-fired the delete
+                  button through the overlay. Safe side + keyboard-first. */}
+              <button className="focus-ring btn btn-md btn-ghost" onClick={onClose} autoFocus>
+                {cancelLabel}
               </button>
               <button
-                className={`btn btn-md ${danger ? "btn-danger-filled" : "btn-primary"}`}
+                className={`focus-ring btn btn-md ${danger ? "btn-danger-filled" : "btn-primary"}`}
                 onClick={() => {
                   onConfirm?.();
                   onClose();
                 }}
               >
-                {confirmLabel ?? "Confirm"}
+                {confirmLabel}
               </button>
             </>
           ) : (
             <button
-              className="btn btn-md btn-primary"
+              className="focus-ring btn btn-md btn-primary"
               onClick={onClose}
               autoFocus
             >
-              {okLabel ?? "OK"}
+              {okLabel}
             </button>
           )}
         </div>
@@ -324,34 +269,100 @@ export function Dialog(props: {
 }
 
 // ---------------------------------------------------------------------------
-// useAnchoredTooltip — the ONE tooltip-positioning brain. Tip / MetricHint /
+// useAnchoredTooltip — the ONE tooltip-positioning brain. Tip /
 // Hint all render through it: the same estimated-width clamp, the same
 // bottom-anchored portal. A positioning fix lands everywhere at once.
 // ---------------------------------------------------------------------------
 /**
  * Global signal: App dispatches it whenever the single modal surface opens
- * (toast dialog or update modal). A dialog mounting under a parked cursor
+ * (dialog or update modal). A dialog mounting under a parked cursor
  * never fires mouseleave — without this the bubble stuck above the modal
  * (and stayed after it closed) until the user hovered the trigger again.
  */
 export const MODAL_OPEN_EVENT = "laghunter:modal-open";
 
+/**
+ * Global signal for VIEW-LEVEL dialogs: App dispatches it when ITS dialog
+ * (the dialog surface) opens on top of a view's own confirm/notice dialog.
+ * The view dialog yields (closes itself) instead of stacking two overlays
+ * where one Escape keydown would close both. Deliberately a SEPARATE event
+ * from MODAL_OPEN_EVENT: a view dispatches that one for its OWN dialog,
+ * and listening to it here would close the view's dialog on its own open.
+ */
+export const APP_DIALOG_OPEN_EVENT = "laghunter:app-dialog-open";
+
+/** typed dispatchers: call these instead of constructing Events by hand,
+    so a renamed signal breaks the build instead of going silent */
+export function dispatchModalOpen(): void {
+  window.dispatchEvent(new Event(MODAL_OPEN_EVENT));
+}
+
+export function dispatchAppDialogOpen(): void {
+  window.dispatchEvent(new Event(APP_DIALOG_OPEN_EVENT));
+}
+
 function useAnchoredTooltip(ref: React.RefObject<HTMLElement | null>, text: string) {
   const [anchor, setAnchor] = useState<{ left: number; bottom: number } | null>(null);
+  const rectRef = useRef<DOMRect | null>(null);
+
+  const place = (w: number) => {
+    const r = rectRef.current;
+    if (!r || !(w > 0)) return;
+    let left = r.left + r.width / 2 - w / 2;
+    left = Math.max(12, Math.min(left, window.innerWidth - w - 12));
+    const bottom = window.innerHeight - r.top + 8;
+    setAnchor((prev) =>
+      prev !== null && Math.abs(prev.left - left) < 1 && prev.bottom === bottom
+        ? prev
+        : { left, bottom },
+    );
+  };
 
   const show = () => {
     if (!text) return; // empty tip = no tooltip (expanded sidebar labels)
     const el = ref.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    // estimate width to clamp inside the window (max 280, small margin)
+    rectRef.current = r;
+    // first paint uses an estimate so the bubble never flashes at 0,0;
+    // the mounted bubble then reports its real width and re-centers.
+    // JSDOM reports offsetWidth 0, so the estimate stands in tests.
     const estW = Math.min(280, text.length * 6.5 + 28);
-    let left = r.left + r.width / 2 - estW / 2;
-    left = Math.max(12, Math.min(left, window.innerWidth - estW - 12));
-    // bottom-anchored: the tooltip's bottom edge sits 8px above the element
-    setAnchor({ left, bottom: window.innerHeight - r.top + 8 });
+    place(estW);
   };
-  const hide = () => setAnchor(null);
+  const hide = () => {
+    rectRef.current = null;
+    setAnchor(null);
+  };
+  /** focus opens for keyboard modality only (Tab): restoring a minimized
+      window returns focus to the last control with no pointer anywhere,
+      and that synthetic focus must not resurrect a bubble nobody hovers
+      (it stuck until the next hover cycle). :focus-visible is the
+      browser's own keyboard heuristic, so real Tab users keep the tip. */
+  const showForFocus = (e: ReactFocusEvent) => {
+    const target = e.target as HTMLElement | null;
+    let keyboard: boolean;
+    try {
+      keyboard =
+        !!target &&
+        typeof target.matches === "function" &&
+        target.matches(":focus-visible");
+    } catch {
+      keyboard = false;
+    }
+    if (keyboard) show();
+  };
+  /** re-center once the mounted bubble reports its real width */
+  const adjust = (w: number) => place(w);
+
+  // invalidate on text change: the sidebar flips text between a label and
+  // "" on collapse/expand, so a stale anchor would render an orphan bubble
+  // (empty after expand, wrong label/position after collapse) or stick
+  // after the trigger moved.
+  useEffect(() => {
+    rectRef.current = null;
+    setAnchor(null);
+  }, [text]);
 
   // belt-and-suspenders: mouseleave/blur alone stick the bubble whenever a
   // hover ends WITHOUT pointer movement — a modal mounting under a parked
@@ -360,26 +371,57 @@ function useAnchoredTooltip(ref: React.RefObject<HTMLElement | null>, text: stri
   // (Press hides too — native tooltips vanish on press as well.)
   useEffect(() => {
     const hideAll = () => setAnchor(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") hideAll();
+    };
     window.addEventListener("blur", hideAll);
+    window.addEventListener("resize", hideAll);
     document.addEventListener("scroll", hideAll, true); // capture: any scroller
     document.addEventListener("pointerdown", hideAll, true); // capture: before click handlers
+    document.addEventListener("pointercancel", hideAll, true);
+    document.addEventListener("keydown", onKey, true);
     window.addEventListener(MODAL_OPEN_EVENT, hideAll);
     return () => {
       window.removeEventListener("blur", hideAll);
+      window.removeEventListener("resize", hideAll);
       document.removeEventListener("scroll", hideAll, true);
       document.removeEventListener("pointerdown", hideAll, true);
+      document.removeEventListener("pointercancel", hideAll, true);
+      document.removeEventListener("keydown", onKey, true);
       window.removeEventListener(MODAL_OPEN_EVENT, hideAll);
     };
   }, []);
 
-  return { anchor, show, hide };
+  return { anchor, show, showForFocus, hide, adjust };
 }
 
 /** The portaled tooltip bubble every anchored tooltip renders. */
-function TooltipBubble(props: { text: string; anchor: { left: number; bottom: number } }) {
-  const { text, anchor } = props;
+function TooltipBubble(props: {
+  text: string;
+  anchor: { left: number; bottom: number };
+  id?: string;
+  onMeasured?: (w: number) => void;
+}) {
+  const { text, anchor, id, onMeasured } = props;
+  const spanRef = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const w = spanRef.current?.offsetWidth ?? 0;
+    if (w > 0) onMeasured?.(w);
+    // measure once per mount: the text never changes under an open bubble
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return createPortal(
-    <span className="hint-tooltip" role="tooltip" style={{ left: anchor.left, bottom: anchor.bottom }}>
+    <span
+      ref={spanRef}
+      className="hint-tooltip"
+      role="tooltip"
+      id={id}
+      // Documented exception to the logical-property rule: `left` here is
+      // a viewport coordinate from getBoundingClientRect (already mirrored
+      // by the browser in RTL), not a layout side, so inset-inline-start
+      // would place it wrong.
+      style={{ left: anchor.left, bottom: anchor.bottom }}
+    >
       {text}
     </span>,
     document.body
@@ -394,45 +436,22 @@ function TooltipBubble(props: { text: string; anchor: { left: number; bottom: nu
 export function Tip(props: { text: string; children: ReactNode }) {
   const { text, children } = props;
   const ref = useRef<HTMLSpanElement>(null);
-  const { anchor, show, hide } = useAnchoredTooltip(ref, text);
+  const { anchor, show, showForFocus, hide, adjust } = useAnchoredTooltip(ref, text);
+  const tipId = useId();
 
   return (
     <span
       ref={ref}
       className="tip-wrap"
       onMouseEnter={show}
-      onFocus={show}
+      onFocus={(e) => showForFocus(e)}
       onMouseLeave={hide}
       onBlur={hide}
     >
       {children}
-      {anchor ? <TooltipBubble text={text} anchor={anchor} /> : null}
-    </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// MetricHint — the tiny corner tooltip inside MetricCard: the SAME Info icon
-// as the Hint button everywhere else (one hint glyph across the app), opening
-// the same portaled tooltip. Rendered by MetricCard (hint text), not callers.
-// ---------------------------------------------------------------------------
-function MetricHint(props: { text: string }) {
-  const { text } = props;
-  const ref = useRef<HTMLSpanElement>(null);
-  const { anchor, show, hide } = useAnchoredTooltip(ref, text);
-
-  return (
-    <span
-      ref={ref}
-      className="metric-hint-dot"
-      tabIndex={0}
-      onMouseEnter={show}
-      onFocus={show}
-      onMouseLeave={hide}
-      onBlur={hide}
-    >
-      <Info size={12} />
-      {anchor ? <TooltipBubble text={text} anchor={anchor} /> : null}
+      {anchor && text ? (
+        <TooltipBubble text={text} anchor={anchor} id={tipId} onMeasured={adjust} />
+      ) : null}
     </span>
   );
 }
@@ -445,21 +464,23 @@ function MetricHint(props: { text: string }) {
 export function Hint(props: { text: string }) {
   const { text } = props;
   const ref = useRef<HTMLButtonElement>(null);
-  const { anchor, show, hide } = useAnchoredTooltip(ref, text);
+  const { anchor, show, showForFocus, hide, adjust } = useAnchoredTooltip(ref, text);
+  const tipId = useId();
 
   return (
     <button
       type="button"
       ref={ref}
-      className="hint"
+      className="hint focus-ring"
       aria-label={text}
+      aria-describedby={anchor ? tipId : undefined}
       onMouseEnter={show}
-      onFocus={show}
+      onFocus={(e) => showForFocus(e)}
       onMouseLeave={hide}
       onBlur={hide}
     >
-      <Info size={13} />
-      {anchor ? <TooltipBubble text={text} anchor={anchor} /> : null}
+      <Info size={13} aria-hidden="true" />
+      {anchor ? <TooltipBubble text={text} anchor={anchor} id={tipId} onMeasured={adjust} /> : null}
     </button>
   );
 }

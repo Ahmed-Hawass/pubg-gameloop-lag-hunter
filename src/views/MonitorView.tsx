@@ -1,10 +1,18 @@
-// MonitorView.tsx — calm page: the layout is ALWAYS present (metrics, feed)
-// in a neutral resting state. Live sessions fill them with real values.
-// No status card/strip — the layout itself is the state.
+// MonitorView.tsx — three states, one per phase of a scan. The user's
+// relationship to each is different, so the page answers a different
+// question in each:
+//
+//   idle    the user is here and deciding: how long, and go
+//   running the user is AWAY and playing: one line, a clock, a stop button
+//   result  the user came back: the verdict, in two seconds of reading
+//
+// Nothing here renders a live instrument panel. The tiles measured the
+// whole machine, not the game, so they sat red during normal play and
+// taught the user to ignore red. The verdict is the only thing that
+// answers "was there lag".
 
-import { useEffect } from "react";
-import { Activity, Cpu, Gauge, HardDrive, Play, Square } from "lucide-react";
-import { Hint, Button, MetricCard, NoteCard, SummaryCard, Timeline, fmtDur } from "../components/components";
+import { Check, CircleAlert, FileText, Play, RefreshCw, Square } from "lucide-react";
+import { Button, fmtDur } from "../components/components";
 import type { StatusPayload } from "../bridge";
 import { useLang } from "../i18n";
 
@@ -15,7 +23,7 @@ export function MonitorView(props: {
   onDurationChange: (v: number) => void;
   onToggle: () => void;
   onOpenReport: () => void;
-  /** the session whose summary the user dismissed (never show it again) */
+  /** the session whose summary was dismissed (never show it again) */
   dismissedSession: string | null;
   onDismissSummary: (session: string) => void;
   /** PowerShell unavailable on this machine — limited mode */
@@ -25,7 +33,6 @@ export function MonitorView(props: {
   const { t } = useLang();
   const ui = status.ui;
   const running = status.status === "running";
-  const finished = status.status === "finished";
   const sessionId = ui?.session ?? null;
 
   const durationLabel = (secs: number) => {
@@ -38,176 +45,261 @@ export function MonitorView(props: {
     return t.minutesShort(Math.round(secs / 60));
   };
 
-  // the summary shows only while its session wasn't dismissed; auto-fades
-  const summaryAllowed =
-    finished && ui && ui.samples_count > 0 && sessionId !== null && sessionId !== dismissedSession;
-  useEffect(() => {
-    if (summaryAllowed) {
-      const timer = setTimeout(() => onDismissSummary(sessionId!), 12_000);
-      return () => clearTimeout(timer);
-    }
-  }, [summaryAllowed, sessionId, onDismissSummary]);
-
-  // live values, or the neutral resting state for every card
-  const live = running && ui;
-  const bars = ui?.bars;
-  const hist = ui?.history;
+  // The result state never auto-dismisses. It used to fade after 12s, which
+  // was right while the user stood watching the scan, and wrong here: a user
+  // returning from a half-hour session found an empty page. It now waits for
+  // an action (open the report, or start another scan).
+  const resultAllowed =
+    status.status === "finished" &&
+    ui != null &&
+    ui.samples_count > 0 &&
+    sessionId !== null &&
+    sessionId !== dismissedSession;
 
   return (
     <div className="monitor">
-      {/* controls row: Start + duration + live clock.
-          Start is always pressable — if the game isn't running, the engine
-          gate answers and App shows the explaining dialog. */}
-      <div className="controls">
-        <Button
-          label={running ? t.stop : t.startScanning}
-          icon={running ? <Square size={16} /> : <Play size={16} />}
-          variant={running ? "danger-filled" : "primary"}
-          size="lg"
-          disabled={busy || status.status === "stopping"}
-          onClick={onToggle}
+      {psLimited && !running ? (
+        <div className="bg-note" role="note">
+          <strong>{t.psLimitedTitle}:</strong> {t.psLimitedBody}
+        </div>
+      ) : null}
+
+      {resultAllowed ? (
+        <ResultState
+          lagCount={ui!.lag_count}
+          samplesCount={ui!.samples_count}
+          momentCount={ui!.diagnoses.length || ui!.spikes.length}
+          topSignal={ui!.diagnoses[0]?.key ?? null}
+          minutes={Math.round((ui!.elapsed_sec || durationSecs) / 60)}
+          onOpenReport={onOpenReport}
+          onDismiss={() => onDismissSummary(sessionId!)}
         />
-        <div className="scan-duration" role="radiogroup" aria-label={t.autoStop}>
+      ) : running ? (
+        <RunningState
+          elapsedSec={ui?.elapsed_sec ?? 0}
+          autoStopSec={ui?.auto_stop_sec ?? durationSecs}
+          samplesCount={ui?.samples_count ?? 0}
+          momentCount={ui?.diagnoses.length || ui?.spikes.length || 0}
+          onStop={onToggle}
+        />
+      ) : (
+        <IdleState
+          busy={busy}
+          status={status.status}
+          durationSecs={durationSecs}
+          durationLabel={durationLabel}
+          onDurationChange={onDurationChange}
+          onToggle={onToggle}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// idle — one centered column: the session plan. The number leads, the pills
+// sit under the number they control, the 3-step path teaches the flow, the
+// button is the decision, and one tip row closes as a quiet footnote.
+// ---------------------------------------------------------------------------
+function IdleState(props: {
+  busy: boolean;
+  status: StatusPayload["status"];
+  durationSecs: number;
+  durationLabel: (secs: number) => string;
+  onDurationChange: (v: number) => void;
+  onToggle: () => void;
+}) {
+  const { busy, status, durationSecs, durationLabel, onDurationChange, onToggle } = props;
+  const { t } = useLang();
+  const minutes = Math.max(1, Math.round(durationSecs / 60));
+  return (
+    <div className="idle-state">
+      <div className="idle-main">
+        <div className="plan-kicker">{t.scanPlanKicker}</div>
+        <div className="plan-big">
+          <span className="num">{minutes}</span>
+          <span className="plan-unit">{t.scanPlanUnit(minutes)}</span>
+        </div>
+        <div className="scan-duration plan-seg" role="radiogroup" aria-label={t.autoStop}>
           {[300, 600, 1800, 3600].map((v) => (
             <button
               key={v}
-              className={`scan-dur-btn ${durationSecs === v ? "is-active" : ""}`}
-              disabled={running}
+              className={`focus-ring-inset scan-dur-btn ${durationSecs === v ? "is-active" : ""}`}
+              role="radio"
+              aria-checked={durationSecs === v}
               onClick={() => onDurationChange(v)}
             >
               {durationLabel(v)}
             </button>
           ))}
         </div>
-        <div className="session-clock">
-          <span className="timer-label">{t.time}</span>
-          <span className="timer-val num">{fmtDur(live ? ui!.elapsed_sec : 0)}</span>
+        <div className="plan-steps">
+          <div className="step"><span className="disc" aria-hidden="true">1</span><span>{t.scanStep1}</span></div>
+          <div className="step"><span className="disc" aria-hidden="true">2</span><span>{t.scanStep2}</span></div>
+          <div className="step"><span className="disc" aria-hidden="true">3</span><span>{t.scanStep3}</span></div>
+        </div>
+        {/* the hero action rides the shared .btn materials (hover nudge,
+            press shrink, keyboard focus ring) with hero sizing on top */}
+        <button
+          type="button"
+          className={`focus-ring btn btn-primary btn-hero ${busy || status === "stopping" ? "is-disabled" : ""}`}
+          disabled={busy || status === "stopping"}
+          onClick={onToggle}
+        >
+          {/* lucide Play, filled: the whole app speaks lucide, so the hero
+              glyph does too — no bespoke SVG to maintain. fill rides the
+              button ink in both themes, stroke off. */}
+          <Play size={20} fill="currentColor" stroke="none" aria-hidden="true" />
+          <span>{t.scanIdleStart}</span>
+        </button>
+        <div className="plan-tips">
+          <div className="tip-row">
+            <span className="tip-disc" aria-hidden="true"><Check size={11} strokeWidth={3} /></span>
+            <span>{t.scanIdleCloseApps}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// running — the user is away. This screen's job is to send them back to the
+// game, not to entertain them: a clock they care about, an honest count, and
+// the one button that means something right now.
+// ---------------------------------------------------------------------------
+function RunningState(props: {
+  elapsedSec: number;
+  autoStopSec: number;
+  samplesCount: number;
+  momentCount: number;
+  onStop: () => void;
+}) {
+  const { elapsedSec, autoStopSec, samplesCount, momentCount, onStop } = props;
+  const { t } = useLang();
+  const remainingSec = Math.max(0, autoStopSec - elapsedSec);
+  const pct = autoStopSec > 0 ? Math.min(100, Math.round((elapsedSec / autoStopSec) * 100)) : 0;
+  return (
+    <div className="run-state">
+      {/* the radar: dashed rings + a conic sweep arm. Everything animated is
+          transform or opacity (compositor-only), so this costs nothing on a
+          machine that is busy running a game */}
+      <div className="run-radar" aria-hidden="true">
+        <span className="run-ring run-ring-1" />
+        <span className="run-ring run-ring-2" />
+        <span className="run-ring run-ring-3" />
+        <span className="run-sweep" />
+        <span className="run-pip run-pip-1" />
+        <span className="run-pip run-pip-2" />
+        <span className="run-pip run-pip-3" />
+        <div className="run-radar-core">
+          <span className="run-pct num">{pct}%</span>
+          <span className="run-core-k">{t.scanOfSession}</span>
         </div>
       </div>
 
-      {/* metrics — always present; neutral until live. Each card carries a
-          small corner tooltip explaining what it measures. */}
-      <div className="metrics metrics-4">
-        <MetricCard
-          label={t.cpu}
-          icon={<Cpu size={14} />}
-          value={live ? bars!.cpu : null}
-          history={live ? hist!.cpu : null}
-          hint={t.cpuHint}
-        />
-        <MetricCard
-          label={t.ram}
-          icon={<Activity size={14} />}
-          value={live ? bars!.ram : null}
-          history={live ? hist!.ram : null}
-          hint={t.ramHint}
-        />
-        <MetricCard
-          label={t.gpu}
-          icon={<Gauge size={14} />}
-          value={live ? bars!.gpu : null}
-          history={live && bars!.gpu !== null ? hist!.gpu : null}
-          hint={t.gpuHint}
-        />
-        <MetricCard
-          label={t.disk}
-          icon={<HardDrive size={14} />}
-          value={live ? bars!.disk : null}
-          history={live ? hist!.disk : null}
-          hint={t.diskHint}
-        />
+      <div className="run-msg">
+        <h2>{t.scanRunningTitle}</h2>
+        <p>{t.scanRunningBody}</p>
+      </div>
+      {/* the live question this screen answers: "can I minimize this?"
+          It lives here, not in idle, because this is where the window is
+          actually open and the doubt is real — idle can only promise it
+          in theory. */}
+      <p className="run-note">{t.scanRunningNote}</p>
+
+      {/* the three numbers the returning user actually wants, as one quiet
+          strip — no side column competing with the message */}
+      <div className="run-rail">
+        <div>
+          <div className="run-k">{t.scanElapsed}</div>
+          <div className="run-v num">{fmtDur(elapsedSec)}</div>
+        </div>
+        <div>
+          <div className="run-k">{t.scanRemainingLabel}</div>
+          <div className="run-v">{t.scanRemaining(Math.ceil(remainingSec / 60))}</div>
+        </div>
+        <div>
+          <div className="run-k">{t.scanSamples}</div>
+          <div className="run-v num">{samplesCount}</div>
+        </div>
       </div>
 
-      {/* timeline — always present */}
-      {live ? (
-        <>
-          <Timeline
-            elapsedSec={ui!.elapsed_sec}
-            autoStopSec={ui!.auto_stop_sec}
-            spikes={ui!.spikes.map((s) => ({ offsetMs: s.offset_ms, kind: s.kind }))}
-            hasData={ui!.samples_count > 0}
-            kindLabel={(k) => t.feed[k] ?? k}
-            headLabel={ui!.auto_stop_sec ? t.timelineAutoStop : t.timelineDuration}
-          />
-          <div className="timeline-hint">
-            <Hint text={t.timelineHint} />
-          </div>
-        </>
-      ) : (
-        <Timeline
-          elapsedSec={0}
-          autoStopSec={null}
-          spikes={[]}
-          hasData={false}
-          kindLabel={(k) => t.feed[k] ?? k}
-          headLabel={t.timelineDuration}
-        />
-      )}
-
-      {/* limited-mode note: PowerShell unavailable — scans still work, some
-          checks run on safe defaults. Shown once per app run (not per tick). */}
-      {psLimited ? (
-        <div className="bg-note" role="note">
-          <strong>{t.psLimitedTitle}:</strong> {t.psLimitedBody}
-        </div>
+      {momentCount > 0 ? (
+        <div className="run-moments" role="status">{t.scanMoments(momentCount)}</div>
       ) : null}
 
-      {/* activity feed — the flexible bottom block */}
-      <section className="feed">
-        <h3 className="feed-title">
-          {t.activity}
-          <Hint text={t.activityHint} />
-        </h3>
-        {live && ui!.feed.length > 0 ? (
-          <ul className="feed-list">
-            {ui!.feed.map((f, i) => (
-              // stable composite key: the feed re-renders every live tick and
-              // index keys would make React reuse the wrong rows after a shift
-              <li key={`${f.clock}-${f.kind}-${i}`} className={`feed-item feed-${f.sev}`}>
-                <span className="feed-clock num">{f.clock}</span>
-                <span className="feed-text">{t.feed[f.kind] ?? f.kind}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div className="feed-empty">
-            {live ? (ui!.game_running ? t.nothingUnusual : t.waitingGameloopFeed) : ""}
-          </div>
-        )}
-      </section>
+      {/* lucide Square, filled: the same fill-trick as the Play glyph —
+          the whole app speaks lucide, so the stop mark does too. No
+          bespoke SVG to maintain. */}
+      <Button
+        label={t.scanStop}
+        icon={<Square size={16} fill="currentColor" stroke="none" aria-hidden="true" />}
+        variant="danger-filled"
+        size="lg"
+        onClick={onStop}
+      />
+    </div>
+  );
+}
 
-      {/* confirmed diagnosis cards — only while the engine confirms them */}
-      {live && ui!.diagnoses.length > 0 ? (
-        <div className="notes">
-          {ui!.diagnoses.map((d) => {
-            const copy = t.diagnoses[d.key] ?? { title: d.title, simple: d.simple, fix: d.fix };
-            return (
-              <NoteCard
-                key={d.key}
-                title={copy.title}
-                simple={copy.simple}
-                fix={copy.fix}
-                severity={d.severity}
-                fixLabel={t.fixLabel}
-              />
-            );
-          })}
+// ---------------------------------------------------------------------------
+// result — the verdict. The state fills the whole card, never just an icon
+// edge (the rule commit 44bde31 set for every card in the app), and the
+// state quads are identical in both themes so this needs no light rules.
+// ---------------------------------------------------------------------------
+function ResultState(props: {
+  lagCount: number;
+  samplesCount: number;
+  momentCount: number;
+  topSignal: string | null;
+  minutes: number;
+  onOpenReport: () => void;
+  onDismiss: () => void;
+}) {
+  const { lagCount, samplesCount, momentCount, topSignal, minutes, onOpenReport, onDismiss } = props;
+  const { t } = useLang();
+  const lagged = lagCount > 0;
+  // the top signal is an engine key; the locale dictionary is the same one
+  // the report uses for key moments, with an honest fallback to the count
+  const signalLabel = topSignal ? (t.diagnoses[topSignal]?.title ?? null) : null;
+  return (
+    <div className="result-state">
+      <div className={`card verdict ${lagged ? "verdict-danger" : "verdict-success"}`}>
+        <span className="verdict-ico" aria-hidden="true">
+          {lagged ? <CircleAlert size={24} /> : <Check size={24} strokeWidth={2.4} />}
+        </span>
+        <div className="verdict-body">
+          <div className="verdict-head">{lagged ? t.scanResultLagTitle : t.scanResultCleanTitle}</div>
+          <div className="verdict-sub">{t.scanResultOver(minutes)}</div>
         </div>
-      ) : null}
+        <div className="verdict-num">
+          <span className="num">{lagCount}</span>
+          <span className="verdict-unit">{t.scanResultSeconds}</span>
+        </div>
+      </div>
 
-      {/* after finish — its own session's summary, never the dismissed one */}
-      {summaryAllowed ? (
-        <div className="summary-wrap">
-          <SummaryCard
-            title={ui!.lag_count > 0 ? t.spikesCaptured(ui!.lag_count) : t.sessionClean}
-            hint={t.summaryHint(ui!.samples_count)}
-            reportLabel={t.openReportBtn}
-            dismissLabel={t.dialog.cancel}
-            onReport={onOpenReport}
-            onDismiss={() => onDismissSummary(sessionId!)}
-          />
+      <div className="result-strip">
+        <div className="card-sm result-cell">
+          <div className="result-k">{t.scanSamples}</div>
+          <div className="result-v num">{samplesCount}</div>
         </div>
-      ) : null}
+        <div className="card-sm result-cell">
+          <div className="result-k">{t.scanResultMoments}</div>
+          <div className="result-v num">{momentCount}</div>
+        </div>
+        <div className="card-sm result-cell">
+          <div className="result-k">{t.scanResultTopSignal}</div>
+          <div className="result-v result-v-long">{signalLabel ?? t.scanResultNone}</div>
+        </div>
+      </div>
+
+      <div className="result-actions">
+        <Button label={t.scanResultOpenReport} icon={<FileText size={15} />} variant="primary" size="lg" onClick={onOpenReport} />
+        <Button label={t.scanResultAgain} icon={<RefreshCw size={15} />} variant="ghost" size="md" onClick={onDismiss} />
+      </div>
+
+      <p className="result-foot">{t.scanResultFootnote}</p>
     </div>
   );
 }

@@ -3,7 +3,6 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-width: min(100%, 760px);
 }
 
 .reports-title-row {
@@ -18,40 +17,15 @@
   letter-spacing: -0.01em;
 }
 
-.reports-error {
-  color: var(--danger);
-  font-size: 12.5px;
-}
+/* back button — shared .back-btn primitive, nothing page-specific left */
 
-/* back button */
-.reports-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: none;
-  border: none;
-  color: var(--text-2);
-  font: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 0;
-  align-self: flex-start;
-}
-.reports-back:hover {
-  color: var(--text-1);
-}
-
-/* report header */
+/* report header — surface comes from .card, layout only below */
 .report-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 18px 20px;
-  background: var(--elev-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
 }
 .report-head-title h2 {
   font-size: 17px;
@@ -64,23 +38,21 @@
 }
 .report-badge {
   font-size: 12px;
-  font-weight: 700;
   padding: 7px 12px;
-  border-radius: 999px;
-  flex: none;
 }
 .badge-ok {
-  background: var(--primary-dim);
-  color: var(--primary);
+  background: var(--bg-success);
+  color: var(--text-success);
 }
 .badge-bad {
-  background: var(--danger-dim);
-  color: var(--danger);
+  background: var(--bg-danger);
+  color: var(--text-danger);
 }
-/* the middle tone (issues / partial): warn, like the list badge below */
-.badge-mid {
-  background: var(--warn-dim);
-  color: var(--warn);
+/* the middle tone (issues / partial) shares the warn name with every
+   other tab: one vocabulary (ok/bad/warn) for all badges */
+.badge-warn {
+  background: var(--bg-warning);
+  color: var(--text-warning);
 }
 
 /* report sections */
@@ -103,9 +75,6 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  background: var(--elev-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
   padding: 14px 16px;
 }
 .report-moments li,
@@ -127,8 +96,13 @@
   border-radius: 50%;
   background: var(--text-3);
 }
-.report-moments li::before {
-  background: var(--danger);
+/* moment dots carry the kind severity (critical drops, warnings,
+   neutral notes): every theme pairs a readable dot with the card */
+.report-moments li.hl-bad::before {
+  background: var(--fill-danger);
+}
+.report-moments li.hl-warn::before {
+  background: var(--fill-warning);
 }
 
 .report-actions {
@@ -157,8 +131,8 @@
   gap: 6px;
   flex: none;
 }
-/* an icon-sized ghost button: the same materials as .btn-ghost (elev-3 fill,
-   border, unified hover) in the compact 28px row-action footprint */
+/* an icon-sized row action: .row-act carries the ghost materials and
+   hover, only the compact 28px footprint stays here */
 .sl-act {
   display: flex;
   align-items: center;
@@ -166,16 +140,7 @@
   width: 28px;
   height: 28px;
   border-radius: 7px;
-  border: 1px solid var(--border);
-  background: var(--elev-3);
   color: var(--text-3);
-  cursor: pointer;
-  transition: color 0.12s, border-color 0.12s, background 0.12s;
-}
-.sl-act:hover {
-  color: var(--hover-text);
-  border-color: var(--hover-border);
-  background: var(--hover-bg);
 }
 .sl-act-danger:hover {
   color: var(--danger);
@@ -195,25 +160,44 @@
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  padding: 0;
+  overflow: hidden;
 }
+/* one shared surface with dividers (not a card per row): rows flush to
+   the card edges (no inner padding gap flashing around a hovered row),
+   the delete action stays pinned at each row's end */
 .session-list li {
   display: flex;
   align-items: center;
   gap: 13px;
-  background: var(--elev-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
   padding: 13px 16px;
-  cursor: pointer;
-  transition: border-color 0.12s, background 0.12s;
+  border-block-end: 1px solid var(--border);
+  transition: background 0.12s;
+}
+.session-list li:last-child {
+  border-block-end: none;
 }
 .session-list li:hover {
-  border-color: var(--hover-border);
   background: var(--hover-bg);
 }
 .session-list li.is-loading {
   opacity: 0.5;
+}
+/* the row's open action: unstyled button filling the row, so the layout
+   stays identical while keyboard and screen-reader users get a real button */
+.sl-open {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
 }
 .sl-icon {
   display: flex;
@@ -223,7 +207,7 @@
 .sl-icon-bad {
   color: var(--danger);
 }
-.sl-icon-mid { color: var(--warn); }
+.sl-icon-warn { color: var(--warn); }
 .sl-main {
   display: flex;
   flex-direction: column;
@@ -240,21 +224,18 @@
 }
 .sl-badge {
   margin-inline-start: auto;
-  flex: none;
   font-size: 11px;
-  font-weight: 700;
   padding: 4px 10px;
-  border-radius: 999px;
 }
 .sl-badge-ok {
-  background: var(--primary-dim);
-  color: var(--primary);
+  background: var(--bg-success);
+  color: var(--text-success);
 }
 .sl-badge-bad {
-  background: var(--danger-dim);
-  color: var(--danger);
+  background: var(--bg-danger);
+  color: var(--text-danger);
 }
-.sl-badge-mid {
-  background: var(--warn-dim);
-  color: var(--warn);
+.sl-badge-warn {
+  background: var(--bg-warning);
+  color: var(--text-warning);
 }

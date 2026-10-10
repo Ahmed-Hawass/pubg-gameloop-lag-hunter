@@ -5,36 +5,35 @@
 // ALL tooltips are the app's own (Tip component) — never the OS one.
 
 import { useEffect, useState } from "react";
-import { Copy, Minus, Square, X } from "lucide-react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { Minus, PictureInPicture2, Square, X } from "lucide-react";
+import {
+  isWindowMaximized,
+  minimizeWindow,
+  onWindowResized,
+  toggleMaximizeWindow,
+} from "../bridge";
 import { Tip } from "./components";
-import { api } from "../bridge";
 import { useLang } from "../i18n";
 import appIcon from "../assets/app-icon.png";
 
-export function TitleBar() {
+export function TitleBar(props: {
+  version: string;
+  onRequestExit: () => void;
+  /** a newer release is known: a quiet dot rides the version (the
+      sidebar About dot and the heading dot stay the action sites) */
+  updateAvailable?: boolean;
+}) {
   const { t } = useLang();
-  const [version, setVersion] = useState<string>("");
+  const { version, onRequestExit, updateAvailable } = props;
   const [maximized, setMaximized] = useState(false);
-
-  // the version comes from the backend (tauri.conf.json) — one source of truth
-  useEffect(() => {
-    api
-      .getVersion()
-      .then(setVersion)
-      .catch(() => setVersion(""));
-  }, []);
 
   // track the maximized state for the toggle's tooltip and icon
   useEffect(() => {
-    const win = getCurrentWindow();
-    win
-      .isMaximized()
+    isWindowMaximized()
       .then(setMaximized)
       .catch(() => {});
-    const unlisten = win.onResized(() => {
-      win
-        .isMaximized()
+    const unlisten = onWindowResized(() => {
+      isWindowMaximized()
         .then(setMaximized)
         .catch(() => {});
     });
@@ -45,7 +44,15 @@ export function TitleBar() {
 
   return (
     <div className="titlebar">
-      <div className="titlebar-left" data-tauri-drag-region>
+      {/* double-click the drag region toggles maximize (OS convention);
+          the controls are a separate block, never inside the region */}
+      <div
+        className="titlebar-left"
+        data-tauri-drag-region
+        onDoubleClick={() => {
+          void toggleMaximizeWindow();
+        }}
+      >
         <img
           className="titlebar-icon"
           src={appIcon}
@@ -62,12 +69,24 @@ export function TitleBar() {
             v{version}
           </span>
         ) : null}
+        {updateAvailable ? (
+          <span
+            className="titlebar-dot"
+            role="status"
+            aria-label={t.updateAvailableTitle}
+          />
+        ) : null}
       </div>
       <div className="win-controls">
+        {/* icon-only buttons carry their accessible name: the tooltip
+            paints on hover only, so without aria-labels the window
+            controls are unnamed for screen readers and keyboard users */}
         <Tip text={t.minimize}>
           <button
+            className="focus-ring-inset"
+            aria-label={t.minimize}
             onClick={() => {
-              void getCurrentWindow().minimize();
+              void minimizeWindow();
             }}
           >
             <Minus size={13} />
@@ -75,18 +94,21 @@ export function TitleBar() {
         </Tip>
         <Tip text={maximized ? t.restore : t.maximize}>
           <button
+            className="focus-ring-inset"
+            aria-label={maximized ? t.restore : t.maximize}
             onClick={() => {
-              void getCurrentWindow().toggleMaximize();
+              void toggleMaximizeWindow();
             }}
           >
-            {maximized ? <Copy size={11} /> : <Square size={11} />}
+            {maximized ? <PictureInPicture2 size={11} /> : <Square size={11} />}
           </button>
         </Tip>
         <Tip text={t.close}>
           <button
-            className="close"
+            className="focus-ring-inset close"
+            aria-label={t.close}
             onClick={() => {
-              void getCurrentWindow().close();
+              onRequestExit();
             }}
           >
             <X size={14} />

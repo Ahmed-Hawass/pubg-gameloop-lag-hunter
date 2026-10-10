@@ -13,6 +13,11 @@ on:
 permissions:
   contents: read
 
+# one run per branch/PR at a time: a new push cancels the stale run
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -20,6 +25,7 @@ jobs:
   frontend:
     name: Frontend (typecheck + build)
     runs-on: windows-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -30,7 +36,15 @@ jobs:
 
       - run: npm ci
 
-      - name: Unit tests (vitest)
+      # hooks correctness (stale closures, missing deps) — the class of
+      # bug the summary-timer shipped with; tsc cannot see it
+      - name: Lint (eslint + react-hooks)
+        run: npm run lint
+
+      # coverage is built into `npm test` (vitest run --coverage):
+      # vite.config.ts carries a v8 threshold floor, so the floor always
+      # gates the suite. CONTRIBUTING promises this gate.
+      - name: Unit tests (vitest + coverage floor)
         run: npm test
 
       # tsc runs as part of the build script, this is also the locale
@@ -46,12 +60,13 @@ jobs:
   engine:
     name: Engine (tests + clippy + audit)
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          components: clippy, rustfmt
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -63,17 +78,33 @@ jobs:
       - name: Clippy (zero warnings)
         run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 
+      - name: Format (rustfmt)
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+
+      - name: Cache cargo-audit binary
+        id: cache-audit
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/cargo-audit
+            ~/.cargo/bin/cargo-audit.exe
+          key: cargo-audit-0.21.0-${{ runner.os }}
+
       - name: Dependency audit (Rust)
         # RustSec advisories for the engine's dependency tree (ureq, sha2,
         # tauri plugins...). Mirrors npm audit on the frontend job.
-        # (prebuilt binary install, ~2s, no cargo install compile wait)
+        # Pinned version + locked install: the old curl-pipe-sh fetched
+        # latest unpinned with no hash check.
+        # The binary install is cached: a warm key skips the reinstall.
+        shell: bash
         run: |
-          curl -LsSf https://github.com/rustsec/rustsec/releases/latest/download/cargo-audit-installer.sh | sh
+          if [ "${{ steps.cache-audit.outputs.cache-hit }}" != "true" ]; then cargo install cargo-audit --version 0.21.0 --locked; fi
           cargo audit --manifest-path src-tauri/Cargo.toml
 
   version-sync:
     name: Version sync (package / tauri / cargo / changelog)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -94,7 +125,10 @@ jobs:
           conf=$(node -p "require('./src-tauri/tauri.conf.json').version")
           mainbin=$(node -p "require('./src-tauri/tauri.conf.json').mainBinaryName")
           cargo=$(grep -m1 '^version' src-tauri/Cargo.toml | sed 's/version *= *"\(.*\)"/\1/')
-          changelog=$(grep -m1 -oP '^\[\K[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md)
+          # the "## " prefix is part of the match: every header here is
+          # "## [1.6.0] - date", so a bare '^\[' anchor never fires and
+          # the gate compared 1.6.0 against an empty string forever
+          changelog=$(grep -m1 -oP '^## \[\K[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md)
           echo "package=$pkg tauri=$conf cargo=$cargo changelog=$changelog mainBinaryName=$mainbin"
           [ "$pkg" = "$conf" ] || { echo "::error::package.json ($pkg) != tauri.conf.json ($conf)"; exit 1; }
           [ "$pkg" = "$cargo" ] || { echo "::error::package.json ($pkg) != Cargo.toml ($cargo)"; exit 1; }
@@ -107,6 +141,7 @@ jobs:
     # the profile unit tests never touch, built on demand until proven stable
     if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -126,6 +161,11 @@ jobs:
       - name: Build release exe
         run: npx tauri build --no-bundle
 
+      # the CLI companion shares the release folder (tauri builds all bins,
+      # but this pins the contract explicitly: no cli exe, no release)
+      - name: Build release CLI
+        run: cargo build --release --bin laghunter-cli --manifest-path src-tauri/Cargo.toml
+
       # SHA256SUMS.txt is part of the update contract (the engine verifies
       # downloads against it), generate it in the same job that builds the
       # exe, so every manually-triggered release run produces a pair that
@@ -134,11 +174,12 @@ jobs:
         shell: pwsh
         run: ./scripts/checksum.ps1
 
-      - name: Upload release exe + checksums
+      - name: Upload release exes + checksums + CLI alias
         uses: actions/upload-artifact@v4
         with:
           name: lag-hunter-release
           path: |
             src-tauri/target/release/*.exe
             src-tauri/target/release/SHA256SUMS.txt
+            laghunter.cmd
           if-no-files-found: error

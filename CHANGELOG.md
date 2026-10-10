@@ -4,6 +4,52 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- Tools tab (Beta): game performance switches (Game Mode, high-performance GPU per GameLoop app, fullscreen-optimizations opt-out, pointer precision, windowed-games optimizations). Every switch mirrors the live Windows state, verifies after each flip, and rolls back silently if you dismiss the system prompt. Rows your machine cannot run show greyed with the reason instead of hiding (optional show-unsupported preference in Settings).
+- High Performance power row: one switch for the built-in plan, with your previous plan restored when you flip back.
+- Storage tools: a cleanup sweep (temporary files, Recycle Bin, update leftovers, old logs and dumps) that measures before and after and deletes only what you tick, plus a Virtual Memory editor mirroring the Windows dialog (automatic, system-managed, custom, or off per drive) with confirm-before-risk and a restart offer.
+- Top Processes: one row per program with its live size, an End button with confirm, real icons, and translated names for Windows processes.
+- Reports in plain language: an honest outcome per session, key moments, and findings with fixes, in English and Arabic.
+- Monitor in three calm states: a session plan when idle, a centered progress view while scanning, and one verdict card that stays until you dismiss it.
+- System tab as a spec sheet (CPU, RAM, display, GPU driver, model, OS) with a copy-all button, and System health cards with plain-language notes and direct links to the right Windows pages.
+- Headless companion (`laghunter-cli.exe`): scan, list sessions, and open reports from a terminal, sharing sessions with the app.
+- Interface zoom (80 to 125 percent) with Ctrl+=/-/0 shortcuts, one-shot intro cards per page, and a two-slide welcome.
+- GameLoop v7 support alongside v6, including a one-time notice when the client updates (saved preferences may need one re-flip).
+
+### Fixed
+- The Storage scan measures the Recycle Bin again (it always read empty before).
+- Starting a session no longer freezes the Stop button while the app prepares.
+- Sidebar tooltips no longer stick on screen or appear as empty bubbles after expanding.
+- A failed update download explains itself in the app language instead of raw English.
+- Stopping twice is quiet success; only a real save failure reports an error.
+- The Processes End button names its app to screen readers, and help (?) buttons announce their topic.
+- The terminal sessions list is newest-first, matching Reports.
+- Memory readings work on Arabic Windows (Arabic-Indic digits are
+  recognized instead of reading as missing).
+- An elevated action that hangs now fails after 60 seconds instead of
+  freezing the app forever.
+- Report rows are keyboard accessible, durations use your language units, and Arabic counts and units read naturally.
+- Error dialogs follow one rule: failed actions explain in a dialog, failed page loads show a retry state.
+- Keyboard focus rings now sit inside their control instead of outside it, so they are never clipped by a page or window edge (About footer links, the System copy button, titlebar controls, tool cards).
+- Tool cards no longer keep a stuck faint highlight after a touch tap (hover treatments apply on hover-capable pointers only, with no press lift).
+- Tool details re-read within a minute while open: an outside change (GameLoop update, another tool) surfaces without leaving and re-entering.
+- Processes pauses its live poll while the window is hidden instead of waking every 2s unseen.
+- The health banner and loading state carry no manual refresh (the silent poll plus focus re-reads own freshness); the error state keeps the only retry.
+- The System copy button keeps a fixed width, so confirming the copy no longer flickers the scrollbar.
+- Keyboard focus is one explicit red tone everywhere (green already dresses resting states like switch ON, so a green ring vanished where it matters most): one shared utility turns the border of bordered controls and paints a single inset ring on the rest.
+
+### Changed
+- Tools and health pages share one look: a summary banner, featured warnings, and the full list below.
+- One typeface everywhere, severity colors from a shared theme, and wall-clock times follow your Windows 12/24 setting.
+- Closing the window asks first only when work is in flight (scan, download, or cleanup).
+
+### Removed
+- The Processes manual Refresh button (the silent 2s poll covers it).
+- The System health disk-space card (measurement only, no in-app fix).
+- The old Monitor instrument panel (replaced by the three calm states).
+
 ## [1.6.0] - 2026-09-11
 
 ### Added

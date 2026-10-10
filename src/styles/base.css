@@ -1,0 +1,63 @@
+/* base — reset, page shell and app-wide helpers. Lives right after the
+   tokens so every stylesheet below resolves against it; component theme
+   overrides live next to their components, not here. */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text-1);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  overflow: hidden;
+}
+
+.num {
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+}
+/* reduced motion: spinners freeze (they signal waiting, never progress).
+   !important because base loads before the rules that arm animations. */
+@media (prefers-reduced-motion: reduce) {
+  .spin,
+  .empty-ico.spin svg {
+    animation: none !important;
+  }
+}
+/* selectable text: the app disables selection globally (kiosk-like
+   shell), but error lines, report content, notes, paths, and inputs
+   must copy — these re-enable it, nothing else does */
+input,
+textarea,
+.dialog-box,
+.note-body,
+.note-fix-box,
+.report-moments,
+.report-metrics,
+.um-notes {
+  user-select: text;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-2);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}

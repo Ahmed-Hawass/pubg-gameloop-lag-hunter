@@ -1,10 +1,10 @@
 /* System / Processes / Checks / About tabs + the gaming scan button */
 
-/* ---- scan zone: THE SCOPE — the hunter's crosshair ----
-   A calm 88px circle. Four ticks form the crosshair; the play icon is the
-   core. On hover: lock-on — the ring rotates a quarter-turn and the ticks
-   pull inward around the target. Running = the core becomes a red square
-   with a breathing pulse. */
+/* Session duration — the same segmented control as the language, theme and
+   zoom switches in Settings (same track, same pill, same materials), so
+   the two surfaces read as one app. flex + flex:1, not a grid: the pills
+   share the row equally in both languages, so "5 min" and "5 دقائق" occupy
+   the same four boxes without one language needing its own track. */
 .scan-duration {
   display: flex;
   gap: 3px;
@@ -12,18 +12,33 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 3px;
+  width: 100%;
 }
 
+/* mirrors .lang-seg, including its fixed line box: Arabic glyphs run
+   taller than Latin, so without an explicit line-height an Arabic row
+   stands taller than an English one and the control changes height with
+   the language. The horizontal padding is tighter than .lang-seg because
+   four pills share this track instead of three, and "60 دقيقة" is the
+   longest label either language produces: at the wider padding it clipped
+   to "60 د". */
 .scan-dur-btn {
+  flex: 1;
+  min-width: 0;
   border: none;
   background: transparent;
   color: var(--text-3);
   font: inherit;
-  font-size: 11.5px;
+  font-size: 12.5px;
+  line-height: 20px;
   font-weight: 600;
-  padding: 6px 12px;
+  padding: 9px 4px;
   border-radius: 6px;
   cursor: pointer;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   transition: background 0.12s, color 0.12s;
 }
 
@@ -48,12 +63,18 @@
   display: flex;
   flex-direction: column;
   gap: 18px;
-  max-width: min(100%, 680px);
 }
 .sys-section {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+/* the retry row under a failed rig load: centered, quiet, same ghost
+   button language as every other inline action */
+.sys-retry {
+  display: flex;
+  justify-content: center;
+  margin-top: 4px;
 }
 .sys-title {
   display: flex;
@@ -65,67 +86,126 @@
   color: var(--text-3);
   font-weight: 700;
 }
-.sys-grid {
+/* spec cards: four-up grid collapsing like the metrics/tools grids */
+.spec-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+@media (max-width: 760px) {
+  .spec-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.spec-card {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  background: var(--elev-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  gap: 3px;
   padding: 14px 16px;
+  min-width: 0;
 }
-.sys-kv {
+.spec-head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 7px 0;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-3);
-  border-bottom: 1px solid var(--border);
+  margin-block-end: 4px;
 }
-.sys-kv:last-child {
-  border-bottom: none;
-}
-.sys-kv svg {
+.spec-head svg {
   flex: none;
+  transition: transform 0.2s var(--ease);
 }
-.sys-k {
-  font-size: 13px;
-  color: var(--text-1);
-  font-weight: 500;
+/* icon nudge on card hover — the same micro-interaction as the metric
+   cards and buttons (expressive, no lift: these cards are display-only
+   and must never promise a click) */
+.spec-card:hover .spec-head svg {
+  transform: scale(1.18);
 }
-.sys-see {
+/* spec names wrap to two lines (CPU/GPU strings run long: a single
+   clipped line hid the model number); beyond that an ellipsis plus the
+   full name on hover */
+.spec-name {
+  font-size: 14.5px;
+  font-weight: 700;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.spec-sub {
+  font-size: 12px;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* spec rows: label at the inline start, value pinned to the end */
+.spec-list {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  background: var(--elev-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 12px 16px;
+  padding: 6px 16px;
 }
-.sys-see li {
+.spec-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-block-end: 1px solid var(--border);
+}
+.spec-row:last-child {
+  border-block-end: none;
+}
+.spec-row-main {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 12.5px;
+  flex: 1;
+  min-width: 0;
   color: var(--text-2);
-  padding: 7px 0;
+  font-size: 12.5px;
 }
-.sys-see li.off {
-  color: var(--warn);
-}
-.see-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+.spec-row-main svg {
   flex: none;
 }
-.see-dot.ok {
-  background: var(--primary);
-  box-shadow: 0 0 6px var(--primary-dim-2);
+.spec-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
 }
-.see-dot.off {
-  background: var(--warn);
+.spec-row-name {
+  color: var(--text-1);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.spec-row-sub {
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+.spec-row-val {
+  flex: none;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: end;
+}
+.sys-actions {
+  display: flex;
+  align-self: flex-start;
+}
+/* fixed width: the label flips between copySpecs (longest) and the
+   shorter copiedSpecs on click — without this the button breathes and
+   the page scrollbar flickers. Must fit the longest label in both
+   locales ("Copy all specs" / "نسخ كل المواصفات") plus the icon. */
+.sys-actions .btn {
+  min-width: 13em;
+  justify-content: center;
+  white-space: nowrap;
 }
 
 /* ---- top processes tab ---- */
@@ -133,37 +213,30 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  max-width: min(100%, 680px);
 }
-.procs-head {
+.procs-retry {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 14px;
-}
-.procs-hint {
-  font-size: 12.5px;
-  color: var(--text-2);
-  line-height: 1.55;
-  max-width: 480px;
+  justify-content: flex-end;
 }
 .proc-list {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  padding: 6px 0;
 }
 .proc-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  background: var(--elev-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 10px 14px;
+  padding: 10px 16px;
+  border-block-end: 1px solid var(--border);
+}
+.proc-row:last-child {
+  border-block-end: none;
 }
 .proc-name {
-  flex: 0 0 160px;
+  flex: 1;
+  min-width: 0;
   font-size: 12.5px;
   font-weight: 600;
   color: var(--text-1);
@@ -171,45 +244,86 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.proc-bar {
-  flex: 1;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--elev-3);
-  overflow: hidden;
-}
-.proc-fill {
-  display: block;
-  height: 100%;
-  border-radius: 3px;
-  transition: width 0.4s var(--ease);
-  /* logical origin: the bar grows from the reading side (right in Arabic) —
-     a physical `left` made RTL rows fill against their text direction */
-  transform-origin: var(--bar-origin, left);
-  animation: bar-grow 0.5s var(--ease) both;
-}
-/* the reading direction decides where the bar grows from */
-[dir="rtl"] .proc-fill {
-  --bar-origin: right;
-}
-.proc-fill.ok {
-  background: var(--primary);
-}
-.proc-fill.warn {
-  background: var(--warn);
-}
-.proc-fill.bad {
-  background: var(--danger);
+/* numbers column: value over unit, pinned to the reading end */
+.proc-nums {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  min-width: 70px;
 }
 .proc-cpu {
-  flex: 0 0 62px;
-  text-align: end;
-  font-size: 12.5px;
+  font-size: 13px;
+  font-weight: 700;
   color: var(--text-1);
 }
 .proc-ram {
-  flex: 0 0 80px;
-  text-align: end;
+  font-size: 11px;
+  color: var(--text-3);
+}
+/* end-task action on app rows: the shared ghost row-action materials
+   (same family as the session delete), neutral hover like every
+   quiet control — the danger lives only in the confirm dialog */
+.proc-end {
+  flex: none;
+  padding: 4px 10px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+.proc-end:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+/* real program artwork: bare, no tile (the tile stays for glyphs
+   only) — same footprint as the tile so rows never shift on resolve */
+.proc-art {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+}
+.proc-icon {
+  width: 24px;
+  height: 24px;
+}
+/* group size after the app name: quieter than the numbers column */
+.proc-count {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-3);
+  margin-inline-start: 6px;
+}
+/* process groups: title row plus the card list */
+.proc-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.proc-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-2);
+}
+.proc-group-head > svg {
+  flex: none;
+}
+.proc-group-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.proc-group-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-1);
+}
+.proc-group-hint {
   font-size: 11.5px;
   color: var(--text-3);
 }
@@ -227,7 +341,6 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  max-width: min(100%, 680px);
 }
 .checks-hint {
   font-size: 12.5px;
@@ -236,6 +349,7 @@
 }
 .checks-head {
   display: flex;
+  justify-content: flex-end;
   align-items: flex-start;
   gap: 12px;
 }
@@ -248,42 +362,15 @@
   flex-direction: column;
   gap: 8px;
 }
-/* wide windows show MORE data, not just air (reflow): two columns once the
-   viewport comfortably fits them — grid flow follows reading direction */
-@media (min-width: 1500px) {
-  .checks {
-    max-width: min(100%, 1100px);
-  }
-  .check-list {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: start;
-  }
-}
+/* System health stays a single readable column at every width. The shared
+  fullscreen rail gives it breathing room without splitting related cards.
+  Rows are single-line (glyph, name, state, badge, note button); the open
+  shortcut drops to a second line on problem cards only. */
 .check-row {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  background: var(--elev-1);
-  border: 1px solid var(--border);
-  border-inline-start: 3px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 13px 16px;
-}
-.check-row.ok {
-  border-inline-start-color: var(--primary);
-}
-.check-row.warn {
-  border-inline-start-color: var(--warn);
-}
-.check-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
+  gap: 10px;
+  padding: 11px 16px;
 }
 .check-top {
   display: flex;
@@ -295,84 +382,653 @@
   flex: none;
   color: var(--text-3);
 }
-.check-badge {
-  margin-inline-start: auto;
-  flex: none;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 4px 10px;
-  border-radius: 999px;
-}
-.check-badge.ok {
-  background: var(--primary-dim);
-  color: var(--primary);
-}
-.check-badge.warn {
-  background: var(--warn-dim);
-  color: var(--warn);
-}
-.check-desc {
-  font-size: 12px;
-  color: var(--text-2);
-  line-height: 1.55;
-}
-.check-foot {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.check-foot .check-state {
+.check-name {
   flex: 1;
   min-width: 0;
-}
-.check-row.ok .check-icon {
-  background: var(--primary-dim);
-  color: var(--primary);
-}
-.check-row.warn .check-icon {
-  background: var(--warn-dim);
-  color: var(--warn);
-}
-.check-name {
   font-size: 12.5px;
   font-weight: 700;
 }
-.check-state {
+.check-top .check-state {
+  flex: none;
   font-size: 12px;
-  color: var(--text-2);
+  color: var(--text-3);
   line-height: 1.45;
 }
+.check-badge {
+  font-size: 11px;
+  padding: 4px 10px;
+}
+.check-badge.ok {
+  background: var(--bg-success);
+  color: var(--text-success);
+}
+.check-badge.warn {
+  background: var(--bg-warning);
+  color: var(--text-warning);
+}
+/* problem-only shortcut: start-aligned on its own line, never beside
+   healthy rows (they own no destination) */
+.check-row .check-open {
+  align-self: flex-start;
+}
+/* health-card action: .row-act carries the ghost materials and hover,
+   only the labeled-button sizing and type stay here */
 .check-open {
   flex: none;
-  background: var(--elev-3);
-  border: 1px solid var(--border);
   border-radius: 7px;
   color: var(--text-2);
   font: inherit;
   font-size: 11.5px;
   font-weight: 600;
   padding: 7px 12px;
-  cursor: pointer;
-  transition: color 0.12s, background 0.12s, border-color 0.12s;
 }
-.check-open:hover {
-  color: var(--hover-text);
-  background: var(--hover-bg);
-  border-color: var(--hover-border);
+/* summary banner: solid highlighter fills (same language as the
+   diagnosis cards) — title and sub both in the card ink. */
+.health-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: var(--radius);
+  border: 0.5px solid transparent;
+  padding: 14px 16px;
+}
+.health-banner.ok {
+  background: var(--bg-success);
+  color: var(--text-success);
+}
+.health-banner.warn {
+  background: var(--bg-warning);
+  color: var(--text-warning);
+}
+.health-banner .hb-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: inherit;
+}
+.health-banner .hb-sub {
+  font-size: 12px;
+  color: inherit;
+  opacity: 0.85;
+  line-height: 1.5;
+}
+/* section labels inside the health tab (attention summary + archive) */
+.health-section-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-2);
+  margin: 0 0 8px;
+}
+.checks section {
+  display: flex;
+  flex-direction: column;
 }
 
+/* ---- tools tab: area landing grid + read-only section details ---- */
+.tools {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  /* hover lift (-1px) and focus ring (3px) on the first grid row would
+     clip against the scrollport top: keep breathing room inside the
+     scroller so both render fully at scroll-top 0 */
+  padding-block-start: 4px;
+}
+/* details sections (banner, featured, archive) stack like the health tab */
+.tools section {
+  display: flex;
+  flex-direction: column;
+}
+.tools-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 760px) {
+  .tools-grid {
+    grid-template-columns: 1fr;
+  }
+}
+/* reference card proportions: a fixed comfortable size (not a stretched
+   full-width tile), so the illustration reads as a scene with the copy
+   under it. */
+.tool-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 24px;
+  cursor: pointer;
+  font: inherit;
+  text-align: start;
+  color: var(--text-1);
+  transition: border-color 0.12s, background 0.12s;
+}
+/* hover only where a pointer can leave (hover-capable devices): on touch
+   a tap sticks :hover with no mouseleave, painting a permanent faint
+   highlight until the next tap elsewhere. No lift either: translateY
+   extends the scrollable overflow and flashed the page scrollbar, while
+   color alone never moves layout. */
+@media (hover: hover) {
+  .tool-card:hover {
+    background: var(--hover-bg);
+    border-color: var(--hover-border);
+  }
+}
+/* (focus ring comes from the shared .focus-ring utility) */
+/* spot illustration: theme-picked SVG asset, one comfortable reading size */
+.tool-spot {
+  width: 168px;
+  height: 168px;
+  flex: none;
+  margin-block-end: 8px;
+}
+.tool-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+/* title row: name pushed to the inline start, the shared beta pill to
+   the inline end — same element as the sidebar, same look */
+.tool-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.tool-desc {
+  font-size: 12.5px;
+  color: var(--text-2);
+  line-height: 1.55;
+}
+/* landing status badge: pinned to the card's inline start, below the
+   copy (same badge language as every row) */
+.tool-badge {
+  align-self: flex-start;
+  font-size: 11px;
+  padding: 4px 10px;
+}
+/* placeholder note under a young card's list: muted, temporary, removed
+   with its key when the card's phase starts */
+.tool-note {
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.55;
+  margin-block-start: 4px;
+}
+/* manual sweep (storage card): same card language as switch rows
+   (elev-1 surface, border, radius); checkboxes instead of switches, one
+   per measured place. Flex follows reading direction, no physical
+   properties anywhere */
+.cleanup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+}
+/* category extras on the shared inset rows: the whole row toggles
+   (hence the pointer), zero rows mute with disabled boxes */
+.cleanup-row {
+  cursor: pointer;
+}
+.cleanup-row input[type="checkbox"] {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+}
+.cleanup-name {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+.cleanup-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cleanup-size {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+}
+.cleanup-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-block-start: 4px;
+}
+.cleanup-result {
+  font-size: 12.5px;
+  color: var(--text-2);
+  line-height: 1.55;
+}
+/* the payoff: one big measured number after a clean (tabular Latin
+   numerals either way); the track fills from the inline-start side so
+   progress follows the reading direction with no physical properties */
+.cleanup-hero {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-block-start: 6px;
+}
+.cleanup-hero-num {
+  font-size: 30px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.cleanup-hero-unit {
+  font-size: 13px;
+  color: var(--text-2);
+}
+.cleanup-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-block-start: 6px;
+}
+/* zero/unknown rows stay visible (the industry norm: CCleaner, PC
+   Manager, BleachBit and Disk Cleanup all show zero rows) but muted
+   with a disabled checkbox: nothing to decide, nothing to clean */
+.cleanup-row.is-empty {
+  opacity: 0.55;
+  cursor: default;
+}
+/* idle hero: the only invitation before the first scan (icon, name,
+   promise, then the mode pills + Scan below do the work) */
+.cleanup-idle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+  padding: 18px 10px 6px;
+}
+.cleanup-idle-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--primary-dim);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  margin-block-end: 8px;
+}
+.cleanup-idle-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-1);
+}
+.cleanup-idle-desc {
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.55;
+}
+/* payoff hero after a verified clean: the measured number big, the
+   tagline warm, Scan again as the way back (the work card returns on
+   the next scan) */
+.cleanup-cleaned {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+  padding: 26px 16px;
+}
+.cleanup-done {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--primary-dim);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  margin-block-end: 10px;
+}
+.cleanup-tagline {
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.55;
+  margin-block-end: 12px;
+}
+/* per-place breakdown bar under the scanned hero: identity colors
+   (never severity), shares scale with the row dots above */
+.cleanup-bars {
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--elev-3);
+}
+.cleanup-bars > span {
+  display: block;
+  height: 100%;
+  min-width: 3px;
+}
+.cleanup-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: none;
+}
+/* footer: the take on the reading-start side, both actions pinned to
+   the end side (scan stays ghost, the commit action fills) */
+.cleanup-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.cleanup-foot-btns {
+  display: flex;
+  gap: 8px;
+  margin-inline-start: auto;
+}
+
+/* plain page header (icon + title + desc, never a card, never
+   collapsible): the shell back button above already says where this
+   lives — same pattern as the Sessions title row */
+.page-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 2px 4px;
+}
+.page-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.page-head-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-1);
+}
+/* status strip inside the editor card: committed sizes on the
+   reading-start side, installed RAM after it, (?) on the end side */
+.pf-status-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--elev-3);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.pf-status-state {
+  flex: 1;
+  min-width: 0;
+}
+.pf-status-ram {
+  flex: none;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.pf-status-strip .switch-hint {
+  margin-inline-start: auto;
+}
+/* custom page file form: same card language as switch rows (elev-1
+   surface, border, radius), labels above Latin-digit inputs; flex follows
+   reading direction, no physical properties anywhere */
+.pf-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+}
+/* deep-link landing (health page file card): the same temporary primary
+   ring the rows get, cleared with the link itself */
+.pf-form.is-linked {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-dim);
+}
+/* the expanded editor: global checkbox, selectable drive rows (the
+   selected row carries the primary ring), sizes only for custom */
+.pf-auto {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-1);
+  cursor: pointer;
+}
+.pf-auto input {
+  accent-color: var(--primary);
+  width: 16px;
+  height: 16px;
+}
+.pf-manual {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-block-start: 4px;
+}
+/* automatic on greys the manual controls (the dialog's own language:
+   the list is visible but inert); every control inside is also natively
+   disabled, this is only the visual echo */
+.pf-manual.is-disabled {
+  opacity: 0.55;
+}
+.pf-drives {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+/* drive picker cards: letter over free space over mode, wrapping;
+   selection keeps the shared primary ring (never a fill: the letter
+   must stay legible in both themes) */
+.pf-drive {
+  flex: 1;
+  min-width: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: var(--elev-3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: var(--text-1);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+.pf-drive.is-selected {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-dim);
+}
+.pf-drive:disabled {
+  cursor: not-allowed;
+}
+.pf-drive-id {
+  font-size: 13px;
+  font-weight: 700;
+}
+.pf-drive-free {
+  font-size: 11px;
+  color: var(--text-2);
+}
+.pf-drive-mode {
+  font-size: 11px;
+  color: var(--text-3);
+}
+/* the commit action owns its row: full-width primary with centered
+   label (the shared .btn never centers: it shrink-wraps everywhere
+   else, so centering stays here, not in the primitive) */
+.pf-apply {
+  width: 100%;
+  justify-content: center;
+}
+.pf-fields {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-block-start: 6px;
+}
+.pf-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.pf-field input {
+  width: 130px;
+  background: var(--elev-3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--text-1);
+  font: inherit;
+}
+.pf-field input:disabled {
+  opacity: 0.5;
+}
+/* (focus ring comes from the shared .focus-ring utility) */
+/* Tools back button uses the shared .back-btn primitive (see components.css) */
+
+/* ---- switch rows (Tools details): icon + title + desc + badge + switch.
+    Same state language as health cards (fill + badge, driven by
+    the optimistic switch state). Knob travels via flex alignment so it
+    follows reading direction with no physical properties. */
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+}
+/* deep-link landing (health DVR card): a temporary primary ring so the
+   eye finds the row the card promised. Cleared with the link itself. */
+.switch-row.is-linked {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-dim);
+}
+/* icon tile inside Tools rows comes from .icon-tile; only the
+   optimistic-on tint stays here */
+.switch-row.verdict-ok .icon-tile {
+  background: var(--primary-dim);
+  color: var(--primary);
+}
+/* disabled-with-reason row: greyed but legible — the row teaches (the
+   reason line underneath) instead of acting; the switch itself is inert
+   via the native disabled state above */
+.switch-row.is-disabled {
+  opacity: 0.65;
+}
+.switch-row.is-disabled .switch {
+  cursor: not-allowed;
+}
+.switch-reason {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-3);
+  line-height: 1.45;
+}
+.switch-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.switch-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+/* visible effect timing under the name (same slot as the health state
+   line, same muted tone): the card shows when, the (?) shows what */
+.switch-state {
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.45;
+}
+/* (?) background-note trigger: the same Info glyph and the same quiet
+   hover as every other Hint (neutral, never green), only smaller and
+   borderless to sit inside a row name */
+.switch-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  flex: none;
+}
+/* (?) triggers: hover lives on the glyph only (no background box
+   anywhere, so inline, standalone, and floating triggers share one
+   feel). Keyboard focus keeps the shared primary outline instead. */
+.switch-hint:hover {
+  color: var(--text-2);
+}
+/* (focus ring comes from the shared .focus-ring-inset utility) */
+.switch-desc {
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.55;
+}
+.switch {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex: none;
+  width: 48px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--elev-3);
+  border: 1px solid var(--border);
+  padding: 2px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.switch[aria-checked="true"] {
+  justify-content: flex-end;
+  background: var(--primary-dim);
+  border-color: var(--primary);
+}
+.switch:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+/* (focus ring comes from the shared .focus-ring utility) */
+.switch-knob {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--text-3);
+  flex: none;
+  transition: background 0.15s;
+}
+.switch[aria-checked="true"] .switch-knob {
+  background: var(--primary);
+}
 
 /* ---- about tab: three consistent cards + a quiet footer, one rhythm ---- */
 .about {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-width: min(100%, 620px);
 }
 .about-card {
-  background: var(--elev-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  width: 100%;
   padding: 18px 20px;
   display: flex;
   flex-direction: column;
@@ -429,34 +1085,22 @@
      relative lets .about-dot anchor to it */
   position: relative;
 }
-.about-impact {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-.about-impact li {
-  font-size: 12.5px;
-  color: var(--text-2);
-  line-height: 1.5;
-  padding-inline-start: 14px;
-  position: relative;
-}
-.about-impact li::before {
-  content: "";
-  position: absolute;
-  inset-inline-start: 0;
-  top: 7px;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--primary);
-}
-
 .about-update {
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+/* full-width check button with centered label (same lesson as the
+   page file Apply: the shared .btn never centers itself) */
+.about-update-btn {
+  width: 100%;
+  justify-content: center;
+}
+.about-update-result {
+  display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 /* the dot beside the Updates heading — mirrors the sidebar's About dot:
@@ -465,7 +1109,7 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--warn);
+  background: var(--fill-warning);
   display: inline-block;
   margin-inline-start: 2px;
 }
@@ -532,13 +1176,26 @@
   display: flex;
   flex-direction: column;
   gap: 18px;
-  max-width: min(100%, 560px);
   width: 100%;
+}
+/* one card for every personal preference: the groups stack inside
+   with breathing room, like sections inside every other card */
+.settings-card {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px;
 }
 .settings-group {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+/* reset action: same row width as the segmented controls above (full
+   width under the same cap, so all three rows share one edge) */
+.settings-group > .btn {
+  width: 100%;
+  max-width: 460px;
 }
 .settings-group-title {
   display: flex;
@@ -569,6 +1226,7 @@
   width: 100%;
   max-width: 460px;
 }
+
 .lang-seg {
   flex: 1;
   min-width: 0;
@@ -577,6 +1235,10 @@
   color: var(--text-3);
   font: inherit;
   font-size: 12.5px;
+  /* fixed line box: Arabic glyphs run taller than Latin, so without
+     this a row holding "العربية" stands taller than an all-Latin row
+     and the two segmented rows mismatch */
+  line-height: 20px;
   font-weight: 600;
   padding: 9px 18px;
   border-radius: 6px;
@@ -587,9 +1249,12 @@
   text-overflow: ellipsis;
   transition: background 0.12s, color 0.12s;
 }
-.lang-seg:hover:not(.is-active) {
+.lang-seg:hover:not(.is-active):not(:disabled) {
   color: var(--hover-text);
   background: var(--hover-bg);
+}
+.lang-seg:disabled {
+  cursor: not-allowed;
 }
 .lang-seg.is-active {
   background: var(--primary);
@@ -598,14 +1263,13 @@
 }
 
 /* ---- per-tab entrance motion (staggered, quiet) ---- */
-.sys-kv {
+.spec-card {
   animation: rise-in 0.35s var(--ease) both;
 }
-.sys-kv:nth-child(1) { animation-delay: 0.02s; }
-.sys-kv:nth-child(2) { animation-delay: 0.07s; }
-.sys-kv:nth-child(3) { animation-delay: 0.12s; }
-.sys-kv:nth-child(4) { animation-delay: 0.17s; }
-.sys-kv:nth-child(5) { animation-delay: 0.22s; }
+.spec-card:nth-child(1) { animation-delay: 0.02s; }
+.spec-card:nth-child(2) { animation-delay: 0.07s; }
+.spec-card:nth-child(3) { animation-delay: 0.12s; }
+.spec-card:nth-child(4) { animation-delay: 0.17s; }
 
 .proc-row {
   animation: rise-in 0.3s var(--ease) both;
@@ -616,10 +1280,6 @@
 .proc-row:nth-child(4) { animation-delay: 0.14s; }
 .proc-row:nth-child(5) { animation-delay: 0.18s; }
 .proc-row:nth-child(6) { animation-delay: 0.22s; }
-.proc-fill {
-  transform-origin: var(--bar-origin, left);
-  animation: bar-grow 0.5s var(--ease) both;
-}
 
 .check-row {
   animation: rise-in 0.35s var(--ease) both;
@@ -630,25 +1290,4 @@
 
 .lang-segment {
   animation: rise-in 0.3s var(--ease) both;
-}
-
-@keyframes rise-in {
-  from {
-    opacity: 0;
-    /* entrance comes from ABOVE: a positive offset would extend the scroll
-       area for the animation's duration and flash a scrollbar in every
-       scrollable page (settings, system, processes, checks) */
-    transform: translateY(-6px);
-  }
-}
-@keyframes bar-grow {
-  from {
-    transform: scaleX(0);
-  }
-}
-@keyframes settle-in {
-  from {
-    opacity: 0;
-    transform: scale(0.85) rotate(-4deg);
-  }
 }

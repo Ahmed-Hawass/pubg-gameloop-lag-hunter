@@ -14,7 +14,12 @@
   color: var(--text-1);
 }
 .btn:active {
-  transform: translateY(1px) scale(0.99);
+  /* press feel without layout motion: the old translateY(1px) pushed the
+     button a pixel down while held, which flashed the page scrollbar on
+     pages standing exactly at its edge (transforms extend the scrollable
+     overflow; outlines do not). Scale-only shrinks, so it never adds
+     overflow. */
+  transform: scale(0.98);
 }
 .btn-md {
   padding: 9px 16px;
@@ -32,24 +37,15 @@
   background: var(--primary-hover);
 }
 /* the FILLED danger — used where the destructive action is the point
-   (the running-scan Stop button, the delete-dialog confirm) */
+   (the running-scan Stop button, the delete-dialog confirm): solid
+   danger fill with white text in both themes */
 .btn-danger-filled {
-  background: var(--danger);
-  border-color: var(--danger);
+  background: var(--fill-danger);
+  border-color: var(--fill-danger);
   color: #fff;
 }
 .btn-danger-filled:hover {
   background: var(--danger-hover);
-}
-/* the quiet danger OUTLINE (dark fill, red text) — currently unused; kept
-   as the variant's design language for future "destructive but calm" spots */
-.btn-danger {
-  background: var(--elev-1);
-  color: var(--danger);
-  border-color: var(--danger-dim);
-}
-.btn-danger:hover {
-  background: var(--elev-2);
 }
 .btn-ghost {
   background: var(--elev-3);
@@ -66,180 +62,259 @@
   pointer-events: none;
 }
 
-/* MetricCard */
-.metric {
+/* Shared primitives — single source of truth for surfaces, state
+   fills, pills, icon tiles, back buttons and row actions. Domain classes
+   keep only layout and padding; materials live here. Load order
+   (components before views/reports/pages) plus equal specificity keeps
+   these authoritative wherever they are combined. */
+/* THE focus language (single source; replaces every bespoke ring).
+   Explicit danger red per theme, exactly one tone: .focus-ring turns the
+   element's own border (bordered controls), .focus-ring-inset paints a
+   2px inner ring (borderless pills, bare buttons, caption controls,
+   glyph-only triggers). Inset and same-box borders never leave their
+   box, so no scrollport or window edge can clip them. */
+.focus-ring:focus-visible,
+.focus-ring-inset:focus-visible {
+  outline: none;
+  border-color: transparent;
+  box-shadow: inset 0 0 0 2px #ff5a52;
+}
+[data-theme="light"] .focus-ring:focus-visible,
+[data-theme="light"] .focus-ring-inset:focus-visible {
+  border-color: transparent;
+  box-shadow: inset 0 0 0 2px #d92d20;
+}
+/* red-on-red exception: a danger-filled button wearing the red ring
+   would vanish, so it takes a white inner line (max contrast on red). */
+.btn-danger-filled:focus-visible {
+  border-color: transparent;
+  box-shadow: inset 0 0 0 2px #fff;
+}
+/* forced-colors (Windows High Contrast): box-shadow paints nothing
+   there, so every ring falls back to a real outline both modes share. */
+@media (forced-colors: active) {
+  .focus-ring:focus-visible,
+  .focus-ring-inset:focus-visible,
+  .btn-danger-filled:focus-visible {
+    box-shadow: none;
+    border-color: transparent;
+    outline: 2px solid ButtonText;
+  }
+}
+.card {
   background: var(--elev-1);
-  border: 1px solid var(--border);
+  border: 0.5px solid var(--border);
   border-radius: var(--radius);
-  padding: 14px;
+}
+.card-sm {
+  background: var(--elev-1);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+/* state fill: a card carrying a state fills its whole surface with the
+   tone (healthy cards stay plain surface, warnings fill warn, errors
+   fill danger). Filled cards carry no border: the fill is the edge. */
+.verdict-ok {
+  background: var(--elev-1);
+}
+.verdict-warn {
+  background: var(--warn-dim);
+  border-color: transparent;
+}
+/* pill: layout only (font size/padding stay per component, tones stay
+   per component); every badge in the app shares this shape */
+.badge {
+  flex: none;
+  font-weight: 700;
+  border-radius: 999px;
+}
+/* totals strip: two big honest numbers (background processes, saved
+   sessions) — one definition, both tabs */
+.totals {
+  display: flex;
+  gap: 32px;
+  padding: 16px 20px;
+}
+.total {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 2px;
 }
-.metric-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-/* value + corner tooltip share the right side of the card head */
-.metric-head-right {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-/* the tiny hint glyph — same Info icon and pointer cursor as the Hint
-   button elsewhere; quiet, sits just before the value */
-.metric-hint-dot {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  color: var(--text-3);
-  opacity: 0.75;
-  cursor: pointer;
-  outline: none;
-  transition: color 0.15s, opacity 0.15s;
-}
-.metric-hint-dot:hover,
-.metric-hint-dot:focus-visible {
-  color: var(--text-2);
-  opacity: 1;
-}
-.metric-name {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--text-1);
-  font-size: 13px;
+.total-num {
+  font-size: 20px;
   font-weight: 700;
 }
-.metric-name svg {
-  width: 17px;
-  height: 17px;
-  stroke-width: 2.4;
-  flex: none;
-}
-/* the icon carries the live tone — expressive at a glance */
-.metric-name-ok svg {
-  color: var(--primary);
-}
-.metric-name-warn svg {
+.total-warn {
   color: var(--warn);
 }
-.metric-name-danger svg {
-  color: var(--danger);
-}
-.metric-name-off svg {
+.total-label {
+  font-size: 11.5px;
   color: var(--text-3);
-  opacity: 0.6;
 }
-/* metric icons nudge on card hover — expressive micro-interaction */
-.metric .metric-name svg {
-  transition: transform 0.2s var(--ease);
+/* quiet refresh pinned to the end of a summary surface (health
+   banner): transparent back-button, hover on the glyph only */
+.health-banner .back-btn {
+  margin-inline-start: auto;
+  align-self: center;
+  flex: none;
+  color: inherit;
 }
-.metric:hover .metric-name svg {
-  transform: scale(1.18);
+.health-banner .back-btn:hover {
+  color: inherit;
+  /* self-tint, never a neutral box (that read black on the fills) and
+     never brightness() (it shows on light inks and nearly vanishes on
+     dark ones: light totals, both banner states). Evergreen WebView2
+     ships color-mix; the fallback below serves only older runtimes so
+     no engine ever lacks feedback. */
+  background: color-mix(in srgb, currentColor 15%, transparent);
+}
+@supports not (background: color-mix(in srgb, red 15%, transparent)) {
+  .health-banner .back-btn:hover {
+    background: none;
+    filter: brightness(0.82);
+  }
+}
+/* 32px function tile shared by Tools rows and the storage/pagefile cards */
+.icon-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--elev-3);
+  color: var(--text-2);
+}
+/* inset divider list: one measured answer on a sunk surface (sweep
+   results, cost rows, visibility rows) — container plus rows, dividers
+   included; per-domain classes keep only their extras */
+.inset-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  background: var(--elev-3);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.inset-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border-block-end: 1px solid var(--border);
+  font-size: 12.5px;
+  color: var(--text-2);
+  line-height: 1.5;
+}
+.inset-row:last-child {
+  border-block-end: none;
+}
+.inset-row > svg {
+  flex: none;
+  color: var(--text-3);
+}
+/* unstyled back button shared by the report reader and Tools details.
+   Hover fills like every quiet control (it reads as clickable, not
+   just tinted text) */
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  background: none;
+  border: none;
+  border-radius: 7px;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+.back-btn:hover {
+  color: var(--text-1);
+  background: var(--hover-bg);
+}
+/* disabled back-button (busy refresh): no hover tease, dimmed ink */
+.back-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.back-btn:disabled:hover {
+  color: inherit;
+  background: none;
+}
+/* row action: ghost materials in a compact footprint, shared by the
+   session-row delete and the health-card open buttons */
+.row-act {
+  background: var(--elev-3);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+.row-act:hover {
+  color: var(--hover-text);
+  border-color: var(--hover-border);
+  background: var(--hover-bg);
 }
 
-/* Start button: hover lift + icon nudge — same language as every icon */
+/* Entrance keyframes shared by every view (single definition: @keyframes
+   is global, so duplicates in page stylesheets silently win by load order).
+   rise-in enters from ABOVE: a positive offset would extend the scroll area
+   for the animation's duration and flash a scrollbar in scrollable pages. */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@keyframes settle-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85) rotate(-4deg);
+  }
+}
+
+/* Start button: hover lift + icon nudge — one scale (1.18) shared
+   with spec/sidebar glyphs */
 .btn svg {
   transition: transform 0.2s var(--ease);
 }
 .btn:hover:not(.is-disabled) svg {
-  transform: scale(1.12);
-}
-.metric-val {
-  font-size: 18px;
-  font-weight: 600;
-}
-.metric.dim .metric-val {
-  color: var(--text-3);
-}
-.bar-track {
-  height: 5px;
-  border-radius: 4px;
-  background: var(--elev-3);
-  overflow: hidden;
-}
-.bar-fill {
-  height: 100%;
-  border-radius: 4px;
-  transition: width 0.6s var(--ease);
-}
-.bar-ok {
-  background: var(--primary);
-}
-.bar-warn {
-  background: var(--warn);
-}
-.bar-danger {
-  background: var(--danger);
-}
-.spark {
-  width: 100%;
-  height: 22px;
-  display: block;
-  opacity: 0.9;
+  transform: scale(1.18);
 }
 
-/* Timeline */
-.timeline {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.timeline-head {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  color: var(--text-3);
-}
-.timeline-track {
-  position: relative;
-  height: 34px;
-  border-radius: 8px;
-  background: var(--elev-1);
-  border: 1px solid var(--border);
-  overflow: hidden;
-}
-.timeline-fill {
-  position: absolute;
-  inset: 0;
-  background: var(--primary-dim);
-  transition: width 1s linear;
-}
-.tl-marker {
-  position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--danger);
-  box-shadow: 0 0 0 4px var(--danger-dim);
-}
-
-/* NoteCard */
+/* NoteCard — solid highlighter fills (title, body, and fix box all in
+   the card ink: dark on amber, white on red). Severity reads from the
+   icon + fill; no dot, no extra marks. */
 .note {
-  border: 1px solid var(--border);
-  border-inline-start-width: 3px;
   border-radius: var(--radius-sm);
-  background: var(--elev-1);
   padding: 14px 16px;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 .note-high {
-  border-inline-start-color: var(--danger);
+  background: var(--bg-danger);
+  border-color: transparent;
+  color: var(--text-danger);
 }
 .note-medium {
-  border-inline-start-color: var(--warn);
+  background: var(--bg-warning);
+  border-color: transparent;
+  color: var(--text-warning);
 }
+/* low = plain healthy surface (same as verdict-ok): stated explicitly
+   so the neutral state is a decision, not a missing rule */
 .note-low {
-  border-inline-start-color: var(--text-3);
+  background: var(--elev-1);
+}
+.note-high .note-title,
+.note-medium .note-title,
+.note-high .note-body,
+.note-medium .note-body {
+  color: inherit;
 }
 .note-title {
   font-weight: 700;
@@ -248,38 +323,37 @@
   gap: 8px;
   font-size: 13.5px;
 }
-.note-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-.note-dot-high {
-  background: var(--danger);
-}
-.note-dot-medium {
-  background: var(--warn);
-}
-.note-dot-low {
-  background: var(--text-3);
+.note-title svg {
+  flex: none;
 }
 .note-body {
   color: var(--text-2);
   line-height: 1.5;
   font-size: 12.5px;
 }
-.note-fix {
-  color: var(--primary);
+/* fix box: white inset with dark ink on every fill (the fix reads as
+   the answer inside the warning, never as another tinted line) */
+.note-fix-box {
+  background: #ffffff;
+  color: var(--ink-fix);
+  border-radius: 8px;
+  padding: 8px 12px;
   font-size: 12px;
   display: flex;
   gap: 8px;
   align-items: baseline;
 }
-.note-fix-label {
+.note-fix-box .note-fix-label {
   text-transform: uppercase;
   font-size: 9.5px;
   letter-spacing: 0.8px;
-  color: var(--text-3);
+  color: var(--ink-fix);
+  opacity: 0.7;
   flex: none;
+}
+.note-fix-box svg {
+  flex: none;
+  align-self: center;
 }
 
 /* EmptyState */
@@ -304,6 +378,17 @@
   height: 18px;
   color: var(--primary);
 }
+/* loading moment: a larger circle with a spinning glyph (same panel,
+   same shape — motion is the only difference) */
+.empty-ico.spin {
+  width: 44px;
+  height: 44px;
+}
+.empty-ico.spin svg {
+  width: 20px;
+  height: 20px;
+  animation: spin 1s linear infinite;
+}
 .empty-title {
   font-size: 14.5px;
   font-weight: 700;
@@ -317,56 +402,42 @@
   line-height: 1.6;
 }
 
-/* SummaryCard */
-.summary {
-  background: var(--elev-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 20px;
+/* IntroCard — one-shot page guidance: info fill with ink text (never a
+   severity tone), borderless like every filled surface. The icon tile
+   rides the fill with the fill's own light ink; the X owns its own
+   accessible name (Tip is visual-only). */
+.intro-card {
+  background: var(--bg-info);
+  border-color: transparent;
   display: flex;
-  align-items: center;
-  gap: 16px;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
 }
-.summary-ico {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  flex: none;
-  background: var(--primary-dim);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.intro-ico {
+  background: var(--fill-info);
+  color: var(--bg-info);
 }
-.summary-ico svg {
-  width: 18px;
-  height: 18px;
-  color: var(--primary);
-  stroke-dasharray: 24;
-  stroke-dashoffset: 24;
-  animation: draw-check 0.5s var(--ease) 0.1s forwards;
+.intro-text {
+  flex: 1;
+  min-width: 0;
 }
-@keyframes draw-check {
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-.summary-text h3 {
-  font-size: 15px;
+.intro-title {
+  display: block;
+  font-size: 13.5px;
   font-weight: 700;
-  margin-bottom: 4px;
+  color: var(--text-info);
+  margin-bottom: 2px;
 }
-.summary-text p {
+.intro-text p {
   font-size: 12.5px;
-  color: var(--text-2);
+  color: var(--text-info);
   line-height: 1.6;
 }
-.summary .btn {
-  margin-inline-start: auto;
-  flex: none;
-}
-
-/* instant dismiss — small quiet X at the card's edge */
-.summary-x {
+/* instant dismiss — small quiet X. Its base rule is shared by every card
+   that offers a dismiss (IntroCard today); the intro variant only retints
+   it to the info ink. */
+.card-x {
   flex: none;
   display: flex;
   align-items: center;
@@ -380,10 +451,18 @@
   cursor: pointer;
   transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
-.summary-x:hover {
+.card-x:hover {
   color: var(--hover-text);
   background: var(--hover-bg);
   border-color: var(--hover-border);
+}
+.card-x.intro-x {
+  color: var(--text-info);
+}
+.card-x.intro-x:hover {
+  color: var(--bg-info);
+  background: var(--fill-info);
+  border-color: transparent;
 }
 
 /* Dialog — the single modal surface (no toasts anywhere) */
@@ -404,7 +483,7 @@
 }
 .dialog-box {
   background: var(--elev-1);
-  border: 1px solid var(--border);
+  border: 0.5px solid var(--border);
   border-radius: var(--radius);
   padding: 24px 26px;
   max-width: 420px;
@@ -414,8 +493,16 @@
   gap: 10px;
   box-shadow: 0 30px 60px -20px rgba(0, 0, 0, 0.7);
 }
-.dialog-box.dialog-danger {
-  border-color: var(--danger-dim);
+/* danger dialogs share the standard hairline: the red fill of the
+   confirm button carries the destructiveness, never an edge (filled
+   surfaces stay borderless everywhere, one feel). */
+/* light theme: the modal scrim stays dark (standard dim over light UI) but
+   lighter, and the heavy black dialog shadow softens to paper elevation */
+[data-theme="light"] .dialog-overlay {
+  background: rgba(20, 24, 20, 0.4);
+}
+[data-theme="light"] .dialog-box {
+  box-shadow: 0 30px 60px -20px rgba(20, 30, 20, 0.35);
 }
 .dialog-title {
   font-size: 15.5px;
@@ -475,7 +562,11 @@
   margin: 0;
 }
 
-.um-progress {
+/* Progress — the single bar language (update download, storage sweep).
+   Base matches the button radius scale; .progress-md matches the btn-md
+   row height for inline placement next to buttons. Fill grows from the
+   inline-start side by block flow (RTL-safe, no physical properties). */
+.progress {
   height: 8px;
   border-radius: 999px;
   background: var(--bg-2);
@@ -483,11 +574,20 @@
   overflow: hidden;
 }
 
-.um-progress-fill {
+.progress-fill {
   height: 100%;
-  background: var(--primary);
+  background: var(--fill-success);
   border-radius: 999px;
   transition: width 0.2s var(--ease);
+}
+
+.progress-md {
+  min-height: 38px;
+  border-radius: 10px;
+}
+
+.progress-md .progress-fill {
+  border-radius: 8px;
 }
 
 .um-progress-text {
@@ -540,11 +640,11 @@
   background: transparent;
   transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
-.hint:hover,
-.hint:focus-visible {
+.hint:hover {
   color: var(--text-2);
-  background: var(--hover-bg);
-  border-color: var(--hover-border);
+}
+.hint:hover svg {
+  opacity: 1;
 }
 .hint svg {
   width: 12px;
@@ -584,6 +684,10 @@
   pointer-events: none;
   box-shadow: 0 10px 30px -8px rgba(0, 0, 0, 0.7);
   animation: tooltip-in 0.15s ease;
+}
+/* light theme: soften the heavy black tooltip shadow to paper elevation */
+[data-theme="light"] .hint-tooltip {
+  box-shadow: 0 10px 30px -8px rgba(20, 30, 20, 0.3);
 }
 @keyframes tooltip-in {
   from {

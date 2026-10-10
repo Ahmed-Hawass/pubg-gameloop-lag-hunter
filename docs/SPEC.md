@@ -8,9 +8,9 @@ It analyzes performance while they play, detects stutters, and uncovers what is 
 
 > **What caused it?**
 
-It is **not** a benchmark, a tweak utility, or an FPS counter.
+It is **not** a benchmark or an FPS counter.
 
-It is a **diagnostician with a memory**.
+It is a **diagnostician with a memory** that offers opt-in fixes the user flips by hand.
 
 ---
 
@@ -69,7 +69,12 @@ tasklist (GameLoop probe)       ─┘
 ### Sessions
 
 * Every sample is written to disk immediately.
-* The RAM window is bounded at **300 ticks**.
+* The RAM window is bounded at **300 ticks** (raw samples, about 5 minutes
+  at 1 Hz, for the detector and the live UI). This is not the diagnosis
+  lookback: engine events keep a separate **15 minute** correlation window
+  (`CORRELATION_WINDOW_MS` in diagnoser.rs, mirrored by the session
+  `diagnosis_window` plus 30 s slack) for pairing wake and churn windows
+  with their confirming cliffs. Samples bound memory, events bound history.
 * Reports are generated from the file, never from memory.
 * Per-source evidence (GPU / emulator / window visibility) carries a **TTL**, a stale snapshot is dropped, never worn as fresh.
 * Each session's sampling readers own a **per-session stop flag**: a fast stop→start can never resurrect the old readers (no double sampling).
@@ -78,11 +83,11 @@ tasklist (GameLoop probe)       ─┘
 
 ## Guarantees
 
-### 🔒 Read-only on the user's machine
+### Changes only by your hand
 
-No settings are ever modified.
+Monitoring and diagnosis never modify anything.
 
-System health shows read-only statuses and opens the relevant Windows page; **the user flips the switch**.
+System health shows statuses and points at the fix; **the user flips the switch**. Every change states its value explicitly in both directions, is verified by re-reading Windows, and leaves an audit line in the log.
 
 ### 📏 No fabricated numbers
 
@@ -119,13 +124,13 @@ Every human-facing string lives in the locale files.
 ## Non-Goals
 
 * **No FPS overlay**, anti-cheat territory, and not our question.
-* **No system tweaking or repair**, diagnosis is the product; repair is the user's decision with our guidance.
+* **No automatic tweaking**, diagnosis paths never write; every fix is an explicit user action through a whitelisted command, verified by re-reading Windows and audit-logged. Repair is the user's decision with our guidance.
 * **No multi-emulator support**, GameLoop only. Identity beats reach.
 * **No telemetry**, the only thing written is on the user's own disk.
 
 ---
 
-## Success Criteria for v1
+## Success Criteria for v1.6
 
 A player finishes a laggy match and opens the report.
 

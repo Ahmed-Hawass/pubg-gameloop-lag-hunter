@@ -20,11 +20,11 @@ If it can't be measured honestly, it isn't shown.
 
 A `--` is worth more than a guess.
 
-### 🔒 Read-only on the user's system
+### Changes only by the user's hand
 
-The tool never modifies Windows settings.
+Monitoring and diagnosis never modify Windows settings.
 
-New "checks" point to the right page; they never flip switches.
+New rows mirror the live state, write explicitly in both directions, verify by re-read, and log. New health cards point at the fix; they never flip switches themselves.
 
 ### 🌍 Localization
 
@@ -48,10 +48,13 @@ Anything that samples, caches, or stores must have a cap.
 ## Development
 
 ```bash
-npx tauri dev              # dev mode
-cd src-tauri && cargo test # the engine test suite, must stay green
-npm test                   # frontend unit tests (Vitest)
-npx tsc                    # frontend typecheck, zero errors tolerated
+npx tauri dev                                            # dev mode
+cargo test --manifest-path src-tauri/Cargo.toml --all-targets  # engine tests, must stay green
+npm test                                                 # frontend tests with coverage floor
+npm run lint                                           # eslint with zero warnings tolerated
+npm run build                                          # typecheck (both configs) plus vite build
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+cargo fmt --manifest-path src-tauri/Cargo.toml --check
 ```
 
 ---
@@ -60,9 +63,11 @@ npx tsc                    # frontend typecheck, zero errors tolerated
 
 Make sure:
 
-* CI passes, it runs the same things on `windows-latest`: vitest, the frontend
+* CI passes, it runs the same things on `windows-latest`: eslint, vitest
+  with coverage floor, the frontend
   build (which type-checks the locale bond: `ar.ts` must match `en.ts`
-  key-for-key), engine tests, and clippy with `-D warnings`
+  key-for-key), engine tests with all targets, clippy with `-D warnings`,
+  fmt check, both audits, and the version sync gate
 * New user-facing strings exist in **both** locales (the build enforces this,
   but the copy itself is on you)
 * Slow IPC commands are `async` and park blocking work on
@@ -70,4 +75,27 @@ Make sure:
   slow command freezes the window (the original "Not Responding" bug)
 * New engine operations log what happened: spawn results, durations
   (`logging::timed`), failures, the log is how we diagnose user machines
-* New IPC commands are added to `capabilities/default.json` **only if the UI truly needs them**
+* New IPC commands are registered in `lib.rs` (`generate_handler`), no
+  capability entry needed for them: `capabilities/default.json` holds
+  plugin permissions only (window, dialog, webview zoom, opener
+  allowlist), add a line there only when the UI needs a new plugin API
+
+## Testing Contract
+
+Every user-facing behavior ships with its test, at the same level as the
+existing suite (`src/tests`, run with `npm test`):
+
+* Pure logic: unit test (`errors.test.ts` pattern).
+* Component behavior: component test with a mocked `bridge` (`toolsGaming.test.tsx`
+  pattern, fixtures in `tests/fixtures.ts`).
+* Rust: unit test inside the module (`#[cfg(test)]`).
+* Critical contracts (silent UAC refusal, one modal surface, deep-links,
+  once-ever advice) get a test named after the contract.
+* Coverage thresholds in `vite.config.ts` fail the suite on any drop:
+  grow them, never lower them to make a PR pass.
+* Deliberately manual (never mocked as covered): real UAC prompts, the real
+  backend, and visual appearance. A PR touching those lists its manual
+  checklist instead of claiming coverage.
+* Stopping line (documented, not accidental): pure display branches carry
+  no tests; everything behavioral does (WelcomeView carries a dots
+  announcement test because its page state is user facing).

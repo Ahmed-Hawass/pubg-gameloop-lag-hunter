@@ -14,8 +14,8 @@ They meet in exactly one place: a JSON state contract pushed over Tauri events.
 │  components/  the design system                   │
 │  locales/     every human string                   │
 │  bridge.ts    the ONLY file that talks             │
-│               to the backend                       │
-│  version.ts   numeric release comparison           │
+│               to the backend (commands, events,     │
+│               window chrome, dialogs)               │
 │  errors.ts    error codes → dialog copy            │
 │  i18n.tsx     language resolution + provider       │
 │               (persisted > OS > English)            │
@@ -53,12 +53,35 @@ They meet in exactly one place: a JSON state contract pushed over Tauri events.
 │             dest-validated paths (v1.3+)          │
 │                                                   │
 │  version    the update-order comparison           │
-│             (shared with the UI's copy)           │
+│             (the single copy: the UI              │
+│             asks the engine, never its own)        │
 │                                                   │
 │  settings   schema v3, atomic writes, migration   │
 │                                                   │
 │  system     rig info (disk-cached across runs),  │
-│             top processes, checks                │
+│             top processes, checks, tweaks read  │
+│             (cheap Registry mirror of checks),  │
+│             pagefile editor read/validate/apply │
+│                                                   │
+│  tweaks     scoped writes behind explicit user  │
+│             action, verified by re-read, audited │
+│                                                   │
+│  cleanup    storage scan and sweep with measure  │
+│             before and after, plus history       │
+│                                                   │
+│  prockill   handle-pinned process end, GameLoop  │
+│             and self refuse by construction     │
+│                                                   │
+│  emulator   V6 and V7 client identity from live  │
+│             processes first, registry second     │
+│                                                   │
+│  elevate    same binary re-run with runas for   │
+│             privileged writes, no resident admin │
+│                                                   │
+│  icons      native program icons as data URLs,  │
+│             PIDs only, never paths               │
+│                                                   │
+│  display_names  ProductName for known OS staples │
 │                                                   │
 │  logging    the flight recorder: boot timing,    │
 │             panics, IPC durations, 7-day        │
@@ -90,11 +113,11 @@ Unavailable sources show `--`.
 
 Measured limits are stated, including freeze durations at 1 Hz resolution.
 
-### 🔒 Read-only on the user's machine
+### Changes only by your hand
 
 The engine reads counters and opens whitelisted Windows panels.
 
-It never flips a switch.
+A setting changes only from an explicit user action through a whitelisted command: scoped writes, validated values, verified by re-read, audit-logged. Diagnosis paths never write.
 
 ### 📦 Bounded everything
 
@@ -162,11 +185,15 @@ The disk-storm test is literally the session that started this project.
 
 A crashed session can **never** be reported as `"clean"`.
 
-`npm test` (Vitest) covers the frontend's pure logic:
+`npm test -- --coverage` (Vitest) covers the frontend:
 
-* Version comparison (the update check)
-* Error-code → dialog mapping
+* Update-modal decision flow (the once-per-version rule)
+* Error-code to dialog mapping
+* Theme, zoom, and clock logic
+* Tools, sweep, pagefile, processes, checks, and reports behavior
+* App shell dialogs and advice flows
 * Locale key parity between en and ar
 
-CI (`.github/workflows/ci.yml`) runs both suites plus clippy
-(`-D warnings`) on every push and PR.
+CI (`.github/workflows/ci.yml`) runs typecheck, lint, tests with coverage
+floor, build, engine tests with all targets, clippy (`-D warnings`), fmt
+check, both audits, and the version sync gate on every push and PR.

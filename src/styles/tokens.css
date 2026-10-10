@@ -1,4 +1,4 @@
-/* design tokens — monochrome + signal green, from the concept direction */
+/* design tokens — monochrome + signal green */
 :root {
   color-scheme: dark;
   /* surfaces — ONE plane: the shell is a single surface split by borders.
@@ -6,22 +6,47 @@
      without the harsh AMOLED contrast. */
   --bg: #141613;
   --elev-1: #1c1f1c;
-  --elev-2: #242824;
   --elev-3: #2c312c;
   /* border */
   --border: #383d38;
   --border-2: #484e48;
-  /* signal */
+  /* signal — monochrome + signal green: the brand fills buttons, pills,
+     and on-switches (dark text on it); dims tint tracks, tiles, rings */
   --primary: #53fc18;
   --primary-dim: rgba(83, 252, 24, 0.1);
   --primary-dim-2: rgba(83, 252, 24, 0.2);
   --on-primary: #06210a;
-  /* status — tones consumed via var(): warn/danger only (ok states reuse
-     the signal --primary, so no --ok token exists by design) */
   --warn: #f5c518;
   --warn-dim: rgba(245, 197, 24, 0.12);
   --danger: #ff5a52;
   --danger-dim: rgba(255, 90, 82, 0.12);
+  /* state quads — pale solid bg + dark ink (identical in both themes, so
+     the pair reads on either): cards, banners, and badges only. Rule:
+     state text rides its bg-* with its text-* ink; text on plain
+     surfaces keeps the vivid signal colors below. */
+  --bg-success: #b9e3b4;
+  --text-success: #0d3f14;
+  --fill-success: #53fc18;
+  --border-success: rgba(83, 252, 24, 0.3);
+  --bg-warning: #f5d6a0;
+  --text-warning: #4d3d0c;
+  --fill-warning: #f5c518;
+  --border-warning: rgba(245, 197, 24, 0.3);
+  --bg-danger: #f0b3a6;
+  --text-danger: #5c1a10;
+  --fill-danger: #ff5a52;
+  --border-danger: rgba(255, 90, 82, 0.3);
+  /* info quad for one-shot guidance (intro cards): blue family, outside
+     the success/warn/danger state language by construction. The dark
+     theme runs saturated (a pale fill would sink into the dark
+     surfaces); the light theme stays soft. */
+  --bg-info: #1b5a8c;
+  --text-info: #dceefb;
+  --fill-info: #7fb8e6;
+  --border-info: rgba(127, 184, 230, 0.35);
+  /* fix-box ink: the white answer box is white in both themes, so its
+     ink stays dark cocoa in both (never a theme text token) */
+  --ink-fix: #4d3d0c;
   /* hover — LIGHT, not green: the accent belongs to states, not to passing hovers */
   --hover-bg: #343a34;
   --hover-text: #edefec;
@@ -36,13 +61,20 @@
   --text-2: #8c948d;
   --text-3: #5a605a;
   /* type — Google Sans covers latin; "Google Sans Arabic" (Cairo) covers the
-     Arabic codepoints via unicode-range — one stack, both scripts, inlined */
+     Arabic codepoints via unicode-range — one stack, both scripts, inlined.
+     Numerals ride this stack too (tabular figures where the face has
+     them); no second family anywhere. */
   --font-ui: "Google Sans", "Google Sans Arabic", "Segoe UI", system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", "Consolas", monospace;
   /* hover lifts for filled actions — direction differs per theme (lighten on
      dark, deepen on light), so they are tokens, not literals */
   --primary-hover: #6aff3a;
   --danger-hover: #ff6f68;
+  /* radar sweep alpha stops — an alpha of the dark neon green is invisible
+     on the light paper background, so the stops are tokens per theme and the
+     conic gradient never hardcodes the signal colour */
+  --sweep-far: rgba(83, 252, 24, 0.05);
+  --sweep-mid: rgba(83, 252, 24, 0.3);
+  --sweep-near: rgba(83, 252, 24, 0.42);
   /* shape & motion */
   --radius: 12px;
   --radius-sm: 9px;
@@ -58,7 +90,6 @@
   color-scheme: light;
   --bg: #eef1ec;
   --elev-1: #ffffff;
-  --elev-2: #f7f9f6;
   --elev-3: #e9ede8;
   --border: #d9ded7;
   --border-2: #c4cbc2;
@@ -70,6 +101,27 @@
   --warn-dim: rgba(138, 95, 0, 0.14);
   --danger: #d92d20;
   --danger-dim: rgba(217, 45, 32, 0.12);
+  /* state quads — light pairs: pale solid bg + dark ink (the finding
+     card as rendered). Fills stay vivid for dots and bars. */
+  --bg-success: #b9e3b4;
+  --text-success: #0d3f14;
+  --fill-success: #1b8737;
+  --border-success: rgba(27, 135, 55, 0.3);
+  --bg-warning: #f5d6a0;
+  --text-warning: #4d3d0c;
+  --fill-warning: #8a5f00;
+  --border-warning: rgba(138, 95, 0, 0.3);
+  --bg-danger: #f0b3a6;
+  --text-danger: #5c1a10;
+  --fill-danger: #d92d20;
+  --border-danger: rgba(217, 45, 32, 0.3);
+  --bg-info: #b9d5ea;
+  --text-info: #0e3a56;
+  --fill-info: #1f6faf;
+  --border-info: rgba(31, 111, 175, 0.3);
+  /* fix-box ink: the white answer box is white in both themes, so its
+     ink stays dark cocoa in both (never a theme text token) */
+  --ink-fix: #4d3d0c;
   --hover-bg: #e4e9e2;
   --hover-text: #141815;
   --hover-border: #b9c2b7;
@@ -81,56 +133,8 @@
   --text-3: #7a817b;
   --primary-hover: #146c2a;
   --danger-hover: #e5484d;
-}
-
-/* light-theme adjustments for the few non-token surfaces: the modal scrim
-   stays dark (standard dim over light UI) but lighter, and the heavy black
-   dialog/tooltip shadows soften to match paper elevation */
-[data-theme="light"] .dialog-overlay {
-  background: rgba(20, 24, 20, 0.4);
-}
-[data-theme="light"] .dialog-box {
-  box-shadow: 0 30px 60px -20px rgba(20, 30, 20, 0.35);
-}
-[data-theme="light"] .hint-tooltip {
-  box-shadow: 0 10px 30px -8px rgba(20, 30, 20, 0.3);
-}
-
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-html,
-body,
-#root {
-  height: 100%;
-}
-
-body {
-  background: var(--bg);
-  color: var(--text-1);
-  font-family: var(--font-ui);
-  font-size: 14px;
-  -webkit-font-smoothing: antialiased;
-  user-select: none;
-  overflow: hidden;
-}
-
-.num {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-}
-
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--border-2);
-  border-radius: 4px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
+  /* the deeper green needs heavier alphas to read against #eef1ec */
+  --sweep-far: rgba(27, 135, 55, 0.06);
+  --sweep-mid: rgba(27, 135, 55, 0.3);
+  --sweep-near: rgba(27, 135, 55, 0.46);
 }

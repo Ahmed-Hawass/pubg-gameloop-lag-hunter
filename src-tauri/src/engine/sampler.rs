@@ -6,6 +6,7 @@ use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
+use std::time::Duration;
 
 use super::types::{GpuSample, ProcInfo, Sample};
 
@@ -106,7 +107,8 @@ mod windows_sys_job {
                         handle: std::ptr::null_mut(),
                     };
                 }
-                let mut info: ExtendedLimitInformation = std::mem::zeroed();
+                let mut info: ExtendedLimitInformation =
+                    std::mem::MaybeUninit::zeroed().assume_init();
                 // the ONE limit that matters: when our process handle is
                 // gone (even via abort), the kernel reaps every child.
                 info.basic.limit_flags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
@@ -143,6 +145,31 @@ pub(crate) fn spawn_tracked(cmd: &mut Command) -> std::io::Result<std::process::
     Ok(child)
 }
 
+/// Run a short-lived child inside the kill-on-close job with a hard deadline.
+/// All probe commands use this path so a wedged Windows utility cannot block
+/// a session forever or outlive the app.
+pub(crate) fn output_tracked(
+    cmd: &mut Command,
+    timeout: Duration,
+) -> std::io::Result<std::process::Output> {
+    let mut child = spawn_tracked(cmd)?;
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        match child.try_wait()? {
+            Some(_) => return child.wait_with_output(),
+            None if std::time::Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "child process timed out",
+                ));
+            }
+            None => thread::sleep(Duration::from_millis(50)),
+        }
+    }
+}
+
 /// Handle for a spawned streaming source. Kill on drop.
 struct SpawnedProcess {
     child: Child,
@@ -152,6 +179,40 @@ impl Drop for SpawnedProcess {
     fn drop(&mut self) {
         let _ = self.child.kill();
     }
+}
+
+/// Watchdog for a streaming source: the reader thread only notices
+/// `running == false` when a LINE arrives — a silent emitter (typeperf
+/// wedged on corrupted counters, a Get-Counter loop parked in its catch
+/// branch) emits nothing, the reader blocks on `lines()` forever, and the
+/// child outlives every stop/start cycle until app exit (one orphan per
+/// session). This thread polls the flag every 2s and kills the child BY
+/// PID the moment the session stops: the blocked reader's stream then
+/// ends, it unwinds, and its own SpawnedProcess drop becomes a harmless
+/// second kill of an already-dead process.
+///
+/// The kill is `taskkill /PID <id> /T /F` (no handle games on std's
+/// single-owner Child; taskkill is native, needs no elevation for our own
+/// children, and /T covers any grand-children typeperf itself spawned).
+fn spawn_source_watchdog(pid: u32, running: Arc<AtomicBool>) {
+    #[cfg(windows)]
+    thread::spawn(move || {
+        loop {
+            if !running.load(Ordering::Relaxed) {
+                break;
+            }
+            thread::sleep(Duration::from_secs(2));
+        }
+        // the session ended: reap the child even if its stream is silent
+        let _ = Command::new(super::system::system32_exe("taskkill.exe"))
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .creation_flags(NO_WINDOW)
+            .status();
+    });
+    #[cfg(not(windows))]
+    let _ = (pid, running);
 }
 
 /// typeperf CSV counter names → Sample fields (parsed by header order).
@@ -203,18 +264,20 @@ pub fn english_counters_work() -> bool {
         _ => {}
     }
     let ok = {
-        let out = Command::new("typeperf")
-            .args([
-                COUNTER_PATHS[0],
-                "-si",
-                "1",
-                "-sc",
-                "1", // one sample then exit
-            ])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .creation_flags(NO_WINDOW)
-            .output();
+        let out = output_tracked(
+            Command::new(super::system::system32_exe("typeperf.exe"))
+                .args([
+                    COUNTER_PATHS[0],
+                    "-si",
+                    "1",
+                    "-sc",
+                    "1", // one sample then exit
+                ])
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .creation_flags(NO_WINDOW),
+            Duration::from_secs(5),
+        );
         match out {
             Ok(o) => {
                 // exit 0 = the path resolved; nonzero = "cannot find counter"
@@ -281,7 +344,7 @@ while ($true) {{
 "#
     );
     let mut child = spawn_tracked(
-        Command::new("powershell.exe")
+        Command::new(super::system::powershell_exe())
             .args(["-NoProfile", "-NonInteractive", "-Command", &script])
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -292,12 +355,21 @@ while ($true) {{
         format!("pdh emitter spawn failed: {e}")
     })?;
     let stdout = child.stdout.take().ok_or("no stdout from pdh emitter")?;
+    // reap this child even if its stream goes silent mid-session (the
+    // watchdog polls the flag and taskkills by PID — see its doc comment)
+    spawn_source_watchdog(child.id(), Arc::clone(&running));
 
     thread::spawn(move || {
         let _keep = SpawnedProcess { child };
         super::logging::info("pdh emitter reader thread started");
         let reader = BufReader::new(stdout);
-        // path suffix → our key (robust to the \\HOST prefix Get-Counter adds)
+        // path suffix → our key (robust to the \\HOST prefix Get-Counter
+        // adds). Deliberately NOT shared with map_counter_key: that one
+        // matches FULL paths (typeperf CSV headers carry them verbatim),
+        // this one matches SUFFIXES (Get-Counter lines carry \\HOST\path
+        // prefixes of varying length). Same key vocabulary, different
+        // matching contract — merging them would silently change which
+        // strings each reader accepts.
         let key_of = |path: &str| -> Option<&'static str> {
             let p = path.to_ascii_lowercase();
             if p.ends_with("% processor performance") {
@@ -325,16 +397,23 @@ while ($true) {{
             if line.is_empty() {
                 continue;
             }
-            // line: "\\host\path=v,\\host\path2=v2,..."
+            // line: "\\host\path=v,\\host\path2=v2,..." — the value may
+            // itself carry a comma (comma-decimal cultures: "\\...\available
+            // mbytes=12,5"), so pairs are split on ",\\" (every pair starts
+            // with a backslash path); a bare ',' split would cut the value
+            // in two and silently misread it.
             let mut s = Sample {
                 t: iso_now(),
                 ..Default::default()
             };
-            for pair in line.split(',') {
+            for pair in line.split(",\\") {
+                // the first pair keeps its leading backslash, later ones
+                // lost theirs to the split — normalize before key_of
+                let pair = pair.strip_prefix('\\').unwrap_or(pair);
                 let Some(eq) = pair.find('=') else { continue };
-                let path = pair[..eq].trim();
-                let val = pair[eq + 1..].trim();
-                let (Some(key), Ok(v)) = (key_of(path), val.parse::<f64>()) else {
+                let path = format!("\\{}", pair[..eq].trim());
+                let val = &pair[eq + 1..];
+                let (Some(key), Some(v)) = (key_of(&path), parse_counter_value_logged(val)) else {
                     continue;
                 };
                 match key {
@@ -360,6 +439,53 @@ while ($true) {{
     Ok(())
 }
 
+/// Parse one counter value the way Windows may have printed it.
+/// typeperf PDH-CSV is always dot-decimal (culture-independent), but the
+/// PowerShell Get-Counter emitter formats with the CURRENT culture: on a
+/// comma-decimal Windows (de-DE, fr-FR, es-ES, ...) a value arrives as
+/// "12,5" — which fails `parse::<f64>()` in the typeperf-shaped readers
+/// and would be silently MISREAD as "12" by any bare-comma split. ONE
+/// parser for both paths: dot first (every locale we support today),
+/// then a strict digits,digits comma-decimal fallback. Anything else is
+/// None — a value we cannot confidently read is dropped, never guessed
+/// (dropping is honest; misreading is a manufactured diagnosis).
+/// Public so the live integration test checks what actually runs.
+pub fn parse_counter_value(raw: &str) -> Option<f64> {
+    let t = raw.trim().trim_matches('"');
+    if let Ok(v) = t.parse::<f64>() {
+        return Some(v);
+    }
+    // comma-decimal shape: exactly digits ',' digits, nothing else.
+    // Grouping shapes ("1,234,567") never match — no culture groups with
+    // the same char it uses as its decimal separator.
+    let (whole, frac) = t.split_once(',')?;
+    if !whole.is_empty()
+        && !frac.is_empty()
+        && whole.bytes().all(|b| b.is_ascii_digit())
+        && frac.bytes().all(|b| b.is_ascii_digit())
+    {
+        return format!("{whole}.{frac}").parse::<f64>().ok();
+    }
+    None
+}
+
+/// One-shot trace for the comma-decimal culture path: it fires at most once
+/// per process, so a user log from such a machine explains its own numbers
+/// without one log line per tick.
+static COMMA_CULTURE_SEEN: AtomicBool = AtomicBool::new(false);
+
+fn parse_counter_value_logged(raw: &str) -> Option<f64> {
+    let v = parse_counter_value(raw)?;
+    if !raw.trim().trim_matches('"').parse::<f64>().is_ok()
+        && !COMMA_CULTURE_SEEN.swap(true, Ordering::Relaxed)
+    {
+        super::logging::info(
+            "counter values arrive in comma-decimal culture (converted per value)",
+        );
+    }
+    Some(v)
+}
+
 fn spawn_typeperf_native<F>(
     interval_sec: u32,
     running: Arc<AtomicBool>,
@@ -381,7 +507,7 @@ where
         .collect();
 
     let mut child = spawn_tracked(
-        Command::new("typeperf")
+        Command::new(super::system::system32_exe("typeperf.exe"))
             .args(&args)
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -392,6 +518,9 @@ where
         format!("typeperf spawn failed: {e}")
     })?;
     let stdout = child.stdout.take().ok_or("no stdout from typeperf")?;
+    // reap this child even if its stream goes silent mid-session (the
+    // watchdog polls the flag and taskkills by PID — see its doc comment)
+    spawn_source_watchdog(child.id(), Arc::clone(&running));
 
     // the reader thread OWNS the child — kills it on exit (Drop), never before
     thread::spawn(move || {
@@ -409,9 +538,7 @@ where
                 break;
             }
             let Ok(line) = line else {
-                super::logging::error(&format!(
-                    "typeperf stream errored at line {line_no}"
-                ));
+                super::logging::error(&format!("typeperf stream errored at line {line_no}"));
                 break;
             };
             if line_no <= 3 {
@@ -456,8 +583,10 @@ where
                 ..Default::default()
             };
             for (i, key) in header.iter().enumerate() {
-                let raw = values.get(i).unwrap_or(&"").trim_matches('"');
-                let Ok(v) = raw.parse::<f64>() else { continue };
+                let raw = values.get(i).unwrap_or(&"");
+                let Some(v) = parse_counter_value_logged(raw) else {
+                    continue;
+                };
                 match *key {
                     "cpu" => s.cpu_total = Some(v),
                     // % Processor Performance is a ratio: physically it cannot
@@ -478,9 +607,7 @@ where
                 emit(s);
             }
         }
-        super::logging::info(&format!(
-            "typeperf reader loop ended after {line_no} lines"
-        ));
+        super::logging::info(&format!("typeperf reader loop ended after {line_no} lines"));
         // _keep drops here: typeperf killed after the stream truly ends
     });
     Ok(())
@@ -488,18 +615,22 @@ where
 
 /// Spawns `nvidia-smi dmon` and calls `emit` with each GpuSample.
 /// If nvidia-smi is missing, returns Ok(false) → session continues GPU-less.
+/// Intentional PATH lookup (not system32_exe): driver-provided tool, also
+/// reachable via its own PATH entry; absolute-only would miss valid installs.
 pub fn spawn_dmon<F>(interval_sec: u32, running: Arc<AtomicBool>, emit: F) -> Result<bool, String>
 where
     F: Fn(GpuSample) + Send + Sync + 'static,
 {
     // check availability quickly first
-    let probe = Command::new("nvidia-smi")
-        .arg("--query-gpu=clocks.max.gr")
-        .arg("--format=csv,noheader")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .creation_flags(NO_WINDOW)
-        .output();
+    let probe = output_tracked(
+        Command::new("nvidia-smi")
+            .arg("--query-gpu=clocks.max.gr")
+            .arg("--format=csv,noheader")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .creation_flags(NO_WINDOW),
+        Duration::from_secs(5),
+    );
     let Ok(out) = probe else { return Ok(false) };
     if !out.status.success() {
         return Ok(false);
@@ -519,6 +650,9 @@ where
     .map_err(|e| format!("nvidia-smi spawn failed: {e}"))?;
 
     let stdout = child.stdout.take().ok_or("no stdout from dmon")?;
+    // reap this child even if its stream goes silent mid-session (the
+    // watchdog polls the flag and taskkills by PID — see its doc comment)
+    spawn_source_watchdog(child.id(), Arc::clone(&running));
 
     // the reader thread OWNS the child — kills it on exit (Drop), never before
     thread::spawn(move || {
@@ -561,7 +695,6 @@ where
                 sm_pct: g("sm"),
                 mem_pct: g("mem"),
                 temp: g("gtemp"),
-                pstate: None, // dmon doesn't carry pstate; full pstate from periodic probe
             };
             if sample.sm_pct.is_some() || sample.pclk.is_some() {
                 emit(sample);
@@ -571,17 +704,34 @@ where
     Ok(true)
 }
 
+/// Map Arabic-Indic digits (U+0660..U+0669) to ASCII before any numeric
+/// parse: on an Arabic-locale Windows tasklist can print memory with
+/// Eastern digits ("١١٧٬٠٠٠ K"), which `parse::<f64>()` rejects. Pure.
+fn normalize_arabic_digits(s: &str) -> String {
+    s.chars()
+        .map(|c| {
+            if ('\u{0660}'..='\u{0669}').contains(&c) {
+                ((c as u32 - 0x0660) as u8 + b'0') as char
+            } else {
+                c
+            }
+        })
+        .collect()
+}
+
 /// GameLoop process snapshot via `tasklist` (native, ~5MB transient per call,
 /// zero resident cost — unlike spawning a full PowerShell every probe).
 /// PUBG Mobile on GameLoop only: the tool's entire identity.
 pub fn query_emulator_procs() -> Result<Vec<ProcInfo>, String> {
-    let out = Command::new("tasklist")
-        .args(["/FO", "CSV", "/NH"])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .creation_flags(NO_WINDOW)
-        .output()
-        .map_err(|e| format!("tasklist spawn failed: {e}"))?;
+    let out = output_tracked(
+        Command::new(super::system::system32_exe("tasklist.exe"))
+            .args(["/FO", "CSV", "/NH"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .creation_flags(NO_WINDOW),
+        Duration::from_secs(5),
+    )
+    .map_err(|e| format!("tasklist spawn failed: {e}"))?;
     if !out.status.success() {
         return Ok(Vec::new());
     }
@@ -604,10 +754,11 @@ pub fn query_emulator_procs() -> Result<Vec<ProcInfo>, String> {
         let pid = parts.next().unwrap_or("").trim_matches('"').parse().ok();
         let _session = parts.next();
         let _sessionnum = parts.next();
-        // mem field: strip group separators. English/Arabic-Indic digits with
-        // any locale thousands-separator ("," and the Arabic U+066C ٬), the
-        // "K" unit and non-breaking spaces must all parse to plain kilobytes.
-        let mem_str = parts
+        // mem field: strip group separators, then map Arabic-Indic digits
+        // ٠١٢٣٤٥٦٧٨٩ to ASCII before the f64 parse. Any locale
+        // thousands-separator ("," and the Arabic U+066C), the "K" unit
+        // and non-breaking spaces must all parse to plain kilobytes.
+        let cleaned = parts
             .next()
             .unwrap_or("")
             .trim_matches('"')
@@ -615,6 +766,7 @@ pub fn query_emulator_procs() -> Result<Vec<ProcInfo>, String> {
             .trim_end_matches('K')
             .trim()
             .to_string();
+        let mem_str = normalize_arabic_digits(&cleaned);
         let ws_mb = mem_str.parse::<f64>().ok().map(|k| k / 1024.0);
         procs.push(ProcInfo {
             name: name.to_string(),
@@ -627,13 +779,34 @@ pub fn query_emulator_procs() -> Result<Vec<ProcInfo>, String> {
 }
 
 /// GameLoop-only process match — the tool exists for PUBG Mobile on GameLoop.
-/// aow_exe = the game runtime, TBS = GameLoop's UI engine, TxGameAssistant = launcher,
-/// AndroidEmulatorEn = GameLoop's engine host. Public: system.rs uses it to
-/// keep all GameLoop processes off the "top processes" suspects list.
+/// v6: aow_exe = the game runtime, TBS = UI engine, TxGameAssistant =
+/// launcher, AndroidEmulatorEn = engine host. v7 (Androws): the GameLoop
+/// family and GLABox VM hosts (CefRendererProcess embeds in unrelated
+/// apps, so the UI renderers stay OUT of the gate — they match nothing).
+/// ONE list, THREE consumers: this matcher, the visibility probe's process
+/// name filter below, and the top-process suspects exclusion in system.rs —
+/// the names can never drift apart.
+///
+/// The set MUST equal the union of the emulator.rs profile families (the
+/// `union_matches_profiles` test enforces it): profiles own the knowledge,
+/// this const keeps the hot scan zero-cost.
+pub const GAMELOOP_PROC_NAMES: [&str; 11] = [
+    "aow_exe",
+    "TBS",
+    "TxGameAssistant",
+    "AndroidEmulatorEn",
+    "GameLoop",
+    "GameLoopEmulator",
+    "GameLoopAssistant",
+    "GameLoopService",
+    "GameLoopDldSvr",
+    "GLABoxSVC",
+    "GLABoxHeadless",
+];
+
 pub fn is_gameloop_process(name: &str) -> bool {
-    const GAMELOOP_PROCS: [&str; 4] = ["aow_exe", "TBS", "TxGameAssistant", "AndroidEmulatorEn"];
     let base = name.trim_end_matches(".exe");
-    GAMELOOP_PROCS.iter().any(|p| {
+    GAMELOOP_PROC_NAMES.iter().any(|p| {
         p.eq_ignore_ascii_case(base)
             || base
                 .to_ascii_lowercase()
@@ -644,20 +817,92 @@ pub fn is_gameloop_process(name: &str) -> bool {
 /// Is this OURSELVES? The tool must never appear as a suspect in its own list.
 /// Matches any versioned name (`...-1.0.0`) — releases are versioned by hand,
 /// so the pattern stays true no matter what the exe is called this release.
+/// The companion CLI (`laghunter-cli`) and the test harness binaries
+/// (`lag_hunter_*`) are ourselves too: same namespace, every separator.
 pub fn is_self_process(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();
-    lower.starts_with("pubg-gameloop-lag-hunter") || lower.starts_with("lag-hunter")
+    lower.starts_with("pubg-gameloop-lag-hunter")
+        || lower.starts_with("laghunter")
+        || lower.starts_with("lag-hunter")
+        || lower.starts_with("lag_hunter")
 }
 
-/// GameLoop detection: Some("GameLoop") when its processes exist.
+/// GameLoop detection: Some("GameLoop") when a game is actually running.
+/// v6: an aow-family process IS the game (per-game runtime). v7: the
+/// emulator idles with no game, so RunningAppInfo decides (an emulator
+/// with an empty VM reads as idle, honestly).
+/// What the live machine looks like, for callers that distinguish idle
+/// from absent (the start gate's messages differ).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Presence {
+    /// a game is running inside the emulator (either generation)
+    GameRunning,
+    /// v7 client up, VM empty: "start the game" is the honest message
+    ClientIdle,
+    /// GameLoop-ish evidence matching no profile (a future rename):
+    /// never mistaken for absent, never trusted for writes
+    UnknownVersion,
+    /// nothing GameLoop at all
+    Absent,
+}
+
+/// Presence from live evidence: one tasklist + one registry snapshot.
+/// Thin I/O edge; the decision itself is the pure emulator::detect.
+pub fn presence() -> Presence {
+    let names = query_all_proc_names().unwrap_or_default();
+    let reg = super::emulator::read_snapshot();
+    match super::emulator::detect(&names, &reg) {
+        super::emulator::Detected::V6Game | super::emulator::Detected::V7Game { .. } => {
+            Presence::GameRunning
+        }
+        super::emulator::Detected::V7Idle { .. } => Presence::ClientIdle,
+        super::emulator::Detected::Unknown => Presence::UnknownVersion,
+        super::emulator::Detected::Absent => Presence::Absent,
+    }
+}
+
+/// Every process name on the box (unfiltered): the presence scan above.
+/// Fail-soft like the filtered query — an unreadable table reads as empty.
+pub fn query_all_proc_names() -> Result<Vec<String>, String> {
+    let out = output_tracked(
+        Command::new(super::system::system32_exe("tasklist.exe"))
+            .args(["/FO", "CSV", "/NH"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .creation_flags(NO_WINDOW),
+        Duration::from_secs(5),
+    )
+    .map_err(|e| format!("tasklist spawn failed: {e}"))?;
+    if !out.status.success() {
+        return Ok(Vec::new());
+    }
+    Ok(parse_tasklist_names(&String::from_utf8_lossy(&out.stdout)))
+}
+
+/// Pure CSV first-column parse (the filtered query shares it): quoted
+/// names, any locale — only the name column is ever read here.
+fn parse_tasklist_names(text: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let mut parts = line.split("\",\"");
+        if let Some(name_raw) = parts.next() {
+            let name = name_raw.trim_matches('"');
+            if !name.is_empty() {
+                names.push(name.to_string());
+            }
+        }
+    }
+    names
+}
+
 pub fn detect_emulator() -> Option<String> {
-    let Ok(procs) = query_emulator_procs() else {
-        return None;
-    };
-    if procs.is_empty() {
-        None
-    } else {
-        Some("GameLoop".into())
+    match presence() {
+        Presence::GameRunning => Some("GameLoop".into()),
+        _ => None,
     }
 }
 
@@ -676,24 +921,34 @@ pub fn detect_emulator() -> Option<String> {
 #[cfg(windows)]
 pub fn query_game_visible() -> Option<bool> {
     use std::os::windows::process::CommandExt;
-    const SCRIPT: &str = concat!(
-        "$sig = '[DllImport(\"user32.dll\")] public static extern bool IsIconic(IntPtr h);';\n",
-        "$t = Add-Type -MemberDefinition $sig -Name Win -Namespace P -PassThru;\n",
-        "$vis = $false;\n",
-        "foreach ($n in @('aow_exe','TBS','TxGameAssistant','AndroidEmulatorEn')) {\n",
-        "  Get-Process -Name \"$n*\" -ErrorAction SilentlyContinue | ForEach-Object {\n",
-        "    if ($_.MainWindowHandle -ne 0 -and -not $t::IsIconic([IntPtr]$_.MainWindowHandle)) { $vis = $true }\n",
-        "  }\n",
-        "}\n",
-        "\"visible|$vis\"\n"
+    // the process list comes from the SAME const is_gameloop_process uses —
+    // the two copies used to drift (a name added to one silently missed
+    // by the other)
+    let names = GAMELOOP_PROC_NAMES
+        .iter()
+        .map(|n| format!("'{n}'"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let script = format!(
+        "$sig = '[DllImport(\"user32.dll\")] public static extern bool IsIconic(IntPtr h);';\n\
+         $t = Add-Type -MemberDefinition $sig -Name Win -Namespace P -PassThru;\n\
+         $vis = $false;\n\
+         foreach ($n in @({names})) {{\n\
+           Get-Process -Name \"$n*\" -ErrorAction SilentlyContinue | ForEach-Object {{\n\
+             if ($_.MainWindowHandle -ne 0 -and -not $t::IsIconic([IntPtr]$_.MainWindowHandle)) {{ $vis = $true }}\n\
+           }}\n\
+         }}\n\
+         \"visible|$vis\"\n"
     );
-    let out = Command::new("powershell.exe")
-        .args(["-NoProfile", "-NonInteractive", "-Command", SCRIPT])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .creation_flags(NO_WINDOW)
-        .output()
-        .ok()?;
+    let out = super::sampler::output_tracked(
+        Command::new(super::system::powershell_exe())
+            .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .creation_flags(NO_WINDOW),
+        Duration::from_secs(10),
+    )
+    .ok()?;
     let text = String::from_utf8_lossy(&out.stdout);
     for line in text.lines() {
         let mut parts = line.trim().splitn(2, '|');
@@ -715,16 +970,18 @@ pub fn query_game_visible() -> Option<bool> {
 
 /// GPU max clocks (gr, mem) — called once at session start.
 pub fn query_gpu_max_clocks() -> Option<(f64, f64)> {
-    let out = Command::new("nvidia-smi")
-        .args([
-            "--query-gpu=clocks.max.gr,clocks.max.mem",
-            "--format=csv,noheader,nounits",
-        ])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .creation_flags(NO_WINDOW)
-        .output()
-        .ok()?;
+    let out = super::sampler::output_tracked(
+        Command::new("nvidia-smi")
+            .args([
+                "--query-gpu=clocks.max.gr,clocks.max.mem",
+                "--format=csv,noheader,nounits",
+            ])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .creation_flags(NO_WINDOW),
+        Duration::from_secs(5),
+    )
+    .ok()?;
     let text = String::from_utf8_lossy(&out.stdout);
     let mut it = text.trim().split(',');
     let gr = it.next()?.trim().parse().ok()?;
@@ -780,12 +1037,14 @@ fn local_utc_offset_secs() -> i64 {
         // DST-aware, no registry parsing — the same source .NET uses.
         const SCRIPT: &str =
             "[int][TimeZoneInfo]::Local.GetUtcOffset([DateTimeOffset]::Now).TotalSeconds";
-        let out = Command::new("powershell.exe")
-            .args(["-NoProfile", "-NonInteractive", "-Command", SCRIPT])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .creation_flags(NO_WINDOW)
-            .output();
+        let out = output_tracked(
+            Command::new(super::system::powershell_exe())
+                .args(["-NoProfile", "-NonInteractive", "-Command", SCRIPT])
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null())
+                .creation_flags(NO_WINDOW),
+            Duration::from_secs(5),
+        );
         if let Ok(o) = out {
             if let Ok(v) = String::from_utf8_lossy(&o.stdout).trim().parse::<i64>() {
                 if v.abs() <= 14 * 3600 {
@@ -823,6 +1082,37 @@ mod tests {
     }
 
     #[test]
+    fn arabic_indic_digits_normalize_to_ascii() {
+        // tasklist on Arabic-locale Windows prints memory with Eastern
+        // digits: ٠١٢٣٤٥٦٧٨٩ must read as 0123456789 before the f64 parse.
+        assert_eq!(normalize_arabic_digits("١١٧٠٠٠"), "117000");
+        assert_eq!(normalize_arabic_digits("٠١٢٣٤٥٦٧٨٩"), "0123456789");
+        // ASCII passes through untouched, mixed content converts in place
+        assert_eq!(normalize_arabic_digits("117,000 K"), "117,000 K");
+        assert_eq!(normalize_arabic_digits("ab١٢cd"), "ab12cd");
+        assert_eq!(normalize_arabic_digits(""), "");
+    }
+
+    #[test]
+    fn counter_values_parse_in_both_cultures() {
+        // dot-decimal (typeperf CSV + every locale we support today)
+        assert_eq!(parse_counter_value("12.5"), Some(12.5));
+        assert_eq!(parse_counter_value("\"99\""), Some(99.0));
+        // comma-decimal cultures (PowerShell Get-Counter formats with the
+        // current culture): "12,5" is 12.5, NOT silently misread as 12
+        assert_eq!(parse_counter_value("12,5"), Some(12.5));
+        assert_eq!(parse_counter_value("\"4096,0\""), Some(4096.0));
+        // grouping shapes are NOT comma decimals — refuse rather than guess
+        assert_eq!(parse_counter_value("1,234,567"), None);
+        assert_eq!(parse_counter_value("1 234"), None);
+        assert_eq!(parse_counter_value("x1,2"), None);
+        assert_eq!(parse_counter_value("1,"), None);
+        assert_eq!(parse_counter_value(",5"), None);
+        // sentinel noise stays a non-value
+        assert_eq!(parse_counter_value(""), None);
+    }
+
+    #[test]
     fn iso_now_format() {
         let s = iso_now();
         assert_eq!(s.len(), 24);
@@ -843,7 +1133,7 @@ mod tests {
         // sanity: our iso_now hour must equal the OS local hour (InvariantCulture
         // so the OS string format is guaranteed regardless of display language)
         let ours = iso_now();
-        let out = Command::new("powershell.exe")
+        let out = Command::new(crate::engine::system::powershell_exe())
             .args([
                 "-NoProfile",
                 "-NonInteractive",
@@ -857,14 +1147,34 @@ mod tests {
             .expect("powershell spawn");
         let os = String::from_utf8_lossy(&out.stdout).trim().to_string();
         let ours_minute = format!("{}:{}", &ours[0..10], &ours[11..16]);
-        // compare at the minute level — the two clock reads happen a moment
-        // apart, so a second boundary is fine but a mismatch beyond that
-        // (the old UTC bug: hours apart) must fail loudly
+        // compare at the minute level with 1-minute tolerance: the two clock
+        // reads happen a moment apart, so a run crossing a minute boundary
+        // is fine, but a mismatch beyond that (the old UTC bug: hours apart)
+        // must fail loudly. Flaky without tolerance (minute rollover).
         let (os_hm, ours_hm) = (&os[11..16], &ours_minute[11..16]);
-        assert_eq!(
-            os_hm, ours_hm,
-            "iso_now must show wall-clock time (offset={offset}, os={os}, ours={ours_minute})"
-        );
+        let to_min = |hm: &str| -> Option<i32> {
+            let (h, m) = hm.split_once(':')?;
+            Some(h.parse::<i32>().ok()? * 60 + m.parse::<i32>().ok()?)
+        };
+        match (to_min(os_hm), to_min(ours_hm)) {
+            (Some(a), Some(b)) => {
+                let mut diff = (a - b).abs();
+                // midnight wrap: 23:59 vs 00:00 is 1 minute, not 1439
+                if diff > 720 {
+                    diff = 1440 - diff;
+                }
+                assert!(
+                    diff <= 1,
+                    "iso_now must show wall-clock time (offset={offset}, os={os}, ours={ours_minute})"
+                );
+            }
+            _ => {
+                assert_eq!(
+                    os_hm, ours_hm,
+                    "iso_now must show wall-clock time (offset={offset}, os={os}, ours={ours_minute})"
+                );
+            }
+        }
     }
 
     #[test]
@@ -876,10 +1186,51 @@ mod tests {
         assert!(is_gameloop_process("TxGameAssistant"));
         assert!(is_gameloop_process("AndroidEmulatorEn"));
         assert!(is_gameloop_process("AndroidEmulatorEn.exe"));
+        // v7 (Androws) family: client, emulator host, helpers, VM hosts
+        assert!(is_gameloop_process("GameLoop.exe"));
+        assert!(is_gameloop_process("GameLoopEmulator.exe"));
+        assert!(is_gameloop_process("GameLoopAssistant.exe"));
+        assert!(is_gameloop_process("GameLoopService.exe"));
+        assert!(is_gameloop_process("GameLoopDldSvr.exe"));
+        assert!(is_gameloop_process("GLABoxSVC.exe"));
+        assert!(is_gameloop_process("GLABoxHeadless.exe"));
         assert!(!is_gameloop_process("explorer"));
         assert!(!is_gameloop_process("chrome"));
         assert!(!is_gameloop_process("dnplayer")); // other emulators are out of scope
         assert!(!is_gameloop_process("HD-Player"));
+        // CEF embeds in unrelated apps: never a gate signal by itself
+        assert!(!is_gameloop_process("CefRendererProcess.exe"));
+        assert!(!is_gameloop_process("QQ.exe"));
+    }
+
+    #[test]
+    fn union_matches_profiles() {
+        // the hot-scan const and the profile cards must name the same
+        // families: a name added to one and missed by the other silently
+        // blinds either the scan or the attribution. CefRendererProcess is
+        // deliberately scan-only-excluded (see above), so it is absent here.
+        let mut from_const = GAMELOOP_PROC_NAMES.to_vec();
+        from_const.sort_unstable();
+        let mut from_profiles = super::super::emulator::all_proc_names();
+        from_profiles.sort_unstable();
+        assert_eq!(from_const, from_profiles);
+    }
+
+    #[test]
+    fn tasklist_names_parsed() {
+        let text = "\"GameLoopEmulator.exe\",\"8692\",\"Console\",\"1\",\"170,928 K\"\n\
+                    \"explorer.exe\",\"8616\",\"Console\",\"1\",\"431,604 K\"\n\
+                    \"GLABoxHeadless.exe\",\"9048\",\"Console\",\"1\",\"637,124 K\"\n";
+        let names = parse_tasklist_names(text);
+        assert_eq!(
+            names,
+            vec![
+                "GameLoopEmulator.exe".to_string(),
+                "explorer.exe".to_string(),
+                "GLABoxHeadless.exe".to_string()
+            ]
+        );
+        assert!(names.iter().any(|n| is_gameloop_process(n)));
     }
 
     #[test]
@@ -890,6 +1241,9 @@ mod tests {
         assert!(is_self_process("pubg-gameloop-lag-hunter-1.0.0"));
         assert!(is_self_process("pubg-gameloop-lag-hunter-1.2.3"));
         assert!(is_self_process("lag-hunter-2.0.0"));
+        // the headless companion and the test harness share the namespace
+        assert!(is_self_process("laghunter-cli.exe"));
+        assert!(is_self_process("lag_hunter_lib-ab12cd34.exe"));
         // anything that doesn't carry our prefix is not us
         assert!(!is_self_process("explorer"));
         assert!(!is_self_process("chrome"));

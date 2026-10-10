@@ -20,7 +20,17 @@
   padding: 0;
   padding-inline-start: 16px;
   background: var(--bg);
-  border-bottom: 1px solid var(--border);
+  border-block-end: 1px solid var(--border);
+}
+
+/* update signal in the chrome: the same 7px warn dot as the sidebar,
+   riding the version text (the About page owns the action) */
+.titlebar-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--fill-warning);
+  flex: none;
 }
 
 .titlebar-left {
@@ -74,9 +84,9 @@
 [dir="rtl"] .sb-collapse svg {
   transform: scaleX(-1);
 }
-/* RTL: the reports back-arrow is a direction-aware chevron too — in Arabic
-   "back" points right, same rule as the sidebar collapse chevron */
-[dir="rtl"] .reports-back svg {
+/* RTL: back-arrow chevrons are direction-aware (in Arabic "back" points
+   right, same rule as the sidebar collapse chevron) */
+[dir="rtl"] .back-btn svg {
   transform: scaleX(-1);
 }
 
@@ -98,6 +108,8 @@
   height: 100%;
 }
 
+/* default (not pointer) cursor is deliberate OS parity: native caption
+   buttons never show a hand, even with hover fills */
 .win-controls button {
   width: 46px;
   height: 100%;
@@ -198,9 +210,27 @@
   pointer-events: none;
 }
 
-/* active entry: the dot keeps its ring against the filled background */
+/* active entry: the dot keeps a contrasting ring against the filled
+   background (same-color ring rendered an unseparated blob) */
 .sb-item.is-active .sb-dot {
-  border-color: var(--warn);
+  border-color: var(--on-primary);
+}
+
+/* beta pill next to a sidebar entry: a FIXED signal yellow in both themes
+   (the --warn token flips to dark amber in light mode for body text, so it
+   cannot carry a solid pill there). Dark text on it reads in both themes.
+   In-flow label, not the corner update dot. Hidden with the labels on the
+   collapsed rail. Remove with its key when v2 goes stable. */
+.sb-beta {
+  margin-inline-start: auto;
+  flex: none;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #f5c518;
+  color: #231a03;
 }
 
 /* collapsed rail: icons only */
@@ -212,6 +242,11 @@
 .sidebar.is-collapsed .sb-item {
   justify-content: center;
   padding: 10px 0;
+}
+/* collapsed rail: the corner dot re-anchors to the centered glyph
+   (half the 7px dot off the middle — logical, mirrors with RTL) */
+.sidebar.is-collapsed .sb-dot {
+  inset-inline-end: calc(50% - 3.5px);
 }
 
 .sidebar.is-collapsed .sb-label {
@@ -245,6 +280,7 @@
 .content > div > .sys,
 .content > div > .procs,
 .content > div > .checks,
+.content > div > .tools,
 .content > div > .about,
 .content > div > .settings-page,
 .content > div > .monitor {
@@ -253,21 +289,48 @@
      screens, full width down to the 1024px minimum — centered, not stuck
      to the reading-start edge */
   width: 100%;
-  max-width: min(100%, 760px);
+  max-width: min(100%, 1100px);
   margin-inline: auto;
   padding-inline-end: 4px;
+  /* bottom breathing room inside every scroller: the focus ring reaches
+     4px past its control (2px outline plus 2px offset) and outlines never
+     push the scrollport, so a last-child button (About footer links, the
+     System copy button) had its ring and descenders clipped at scroll-end.
+     Same family as the tools top-room rule in pages.css. */
+  padding-block-end: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-2) transparent;
+  scrollbar-gutter: stable;
 }
 
+/* the monitor is a dashboard, not reading: it spans the full content
+   width (no centered measure), so square tiles fill
+   the row edge to edge at every window size */
 .content > div > .monitor {
   max-width: none;
 }
 
-/* wide viewport: let the checks container grow into the two-column reflow
-   (pages.css) instead of capping it at the single-column measure */
-@media (min-width: 1500px) {
-  .content > div > .checks {
-    max-width: min(100%, 1100px);
-  }
+/* Thin theme-matched scrollbars: 6px, thumb-only on a transparent track,
+   hover lightens via the hover token. One definition for every scrollable
+   view; visible only when the page actually overflows (overflow-y: auto
+   above), so roomy screens stay clean. */
+:is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::-webkit-scrollbar,
+.monitor::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+:is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::-webkit-scrollbar-thumb,
+.monitor::-webkit-scrollbar-thumb {
+  background: var(--border-2);
+  border-radius: 4px;
+}
+:is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::-webkit-scrollbar-thumb:hover,
+.monitor::-webkit-scrollbar-thumb:hover {
+  background: var(--hover-border);
+}
+:is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::-webkit-scrollbar-track,
+.monitor::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 /* HIDDEN beats the flex layout above — same specificity class + element
@@ -277,12 +340,16 @@
 }
 
 /* ---- icon micro-animations (quiet, app-wide) ---- */
-/* sidebar icons: nudge on hover, pop when becoming active */
+/* sidebar icons: nudge on hover (same 1.18 scale everywhere; the
+   tilt mirrors in RTL), pop when becoming active */
 .sb-item svg {
   transition: transform 0.25s var(--ease);
 }
 .sb-item:hover:not(.is-active) svg {
-  transform: scale(1.22) rotate(-6deg);
+  transform: scale(1.18) rotate(-6deg);
+}
+[dir="rtl"] .sb-item:hover:not(.is-active) svg {
+  transform: scale(1.18) rotate(6deg);
 }
 .sb-item.is-active svg {
   animation: sb-pop 0.3s var(--ease);
@@ -291,22 +358,4 @@
   0% { transform: scale(0.7); }
   60% { transform: scale(1.28); }
   100% { transform: scale(1); }
-}
-
-/* clean scrollbars: thin, theme-matched — About/Reports scroll without the
-   always-on gray bar. One :is() list covers both layouts (the direct child
-   and the keep-alive wrapper div) — the old three 15-selector blocks were
-   copy-pasted per property. */
-:is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .about, .settings-page, .monitor)::webkit-scrollbar,
-:is(.monitor, .feed-list)::webkit-scrollbar {
-  width: 8px;
-}
-:is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .about, .settings-page, .monitor)::webkit-scrollbar-thumb,
-:is(.monitor, .feed-list)::webkit-scrollbar-thumb {
-  background: var(--border-2);
-  border-radius: 4px;
-}
-:is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .about, .settings-page, .monitor)::webkit-scrollbar-track,
-:is(.monitor, .feed-list)::webkit-scrollbar-track {
-  background: transparent;
 }

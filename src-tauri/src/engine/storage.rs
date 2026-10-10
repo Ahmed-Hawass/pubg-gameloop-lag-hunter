@@ -12,7 +12,10 @@ use super::types::{iso_ms, EngineEvent, Sample, Thresholds};
 pub fn app_dir() -> PathBuf {
     let base = std::env::var("LOCALAPPDATA")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("."));
+        // LOCALAPPDATA is always set on Windows; a missing value must never
+        // land writes in the current directory (often read-only or the wrong
+        // drive). Fall back to the OS temp dir, still under our own folder.
+        .unwrap_or_else(|_| std::env::temp_dir());
     base.join("LagHunter")
 }
 
@@ -20,13 +23,87 @@ pub fn sessions_root() -> PathBuf {
     app_dir().join("sessions")
 }
 
+/// Ensure the sessions root exists at boot. It is born with the first
+/// session otherwise, so a fresh user who somehow reaches an "open the
+/// sessions folder" affordance before any scan (or a user who deleted
+/// the folder by hand while old reports are still listed) hits a
+/// missing-path error instead of an empty folder. One cheap mkdir.
+pub fn ensure_sessions_root() {
+    let _ = fs::create_dir_all(sessions_root());
+}
+
+/// Crash-safe file write: readers either see the previous complete file
+/// or the new complete file, never a truncated half-write. This matters
+/// because the Reports list reads `events.json`/`summary.json` while a
+/// running session's autosave rewrites them on a timer.
+pub(crate) fn write_file_atomic(path: &Path, contents: &[u8]) -> std::io::Result<()> {
+    let tmp = path.with_extension("laghunter-tmp");
+    fs::write(&tmp, contents)?;
+    fs::rename(&tmp, path)
+}
+
+/// Hard bound for trusted-but-tinkerable local JSON (mirrors the network
+/// MAX_METADATA_BYTES in update.rs): a hand-planted multi-GB summary or
+/// events file must read as missing, never as an OOM that aborts the app.
+pub(crate) const MAX_LOCAL_META_BYTES: u64 = 2 * 1024 * 1024;
+
+/// Bounded file read: None when missing, oversized, or unreadable.
+/// Every session/settings/history reader goes through this so no single
+/// planted file can exhaust memory (panic=abort would kill the app).
+/// TOCTOU-safe: the cap is enforced DURING the read via take(), not by a
+/// prior metadata check (a file growing between stat and read can't bypass).
+pub(crate) fn read_limited(path: &Path) -> Option<String> {
+    use std::io::Read;
+    let file = fs::File::open(path).ok()?;
+    let mut limited = file.take(MAX_LOCAL_META_BYTES + 1);
+    let mut buf = String::new();
+    limited.read_to_string(&mut buf).ok()?;
+    if buf.len() as u64 > MAX_LOCAL_META_BYTES {
+        return None;
+    }
+    Some(buf)
+}
+
 /// Create a new session directory named by local time: session-YYYY-MM-DD_HHMMSS
 /// (local = wall-clock time on the user's machine, DST-aware).
+/// Second-resolution ids collide when a stop+start lands inside the same
+/// wall-clock second — the id must stay SORTABLE (it is the list ordering
+/// AND carries the date), so a collision takes a monotonic -2, -3, ...
+/// suffix instead of waiting for the next second (which could land the new
+/// session BEFORE its true start time).
 pub fn new_session_dir() -> Result<(String, PathBuf), String> {
-    let id = session_id_from(&super::sampler::iso_now());
-    let dir = sessions_root().join(&id);
-    fs::create_dir_all(&dir).map_err(|e| format!("cannot create session dir: {e}"))?;
-    Ok((id, dir))
+    let base_id = session_id_from(&super::sampler::iso_now());
+    let root = sessions_root();
+    // the root may not exist yet (first run): create it once, then use
+    // atomic create_dir per session so two writers (GUI + CLI) can never
+    // claim the same id (exists()+create_dir_all was a TOCTOU: both could
+    // see "free" then share a dir while File::create truncated samples).
+    fs::create_dir_all(&root).map_err(|e| format!("cannot create sessions root: {e}"))?;
+    claim_session_dir(&root, &base_id)
+}
+
+/// Pure-ish claim step (testable): atomically claim base_id or the next
+/// -N suffix inside an existing root. create_dir fails on existing, so the
+/// check-and-create is one syscall, never a TOCTOU window.
+fn claim_session_dir(root: &Path, base_id: &str) -> Result<(String, PathBuf), String> {
+    let mut id = base_id.to_string();
+    let mut n = 2;
+    loop {
+        let dir = root.join(&id);
+        match fs::create_dir(&dir) {
+            Ok(()) => return Ok((id, dir)),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                id = format!("{base_id}-{n}");
+                n += 1;
+                // bound the suffix walk: a pathological folder with
+                // thousands of collisions must fail, never loop forever
+                if n > 10000 {
+                    return Err("too many session collisions".into());
+                }
+            }
+            Err(e) => return Err(format!("cannot create session dir: {e}")),
+        }
+    }
 }
 
 fn session_id_from(iso: &str) -> String {
@@ -34,6 +111,22 @@ fn session_id_from(iso: &str) -> String {
     let date = iso.get(0..10).unwrap_or("unknown");
     let time = iso.get(11..19).unwrap_or("000000").replace(':', "");
     format!("session-{date}_{time}")
+}
+
+/// Display date from a session id (`session-YYYY-MM-DD_HHMMSS`).
+/// Byte slicing would panic on multi-byte names (and this app builds
+/// with panic=abort), so every cut is a char-boundary-safe `.get`.
+/// Anything unexpected reads as the id itself, never a blank. Pure.
+fn session_id_date(id: &str) -> String {
+    id.strip_prefix("session-")
+        .map(|s| {
+            let d = s.get(0..10).unwrap_or(s);
+            let t = s.get(11..17).unwrap_or("000000");
+            let hh = t.get(0..2).unwrap_or("00");
+            let mm = t.get(2..4).unwrap_or("00");
+            format!("{d} {hh}:{mm}")
+        })
+        .unwrap_or_else(|| id.to_string())
 }
 
 pub struct SessionWriter {
@@ -53,22 +146,31 @@ impl SessionWriter {
         &self.dir
     }
 
-    pub fn append_sample(&mut self, s: &Sample) {
-        if let Ok(line) = serde_json::to_string(s) {
-            let _ = writeln!(self.samples, "{line}");
-        }
+    pub fn append_sample(&mut self, s: &Sample) -> Result<(), String> {
+        let line = serde_json::to_string(s).map_err(|e| format!("serialize sample: {e}"))?;
+        writeln!(self.samples, "{line}").map_err(|e| format!("write sample: {e}"))
     }
 
-    pub fn flush(&mut self) {
-        let _ = self.samples.flush();
+    pub fn flush(&mut self) -> Result<(), String> {
+        self.samples
+            .flush()
+            .map_err(|e| format!("flush samples: {e}"))
     }
 
     /// Autosafe: rewrite events + summary-lite periodically so a crash never loses data.
-    pub fn autosave(&self, events: &[EngineEvent], thresholds: &Thresholds, started_at: &str) {
-        let _ = fs::write(
-            self.dir.join("events.json"),
-            serde_json::to_string_pretty(events).unwrap_or_default(),
-        );
+    pub fn autosave(
+        &self,
+        events: &[EngineEvent],
+        thresholds: &Thresholds,
+        started_at: &str,
+    ) -> Result<(), String> {
+        write_file_atomic(
+            &self.dir.join("events.json"),
+            serde_json::to_string_pretty(events)
+                .unwrap_or_default()
+                .as_bytes(),
+        )
+        .map_err(|e| format!("autosave events: {e}"))?;
         let summary = serde_json::json!({
             "session": self.dir.file_name().and_then(|s| s.to_str()).unwrap_or(""),
             "startedAt": started_at,
@@ -76,41 +178,99 @@ impl SessionWriter {
             "thresholds": thresholds,
             "eventsCount": events.len(),
         });
-        let _ = fs::write(
-            self.dir.join("summary.json"),
-            serde_json::to_string_pretty(&summary).unwrap_or_default(),
-        );
+        write_file_atomic(
+            &self.dir.join("summary.json"),
+            serde_json::to_string_pretty(&summary)
+                .unwrap_or_default()
+                .as_bytes(),
+        )
+        .map_err(|e| format!("autosave summary: {e}"))?;
+        Ok(())
     }
 
     /// Final write: events, summary, CSV, Markdown report.
     /// Reads samples back from the jsonl file (the RAM window may have trimmed them).
+    /// Best-effort by design: a failing disk must still leave a listable
+    /// partial session behind instead of an invisible directory the summary
+    /// card points at. summary.json is the one hard requirement (the list
+    /// and the reader both key off it); everything else degrades to the
+    /// storageWriteFailed flag the outcome readers map to partial.
     pub fn finalize_from_disk(
         &mut self,
         events: &[EngineEvent],
         started_at: &str,
         thresholds: &Thresholds,
         samples_total: u64,
+        storage_write_failed: bool,
     ) -> Result<PathBuf, String> {
-        self.flush();
+        let _ = self.flush();
 
-        // read all samples from disk — the file is the source of truth
-        let samples: Vec<Sample> = fs::read_to_string(self.dir.join("samples.jsonl"))
-            .map_err(|e| format!("cannot read samples: {e}"))?
-            .lines()
-            .filter_map(|l| {
-                if l.trim().is_empty() {
-                    None
-                } else {
-                    serde_json::from_str(l).ok()
+        // Stream samples from disk (never read_to_string the whole file):
+        // a planted multi-GB jsonl must finalize as empty/partial, never
+        // as an OOM that aborts the app. Cap: 32 MB or 200k samples.
+        // The byte counter below (not the metadata pre-check) is the real
+        // guard: the file can grow between stat and read (TOCTOU), so every
+        // successfully parsed line accumulates its length and crossing the
+        // cap discards everything and stops collecting (empty/partial out).
+        let samples: Vec<Sample> = {
+            use std::io::{BufRead, BufReader};
+            const MAX_SAMPLE_BYTES: u64 = 32 * 1024 * 1024;
+            const MAX_SAMPLES: usize = 200_000;
+            let mut out = Vec::new();
+            if let Ok(f) = fs::File::open(self.dir.join("samples.jsonl")) {
+                let meta_len = f.metadata().map(|m| m.len()).unwrap_or(0);
+                if meta_len <= MAX_SAMPLE_BYTES {
+                    let mut reader = BufReader::new(f);
+                    let mut line = String::new();
+                    let mut parsed_bytes: u64 = 0;
+                    loop {
+                        line.clear();
+                        match reader.read_line(&mut line) {
+                            Ok(0) => break,
+                            Ok(_) => {
+                                if out.len() >= MAX_SAMPLES {
+                                    break;
+                                }
+                                let t = line.trim();
+                                if t.is_empty() {
+                                    continue;
+                                }
+                                // bound each line: a single GB line can't OOM us
+                                if t.len() > 64 * 1024 {
+                                    continue;
+                                }
+                                if let Ok(s) = serde_json::from_str(t) {
+                                    parsed_bytes += t.len() as u64;
+                                    if parsed_bytes > MAX_SAMPLE_BYTES {
+                                        // TOCTOU growth: file was small at
+                                        // stat but streamed past the cap —
+                                        // drop everything, finalize empty.
+                                        out.clear();
+                                        break;
+                                    }
+                                    out.push(s);
+                                }
+                            }
+                            Err(_) => break,
+                        }
+                    }
                 }
-            })
-            .collect();
+            }
+            out
+        };
 
+        let mut failed = storage_write_failed;
         // events.json
-        let _ = fs::write(
-            self.dir.join("events.json"),
-            serde_json::to_string_pretty(events).unwrap_or_default(),
-        );
+        if write_file_atomic(
+            &self.dir.join("events.json"),
+            serde_json::to_string_pretty(events)
+                .unwrap_or_default()
+                .as_bytes(),
+        )
+        .is_err()
+        {
+            failed = true;
+        }
 
         // samples.csv
         let mut csv = String::from("time,cpu_pct,proc_perf_pct,avail_mb,pages_in_ps,disk_queue,disk_busy_pct,gpu_sm_pct,gpu_clk_mhz,gpu_temp_c\n");
@@ -130,10 +290,19 @@ impl SessionWriter {
                 fmt(g.and_then(|g| g.temp)),
             ));
         }
-        let _ = fs::write(self.dir.join("samples.csv"), csv);
+        if write_file_atomic(&self.dir.join("samples.csv"), csv.as_bytes()).is_err() {
+            failed = true;
+        }
 
-        // summary.json + report.md
+        // report.md before the summary so the flag below covers every write
         let stats = SessionStats::from(&samples);
+        let report = build_report(&stats, events, samples.len() as u64);
+        let rp = self.dir.join("report.md");
+        if write_file_atomic(&rp, report.as_bytes()).is_err() {
+            failed = true;
+        }
+
+        // summary.json last: the commit point the list and reader key off
         let summary = serde_json::json!({
             "session": self.dir.file_name().and_then(|s| s.to_str()).unwrap_or(""),
             "startedAt": started_at,
@@ -141,6 +310,7 @@ impl SessionWriter {
             "durationSec": stats.duration_sec,
             "samplesCount": samples.len(),
             "samplesTotal": samples_total,
+            "storageWriteFailed": failed,
             "thresholds": thresholds,
             "stats": {
                 "cpuAvg": stats.cpu_avg, "cpuP95": stats.cpu_p95,
@@ -149,14 +319,13 @@ impl SessionWriter {
                 "backgroundPct": stats.background_pct,
             },
         });
-        let _ = fs::write(
-            self.dir.join("summary.json"),
-            serde_json::to_string_pretty(&summary).unwrap_or_default(),
-        );
-
-        let report = build_report(&stats, events, samples.len() as u64);
-        let rp = self.dir.join("report.md");
-        fs::write(&rp, report).map_err(|e| format!("cannot write report: {e}"))?;
+        write_file_atomic(
+            &self.dir.join("summary.json"),
+            serde_json::to_string_pretty(&summary)
+                .unwrap_or_default()
+                .as_bytes(),
+        )
+        .map_err(|e| format!("write summary: {e}"))?;
         Ok(rp)
     }
 }
@@ -192,9 +361,15 @@ impl SessionStats {
         // single bad line would kill the whole app and take the session with
         // it. Equal-comparison on unorderable pairs keeps the sort total.
         cpus.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        // p95 by nearest-rank: ceil(0.95·n) − 1 clamped to the data. The
+        // old floor-index form returned the MAXIMUM for any n ≤ 20 (index
+        // (n·0.95) % n = n−1) and overstated "CPU p95" in short sessions.
         let p95 = |v: &mut Vec<f64>| {
-            v.get((v.len() as f64 * 0.95) as usize % v.len().max(1))
-                .copied()
+            if v.is_empty() {
+                return None;
+            }
+            let rank = ((v.len() as f64 * 0.95).ceil() as usize).clamp(1, v.len());
+            v.get(rank - 1).copied()
         };
         let avg = |v: &[f64]| {
             if v.is_empty() {
@@ -294,7 +469,9 @@ fn build_report(stats: &SessionStats, events: &[EngineEvent], n: u64) -> String 
         for e in events.iter().take(200) {
             md.push_str(&format!(
                 "| {} | {} | {} | {:?} | {} | {} |\n",
-                &e.t[11..19.min(e.t.len())],
+                // .get, not slicing: a malformed timestamp from a future
+                // producer must never panic the app (panic = abort here)
+                e.t.get(11..19).unwrap_or(&e.t),
                 e.kind,
                 e.severity.as_str(),
                 e.phase,
@@ -315,7 +492,36 @@ fn build_report(stats: &SessionStats, events: &[EngineEvent], n: u64) -> String 
     md
 }
 
+/// Stream-count the samples file: `read_to_string` pulled the WHOLE file
+/// into memory (tens of MB on long sessions) just to count lines, on
+/// every Reports-list refresh. A buffered newline walk reads in chunks
+/// and never holds the file.
+fn count_lines(path: &Path) -> u64 {
+    use std::io::{BufRead, BufReader};
+    let Ok(f) = fs::File::open(path) else {
+        return 0;
+    };
+    let mut reader = BufReader::new(f);
+    let mut count = 0u64;
+    let mut line = String::new();
+    loop {
+        line.clear();
+        match reader.read_line(&mut line) {
+            Ok(0) => break,
+            Ok(_) => {
+                if !line.trim().is_empty() {
+                    count += 1;
+                }
+            }
+            Err(_) => break,
+        }
+    }
+    count
+}
+
 /// All session dirs sorted by name (= chronological, newest last).
+/// Foreign folder names (hand-planted, wrong shape) never enter the
+/// list: readers below can assume the strict id shape.
 pub fn list_sessions() -> Vec<String> {
     let Ok(rd) = fs::read_dir(sessions_root()) else {
         return vec![];
@@ -324,6 +530,7 @@ pub fn list_sessions() -> Vec<String> {
         .flatten()
         .filter(|e| e.path().is_dir())
         .filter_map(|e| e.file_name().to_str().map(String::from))
+        .filter(|name| validate_session_id(name).is_ok())
         .collect();
     v.sort();
     v
@@ -345,53 +552,52 @@ pub struct SessionEntry {
 }
 
 /// Session list with the numbers users care about. Newest first.
-pub fn session_entries() -> Vec<SessionEntry> {
+/// `live_id`: the session being written RIGHT NOW (from the engine, not
+/// the filesystem) — hidden from the list whatever state its files are
+/// in. The old heuristic (hide only when summary.json is missing) broke
+/// at the first autosave (~50s in, summary.json appears with
+/// partial:true) and the half-written session showed up as a
+/// half-finished report.
+pub fn session_entries(live_id: Option<&str>) -> Vec<SessionEntry> {
     let ids = list_sessions();
     let mut out: Vec<SessionEntry> = Vec::new();
     for id in ids {
+        if Some(id.as_str()) == live_id {
+            continue; // live session — not a report yet
+        }
         let dir = sessions_root().join(&id);
-        // a session with no summary and a samples file touched within the
-        // last minute is being written RIGHT NOW — hide it until it's real
+        // legacy safety net for crashed runs: a session with no summary
+        // whose samples were touched within the last minute is a run that
+        // died mid-write — hide it until it is a minute old
         let summary_exists = dir.join("summary.json").is_file();
         if !summary_exists {
             if let Ok(meta) = fs::metadata(dir.join("samples.jsonl")) {
                 if let Ok(modified) = meta.modified() {
                     if let Ok(age) = modified.elapsed() {
                         if age.as_secs() < 60 {
-                            continue; // live session — not a report yet
+                            continue; // fresh corpse of a crashed run — not a report yet
                         }
                     }
                 }
             }
         }
-        // date from the id: session-YYYY-MM-DD_HHMMSS -> "YYYY-MM-DD HH:MM"
-        let date = id
-            .strip_prefix("session-")
-            .map(|s| {
-                let d = &s[0..10.min(s.len())];
-                let t = s.get(11..19.min(s.len())).unwrap_or("000000");
-                let hh = t.get(0..2).unwrap_or("00");
-                let mm = t.get(2..4).unwrap_or("00");
-                format!("{d} {hh}:{mm}")
-            })
-            .unwrap_or_else(|| id.clone());
-        // samples count from jsonl (cheap line count, no full parse)
-        let samples = fs::read_dir(&dir)
-            .ok()
-            .and_then(|_| {
-                fs::read_to_string(dir.join("samples.jsonl"))
-                    .ok()
-                    .map(|t| t.lines().filter(|l| !l.trim().is_empty()).count() as u64)
-            })
-            .unwrap_or(0);
-        // summary numbers when finalized
-        let (duration, spikes, outcome) = match fs::read_to_string(dir.join("summary.json")) {
-            Ok(text) => match serde_json::from_str::<serde_json::Value>(&text) {
+        // date from the id, boundary-safe for any local folder name
+        let date = session_id_date(&id);
+        // samples count from jsonl (streamed line count, no full parse)
+        let samples = count_lines(&dir.join("samples.jsonl"));
+        // summary numbers when finalized (bounded: a planted GB file
+        // reads as missing, never as an OOM)
+        let (duration, spikes, outcome) = match read_limited(&dir.join("summary.json")) {
+            Some(text) => match serde_json::from_str::<serde_json::Value>(&text) {
                 Ok(v) => {
                     let partial = v.get("partial").and_then(|p| p.as_bool()).unwrap_or(false);
+                    let write_failed = v
+                        .get("storageWriteFailed")
+                        .and_then(|w| w.as_bool())
+                        .unwrap_or(false);
                     let dur = v.get("durationSec").and_then(|d| d.as_u64()).unwrap_or(0);
                     let (spikes, distinct_issues) = classify_events(&dir);
-                    let outcome = if partial {
+                    let outcome = if partial || write_failed {
                         "partial".to_string()
                     } else {
                         honest_outcome(spikes, distinct_issues)
@@ -400,7 +606,7 @@ pub fn session_entries() -> Vec<SessionEntry> {
                 }
                 Err(_) => (0, 0, "partial".into()),
             },
-            Err(_) => {
+            None => {
                 let (spikes, _distinct_issues) = classify_events(&dir);
                 // samples exist but no summary = crashed mid-session: NEVER call it clean
                 let outcome = if samples == 0 {
@@ -429,7 +635,7 @@ pub fn session_entries() -> Vec<SessionEntry> {
 /// Frame freezes + distinct issue kinds from a session's events.
 /// Returns (lag_spikes, distinct_issue_kinds).
 fn classify_events(dir: &Path) -> (u64, u64) {
-    let Ok(text) = fs::read_to_string(dir.join("events.json")) else {
+    let Some(text) = read_limited(&dir.join("events.json")) else {
         return (0, 0);
     };
     let Ok(evs) = serde_json::from_str::<Vec<serde_json::Value>>(&text) else {
@@ -465,23 +671,88 @@ fn honest_outcome(spikes: u64, distinct_issues: u64) -> String {
     }
 }
 
-/// Same session-id guard as delete/session_dir: anything that doesn't look
-/// like a session id is refused before it ever touches the filesystem.
+/// Strict session-id shape: session-YYYY-MM-DD_HHMMSS with an optional
+/// -N collision suffix. Anything else (ADS colons, wildcards, spaces,
+/// unicode, trailing dots, wrong lengths) is refused before touching
+/// the filesystem. Pure.
 fn validate_session_id(id: &str) -> Result<(), String> {
-    if !id.starts_with("session-") || id.contains("..") || id.contains('\\') || id.contains('/') {
+    if id.len() > 40 || !id.starts_with("session-") {
         return Err("invalid session id".into());
     }
+    let rest = &id["session-".len()..];
+    // head is exactly date(10) + '_' + time(6); anything after must be
+    // a -N collision suffix (the id stays sortable and chronological)
+    if rest.len() < 17 {
+        return Err("invalid session id".into());
+    }
+    let (head, suffix) = rest.split_at(17);
+    let b = head.as_bytes();
+    // YYYY-MM-DD_HHMMSS
+    for &i in &[4, 7] {
+        if b[i] != b'-' {
+            return Err("invalid session id".into());
+        }
+    }
+    if b[10] != b'_' {
+        return Err("invalid session id".into());
+    }
+    for (i, &c) in b.iter().enumerate() {
+        if i == 4 || i == 7 || i == 10 {
+            continue;
+        }
+        if !c.is_ascii_digit() {
+            return Err("invalid session id".into());
+        }
+    }
+    if !suffix.is_empty() {
+        if !suffix.starts_with('-') || suffix.len() < 2 || suffix.len() > 6 {
+            return Err("invalid session id".into());
+        }
+        if !suffix[1..].bytes().all(|c| c.is_ascii_digit()) {
+            return Err("invalid session id".into());
+        }
+    }
     Ok(())
+}
+
+/// Resolve a session dir fail-closed: strict id, not a symlink, and
+/// canonicalized inside the sessions root (a planted junction pointing
+/// at System32 must never be emptied by the Reports delete buttons).
+fn checked_session_dir(id: &str) -> Result<PathBuf, String> {
+    validate_session_id(id)?;
+    let root = sessions_root();
+    let dir = root.join(id);
+    let meta = std::fs::symlink_metadata(&dir).map_err(|_| format!("session not found: {id}"))?;
+    if meta.is_symlink() {
+        return Err("session is a link, refusing".into());
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+        if meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return Err("session is a link, refusing".into());
+        }
+    }
+    if !dir.is_dir() {
+        return Err(format!("session not found: {id}"));
+    }
+    let canonical_root = root
+        .canonicalize()
+        .map_err(|e| format!("app data unavailable: {e}"))?;
+    let canonical = dir
+        .canonicalize()
+        .map_err(|e| format!("session unreadable: {e}"))?;
+    if !canonical.starts_with(&canonical_root) {
+        return Err("session escapes the app data folder".into());
+    }
+    Ok(canonical)
 }
 
 /// Delete a session directory (Reports page cleanup).
 pub fn delete_session(id: &str) -> Result<(), String> {
     // refuse anything that doesn't look like a session id (path safety)
-    validate_session_id(id)?;
-    let dir = sessions_root().join(id);
-    if !dir.is_dir() {
-        return Err(format!("session not found: {id}"));
-    }
+    let dir = checked_session_dir(id)?;
     fs::remove_dir_all(&dir).map_err(|e| format!("cannot delete: {e}"))
 }
 
@@ -498,15 +769,43 @@ pub fn delete_all_sessions(root: &Path, exclude_id: Option<&str>) -> Result<Vec<
     let Ok(rd) = fs::read_dir(root) else {
         return Ok(deleted);
     };
+    let canonical_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
     for e in rd.flatten() {
         let name = e.file_name().to_str().unwrap_or("").to_string();
-        if !name.starts_with("session-") || name.contains("..") || name.contains('\\') || name.contains('/') {
+        if validate_session_id(&name).is_err() {
             continue;
         }
         if Some(name.as_str()) == exclude_id {
             continue;
         }
-        if e.path().is_dir() && fs::remove_dir_all(e.path()).is_ok() {
+        let p = e.path();
+        // same link + containment gate as single delete: a planted
+        // junction must never be emptied by the bulk button either
+        let Ok(meta) = std::fs::symlink_metadata(&p) else {
+            continue;
+        };
+        if meta.is_symlink() {
+            continue;
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::MetadataExt;
+            const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+            if meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+                continue;
+            }
+        }
+        if !p.is_dir() {
+            continue;
+        }
+        if let Ok(canonical) = p.canonicalize() {
+            if !canonical.starts_with(&canonical_root) {
+                continue;
+            }
+        } else {
+            continue;
+        }
+        if fs::remove_dir_all(&p).is_ok() {
             deleted.push(name);
         }
     }
@@ -516,11 +815,7 @@ pub fn delete_all_sessions(root: &Path, exclude_id: Option<&str>) -> Result<Vec<
 
 /// Full path of a session dir (for "open folder").
 pub fn session_dir(id: &str) -> Result<String, String> {
-    validate_session_id(id)?;
-    let dir = sessions_root().join(id);
-    if !dir.is_dir() {
-        return Err(format!("session not found: {id}"));
-    }
+    let dir = checked_session_dir(id)?;
     Ok(dir.to_string_lossy().to_string())
 }
 
@@ -542,12 +837,22 @@ pub struct FriendlyReport {
     pub outcome: String,
     /// user-facing lines: key moments in plain language
     pub highlights: Vec<HighlightEntry>,
-    /// metric summary lines like "CPU stayed under 61% the whole session"
-    pub metrics_summary: Vec<String>,
+    /// metric summary facts: machine keys + raw numbers, the UI composes
+    /// the sentence per language (same contract as highlights)
+    pub metrics_summary: Vec<MetricEntry>,
     /// plain-language findings (one per distinct issue)
     pub findings: Vec<FriendlyFinding>,
     /// raw markdown file path (for "open externally")
     pub raw_path: String,
+}
+
+/// One metrics-summary fact: a machine key plus the measured number.
+/// The UI owns the sentence (per language); the engine owns the fact.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct MetricEntry {
+    /// e.g. "cpuPeak" | "cpuPerfMin" | "ramFreeMin" | "gpuTempMax" | "gpuUsageAvg"
+    pub key: String,
+    pub value: f64,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -562,24 +867,15 @@ pub struct FriendlyFinding {
 }
 
 pub fn friendly_report(id: &str) -> Result<FriendlyReport, String> {
-    validate_session_id(id)?;
-    let dir = sessions_root().join(id);
-    if !dir.is_dir() {
-        return Err(format!("session not found: {id}"));
-    }
+    let dir = checked_session_dir(id)?;
 
-    let summary: serde_json::Value = fs::read_to_string(dir.join("summary.json"))
-        .ok()
+    let summary: serde_json::Value = read_limited(&dir.join("summary.json"))
         .and_then(|t| serde_json::from_str(&t).ok())
         .unwrap_or(serde_json::json!({}));
-    let events: Vec<serde_json::Value> = fs::read_to_string(dir.join("events.json"))
-        .ok()
+    let events: Vec<serde_json::Value> = read_limited(&dir.join("events.json"))
         .and_then(|t| serde_json::from_str(&t).ok())
         .unwrap_or_default();
-    let samples = fs::read_to_string(dir.join("samples.jsonl"))
-        .ok()
-        .map(|t| t.lines().filter(|l| !l.trim().is_empty()).count() as u64)
-        .unwrap_or(0);
+    let samples = count_lines(&dir.join("samples.jsonl"));
 
     let duration = summary
         .get("durationSec")
@@ -590,22 +886,17 @@ pub fn friendly_report(id: &str) -> Result<FriendlyReport, String> {
         .get("partial")
         .and_then(|p| p.as_bool())
         .unwrap_or(false);
-    let outcome = if partial {
+    let write_failed = summary
+        .get("storageWriteFailed")
+        .and_then(|w| w.as_bool())
+        .unwrap_or(false);
+    let outcome = if partial || write_failed {
         "partial".to_string()
     } else {
         honest_outcome(spikes, distinct_issues)
     };
 
-    let date = id
-        .strip_prefix("session-")
-        .map(|s| {
-            let d = &s[0..10.min(s.len())];
-            let t = s.get(11..19.min(s.len())).unwrap_or("000000");
-            let hh = t.get(0..2).unwrap_or("00");
-            let mm = t.get(2..4).unwrap_or("00");
-            format!("{d} {hh}:{mm}")
-        })
-        .unwrap_or_else(|| id.to_string());
+    let date = session_id_date(id);
 
     // findings: map distinct event kinds to friendly copy (same copy as diagnoser)
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
@@ -634,11 +925,16 @@ pub fn friendly_report(id: &str) -> Result<FriendlyReport, String> {
         });
     }
 
-    // highlights: raw event facts (kind + clock + duration) — the UI composes
-    // the sentence in the user's language. Max 8, newest last.
+    // highlights: known event facts only (kind + clock + duration) — the
+    // UI composes the sentence in the user's language. Max 8, newest
+    // last. Unknown kinds are skipped (a planted kind string never
+    // reaches the UI verbatim); findings already map them to Other event.
     let mut highlights: Vec<HighlightEntry> = Vec::new();
     for ev in &events {
         let kind = ev.get("kind").and_then(|k| k.as_str()).unwrap_or("");
+        if !is_known_highlight_kind(kind) {
+            continue;
+        }
         let sev = ev
             .get("severity")
             .and_then(|s| s.as_str())
@@ -682,34 +978,46 @@ pub fn friendly_report(id: &str) -> Result<FriendlyReport, String> {
         }
     }
 
-    // metrics summary from summary.json stats
+    // metrics summary from summary.json stats — machine keys + raw numbers,
+    // the UI composes the sentence per language (the old English sentences
+    // shipped verbatim into Arabic reports; keys follow the highlights
+    // contract now)
     let stats = summary
         .get("stats")
         .cloned()
         .unwrap_or(serde_json::json!({}));
     let mut metrics_summary = Vec::new();
     if let Some(v) = stats.get("cpuP95").and_then(|v| v.as_f64()) {
-        metrics_summary.push(format!("CPU peaked around {:.0}% under load.", v));
+        metrics_summary.push(MetricEntry {
+            key: "cpuPeak".into(),
+            value: v,
+        });
     }
     if let Some(v) = stats.get("procPerfMin").and_then(|v| v.as_f64()) {
         if v < 90.0 {
-            metrics_summary.push(format!(
-                "CPU dropped to {:.0}% of its speed at some point.",
-                v
-            ));
+            metrics_summary.push(MetricEntry {
+                key: "cpuPerfMin".into(),
+                value: v,
+            });
         }
     }
     if let Some(v) = stats.get("availMin").and_then(|v| v.as_f64()) {
-        metrics_summary.push(format!("At least {:.0} MB of RAM stayed free.", v));
+        metrics_summary.push(MetricEntry {
+            key: "ramFreeMin".into(),
+            value: v,
+        });
     }
     if let Some(v) = stats.get("gpuTempMax").and_then(|v| v.as_f64()) {
-        metrics_summary.push(format!("GPU reached {:.0}°C at its hottest.", v));
+        metrics_summary.push(MetricEntry {
+            key: "gpuTempMax".into(),
+            value: v,
+        });
     }
     if let Some(v) = stats.get("gpuSmAvg").and_then(|v| v.as_f64()) {
-        metrics_summary.push(format!(
-            "GPU averaged around {:.0}% usage while rendering.",
-            v
-        ));
+        metrics_summary.push(MetricEntry {
+            key: "gpuUsageAvg".into(),
+            value: v,
+        });
     }
 
     let raw_path = dir.join("report.md").to_string_lossy().to_string();
@@ -737,6 +1045,28 @@ pub struct HighlightEntry {
     pub clock: String,
     /// duration in seconds when known
     pub dur_sec: Option<f64>,
+}
+
+/// Allowlist for highlight kinds: only engine-known moments reach the UI.
+/// Anything else (including a hand-planted string in events.json) is
+/// skipped by the highlights loop. Pure.
+fn is_known_highlight_kind(kind: &str) -> bool {
+    matches!(
+        kind,
+        "disk_queue"
+            | "disk_busy"
+            | "hard_faults"
+            | "cpu_saturation"
+            | "cpu_throttle"
+            | "mem_pressure"
+            | "paging_churn"
+            | "gpu_mem_idle"
+            | "gpu_activity_cliff"
+            | "gpu_activity_cliff_loaded"
+            | "gpu_clock_low"
+            | "gpu_temp"
+            | "spike"
+    )
 }
 
 /// Machine key for UI translation (mirrors the diagnoser dictionary keys).
@@ -787,13 +1117,59 @@ mod tests {
     }
 
     #[test]
+    fn session_id_date_never_panics_on_foreign_names() {
+        // a hand-planted folder with multi-byte chars must degrade to
+        // readable text, never panic (panic=abort would kill the app)
+        assert_eq!(
+            session_id_date("session-2026-08-31_001952"),
+            "2026-08-31 00:19"
+        );
+        let odd = session_id_date("session-中文-2026-08-31_001952");
+        assert!(!odd.is_empty());
+        assert_eq!(session_id_date("garbage"), "garbage");
+        assert_eq!(session_id_date("session-"), " 00:00");
+    }
+
+    #[test]
+    fn atomic_write_replaces_target_and_leaves_no_temp() {
+        // readers must only ever see a complete file: the helper writes a
+        // sibling and renames it over the target, so a crash cannot leave
+        // a truncated events.json/summary.json behind for the Reports list.
+        let d = std::env::temp_dir().join(format!("lh-atomic-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(&d).unwrap();
+        let target = d.join("events.json");
+        fs::write(&target, r#"[{"old":true}]"#).unwrap();
+        write_file_atomic(&target, br#"[{"new":true}]"#).unwrap();
+        assert_eq!(fs::read_to_string(&target).unwrap(), r#"[{"new":true}]"#);
+        assert!(!d.join("events.laghunter-tmp").exists());
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
     fn iso_ms_known_epoch() {
         // shared parser (types::iso_ms) keeps its epoch contract here
         assert_eq!(iso_ms("1970-01-01T00:00:00.000Z"), Some(0));
-        assert_eq!(
-            iso_ms("2026-08-31T00:00:00.000Z"),
-            Some(1_788_134_400_000)
-        );
+        assert_eq!(iso_ms("2026-08-31T00:00:00.000Z"), Some(1_788_134_400_000));
+    }
+
+    #[test]
+    fn p95_is_nearest_rank_not_max_for_small_samples() {
+        // 20 sorted values 1..20: nearest-rank p95 = ceil(0.95·20) − 1 =
+        // index 18 → 19.0. The old form returned index 19 → 20.0 (the
+        // MAX) — every short session overstated its CPU p95.
+        let vals: Vec<Sample> = (1..=20)
+            .map(|i| Sample {
+                t: "2026-08-31T05:00:00.000Z".into(),
+                cpu_total: Some(i as f64),
+                ..Default::default()
+            })
+            .collect();
+        let stats = SessionStats::from(&vals);
+        assert_eq!(stats.cpu_p95, Some(19.0));
+        // n=1: the only value is the p95
+        let one = vec![vals[0].clone()];
+        assert_eq!(SessionStats::from(&one).cpu_p95, Some(1.0));
     }
 
     #[test]
@@ -894,12 +1270,160 @@ mod tests {
 
     #[test]
     fn path_traversal_rejected() {
-        // delete/session-dir ids must look like session-* and stay inside our root
+        // delete/session-dir ids must match the strict shape and stay inside our root
         assert!(delete_session("../evil").is_err());
         assert!(delete_session("session-..\\..\\evil").is_err());
         assert!(delete_session("not-a-session").is_err());
         assert!(session_dir("..\\..\\Windows").is_err());
+        // ADS, wildcards, spaces, unicode, and overlong ids are refused too
+        assert!(validate_session_id("session-2026-08-31_000000:evil").is_err());
+        assert!(validate_session_id("session-2026-08-31_000000 evil").is_err());
+        assert!(validate_session_id("session-2026-08-31_000000*.exe").is_err());
+        assert!(validate_session_id("session-中文-2026-08-31_000000").is_err());
+        assert!(validate_session_id(&format!("session-{}_000000", "9".repeat(60))).is_err());
+        // strict shape passes, including the -N collision suffix
+        assert!(validate_session_id("session-2026-08-31_001952").is_ok());
+        assert!(validate_session_id("session-2026-08-31_001952-2").is_ok());
+        assert!(validate_session_id("session-2026-08-31_00195").is_err());
         // a well-formed id that simply doesn't exist = clean error, no panic
         assert!(delete_session("session-2026-08-31_000000").is_err());
+    }
+
+    #[test]
+    fn oversized_local_meta_reads_as_missing() {
+        // a hand-planted multi-MB summary must read as missing (partial),
+        // never as an OOM: the bound mirrors the network metadata cap
+        let d = std::env::temp_dir().join(format!("lh-limited-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(&d).unwrap();
+        let big = d.join("summary.json");
+        let blob = "x".repeat((MAX_LOCAL_META_BYTES + 16) as usize);
+        fs::write(&big, blob).unwrap();
+        assert!(read_limited(&big).is_none());
+        let small = d.join("small.json");
+        fs::write(&small, r#"{"ok":true}"#).unwrap();
+        assert_eq!(read_limited(&small).as_deref(), Some(r#"{"ok":true}"#));
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn claim_session_dir_is_atomic_on_collision() {
+        // pre-claim base id: the next claim must take -2 without reusing
+        let root = std::env::temp_dir().join(format!("lh-claim-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let base = "session-2026-08-31_001952";
+        let (first, _) = claim_session_dir(&root, base).unwrap();
+        assert_eq!(first, base);
+        let (second, second_dir) = claim_session_dir(&root, base).unwrap();
+        assert_eq!(second, format!("{base}-2"));
+        assert!(second_dir.is_dir());
+        // the first dir was never truncated/reused
+        assert!(root.join(base).is_dir());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn highlight_allowlist_skips_planted_kinds() {
+        assert!(is_known_highlight_kind("disk_queue"));
+        assert!(is_known_highlight_kind("spike"));
+        assert!(!is_known_highlight_kind(""));
+        assert!(!is_known_highlight_kind("evil<script>"));
+        assert!(!is_known_highlight_kind("disk_queue; rm -rf"));
+    }
+
+    #[test]
+    fn report_dictionary_matches_the_live_one() {
+        // the report reader and the live cards must classify every engine
+        // kind identically: with two separate dictionaries the same event
+        // could show as gpu_busy live and scene_hitch in the report. This
+        // pins finding_key to the diagnoser's key_for for every kind both
+        // know (finding_key sees a bare kind string; key_for an event).
+        let mk_ev = |kind: &str| super::super::types::EngineEvent {
+            kind: kind.into(),
+            phase: super::super::types::Phase::Instant,
+            severity: super::super::types::Severity::Crit,
+            t: "2026-08-31T05:00:00.000Z".into(),
+            duration_sec: None,
+            detail: String::new(),
+        };
+        for kind in [
+            "disk_queue",
+            "disk_busy",
+            "hard_faults",
+            "cpu_saturation",
+            "cpu_throttle",
+            "spike",
+            "mem_pressure",
+            "paging_churn",
+            "gpu_mem_idle",
+            "gpu_activity_cliff",
+            "gpu_activity_cliff_loaded",
+            "gpu_clock_low",
+            "gpu_temp",
+        ] {
+            assert_eq!(
+                finding_key(kind),
+                super::super::diagnoser::key_for(&mk_ev(kind)),
+                "the live cards and the saved report must agree on '{kind}'"
+            );
+        }
+        // unknown kinds map to "" on BOTH sides (never mislabeled)
+        assert_eq!(finding_key("mystery_kind"), "");
+        assert_eq!(super::super::diagnoser::key_for(&mk_ev("mystery_kind")), "");
+    }
+
+    #[test]
+    fn huge_samples_file_finalizes_empty_without_oom() {
+        // a planted multi-GB jsonl must finalize as empty/partial, never as
+        // an OOM: the streaming byte counter drops everything past 32 MB.
+        // The file here is just over the cap (padded valid samples so every
+        // line parses and accumulates); finalize must still succeed with a
+        // zero-sample summary and a report on disk.
+        use std::io::Write;
+        let dir = std::env::temp_dir().join(format!("lh-huge-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let pad = "x".repeat(8192);
+        let line =
+            format!("{{\"t\":\"2026-08-31T05:00:00.000Z\",\"cpu_total\":50.0,\"pad\":\"{pad}\"}}");
+        let line_len = line.len() as u64;
+        // just over 32 MB worth of parsed bytes
+        let target: u64 = 32 * 1024 * 1024 + 64 * 1024;
+        let n = (target / line_len + 1) as usize;
+        let f = fs::File::create(dir.join("samples.jsonl")).unwrap();
+        let mut w = std::io::BufWriter::new(f);
+        for _ in 0..n {
+            w.write_all(line.as_bytes()).unwrap();
+            w.write_all(b"\n").unwrap();
+        }
+        w.flush().unwrap();
+        drop(w);
+        let handle = fs::OpenOptions::new()
+            .append(true)
+            .open(dir.join("samples.jsonl"))
+            .unwrap();
+        let mut sw = SessionWriter {
+            samples: handle,
+            dir: dir.clone(),
+        };
+        let rp = sw
+            .finalize_from_disk(
+                &[],
+                "2026-08-31T05:00:00.000Z",
+                &Thresholds::default(),
+                n as u64,
+                false,
+            )
+            .expect("huge file must still finalize");
+        assert!(rp.is_file());
+        let summary: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(dir.join("summary.json")).unwrap()).unwrap();
+        assert_eq!(
+            summary.get("samplesCount").and_then(|v| v.as_u64()),
+            Some(0),
+            "over-cap stream must finalize with zero samples"
+        );
+        let _ = fs::remove_dir_all(&dir);
     }
 }

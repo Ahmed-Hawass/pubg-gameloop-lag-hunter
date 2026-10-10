@@ -3,13 +3,18 @@
 
 use std::collections::HashMap;
 
-use super::types::{others_ok, EngineEvent, Phase, Sample, Severity, Thresholds};
+use super::types::{EngineEvent, Phase, Sample, Severity, Thresholds};
 
 /// Stateful detector: feed samples, get events. Hysteresis per condition key.
 pub struct Detector {
     th: Thresholds,
+    /// theoretical max core clock (nvidia-smi) — the gpu_clock_low ratio
+    /// compares against it. The theoretical max MEMORY clock is
+    /// deliberately absent: gpu_mem_idle compares against the highest
+    /// mclk OBSERVED this session (some drivers never reach the
+    /// theoretical max; comparing against it fired 12 phantom cards per
+    /// session on a Quadro), so the queried value was dead on arrival.
     gpu_max_gr: Option<f64>,
-    gpu_max_mem: Option<f64>,
     /// highest mclk actually observed this session — gpu_mem_idle compares
     /// against THIS, not the theoretical max (which some drivers never reach;
     /// comparing against it fired 12 phantom cards per session on a Quadro)
@@ -25,6 +30,10 @@ pub struct Detector {
     churn_acc: u32,
     /// rolling SM history for the activity gate (true rendering vs idle lobby)
     sm_hist: Vec<f64>,
+    /// last instant emission per kind (wall ms): sustained storms emit one
+    /// instant per minute, not one per tick (a 10-min storm was ~600
+    /// identical instants bloating events.json and the per-tick UI walk)
+    last_instant: HashMap<String, i64>,
 }
 
 /// The SM average (over ~60s) that separates "real rendering" from a static
@@ -70,7 +79,6 @@ impl Detector {
         Self {
             th,
             gpu_max_gr: None,
-            gpu_max_mem: None,
             gpu_observed_max_mclk: None,
             active: HashMap::new(),
             prev_sm: None,
@@ -78,12 +86,15 @@ impl Detector {
             cliff_fired: false,
             churn_acc: 0,
             sm_hist: Vec::new(),
+            last_instant: HashMap::new(),
         }
     }
 
-    pub fn set_gpu_max(&mut self, gr: f64, mem: f64) {
+    pub fn set_gpu_max(&mut self, gr: f64, _mem: f64) {
+        // mem stays in the signature: the caller reads BOTH clocks from
+        // nvidia-smi in one query; the observed-max rule (above) ignores
+        // the theoretical mem max
         self.gpu_max_gr = Some(gr);
-        self.gpu_max_mem = Some(mem);
     }
 
     /// Feed one sample; returns events emitted by this tick.
@@ -119,9 +130,48 @@ impl Detector {
         self.check_throttle(s, &mut evs);
         self.check_memory(s, &mut evs);
         self.check_disk(s, &mut evs);
-        self.check_gpu(s, &mut evs, playing);
-        self.check_gpu_activity_cliff(s, &mut evs, playing);
+        self.check_cpu_perf_cliff(s, &mut evs);
+        // one baseline per tick for the GPU rules below (was: one sort per
+        // rule). playing() above keeps its own pre-push computation on
+        // purpose: it must decide on PAST history before this tick enters
+        // it (see its feedback-loop comment), so sharing that value here
+        // would change behavior. The two GPU rules both read post-push
+        // history, so they share this one.
+        let baseline = self.learned_baseline();
+        self.check_gpu(s, &mut evs, playing, baseline);
+        self.check_gpu_activity_cliff(s, &mut evs, playing, baseline);
         evs
+    }
+
+    /// Sustained processor-performance cliff (the "spike" fingerprint): a
+    /// loaded CPU (>= proc_perf_load_gate) running well under its nominal
+    /// speed for several consecutive seconds. Pure CPU-side evidence —
+    /// runs on EVERY machine, GPU or not: it used to live at the bottom
+    /// of the GPU cliff path, so AMD/Intel machines (no dmon feed, no GPU
+    /// sample) could never reach it and the fingerprint was dead for them.
+    /// Its own load gate keeps it quiet at idle (power saving legitimately
+    /// drops perf when nothing runs).
+    fn check_cpu_perf_cliff(&mut self, s: &Sample, evs: &mut Vec<EngineEvent>) {
+        if let (Some(perf), Some(cpu)) = (s.proc_perf, s.cpu_total) {
+            if cpu >= self.th.proc_perf_load_gate && perf < (100.0 - self.th.spike_cpu_drop_pct) {
+                self.spike_acc += 1;
+                if self.spike_acc == self.th.spike_sustained_sec {
+                    evs.push(EngineEvent {
+                        kind: "spike".into(),
+                        phase: Phase::Instant,
+                        severity: Severity::Crit,
+                        t: s.t.clone(),
+                        duration_sec: None,
+                        detail: format!(
+                            "Sustained perf cliff: {:.0}% for {}s",
+                            perf, self.spike_acc
+                        ),
+                    });
+                }
+            } else {
+                self.spike_acc = 0;
+            }
+        }
     }
 
     /// Is the user actually PLAYING? Two gates, both required:
@@ -186,6 +236,21 @@ impl Detector {
 
     // ---- condition helpers: hysteresis via active map ----------------------
 
+    /// Rate gate for instant events: first emission passes, repeats within
+    /// 60s are suppressed (the open condition, if any, already tells the
+    /// story). Returns true when this tick may emit.
+    fn instant_allowed(&mut self, key: &str) -> bool {
+        const MIN_GAP_MS: i64 = 60_000;
+        let now = now_ms();
+        match self.last_instant.get(key) {
+            Some(&last) if now - last < MIN_GAP_MS => false,
+            _ => {
+                self.last_instant.insert(key.to_string(), now);
+                true
+            }
+        }
+    }
+
     fn condition(
         &mut self,
         key: &str,
@@ -207,6 +272,28 @@ impl Detector {
                     duration_sec: None,
                     detail,
                 });
+            }
+            (true, true) => {
+                // ESCALATION: the condition is still open and got WORSE
+                // (warn crossed into crit). The card must not stay frozen
+                // at the severity it happened to open with — a saturation
+                // that opened at 86% then pegged 99% is a high card, not
+                // medium. The diagnoser keeps the WORST event severity.
+                if let Some((_since, open_sev)) = self.active.get_mut(key) {
+                    if *open_sev != Severity::Crit && sev == Severity::Crit {
+                        *open_sev = Severity::Crit;
+                        evs.push(EngineEvent {
+                            kind: key.to_string(),
+                            // Instant: not a new condition, an upgrade of
+                            // the open one — no Start/End pair to close
+                            phase: Phase::Instant,
+                            severity: Severity::Crit,
+                            t: t.to_string(),
+                            duration_sec: None,
+                            detail,
+                        });
+                    }
+                }
             }
             (false, true) => {
                 // same shape as finish() — remove returns the map entry, and
@@ -274,9 +361,20 @@ impl Detector {
         };
         self.condition("mem_pressure", sev, active, detail, &s.t, evs);
 
-        // Hard faults: instant events when spiking
+        // Hard faults: instant events when spiking — but NOT while the
+        // churn or disk-queue condition is already open describing the
+        // same storm. A 10-minute sustained storm used to emit ~600
+        // near-identical instants (one per tick), polluting events.json,
+        // evicting other kinds from the capped feed, and double-counting
+        // evidence in the disk_wait bucket. The condition's Start/End
+        // already tells the story; the instant is for the FIRST ticks,
+        // before any condition owns the narrative.
         if let Some(pi) = s.pages_in {
-            if pi > self.th.hard_faults_per_sec {
+            if pi > self.th.hard_faults_per_sec
+                && !self.active.contains_key("paging_churn")
+                && !self.active.contains_key("disk_queue")
+                && self.instant_allowed("hard_faults")
+            {
                 evs.push(EngineEvent {
                     kind: "hard_faults".into(),
                     phase: Phase::Instant,
@@ -365,7 +463,7 @@ impl Detector {
         self.condition("disk_queue", sev, active, detail, &s.t, evs);
 
         if let Some(busy) = s.disk_busy_pct {
-            if busy >= self.th.disk_busy_pct {
+            if busy >= self.th.disk_busy_pct && self.instant_allowed("disk_busy") {
                 evs.push(EngineEvent {
                     kind: "disk_busy".into(),
                     phase: Phase::Instant,
@@ -378,7 +476,7 @@ impl Detector {
         }
     }
 
-    fn check_gpu(&mut self, s: &Sample, evs: &mut Vec<EngineEvent>, playing: bool) {
+    fn check_gpu(&mut self, s: &Sample, evs: &mut Vec<EngineEvent>, playing: bool, baseline: f64) {
         let Some(g) = s.gpu.as_ref() else { return };
 
         // GPU rules are only meaningful in real play. Minimized window or a
@@ -439,9 +537,8 @@ impl Detector {
         if let (Some(mclk), Some(max)) = (g.mclk, self.gpu_observed_max_mclk) {
             if max > 0.0 {
                 let rendering_now = playing
-                    && g
-                        .sm_pct
-                        .map(|sm| sm >= self.learned_baseline() * ACTIVITY_GATE_RATIO)
+                    && g.sm_pct
+                        .map(|sm| sm >= baseline * ACTIVITY_GATE_RATIO)
                         .unwrap_or(false);
                 let active = rendering_now && mclk < max * 0.5;
                 let detail = if active {
@@ -463,7 +560,13 @@ impl Detector {
     /// transitions (12-15% quiet band vs a 40s combat-flavored baseline),
     /// the absolute axis alone misfires on light scenes of low-baseline
     /// GPUs. One event per collapse: continuation ticks never re-emit.
-    fn check_gpu_activity_cliff(&mut self, s: &Sample, evs: &mut Vec<EngineEvent>, playing: bool) {
+    fn check_gpu_activity_cliff(
+        &mut self,
+        s: &Sample,
+        evs: &mut Vec<EngineEvent>,
+        playing: bool,
+        baseline: f64,
+    ) {
         let Some(g) = s.gpu.as_ref() else { return };
         // not in real play: reset the running comparison so the return to
         // the game never reads as one giant cliff (idle SM -> live SM)
@@ -477,7 +580,6 @@ impl Detector {
             self.cliff_fired = false;
             return;
         };
-        let baseline = self.learned_baseline();
         let deep_floor = baseline * CLIFF_DEEP_RATIO;
         let prev = self.prev_sm.replace(sm);
 
@@ -486,9 +588,12 @@ impl Detector {
             // ONE event per collapse: the first qualifying tick emits, later
             // ticks of the same crater are continuation, not new events
             if !self.cliff_fired {
-                // shared gate (types::others_ok) — the diagnoser classifies
-                // the same collapse with the same rule, RAM included
-                let others_ok = others_ok(s.disk_queue, s.cpu_total, s.avail_mb);
+                // shared gate (Thresholds::others_ok) — the machine-tuned
+                // rule the diagnoser agrees with, applied to THIS sample:
+                // the classification is decided HERE, at emit time, and the
+                // event kind carries it. Nothing downstream re-derives it
+                // from later machine state.
+                let others_ok = self.th.others_ok(s.disk_queue, s.cpu_total, s.avail_mb);
                 let (kind, detail) = if others_ok {
                     (
                         "gpu_activity_cliff",
@@ -519,28 +624,6 @@ impl Detector {
         } else {
             self.cliff_fired = false;
         }
-
-        // sustained proc-perf drop accumulator (CPU perf cliff)
-        if let (Some(perf), Some(cpu)) = (s.proc_perf, s.cpu_total) {
-            if cpu >= self.th.proc_perf_load_gate && perf < (100.0 - self.th.spike_cpu_drop_pct) {
-                self.spike_acc += 1;
-                if self.spike_acc == self.th.spike_sustained_sec {
-                    evs.push(EngineEvent {
-                        kind: "spike".into(),
-                        phase: Phase::Instant,
-                        severity: Severity::Crit,
-                        t: s.t.clone(),
-                        duration_sec: None,
-                        detail: format!(
-                            "Sustained perf cliff: {:.0}% for {}s",
-                            perf, self.spike_acc
-                        ),
-                    });
-                }
-            } else {
-                self.spike_acc = 0;
-            }
-        }
     }
 }
 
@@ -556,15 +639,79 @@ mod tests {
     use super::*;
 
     #[test]
+    fn sustained_disk_busy_rate_limited_to_one_per_minute() {
+        // 10 ticks of sustained disk_busy must emit 1 instant, not 10
+        let th = Thresholds {
+            disk_busy_pct: 10.0,
+            ..Thresholds::default()
+        };
+        let mut d = Detector::new(th);
+        let mk = |t: &str| Sample {
+            t: t.into(),
+            cpu_total: Some(10.0),
+            proc_perf: Some(100.0),
+            avail_mb: Some(8192.0),
+            pages_in: Some(0.0),
+            disk_queue: Some(0.0),
+            disk_busy_pct: Some(99.0),
+            gpu: None,
+            emu: vec![],
+            game_visible: None,
+        };
+        let first = d.feed(&mk("2026-08-31T00:00:00.000Z"));
+        assert_eq!(
+            first.iter().filter(|e| e.kind == "disk_busy").count(),
+            1,
+            "first storm tick emits"
+        );
+        for i in 1..10 {
+            let evs = d.feed(&mk(&format!("2026-08-31T00:00:{i:02}.000Z")));
+            assert_eq!(
+                evs.iter().filter(|e| e.kind == "disk_busy").count(),
+                0,
+                "sustained storm must not re-emit within the minute (tick {i})"
+            );
+        }
+    }
+
+    #[test]
     fn others_ok_gate_agrees_on_ram_pressure() {
-        // the shared gate (types::others_ok): detector and diagnoser must
-        // classify the same collapse the same way — RAM pressure included
-        assert!(others_ok(Some(0.1), Some(50.0), Some(4096.0)));
-        assert!(!others_ok(Some(0.1), Some(50.0), Some(1024.0))); // RAM pressure
-        assert!(!others_ok(Some(2.0), Some(50.0), Some(4096.0))); // disk load
-        assert!(!others_ok(Some(0.1), Some(95.0), Some(4096.0))); // cpu load
-        // missing counters abstain as healthy — never blame load blind
-        assert!(others_ok(None, None, None));
+        // the shared gate (Thresholds::others_ok), machine-tuned: the bars
+        // are the session's own thresholds, not static numbers — detector
+        // and diagnoser must classify the same collapse the same way.
+        // Default thresholds: queue < 2.0, cpu < 85, avail > 2048.
+        let th = Thresholds::default();
+        assert!(th.others_ok(Some(0.1), Some(50.0), Some(4096.0)));
+        assert!(!th.others_ok(Some(0.1), Some(50.0), Some(1024.0))); // RAM pressure
+        assert!(!th.others_ok(Some(2.0), Some(50.0), Some(4096.0))); // disk load
+        assert!(!th.others_ok(Some(0.1), Some(95.0), Some(4096.0))); // cpu load
+                                                                     // missing counters abstain as healthy — never blame load blind
+        assert!(th.others_ok(None, None, None));
+    }
+
+    #[test]
+    fn others_ok_gate_is_machine_tuned() {
+        // a multi-disk machine (queue bar 2.0) and a big-RAM machine
+        // (floor 4096): the gate must use THEIR bars. A static 0.5 queue
+        // bar called this healthy 2-disk machine "loaded"; a static 2048
+        // RAM bar read a mem_pressure machine (3 GB free of 64) healthy.
+        let multi_disk = Thresholds::for_machine(super::super::types::MachineProfile {
+            total_mem_mb: 16_384.0,
+            disk_count: 4,
+        });
+        assert!(
+            multi_disk.others_ok(Some(1.5), Some(50.0), Some(6000.0)),
+            "queue 1.5 is under a 4-spindle machine's own bar (4.0), not loaded"
+        );
+        let big_ram = Thresholds::for_machine(super::super::types::MachineProfile {
+            total_mem_mb: 65_536.0,
+            disk_count: 1,
+        });
+        // 6 GB free on a 64 GB machine: above its own floor (~4 GB) — healthy
+        assert!(big_ram.others_ok(Some(0.1), Some(50.0), Some(6000.0)));
+        // 3 GB free on the same machine: UNDER its floor — loaded, even
+        // though a static 2048 bar would have read it healthy
+        assert!(!big_ram.others_ok(Some(0.1), Some(50.0), Some(3000.0)));
     }
 
     fn sample(cpu: f64, perf: f64, avail: f64, q: f64, sm: Option<f64>) -> Sample {
@@ -638,12 +785,80 @@ mod tests {
     }
 
     #[test]
+    fn severity_escalates_while_open() {
+        // opened at 90 (warn), deepened to 99 (crit line) while STILL OPEN:
+        // an escalation event must raise the card, and the diagnoser keeps
+        // the worst severity (crit -> high card)
+        let mut d = Detector::new(Thresholds::default());
+        let e1 = d.feed(&sample(90.0, 120.0, 20000.0, 0.1, None));
+        assert!(e1
+            .iter()
+            .any(|e| e.kind == "cpu_saturation" && e.severity == Severity::Warn));
+        let e2 = d.feed(&sample(99.0, 120.0, 20000.0, 0.1, None));
+        assert!(
+            e2.iter().any(|e| e.kind == "cpu_saturation"
+                && e.severity == Severity::Crit
+                && e.phase == Phase::Instant),
+            "the crit crossing while open must emit an escalation event"
+        );
+        // and only ONE escalation, not one per crit tick
+        let e3 = d.feed(&sample(99.0, 120.0, 20000.0, 0.1, None));
+        assert!(!e3
+            .iter()
+            .any(|e| e.kind == "cpu_saturation" && e.phase == Phase::Instant));
+        // the end still pairs with the (single) open condition
+        let e4 = d.feed(&sample(40.0, 120.0, 20000.0, 0.1, None));
+        assert!(e4
+            .iter()
+            .any(|e| e.kind == "cpu_saturation" && e.phase == Phase::End));
+    }
+
+    #[test]
     fn throttle_detect() {
         let mut d = Detector::new(Thresholds::default());
         let e = d.feed(&sample(80.0, 60.0, 20000.0, 0.1, None));
         assert!(e
             .iter()
             .any(|e| e.kind == "cpu_throttle" && e.severity == Severity::Crit));
+    }
+
+    // ---- spike: the sustained CPU perf cliff, with and without a GPU ----
+
+    #[test]
+    fn spike_fires_without_any_gpu_sample() {
+        // the AMD/Intel machine: no dmon feed, s.gpu is None. The spike
+        // fingerprint is pure CPU evidence and MUST still fire — it used to
+        // sit behind the GPU early-return and was dead for these machines.
+        let mut d = Detector::new(Thresholds::default());
+        for i in 0..(d.th.spike_sustained_sec - 1) {
+            let e = d.feed(&sample(80.0, 80.0, 20000.0, 0.1, None)); // sm=None
+            assert!(
+                !e.iter().any(|e| e.kind == "spike"),
+                "tick {i}: not sustained yet"
+            );
+        }
+        let e = d.feed(&sample(80.0, 80.0, 20000.0, 0.1, None));
+        assert!(e
+            .iter()
+            .any(|e| e.kind == "spike" && e.severity == Severity::Crit));
+    }
+
+    #[test]
+    fn spike_resets_when_load_drops() {
+        // the load gate is part of the fingerprint: a perf dip at idle is
+        // normal power saving, only a LOADED CPU slowing down counts
+        let mut d = Detector::new(Thresholds::default());
+        for _ in 0..2 {
+            d.feed(&sample(80.0, 80.0, 20000.0, 0.1, None));
+        }
+        let e = d.feed(&sample(20.0, 80.0, 20000.0, 0.1, None)); // idle tick
+        assert!(!e.iter().any(|e| e.kind == "spike"));
+        let e = d.feed(&sample(80.0, 80.0, 20000.0, 0.1, None));
+        assert!(!e.iter().any(|e| e.kind == "spike")); // accumulator restarted
+        let e = d.feed(&sample(80.0, 80.0, 20000.0, 0.1, None));
+        assert!(!e.iter().any(|e| e.kind == "spike"));
+        let e = d.feed(&sample(80.0, 80.0, 20000.0, 0.1, None));
+        assert!(e.iter().any(|e| e.kind == "spike")); // 3 loaded ticks again
     }
 
     // ---- paging churn: the healthy-RAM background paging fingerprint -------
@@ -742,7 +957,9 @@ mod tests {
             .any(|e| e.kind == "gpu_activity_cliff" && e.severity == Severity::Crit));
         let e2 = d.feed(&live_sample(4.0)); // tick 2 — no duplicate event
         assert_eq!(
-            e2.iter().filter(|e| e.kind.starts_with("gpu_activity_cliff")).count(),
+            e2.iter()
+                .filter(|e| e.kind.starts_with("gpu_activity_cliff"))
+                .count(),
             0,
             "one cliff = one event, not one per tick"
         );
@@ -774,7 +991,11 @@ mod tests {
         // combat bursts ride on top — P25 latches onto the quiet band (40)
         let quiet = 40.0;
         for i in 0..40 {
-            let s = if i % 4 == 0 { live_sample(48.0) } else { live_sample(quiet) };
+            let s = if i % 4 == 0 {
+                live_sample(48.0)
+            } else {
+                live_sample(quiet)
+            };
             d.feed(&s);
         }
         d.feed(&live_sample(48.0)); // last combat tick

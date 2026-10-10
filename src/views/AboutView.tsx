@@ -7,7 +7,7 @@
 // (manual checks ignore the once-per-version announcement on purpose).
 
 import { useEffect, useState } from "react";
-import { Coffee, Code2, Download, Heart, Leaf } from "lucide-react";
+import { Coffee, Code2, Cpu, Download, HardDrive, Heart, Leaf, MemoryStick, ShieldCheck, ToggleRight } from "lucide-react";
 import { Button } from "../components/components";
 import { api, type UpdateInfo } from "../bridge";
 import { useLang } from "../i18n";
@@ -16,9 +16,16 @@ import appIcon from "../assets/app-icon.png";
 const REPO_URL = "https://github.com/Ahmed-Hawass/pubg-gameloop-lag-hunter";
 const SUPPORT_URL = "https://paypal.me/ahmedhawass";
 
+/** cost-row glyphs in locale-array order (texts stay the locale array:
+    zero locale churn, icons live with the layout) */
+const IMPACT_ICONS = [Cpu, MemoryStick, HardDrive, ShieldCheck, ToggleRight];
+
 export function AboutView(props: {
   /** the startup check's result — dot + "download" affordance when set */
   updateInfo: UpdateInfo | null;
+  /** the running version, ASKED ONCE by App and handed down (the old
+      shape paid the IPC twice: TitleBar and AboutView each asked) */
+  version: string;
   onOpenUpdateModal: () => void;
   /**
    * Manual check found a newer version the startup check MISSED (e.g. the
@@ -30,18 +37,10 @@ export function AboutView(props: {
   onUpdateFound: (info: UpdateInfo) => void;
 }) {
   const { t } = useLang();
-  const { updateInfo, onOpenUpdateModal, onUpdateFound } = props;
+  const { updateInfo, version, onOpenUpdateModal, onUpdateFound } = props;
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<"latest" | "err" | null>(null);
-  // version from the backend — the same string tauri.conf.json owns
-  const [appVersion, setAppVersion] = useState<string>("");
-
-  useEffect(() => {
-    api
-      .getVersion()
-      .then(setAppVersion)
-      .catch(() => setAppVersion(""));
-  }, []);
+  const appVersion = version;
 
   // the startup check already knows — the dot shows immediately
   useEffect(() => {
@@ -75,7 +74,7 @@ export function AboutView(props: {
   return (
     <div className="about">
       {/* block 1: identity — icon, name, version, one honest sentence */}
-      <div className="about-card about-identity">
+      <div className="card about-card about-identity">
         <img className="about-mark-img" src={appIcon} alt="" width={44} height={44} draggable={false} />
         <div className="about-id-text">
           <h2 className="about-title">{t.aboutTitle}</h2>
@@ -84,49 +83,67 @@ export function AboutView(props: {
         <p className="about-what">{t.aboutWhat}</p>
       </div>
 
-      {/* block 2: cost — the five honest numbers */}
-      <div className="about-card">
+      {/* block 2: cost — the five honest numbers as icon rows on an
+          inset divider list (same language as the sweep results) */}
+      <div className="card about-card">
         <h3 className="about-h">
           <Leaf size={13} />
           {t.aboutImpact}
         </h3>
-        <ul className="about-impact">
-          {t.aboutImpactItems.map((item, i) => (
-            <li key={i}>{item}</li>
-          ))}
+        <ul className="inset-list">
+          {t.aboutImpactItems.map((item, i) => {
+            const Icon = IMPACT_ICONS[i] ?? Leaf;
+            return (
+              <li key={i} className="inset-row">
+                <Icon size={15} aria-hidden="true" />
+                <span>{item}</span>
+              </li>
+            );
+          })}
         </ul>
       </div>
 
       {/* block 3: updates — the dot sits on the heading when a newer
           release exists; it is not dismissible and matches the sidebar's */}
-      <div className="about-card">
+      <div className="card about-card">
         <h3 className="about-h">
           <Download size={13} />
           {t.aboutUpdate}
-          {updateInfo ? <span className="about-dot" aria-label={t.updateAvailableTitle} /> : null}
+          {updateInfo ? (
+            <span
+              className="about-dot"
+              role="status"
+              aria-label={t.updateAvailableTitle}
+            />
+          ) : null}
         </h3>
         <div className="about-update">
           <Button
             label={checking ? t.checkingUpdate : t.aboutCheckUpdate}
             icon={<Download size={14} />}
             variant="ghost"
+            className="about-update-btn"
             disabled={checking}
             onClick={() => void check()}
           />
-          {result === "latest" ? <span className="about-result ok">{t.aboutUpToDate}</span> : null}
-          {updateInfo ? (
-            <button className="about-result update" onClick={onOpenUpdateModal}>
-              {t.aboutNewVersion} (v{updateInfo.version})
-            </button>
+          {result === "latest" || updateInfo || result === "err" ? (
+            <div className="about-update-result">
+              {result === "latest" ? <span className="about-result ok">{t.aboutUpToDate}</span> : null}
+              {updateInfo ? (
+                <button className="focus-ring-inset about-result update" onClick={onOpenUpdateModal}>
+                  {t.aboutNewVersion} (v{updateInfo.version})
+                </button>
+              ) : null}
+              {result === "err" ? <span className="about-result err">{t.aboutUpdateErr}</span> : null}
+            </div>
           ) : null}
-          {result === "err" ? <span className="about-result err">{t.aboutUpdateErr}</span> : null}
         </div>
       </div>
 
       {/* footer: links + signature — same row, quiet */}
       <div className="about-footer">
         <Button
-          label="GitHub"
+          label={t.aboutGitHub}
           icon={<Code2 size={14} />}
           variant="ghost"
           onClick={() => void api.openUrl(REPO_URL)}

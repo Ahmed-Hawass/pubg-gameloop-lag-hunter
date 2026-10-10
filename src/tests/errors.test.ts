@@ -8,6 +8,7 @@ const COPY = {
   somethingWrong: en.dialog.somethingWrong,
   scanNeedsGame: en.dialog.scanNeedsGame,
   scanNeedsGameBody: en.dialog.scanNeedsGameBody,
+  unknownErrorBody: en.dialog.unknownErrorBody,
 };
 
 describe("errorDialog", () => {
@@ -33,10 +34,28 @@ describe("errorDialog", () => {
     expect(d.body).toBe(en.errors.SESSION_STOPPING);
   });
 
-  it("unknown errors show the raw message under the generic title", () => {
+  it("maps an unrecognized emulator build to its honest copy, never the game gate", () => {
+    // EMULATOR_UNKNOWN must not collapse into GAMELOOP_NOT_RUNNING: the
+    // game may well be running under a build we have no card for
+    const d = errorDialog("EMULATOR_UNKNOWN", en.errors, COPY);
+    expect(d.title).toBe(en.dialog.somethingWrong);
+    expect(d.body).toBe(en.errors.EMULATOR_UNKNOWN);
+    expect(d.key).toBe("EMULATOR_UNKNOWN");
+  });
+
+  it("unknown errors show the localized unknown-error body under the generic title", () => {
+    // a novel backend message must never ship raw English into an Arabic
+    // dialog: the locale explains and the raw string rides along as a
+    // technical line
     const d = errorDialog("some novel failure", en.errors, COPY);
     expect(d.title).toBe(en.dialog.somethingWrong);
-    expect(d.body).toBe("some novel failure");
+    expect(d.body).toBe(en.dialog.unknownErrorBody("some novel failure"));
+    expect(d.body).toContain("some novel failure");
     expect(d.key).toBe("some novel failure");
+  });
+
+  it("a known code embedded in noise still wins over the unknown fallback", () => {
+    const d = errorDialog("download task failed: SESSION_STOPPING", en.errors, COPY);
+    expect(d.body).toBe(en.errors.SESSION_STOPPING);
   });
 });

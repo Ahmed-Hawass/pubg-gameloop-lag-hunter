@@ -1,6 +1,14 @@
 # Node
 node_modules/
 dist/
+coverage/
+
+# Env (never commit secrets)
+.env
+.env.*
+
+# Temp scratch files
+*.tmp
 
 # Rust / Tauri
 src-tauri/target/

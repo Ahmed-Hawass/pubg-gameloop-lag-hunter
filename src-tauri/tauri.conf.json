@@ -14,10 +14,10 @@
     "windows": [
       {
         "title": "PUBG GameLoop Lag Hunter",
-        "width": 1024,
-        "height": 680,
-        "minWidth": 1024,
-        "minHeight": 680,
+        "width": 1180,
+        "height": 760,
+        "minWidth": 960,
+        "minHeight": 620,
         "resizable": true,
         "fullscreen": false,
         "center": true,
@@ -31,13 +31,15 @@
         "script-src": "'self'",
         "style-src": "'self' 'unsafe-inline'",
         "img-src": "'self' data:",
-        "font-src": "'self' data:'"
+        "font-src": "'self' data:",
+        "object-src": "'none'",
+        "base-uri": "'self'"
       }
     }
   },
   "bundle": {
-    "active": true,
-    "targets": ["nsis"],
+    "active": false,
+    "targets": [],
     "publisher": "Ahmed Hawass",
     "copyright": "Copyright (c) 2026 Ahmed Hawass. MIT License.",
     "category": "Utility",

@@ -2,27 +2,30 @@
 // Gently live: power plan / pagefile / battery state can change while the
 // user is on this tab (unplugging the charger is the classic case).
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
+  AlertTriangle,
   CheckCircle2,
   Cpu,
   Database,
-  HardDrive,
+  Info,
   Plug,
   RefreshCw,
   ShieldAlert,
+  ShieldCheck,
   Video,
-  XCircle,
   Zap,
 } from "lucide-react";
-import { Button, EmptyState } from "../components/components";
-import { api, type SystemChecks } from "../bridge";
+import { Button, Dialog, EmptyState, IntroCard, dispatchModalOpen, APP_DIALOG_OPEN_EVENT } from "../components/components";
+import { api, FEATURE_STATE_CHANGED_EVENT, type SystemChecks } from "../bridge";
+import { toErrorBody } from "../errors";
 import { useLang } from "../i18n";
+import { useIntroCard } from "../useIntroCard";
 
 const LIVE_INTERVAL_MS = 30000;
 
-export function ChecksView(props: { active: boolean }) {
-  const { active } = props;
+export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) => void }) {
+  const { active, onOpenTool } = props;
   const { t } = useLang();
   const [checks, setChecks] = useState<SystemChecks | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +37,16 @@ export function ChecksView(props: { active: boolean }) {
   // swallowing the click silently, the button spins immediately and the
   // press runs right after the in-flight query finishes — one click suffices
   const pendingManualRef = useRef(false);
+  /** background-note dialog behind a card's (?) button (null = closed).
+      Same unified Dialog as everywhere: one modal surface, yields to the
+      App-level dialog like every view dialog. */
+  const [hint, setHint] = useState<{ title: string; body: string } | null>(null);
+  /** one-shot page guidance (replaces the static header line below):
+      the smooth-or-stuttering verdict and the one-click fix path.
+      Declared with every other hook (never past the error/loading early
+      returns): hook order must not shift between renders. Transient
+      error/loading headers above keep their own hint line. */
+  const intro = useIntroCard("health");
 
   const load = async (silent: boolean, force = false) => {
     if (busyRef.current) {
@@ -49,7 +62,11 @@ export function ChecksView(props: { active: boolean }) {
       setChecks(await api.systemChecks(force));
       setError(null);
     } catch (e) {
-      if (!silent) setError(String(e));
+      // the locale copy for known backend keys, with the raw message riding
+      // along as a technical line only for novel failures
+      if (!silent) {
+        setError(toErrorBody(e, t));
+      }
     } finally {
       busyRef.current = false;
       if (pendingManualRef.current) {
@@ -63,32 +80,82 @@ export function ChecksView(props: { active: boolean }) {
 
   useEffect(() => {
     void load(false);
+    // mount-time fetch only: the retry button and focus handler below
+    // own every later attempt
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (!active) return;
+    void load(true, true);
     const timer = window.setInterval(() => void load(true), LIVE_INTERVAL_MS);
     // returning from Windows Settings (after flipping a toggle) refreshes
     // immediately: force pays one PowerShell spawn, skipped while busy
     const onFocus = () => void load(true, true);
+    const onFeatureStateChanged = () => void load(true, true);
     window.addEventListener("focus", onFocus);
+    window.addEventListener(FEATURE_STATE_CHANGED_EVENT, onFeatureStateChanged);
     return () => {
       window.clearInterval(timer);
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener(FEATURE_STATE_CHANGED_EVENT, onFeatureStateChanged);
     };
+    // load reads busyRef/pendingManualRef (refs) and queues itself; its
+    // identity is not part of the subscription contract
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
+  // a dialog mounting under a parked cursor never fires mouseleave — tell
+  // every tooltip to hide the moment ours opens (same signal as the shell)
+  useEffect(() => {
+    if (hint) {
+      dispatchModalOpen();
+    }
+  }, [hint]);
+
+  // one modal surface, app-wide: an App-level dialog opening on top of
+  // our hint yields it instead of stacking two overlays
+  useEffect(() => {
+    if (!hint) return;
+    const onAppDialog = () => setHint(null);
+    window.addEventListener(APP_DIALOG_OPEN_EVENT, onAppDialog);
+    return () => window.removeEventListener(APP_DIALOG_OPEN_EVENT, onAppDialog);
+  }, [hint]);
+
+  // the error renders INSIDE the page, below the header: the early-return
+  // version hid the Refresh button too, leaving the user stuck with a dead
+  // tab until the silent 30s poll or a window focus rescued it
   if (error) {
     return (
       <div className="checks">
-        <EmptyState icon={<ShieldAlert size={18} />} title={t.dialog.somethingWrong} hint={error} />
+        <div className="checks-head">
+          <p className="checks-hint">{t.checksHint}</p>
+          <Button
+            label={busy ? t.loading : t.refresh}
+            icon={<RefreshCw size={14} className={busy ? "spin" : ""} />}
+            variant="ghost"
+            disabled={busy}
+            onClick={() => void load(false, true)}
+          />
+        </div>
+        <EmptyState
+          icon={<ShieldAlert size={18} />}
+          title={t.dialog.somethingWrong}
+          hint={error}
+        />
       </div>
     );
   }
   if (!checks) {
+    // loading owns no retry button: the mount fetch is in flight and the
+    // silent poll plus window-focus re-reads rescue it. A button here
+    // would stack a second query behind the first.
     return (
       <div className="checks">
-        <EmptyState icon={<ShieldAlert size={18} />} title={t.loading} hint="" />
+        <div className="checks-head">
+          <p className="checks-hint">{t.checksHint}</p>
+        </div>
+        <EmptyState icon={<RefreshCw size={20} />} title={t.loading} hint="" spin />
       </div>
     );
   }
@@ -101,166 +168,185 @@ export function ChecksView(props: { active: boolean }) {
 
   const chargerBad = checks.laptop && !checks.on_ac;
 
-  const diskOk = checks.disk_level === "ok";
-  const diskText = diskOk
-    ? t.diskOk(checks.disk_id, Math.round(checks.disk_free_pct), Math.round(checks.disk_free_gb))
-    : checks.disk_level === "critical"
-      ? t.diskCritical(checks.disk_id, Math.round(checks.disk_free_pct), Math.round(checks.disk_free_gb))
-      : t.diskLow(checks.disk_id, Math.round(checks.disk_free_pct), Math.round(checks.disk_free_gb));
+  /** one data row per health card: the attention section and the full
+      archive render the SAME CheckCard below, so a fix can never drift
+      between summary and list (edit once, both follow). */
+  type CheckItem = {
+    id: string;
+    ok: boolean;
+    funcIcon: ReactNode;
+    name: string;
+    state: string;
+    hint: { title: string; body: string };
+    /** null = read-only card (VT, charger): state text only, no button */
+    onOpen: (() => void) | null;
+  };
+  // power/DVR/page file have an in-app Tools row: stay inside the app
+  // and land on it. Without the link, keep the Windows page.
+  const openInAppOr = (toolId: string, panel: string) => () => {
+    if (onOpenTool) onOpenTool(toolId);
+    else void api.openWindowsPanel(panel);
+  };
+  const items: CheckItem[] = [
+    {
+      id: "power",
+      ok: checks.power_ok,
+      funcIcon: <Zap size={15} />,
+      name: t.checkPower,
+      state: checks.power_ok ? t.powerOk(checks.power_name) : t.powerWarn(checks.power_name),
+      hint: { title: t.checkPower, body: t.checkPowerHint },
+      onOpen: openInAppOr("powerplan", "power"),
+    },
+    {
+      id: "vt",
+      ok: checks.vt_enabled,
+      funcIcon: <Cpu size={15} />,
+      name: t.checkVt,
+      state: checks.vt_enabled ? t.vtOk : t.vtWarn,
+      hint: { title: t.checkVt, body: t.checkVtHint },
+      onOpen: null,
+    },
+    {
+      id: "dvr",
+      ok: !checks.game_dvr_enabled,
+      funcIcon: <Video size={15} />,
+      name: t.checkDvr,
+      state: checks.game_dvr_enabled ? t.dvrWarn : t.dvrOk,
+      hint: { title: t.checkDvr, body: t.tweakDvrHint },
+      onOpen: openInAppOr("dvr", "gaming-captures"),
+    },
+    {
+      id: "pagefile",
+      ok: checks.pagefile_ok,
+      funcIcon: <Database size={15} />,
+      name: t.checkPagefile,
+      state: pagefileText,
+      hint: { title: t.checkPagefile, body: t.checkPagefileHint },
+      onOpen: openInAppOr("pagefile", "system"),
+    },
+    // charger lives on laptops only — hidden on desktops, never a
+    // placeholder row
+    ...(checks.laptop
+      ? [
+          {
+            id: "charger",
+            ok: !chargerBad,
+            funcIcon: <Plug size={15} />,
+            name: t.checkCharger,
+            state: chargerBad ? t.chargerWarn : t.chargerOk,
+            hint: { title: t.checkCharger, body: t.checkChargerHint },
+            onOpen: null,
+          } satisfies CheckItem,
+        ]
+      : []),
+  ];
+  const warnItems = items.filter((item) => !item.ok);
+  const openLabel = onOpenTool ? t.openInTools : t.openSettings;
 
   return (
     <div className="checks">
-      <div className="checks-head">
-        <p className="checks-hint">{t.checksHint}</p>
-        <Button
-          label={busy ? t.loading : t.refresh}
-          icon={<RefreshCw size={14} className={busy ? "spin" : ""} />}
-          variant="ghost"
-          disabled={busy}
-          onClick={() => void load(false, true)}
+      {intro.show ? (
+        <IntroCard
+          icon={<ShieldCheck size={16} />}
+          title={t.introHealthTitle}
+          body={t.introHealthBody}
+          dismissLabel={t.dialog.dismiss}
+          onDismiss={intro.dismiss}
         />
+      ) : null}
+
+      {/* one-glance verdict: derived from the five checks above, zero
+          backend cost (counts warn cards, nothing more). No manual
+          refresh here: the silent 30s poll plus window-focus and
+          feature-state re-reads own freshness, and the error state keeps
+          the only retry button (the one place no poll can rescue). */}
+      <div className={`health-banner ${warnItems.length === 0 ? "ok" : "warn"}`}>
+        {warnItems.length === 0 ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
+        <div>
+          <div className="hb-title">
+            {warnItems.length === 0 ? t.healthAllGood : t.healthNeedsTitle(warnItems.length)}
+          </div>
+          <div className="hb-sub">{warnItems.length === 0 ? t.healthAllGoodSub : t.healthNeedsSub}</div>
+        </div>
       </div>
+      {/* featured warnings: the same cards as the archive below, repeated
+          deliberately (summary + archive, not summary instead of it) */}
+      {warnItems.length > 0 ? (
+        <section>
+          <h3 className="health-section-title">{t.checkWarnBadge}</h3>
+          <div className="check-list">
+            {warnItems.map((item) => (
+              <CheckCard key={item.id} item={item} openLabel={openLabel} onHint={setHint} />
+            ))}
+          </div>
+        </section>
+      ) : null}
 
-      <div className="check-list">
-        {/* power plan */}
-        <div className={`check-row ${checks.power_ok ? "ok" : "warn"}`}>
-          <div className="check-top">
-            <span className="check-icon">
-              {checks.power_ok ? <CheckCircle2 size={17} /> : <XCircle size={17} />}
-            </span>
-            <span className="check-func">
-              <Zap size={15} />
-            </span>
-            <span className="check-name">{t.checkPower}</span>
-            <span className={`check-badge ${checks.power_ok ? "ok" : "warn"}`}>
-              {checks.power_ok ? t.checkOkBadge : t.checkWarnBadge}
-            </span>
-          </div>
-          <p className="check-desc">{t.checkPowerDesc}</p>
-          <div className="check-foot">
-            <span className="check-state">
-              {checks.power_ok ? t.powerOk(checks.power_name) : t.powerWarn(checks.power_name)}
-            </span>
-            <button className="check-open" onClick={() => void api.openWindowsPanel("power")}>
-              {t.openSettings}
-            </button>
-          </div>
+      <section>
+        <h3 className="health-section-title">{t.healthAllSettings}</h3>
+        <div className="check-list">
+          {items.map((item) => (
+            <CheckCard key={item.id} item={item} openLabel={openLabel} onHint={setHint} />
+          ))}
         </div>
+      </section>
+      {/* background note behind a card's (?) button — the one unified
+          Dialog, notice only */}
+      {hint ? (
+        <Dialog
+          title={hint.title}
+          body={hint.body}
+          kind="notice"
+          okLabel={t.dialog.ok}
+          onClose={() => setHint(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
 
-        {/* virtualization (VT) — read-only, BIOS change is manual by the user */}
-        <div className={`check-row ${checks.vt_enabled ? "ok" : "warn"}`}>
-          <div className="check-top">
-            <span className="check-icon">
-              {checks.vt_enabled ? <CheckCircle2 size={17} /> : <XCircle size={17} />}
-            </span>
-            <span className="check-func">
-              <Cpu size={15} />
-            </span>
-            <span className="check-name">{t.checkVt}</span>
-            <span className={`check-badge ${checks.vt_enabled ? "ok" : "warn"}`}>
-              {checks.vt_enabled ? t.checkOkBadge : t.checkWarnBadge}
-            </span>
-          </div>
-          <p className="check-desc">{t.checkVtDesc}</p>
-          <div className="check-foot">
-            <span className="check-state">{checks.vt_enabled ? t.vtOk : t.vtWarn}</span>
-          </div>
-        </div>
-
-        {/* background recording (Game DVR) */}
-        <div className={`check-row ${checks.game_dvr_enabled ? "warn" : "ok"}`}>
-          <div className="check-top">
-            <span className="check-icon">
-              {checks.game_dvr_enabled ? <XCircle size={17} /> : <CheckCircle2 size={17} />}
-            </span>
-            <span className="check-func">
-              <Video size={15} />
-            </span>
-            <span className="check-name">{t.checkDvr}</span>
-            <span className={`check-badge ${checks.game_dvr_enabled ? "warn" : "ok"}`}>
-              {checks.game_dvr_enabled ? t.checkWarnBadge : t.checkOkBadge}
-            </span>
-          </div>
-          <p className="check-desc">{t.checkDvrDesc}</p>
-          <div className="check-foot">
-            <span className="check-state">{checks.game_dvr_enabled ? t.dvrWarn : t.dvrOk}</span>
-            <button
-              className="check-open"
-              onClick={() => void api.openWindowsPanel("gaming-captures")}
-            >
-              {t.openSettings}
-            </button>
-          </div>
-        </div>
-
-        {/* pagefile */}
-        <div className={`check-row ${checks.pagefile_ok ? "ok" : "warn"}`}>
-          <div className="check-top">
-            <span className="check-icon">
-              {checks.pagefile_ok ? <CheckCircle2 size={17} /> : <XCircle size={17} />}
-            </span>
-            <span className="check-func">
-              <Database size={15} />
-            </span>
-            <span className="check-name">{t.checkPagefile}</span>
-            <span className={`check-badge ${checks.pagefile_ok ? "ok" : "warn"}`}>
-              {checks.pagefile_ok ? t.checkOkBadge : t.checkWarnBadge}
-            </span>
-          </div>
-          <p className="check-desc">{t.checkPagefileDesc}</p>
-          <div className="check-foot">
-            <span className="check-state">{pagefileText}</span>
-            <button className="check-open" onClick={() => void api.openWindowsPanel("system")}>
-              {t.openSettings}
-            </button>
-          </div>
-        </div>
-
-        {/* disk space */}
-        <div className={`check-row ${diskOk ? "ok" : "warn"}`}>
-          <div className="check-top">
-            <span className="check-icon">
-              {diskOk ? <CheckCircle2 size={17} /> : <XCircle size={17} />}
-            </span>
-            <span className="check-func">
-              <HardDrive size={15} />
-            </span>
-            <span className="check-name">{t.checkDisk}</span>
-            <span className={`check-badge ${diskOk ? "ok" : "warn"}`}>
-              {diskOk ? t.checkOkBadge : t.checkWarnBadge}
-            </span>
-          </div>
-          <p className="check-desc">{t.checkDiskDesc}</p>
-          <div className="check-foot">
-            <span className="check-state">{diskText}</span>
-            <button className="check-open" onClick={() => void api.openWindowsPanel("storage")}>
-              {t.openSettings}
-            </button>
-          </div>
-        </div>
-
-        {/* charger (laptops only — hidden on desktops) */}
-        {checks.laptop ? (
-          <div className={`check-row ${chargerBad ? "warn" : "ok"}`}>
-            <div className="check-top">
-              <span className="check-icon">
-                {chargerBad ? <XCircle size={17} /> : <CheckCircle2 size={17} />}
-              </span>
-              <span className="check-func">
-              <Plug size={15} />
-            </span>
-            <span className="check-name">{t.checkCharger}</span>
-              <span className={`check-badge ${chargerBad ? "warn" : "ok"}`}>
-                {chargerBad ? t.checkWarnBadge : t.checkOkBadge}
-              </span>
-            </div>
-            <p className="check-desc">{t.checkChargerDesc}</p>
-            <div className="check-foot">
-              <span className="check-state">{chargerBad ? t.chargerWarn : t.chargerOk}</span>
-            </div>
-          </div>
-        ) : null}
+/** one health card: a single compact row (glyph, name, state, badge,
+    background note behind the (?) button). The open shortcut renders
+    on problem cards only — a healthy card has nowhere to send anyone.
+    Featured warnings and archive rows share this card, so the rule can
+    never drift between summary and list. */
+function CheckCard(props: {
+  item: {
+    ok: boolean;
+    funcIcon: ReactNode;
+    name: string;
+    state: string;
+    hint: { title: string; body: string };
+    onOpen: (() => void) | null;
+  };
+  openLabel: string;
+  onHint: (hint: { title: string; body: string }) => void;
+}) {
+  const { item, openLabel, onHint } = props;
+  const { t } = useLang();
+  return (
+    <div className={`card-sm check-row ${item.ok ? "verdict-ok" : "verdict-warn"}`}>
+      <div className="check-top">
+        <span className="check-func">{item.funcIcon}</span>
+        <span className="check-name">{item.name}</span>
+        <span className="check-state">{item.state}</span>
+        <span className={`badge check-badge ${item.ok ? "ok" : "warn"}`}>
+          {item.ok ? t.checkOkBadge : t.checkWarnBadge}
+        </span>
+        <button
+          type="button"
+          className="focus-ring-inset switch-hint"
+          aria-label={t.hintAbout(item.name)}
+          onClick={() => onHint(item.hint)}
+        >
+          <Info size={13} />
+        </button>
       </div>
+      {!item.ok && item.onOpen ? (
+        <button className="focus-ring-inset row-act check-open" onClick={item.onOpen}>
+          {openLabel}
+        </button>
+      ) : null}
     </div>
   );
 }
