@@ -16,15 +16,6 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ["scripts/**/*.mjs"],
-    languageOptions: {
-      globals: {
-        console: "readonly",
-        process: "readonly",
-      },
-    },
-  },
-  {
     // boot splash theme: plain browser script (no imports, no bundle),
     // needs document/window as readonly globals for the no-undef rule
     files: ["src/splash-theme.js"],
