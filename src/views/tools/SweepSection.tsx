@@ -325,14 +325,14 @@ export function SweepSection(props: {
           a second header under it would only repeat both) */}
       <PageIntro
         id="cleanup"
-        icon={<Trash2 size={16} />}
+        icon={<Trash2 size={18} />}
         title={t.introCleanupTitle}
         body={t.introCleanupBody}
         fallback={
           /* plain page header (not a card, not collapsible): the shell
              back button above already says where this lives */
           <div className="page-head">
-            <span className="icon-tile">
+            <span className="icon-tile icon-tile-lg">
               <Trash2 size={18} />
             </span>
             <span className="page-head-text">

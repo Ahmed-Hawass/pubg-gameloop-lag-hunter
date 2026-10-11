@@ -104,14 +104,17 @@
   padding: 14px 16px;
   min-width: 0;
 }
+/* spec heading wears the same 32px tile as the health and Tools rows,
+   kept neutral: this page reports an inventory, never a verdict, so the
+   tile must not tint like one that passed */
 .spec-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-size: 12px;
   font-weight: 600;
   color: var(--text-3);
-  margin-block-end: 4px;
+  margin-block-end: 2px;
 }
 .spec-head svg {
   flex: none;
@@ -168,9 +171,8 @@
   color: var(--text-2);
   font-size: 12.5px;
 }
-.spec-row-main svg {
-  flex: none;
-}
+/* the disk glyph rides the same neutral tile as the spec cards (shape
+   from .icon-tile, ink from .icon-func) */
 .spec-row-text {
   display: flex;
   flex-direction: column;
@@ -197,15 +199,6 @@
 .sys-actions {
   display: flex;
   align-self: flex-start;
-}
-/* fixed width: the label flips between copySpecs (longest) and the
-   shorter copiedSpecs on click — without this the button breathes and
-   the page scrollbar flickers. Must fit the longest label in both
-   locales ("Copy all specs" / "نسخ كل المواصفات") plus the icon. */
-.sys-actions .btn {
-  min-width: 13em;
-  justify-content: center;
-  white-space: nowrap;
 }
 
 /* ---- top processes tab ---- */
@@ -903,8 +896,8 @@
   border-color: var(--primary);
   box-shadow: 0 0 0 3px var(--primary-dim);
 }
-/* icon tile inside Tools rows comes from .icon-tile; only the
-   optimistic-on tint stays here */
+/* icon tile inside Tools rows comes from .icon-tile (shape) and
+   .icon-func (glyph ink); only the optimistic-on tint stays here */
 .switch-row.verdict-ok .icon-tile {
   background: var(--primary-dim);
   color: var(--primary);

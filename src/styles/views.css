@@ -179,6 +179,8 @@
 }
 .monitor .btn-hero svg {
   flex: none;
+  inline-size: 20px;
+  block-size: 20px;
 }
 /* the running note: the same quiet voice as the old idle foot, relocated
    to the screen where the doubt is live. One line under the message, never

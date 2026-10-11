@@ -37,16 +37,19 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - Tool details re-read within a minute while open: an outside change (GameLoop update, another tool) surfaces without leaving and re-entering.
 - Processes pauses its live poll while the window is hidden instead of waking every 2s unseen.
 - The health banner and loading state carry no manual refresh (the silent poll plus focus re-reads own freshness); the error state keeps the only retry.
-- The System copy button keeps a fixed width, so confirming the copy no longer flickers the scrollbar.
+- The System copy button sizes to its label again (the fixed width guessed wrong for Arabic; the press-motion fix above already owns the scrollbar flicker).
 - Keyboard focus is one explicit red tone everywhere (green already dresses resting states like switch ON, so a green ring vanished where it matters most): one shared utility turns the border of bordered controls and paints a single inset ring on the rest.
 - Collapsed sidebar tabs announce their names to screen readers (they were icon-only with a visual-only tooltip).
 - Long reports lists always scroll: scroll pages carry an explicit shrink floor instead of relying on it.
 - Help notes behind (?) buttons lost their repeated one-tap tails: every hint now ends on its substance, in both languages.
 - System health cards share the Tools row shape (tinted icon tile, name over muted state line, same row height), so the two pages read as one.
 - The health page file card reads the same registry the editor writes (the old WMI flag disagreed across reboots), and names a pending reboot with the editor's own badge instead of showing the old state as current.
+- The page icon keeps its size when the one-time intro card is dismissed (the card and the plain header drew the same tile at two different scales).
+- Buttons and window controls draw every icon at one size (four different glyph sizes had crept into neighbouring buttons, and the three caption buttons had three of their own).
 
 ### Changed
 - Tools and health pages share one look: a summary banner, featured warnings, and the full list below.
+- The System spec cards, storage rows, and About cost rows now lead with the same icon tile as the health and Tools rows. The tile stays neutral grey there, because a page that only reports an inventory has nothing to pass or fail.
 - One typeface everywhere, severity colors from a shared theme, and wall-clock times follow your Windows 12/24 setting.
 - Closing the window asks first only when work is in flight (scan, download, or cleanup).
 

@@ -175,7 +175,9 @@
     filter: brightness(0.82);
   }
 }
-/* 32px function tile shared by Tools rows and the storage/pagefile cards */
+/* 32px function tile: one shape for every row that leads with a glyph
+   (health rows, Tools rows, the processes list, System specs, About
+   costs, pagefile and sweep cards) */
 .icon-tile {
   display: flex;
   align-items: center;
@@ -186,6 +188,27 @@
   border-radius: 9px;
   background: var(--elev-3);
   color: var(--text-2);
+}
+/* the glyph inside a tile, one step dimmer than the tile ink: every row
+   carrying one also carries a label, and the label must outrank the
+   icon. Verdict rows (health, Tools) re-tint the tile and the glyph
+   together through their own higher-specificity rule; display rows
+   (System specs, About costs) keep this neutral pair. */
+.icon-func {
+  color: var(--text-3);
+}
+/* the tile OWNS its glyph size. Lucide takes the number from the call
+   site (size={n} on the icon component), so without this a tile can
+   land at any scale and the row rhythm drifts without anything looking
+   broken. Row tiles carry 15px; page heads and intro cards ask for the
+   larger one by name. */
+.icon-tile > svg {
+  inline-size: 15px;
+  block-size: 15px;
+}
+.icon-tile-lg > svg {
+  inline-size: 18px;
+  block-size: 18px;
 }
 /* inset divider list: one measured answer on a sunk surface (sweep
    results, cost rows, visibility rows) — container plus rows, dividers
@@ -210,10 +233,6 @@
 }
 .inset-row:last-child {
   border-block-end: none;
-}
-.inset-row > svg {
-  flex: none;
-  color: var(--text-3);
 }
 /* unstyled back button shared by the report reader and Tools details.
    Hover fills like every quiet control (it reads as clickable, not
@@ -279,6 +298,19 @@
 
 /* Start button: hover lift + icon nudge — one scale (1.18) shared
    with spec/sidebar glyphs */
+/* the button owns its glyph size, same contract as the tile. Button text
+   is 13px, so the glyph sits one step above it; the four numbers the
+   call sites were picking from (14/15/16/18) made neighbouring buttons
+   look mis-matched. */
+.btn > svg {
+  inline-size: 15px;
+  block-size: 15px;
+  flex: none;
+}
+.btn-lg > svg {
+  inline-size: 16px;
+  block-size: 16px;
+}
 .btn svg {
   transition: transform 0.2s var(--ease);
 }

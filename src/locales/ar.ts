@@ -111,7 +111,7 @@ export const ar: Locale = {
   expandMenu: "توسيع القائمة",
   monitor: "المراقبة",
   system: "النظام",
-  topProcesses: "أكثر العمليات استهلاكًا",
+  topProcesses: "العمليات",
   systemHealth: "صحة النظام",
   reports: "التقارير",
   settings: "الإعدادات",

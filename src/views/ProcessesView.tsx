@@ -136,7 +136,7 @@ export function ProcessesView(props: { active: boolean }) {
     <div className="procs">
       <PageIntro
         id="processes"
-        icon={<Activity size={16} />}
+        icon={<Activity size={18} />}
         title={t.introProcessesTitle}
         body={t.introProcessesBody}
       />

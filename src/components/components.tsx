@@ -140,7 +140,7 @@ export function IntroCard(props: {
   const { icon, title, body, dismissLabel, onDismiss } = props;
   return (
     <div className="card-sm intro-card">
-      <span className="icon-tile intro-ico">{icon}</span>
+      <span className="icon-tile icon-tile-lg intro-ico">{icon}</span>
       <div className="intro-text">
         <span className="intro-title">{title}</span>
         <p>{body}</p>

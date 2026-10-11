@@ -95,7 +95,9 @@ export function AboutView(props: {
             const Icon = IMPACT_ICONS[i] ?? Leaf;
             return (
               <li key={i} className="inset-row">
-                <Icon size={15} aria-hidden="true" />
+                <span className="icon-tile icon-func">
+                  <Icon size={15} aria-hidden="true" />
+                </span>
                 <span>{item}</span>
               </li>
             );

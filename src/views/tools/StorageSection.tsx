@@ -65,7 +65,7 @@ export function StorageSection(props: {
     return (
       <div className="check-list">
         <EmptyState
-          icon={failed ? <SlidersHorizontal size={18} /> : <RefreshCw size={20} />}
+          icon={failed ? <SlidersHorizontal size={18} /> : <RefreshCw size={18} />}
           title={failed ? t.dialog.somethingWrong : t.loading}
           hint={failed ? (tweaks.loadError ?? "") : ""}
           spin={!failed}

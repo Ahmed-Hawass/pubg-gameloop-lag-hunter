@@ -105,7 +105,7 @@ export function SystemView() {
   if (!info) {
     return (
       <div className="sys">
-        <EmptyState icon={<RefreshCw size={20} />} title={t.loading} hint="" spin />
+        <EmptyState icon={<RefreshCw size={18} />} title={t.loading} hint="" spin />
       </div>
     );
   }
@@ -120,7 +120,9 @@ export function SystemView() {
         <div className="spec-grid">
           <div className="card spec-card">
             <span className="spec-head">
-              <Cpu size={15} />
+              <span className="icon-tile icon-func">
+                <Cpu size={15} />
+              </span>
               {t.specCpu}
             </span>
             <span className="spec-name" title={text(info.cpu.name) ?? "--"}>{text(info.cpu.name) ?? "--"}</span>
@@ -135,7 +137,9 @@ export function SystemView() {
           </div>
           <div className="card spec-card">
             <span className="spec-head">
-              <Gamepad2 size={15} />
+              <span className="icon-tile icon-func">
+                <Gamepad2 size={15} />
+              </span>
               {t.specGpu}
             </span>
             <span className="spec-name" title={gpu && text(gpu.name) ? gpu.name : "--"}>{gpu && text(gpu.name) ? gpu.name : "--"}</span>
@@ -148,7 +152,9 @@ export function SystemView() {
           </div>
           <div className="card spec-card">
             <span className="spec-head">
-              <MemoryStick size={15} />
+              <span className="icon-tile icon-func">
+                <MemoryStick size={15} />
+              </span>
               {t.specRam}
             </span>
             <span className="spec-name">
@@ -161,7 +167,9 @@ export function SystemView() {
           </div>
           <div className="card spec-card">
             <span className="spec-head">
-              <Monitor size={15} />
+              <span className="icon-tile icon-func">
+                <Monitor size={15} />
+              </span>
               {t.specDisplay}
             </span>
             <span className="spec-name">
@@ -187,7 +195,9 @@ export function SystemView() {
             info.disks.map((d, i) => (
               <li key={i} className="spec-row">
                 <span className="spec-row-main">
-                  <HardDrive size={15} />
+                  <span className="icon-tile icon-func">
+                    <HardDrive size={15} />
+                  </span>
                   <span className="spec-row-text">
                     <span className="spec-row-name">{d.name}</span>
                     <span className="spec-row-sub">

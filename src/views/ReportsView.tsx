@@ -377,7 +377,7 @@ export function ReportsView(props: {
           hint={loadFailed}
         />
       ) : entries === null ? (
-        <EmptyState icon={<RefreshCw size={20} />} title={t.loadingSessions} hint="" spin />
+        <EmptyState icon={<RefreshCw size={18} />} title={t.loadingSessions} hint="" spin />
       ) : entries.length === 0 ? (
         <EmptyState
           icon={<FileWarning size={18} />}

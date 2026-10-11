@@ -260,7 +260,7 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
     <div className="checks">
       {intro.show ? (
         <IntroCard
-          icon={<ShieldCheck size={16} />}
+          icon={<ShieldCheck size={18} />}
           title={t.introHealthTitle}
           body={t.introHealthBody}
           dismissLabel={t.dialog.dismiss}

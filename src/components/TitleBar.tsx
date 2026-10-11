@@ -100,7 +100,7 @@ export function TitleBar(props: {
               void toggleMaximizeWindow();
             }}
           >
-            {maximized ? <PictureInPicture2 size={11} /> : <Square size={11} />}
+            {maximized ? <PictureInPicture2 size={13} /> : <Square size={13} />}
           </button>
         </Tip>
         <Tip text={t.close}>
@@ -111,7 +111,7 @@ export function TitleBar(props: {
               onRequestExit();
             }}
           >
-            <X size={14} />
+            <X size={13} />
           </button>
         </Tip>
       </div>

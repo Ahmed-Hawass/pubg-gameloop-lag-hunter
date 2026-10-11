@@ -67,14 +67,14 @@ export function PagefileSection(props: {
           a second header under it would only repeat both) */}
       <PageIntro
         id="pagefile"
-        icon={<Database size={16} />}
+        icon={<Database size={18} />}
         title={t.introPagefileTitle}
         body={t.introPagefileBody}
         fallback={
           /* plain page header (not a card, not collapsible): the shell
              back button above already says where this lives */
           <div className="page-head">
-            <span className="icon-tile">
+            <span className="icon-tile icon-tile-lg">
               <Database size={18} />
             </span>
             <span className="page-head-text">
@@ -85,7 +85,7 @@ export function PagefileSection(props: {
       />
       {pfFailed === null ? (
         <EmptyState
-          icon={<RefreshCw size={20} />}
+          icon={<RefreshCw size={18} />}
           title={t.loading}
           hint=""
           spin

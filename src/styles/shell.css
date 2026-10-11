@@ -128,6 +128,13 @@
   background: var(--elev-3);
   color: var(--text-1);
 }
+/* one glyph size for all three caption buttons: native Windows draws the
+   dash, the box and the X at the same weight, and 11/13/14 side by side
+   read as three different controls */
+.win-controls button > svg {
+  inline-size: 13px;
+  block-size: 13px;
+}
 
 .win-controls button.close:hover {
   /* native Windows close red, exact and unthemed on purpose */
