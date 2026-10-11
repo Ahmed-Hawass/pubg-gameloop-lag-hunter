@@ -209,16 +209,14 @@ export const en = {
       system-tasks rule */
   introProcessesTitle: "Close the heavy apps before you play",
   introProcessesBody:
-    "These are the programs eating CPU and RAM right now, game excluded. Close what you don't need before playing.",
+    "These are the apps using the most memory right now, game excluded. Close what you don't need before playing.",
+  /** always-on one-liner above the list (the intro card is one-shot and
+      disappears): the action and what the user gets for it, in their
+      words. The scope and the ordering live in the intro card and the
+      page header, not here */
+  procsAbout: "Close the apps you are not using to free up memory for your game.",
   topProcessesEmpty: "Nothing significant is running",
   refresh: "Refresh",
-  /** background totals header: the list below is truncated, these are not */
-  totalCpuBackground: "total CPU in background",
-  totalRamBackground: "total RAM in background",
-  /** the single apps group: every row ends, nothing here is
-      guidance-free */
-  groupAppsTitle: "Apps you opened",
-  groupAppsHint: "Safe to close before playing",
   /** end-task action on every row: confirm names the app,
       unsaved work may be lost */
   endTask: "End",
@@ -306,11 +304,11 @@ export const en = {
       same note); the rest own theirs. States and effect timing stay in
       the card's own desc/state lines, never duplicated here. */
   checkPowerHint:
-    "The power plan decides whether your processor may run at full speed. Saver plans slow the CPU down to save battery, and that shows up as stutters in fights. The fix is one switch in Windows Settings.",
+    "The power plan decides whether your processor may run at full speed. Saver plans slow the CPU down to save battery, and that shows up as stutters in fights.",
   checkPagefileHint:
     "The pagefile is backup memory on disk for moments when RAM fills up. Too small or disabled means hitches while maps and textures load. Letting Windows manage it automatically suits most devices.",
   checkVtHint:
-    "Virtualization lets GameLoop use your CPU directly instead of slow software emulation. Only you can change it, from the BIOS before Windows starts. One enable, no maintenance afterwards.",
+    "Virtualization lets GameLoop use your CPU directly instead of slow software emulation. Only you can change it, from the BIOS before Windows starts.",
   checkChargerHint:
     "Laptops slow themselves down on battery to protect it. A scan on battery measures a throttled device, so its results mislead. Plug in before playing or scanning.",
 
@@ -343,22 +341,23 @@ export const en = {
   tweakMouseTitle: "Turn off mouse acceleration",
   tweakWindowedTitle: "Turn on optimizations for windowed games",
   /** per-row background notes behind the (?) button: at most 3 sentences,
-      plain language (what it does, when it helps or hurts, effect timing,
-      one-tap revert), never invented numbers */
+      plain language (what it does, when it helps or hurts, effect
+      timing), never invented numbers. No revert pattern: the switch
+      itself is the way back, saying so every time is noise. */
   tweakDvrHint:
-    "Background recording keeps the last seconds of your play saved at all times, so the encoder and the disk never rest during a match. Turning it off removes a constant thief of GPU and disk with no downside for gameplay. Switching it back on takes one tap if you miss the captures.",
+    "Background recording keeps the last seconds of your play saved at all times, so the encoder and the disk never rest during a match. Turning it off removes a constant thief of GPU and disk with no downside for gameplay.",
   tweakSsHint:
-    "Windows deletes temporary files on its own when the drive runs low. It prevents a full drive, it does not free a drive that is already full. Turning it off stops future cleanups with one tap.",
+    "Windows deletes temporary files on its own when the drive runs low. It prevents a full drive, it does not free a drive that is already full. Turning it off stops future cleanups.",
   tweakGameModeHint:
-    "Asks Windows to favor the game with CPU time and to hold update interruptions while you play. Independent frame-time tests show it mainly smooths sudden dips on devices running browsers or chat apps next to the game; a few CPU-maxed titles run better with it off. Leave it on unless a specific game stutters, switching back takes one tap.",
+    "Asks Windows to favor the game with CPU time and to hold update interruptions while you play. Independent frame-time tests show it mainly smooths sudden dips on devices running browsers or chat apps next to the game; a few CPU-maxed titles run better with it off. Leave it on unless a specific game stutters.",
   tweakGpuHint:
     "On laptops with two graphics cards, Windows may run the game on the weaker built-in card to save power. This pins GameLoop to the powerful card instead. It changes nothing on single-GPU devices, and turning it off hands the choice back to Windows.",
   tweakFsoHint:
-    "Some titles pace their frames worse under the Windows fullscreen handling and feel smoother without it. The effect differs per game, so this is a per-title experiment, not a universal win. Turning it back on takes one tap.",
+    "Some titles pace their frames worse under the Windows fullscreen handling and feel smoother without it. The effect differs per game, so this is a per-title experiment, not a universal win.",
   tweakMouseHint:
-    "Pointer acceleration makes the cursor travel further the faster you move your hand. Turning it off gives the same cursor travel for the same hand movement every time. Pure feel, it does not change FPS, and turning it back on takes one tap.",
+    "Pointer acceleration makes the cursor travel further the faster you move your hand. Turning it off gives the same cursor travel for the same hand movement every time. Pure feel, it does not change FPS.",
   tweakWindowedHint:
-    "Modern Windows can present windowed and borderless games with lower latency through a newer path. Microsoft documents smoother play for these modes when the toggle is on. Turning it off restores the old path with one tap.",
+    "Modern Windows can present windowed and borderless games with lower latency through a newer path. Microsoft documents smoother play for these modes when the toggle is on. Turning it off restores the old path.",
   tweakPfTitle: "Virtual memory (page file)",
   /** one-shot page card: the why (borrowed disk instead of a crash)
       and the honest default (automatic suits almost everyone) */
