@@ -228,9 +228,17 @@ export const en = {
       site), so this key never pluralizes itself */
   endConfirmBodyCount: (name: string, count: string) =>
     `${name} (${count}) will close immediately. Unsaved work in them will be lost.`,
-  /** grouped-row size line under the app name (MSA-safe counts live
-      here alone, like spikeCount) */
+  /** the grouped-process count, now only the confirm dialog names it
+      (MSA-safe counts live here alone, like spikeCount) */
   procCount: (n: number) => `${n} process${n === 1 ? "" : "es"}`,
+  /** per-row RAM line under the app name: the number plus what it is,
+      so a bare figure never sits unexplained. At and above a gigabyte
+      the figure reads in GB (same threshold as the sweep summary),
+      never a four-digit MB count */
+  procRamUsage: (mb: number) =>
+    mb >= 1024
+      ? `Memory usage: ${(mb / 1024).toFixed(1)} GB`
+      : `Memory usage: ${Math.round(mb)} MB`,
   /** curated process display names (stable OS staples only; user
       software names itself via ProductName, raw names back both) */
   procNames: {
@@ -249,7 +257,6 @@ export const en = {
     procStartMenu: "Start Menu",
     procShellExperience: "Shell Experience Host",
     procSpooler: "Print Spooler",
-    procEdgeWebView: "WebView2 Runtime",
   } as Record<string, string>,
   /** generic loading line for tabs that are not Top Processes */
   loading: "Loading...",

@@ -129,8 +129,8 @@
   font-weight: 700;
   border-radius: 999px;
 }
-/* totals strip: two big honest numbers (background processes, saved
-   sessions) — one definition, both tabs */
+/* totals strip: two big honest numbers (saved sessions) — one
+   definition, Reports only */
 .totals {
   display: flex;
   gap: 32px;

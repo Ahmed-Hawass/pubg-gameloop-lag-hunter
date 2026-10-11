@@ -368,10 +368,11 @@ export interface SystemInfo {
 export interface TopProcess {
   name: string;
   pid: number;
-  /** every live PID in this group (hottest first): End stops them
+  /** every live PID in this group (biggest first): End stops them
       all, the icon reads the first */
   pids: number[];
-  cpu_pct: number;
+  /** resident memory summed over the group, MB (printed under the
+      name with its label) */
   ram_mb: number;
   /** "app" (user software) or "system" (leave running), decided by the engine */
   kind: "app" | "system";
@@ -387,12 +388,9 @@ export interface ProcessIcon {
   url: string;
 }
 
-/** ranked rows plus honest background totals (every non-excluded process,
-    not just the displayed top rows) */
+/** ranked rows, one measure (memory) and one order (biggest first) */
 export interface TopProcesses {
   processes: TopProcess[];
-  total_cpu: number;
-  total_ram_mb: number;
 }
 
 export interface SystemChecks {

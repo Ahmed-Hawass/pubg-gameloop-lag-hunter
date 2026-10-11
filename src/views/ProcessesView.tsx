@@ -1,8 +1,9 @@
 // ProcessesView.tsx — who is eating the machine (the game is never a suspect).
-// A totals card answers "how bad is the background overall", then one
-// actionable apps list (system tasks stay in the honest totals above,
-// never as rows: nothing here is guidance-free, every row ends). Stays
-// live while the tab is open: silent refresh every few seconds (the
+// One actionable apps list: name over a muted RAM line per row, heaviest
+// first, so the page reads as a decision ("close what you do not need")
+// with the number that justifies it. No totals card. System tasks stay
+// off-screen entirely (nothing here is guidance-free, every row ends).
+// Stays live while the tab is open: silent refresh every few seconds (the
 // engine's TTL cache decides whether a real query is needed).
 
 import { useEffect, useRef, useState } from "react";
@@ -58,10 +59,10 @@ export function ProcessesView(props: { active: boolean }) {
   useIntervalTick(active, LIVE_INTERVAL_MS, () => void load(true));
 
   const procs = answer?.processes ?? null;
-  // apps only on screen (system rows stay in the honest totals above,
-  // never as rows: nothing here is guidance-free, every row ends).
-  // The engine still classifies every row; display just stops listing
-  // the leave-running kind (one actionable list, no dead headers).
+  // apps only on screen: nothing here is guidance-free, every row ends, and
+  // a system task is not something the user can close anyway. The engine
+  // still classifies every row; display just stops listing the leave-running
+  // kind.
   const apps = procs?.filter((p) => p.kind === "app") ?? [];
   /** end-task confirm target (null = no confirm): app rows only, the
       Dialog names the app and warns about unsaved work */
@@ -160,48 +161,30 @@ export function ProcessesView(props: { active: boolean }) {
           />
         </>
       ) : procs === null ? (
-        <EmptyState icon={<RefreshCw size={20} />} title={t.loading} hint="" spin />
+        <EmptyState icon={<RefreshCw size={18} />} title={t.loading} hint="" spin />
       ) : apps.length === 0 ? (
         <EmptyState icon={<Activity size={18} />} title={t.topProcessesEmpty} hint="" />
       ) : (
         <>
-          {/* background totals: the truncated list below can never show
-              the whole load, so the header carries the honest sums */}
-          <div className="card totals">
-            <div className="total">
-              <span className="total-num num">{answer!.total_cpu.toFixed(1)}%</span>
-              <span className="total-label">{t.totalCpuBackground}</span>
-            </div>
-            <div className="total">
-              <span className="total-num num">{Math.round(answer!.total_ram_mb)} MB</span>
-              <span className="total-label">{t.totalRamBackground}</span>
-            </div>
-          </div>
-          {apps.length > 0 ? (
-            <section className="proc-group">
-              <h3 className="proc-group-head">
-                <AppWindow size={15} />
-                <span className="proc-group-text">
-                  <span className="proc-group-title">{t.groupAppsTitle}</span>
-                  <span className="proc-group-hint">{t.groupAppsHint}</span>
-                </span>
-              </h3>
-              <ul className="card proc-list">
-                {apps.map((p) => (
-                  <ProcRow
-                    key={p.pids[0] ?? p.pid ?? p.name}
-                    proc={p}
-                    art={icons[p.pids[0] ?? p.pid] ?? null}
-                    glyph={<AppWindow size={15} />}
-                    endLabel={t.endTask}
-                    endingLabel={t.endingTask}
-                    ending={endingPid === p.pid}
-                    onEnd={() => setConfirm(p)}
-                  />
-                ))}
-              </ul>
-            </section>
-          ) : null}
+          {/* always on: the intro card above is one-shot and leaves, and
+              the rows alone never say who is in them or how they sort */}
+          <p className="procs-about">{t.procsAbout}</p>
+          {/* one list, no group heading: a lone title above a lone list
+              is a label for the obvious */}
+          <ul className="card proc-list">
+            {apps.map((p) => (
+              <ProcRow
+                key={p.pids[0] ?? p.pid ?? p.name}
+                proc={p}
+                art={icons[p.pids[0] ?? p.pid] ?? null}
+                glyph={<AppWindow size={15} />}
+                endLabel={t.endTask}
+                endingLabel={t.endingTask}
+                ending={endingPid === p.pid}
+                onEnd={() => setConfirm(p)}
+              />
+            ))}
+          </ul>
         </>
       )}
       {/* destructive confirm: names the app and its size, unsaved work
@@ -242,9 +225,11 @@ export function ProcessesView(props: { active: boolean }) {
 /** one row: real artwork bare (no box) once
     resolved, the shared tile with the glyph until then. Curated staples
     translate by key, everything else shows the engine's
-    FileDescription-or-raw string verbatim. App rows carry an end-task
-    action on the shared neutral button (danger lives only in the
-    confirm); system rows carry no action by construction. */
+    FileDescription-or-raw string verbatim. Name over a muted RAM line
+    (same slot as the health state line, same tone): the row shows how
+    much, the order shows how heavy. App rows carry an end-task action
+    on the shared neutral button (danger lives only in the confirm);
+    system rows carry no action by construction. */
 function ProcRow(props: {
   proc: TopProcess;
   art: string | null;
@@ -271,17 +256,11 @@ function ProcRow(props: {
           />
         </span>
       ) : (
-        <span className="icon-tile">{glyph}</span>
+        <span className="icon-tile icon-func">{glyph}</span>
       )}
-      <span className="proc-name">
-        {label}
-        {p.pids.length > 1 ? (
-          <span className="proc-count">{t.procCount(p.pids.length)}</span>
-        ) : null}
-      </span>
-      <span className="proc-nums num">
-        <span className="proc-cpu">{p.cpu_pct.toFixed(1)}%</span>
-        <span className="proc-ram">{Math.round(p.ram_mb)} MB</span>
+      <span className="proc-text">
+        <span className="proc-name">{label}</span>
+        <span className="proc-ram num">{t.procRamUsage(p.ram_mb)}</span>
       </span>
       {onEnd ? (
         <button

@@ -231,6 +231,14 @@ export const ar: Locale = {
         : n >= 3 && n <= 10
           ? `${n} عمليات`
           : `${n} عملية`,
+  /** per-row RAM line under the app name: the number plus what it is,
+      so a bare figure never sits unexplained. At and above a gigabyte
+      the figure reads in GB (same threshold as the sweep summary),
+      never a four-digit MB count */
+  procRamUsage: (mb: number) =>
+    mb >= 1024
+      ? `استخدام الذاكرة: ${(mb / 1024).toFixed(1)} GB`
+      : `استخدام الذاكرة: ${Math.round(mb)} MB`,
   /** curated process display names (stable OS staples only; user
       software names itself via ProductName, raw names back both) */
   procNames: {
@@ -249,7 +257,6 @@ export const ar: Locale = {
     procStartMenu: "قائمة ابدأ",
     procShellExperience: "واجهة النظام",
     procSpooler: "التخزين المؤقت للطباعة",
-    procEdgeWebView: "مكوّن عرض الويب",
   } as Record<string, string>,
   /** generic loading line for tabs that are not Top Processes */
   loading: "جارٍ التحميل...",

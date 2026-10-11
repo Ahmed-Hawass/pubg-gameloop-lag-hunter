@@ -48,6 +48,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - Buttons and window controls draw every icon at one size (four different glyph sizes had crept into neighbouring buttons, and the three caption buttons had three of their own).
 
 ### Changed
+- Top Processes is a plain list now: a standing one-liner says what it holds, and each row shows the app, its memory use, and End. Memory alone decides the order, so the page answers what to close with the number that justifies it. It lists 15 apps instead of 12.
 - Tools and health pages share one look: a summary banner, featured warnings, and the full list below.
 - The System spec cards, storage rows, and About cost rows now lead with the same icon tile as the health and Tools rows. The tile stays neutral grey there, because a page that only reports an inventory has nothing to pass or fail.
 - One typeface everywhere, severity colors from a shared theme, and wall-clock times follow your Windows 12/24 setting.

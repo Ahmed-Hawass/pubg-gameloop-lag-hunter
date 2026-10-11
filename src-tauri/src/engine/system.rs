@@ -906,12 +906,11 @@ fn os_release_name(build: &str) -> String {
 pub struct TopProcess {
     pub name: String,
     pub pid: u32,
-    /// every live PID in this group (hottest first): End task stops the
-    /// whole app, not one worker (a Chromium child alone never ends the
-    /// browser). Single-process apps carry exactly one PID.
+    /// every live PID in this group (biggest member first): End task stops
+    /// the whole app, not one worker (a Chromium child alone never ends
+    /// the browser). Single-process apps carry exactly one PID.
     pub pids: Vec<u32>,
-    /// % of TOTAL CPU (normalized across all logical cores), 1s average
-    pub cpu_pct: f64,
+    /// resident memory (working set) summed over the group, MB
     pub ram_mb: f64,
     /// "app" (user software, safe to close before playing) or "system"
     /// (leave running) — decided by classify() below, never guessed
@@ -924,15 +923,12 @@ pub struct TopProcess {
     pub display_name: String,
 }
 
-/// The top-process answer: ranked rows plus honest background totals.
-/// Totals accumulate over EVERY non-excluded process (not just the
-/// displayed top 12) in the same pass, so the header never understates
-/// the background load the truncated list cannot show.
+/// The top-process answer: ranked rows, and nothing else. One measure
+/// (resident memory) and one order (biggest first), so the list answers a
+/// question a user can act on: which of MY programs can I close?
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct TopProcesses {
     pub processes: Vec<TopProcess>,
-    pub total_cpu: f64,
-    pub total_ram_mb: f64,
 }
 
 /// App vs system, fail-safe toward system: an unidentifiable process is
@@ -959,26 +955,26 @@ pub fn classify_process(session: Option<u32>, path: Option<&str>, windir: &str) 
 }
 
 /// Group per-process rows by exe stem (case-insensitive): one program,
-/// one row. CPU/RAM sum, member PIDs ride hottest-first, the hottest
+/// one row. RAM sums, member PIDs ride biggest-first, the biggest
 /// member lends its name/path/display. Kind fails safe: every member
 /// must read app, else the group reads system (a shared worker pool is
-/// never a close suggestion). Pure: the poll shapes, this math folds.
+/// never a close suggestion). Pure: the snapshot shapes, this math
+/// folds.
 fn group_by_exe(rows: Vec<(TopProcess, Option<String>)>) -> Vec<(TopProcess, Option<String>)> {
-    // acc row + its path + its hottest member CPU (the face follows heat,
-    // not arrival order: a late hot worker still lends name and path)
+    // acc row + its path + its biggest member RAM (the face follows size,
+    // not arrival order: a late big worker still lends name and path)
     let mut groups: HashMap<String, (TopProcess, Option<String>, f64)> = HashMap::new();
     for (row, path) in rows {
         let key = row.name.to_ascii_lowercase();
         match groups.get_mut(&key) {
-            Some((acc, acc_path, heat)) => {
-                acc.cpu_pct += row.cpu_pct;
+            Some((acc, acc_path, size)) => {
                 acc.ram_mb += row.ram_mb;
                 acc.pids.push(row.pid);
                 if row.kind != "app" {
                     acc.kind = "system".into();
                 }
-                if row.cpu_pct > *heat {
-                    *heat = row.cpu_pct;
+                if row.ram_mb > *size {
+                    *size = row.ram_mb;
                     acc.pid = row.pid;
                     acc.name = row.name.clone();
                     acc.display_key = row.display_key.clone();
@@ -987,8 +983,8 @@ fn group_by_exe(rows: Vec<(TopProcess, Option<String>)>) -> Vec<(TopProcess, Opt
                 }
             }
             None => {
-                let heat = row.cpu_pct;
-                groups.insert(key, (row, path, heat));
+                let size = row.ram_mb;
+                groups.insert(key, (row, path, size));
             }
         }
     }
@@ -1007,17 +1003,18 @@ fn group_by_exe(rows: Vec<(TopProcess, Option<String>)>) -> Vec<(TopProcess, Opt
     out
 }
 
-/// Display order: RAM desc. RAM is a level (stable across polls), CPU
-/// is a delta (noisy across polls) — ranking by CPU reshuffled the list
-/// every refresh while ranking by RAM holds it still. Bounded at 12
-/// (bounded everything). Pure.
+/// Display order: RAM desc, and the bound. RAM is a level (stable across
+/// polls), so the list holds still instead of reshuffling every refresh.
+/// Bounded (bounded everything). Pure.
+const MAX_TOP_ROWS: usize = 15;
+
 fn rank_groups(mut rows: Vec<(TopProcess, Option<String>)>) -> Vec<(TopProcess, Option<String>)> {
     rows.sort_by(|a, b| {
         b.0.ram_mb
             .partial_cmp(&a.0.ram_mb)
             .unwrap_or(std::cmp::Ordering::Equal)
     });
-    rows.truncate(12);
+    rows.truncate(MAX_TOP_ROWS);
     rows
 }
 
@@ -1029,35 +1026,14 @@ struct RawProc {
     ppid: u32,
     session: Option<u32>,
     path: Option<String>,
-    cpu_100ns: u64,
     ram_mb: f64,
 }
 
-/// Previous CPU clock per PID (100ns kernel+user) plus when seen: the
-/// second point every percentage needs. Pruned to live PIDs each poll,
-/// so the map never grows across weeks.
-static CPU_PREV: OnceLock<Mutex<HashMap<u32, (u64, std::time::Instant)>>> = OnceLock::new();
-
-fn cpu_prev() -> &'static Mutex<HashMap<u32, (u64, std::time::Instant)>> {
-    CPU_PREV.get_or_init(|| Mutex::new(HashMap::new()))
-}
-
-/// CPU% from two 100ns clocks over wall seconds on N cores. Zero wall
-/// reads zero (same instant sampled twice), a backwards clock saturates
-/// to zero — never NaN, never negative. Pure.
-fn cpu_percent(prev_100ns: u64, cur_100ns: u64, wall_secs: f64, cores: f64) -> f64 {
-    if wall_secs <= 0.0 || cores <= 0.0 {
-        return 0.0;
-    }
-    let delta_secs = cur_100ns.saturating_sub(prev_100ns) as f64 / 10_000_000.0;
-    ((delta_secs / wall_secs / cores * 100.0) * 10.0).round() / 10.0
-}
-
 /// Native process snapshot: Toolhelp for identity/parentage, then one
-/// limited-information handle per PID for times, memory, path, session.
+/// limited-information handle per PID for memory, path and session.
 /// Unopenable processes (protected) are absent — same fail-safe as the
 /// missing-path rule below (unknown reads as system when classifiable,
-/// invisible otherwise). Totals therefore cover the readable set.
+/// invisible otherwise).
 #[cfg(windows)]
 fn native_snapshot() -> Result<Vec<RawProc>, String> {
     let entries = super::prockill::snapshot_entries();
@@ -1090,12 +1066,6 @@ fn query_one(e: super::prockill::ProcEntry) -> Option<RawProc> {
         if handle.is_null() {
             return None;
         }
-        let mut creation = FILETIME { low: 0, high: 0 };
-        let mut exit = FILETIME { low: 0, high: 0 };
-        let mut kernel = FILETIME { low: 0, high: 0 };
-        let mut user = FILETIME { low: 0, high: 0 };
-        let times_ok =
-            GetProcessTimes(handle, &mut creation, &mut exit, &mut kernel, &mut user) != 0;
         let mut counters: PROCESS_MEMORY_COUNTERS = std::mem::zeroed();
         counters.cb = std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32;
         let mem_ok = GetProcessMemoryInfo(handle, &mut counters, counters.cb) != 0;
@@ -1108,7 +1078,11 @@ fn query_one(e: super::prockill::ProcEntry) -> Option<RawProc> {
                 None
             };
         CloseHandle(handle);
-        if !times_ok || !mem_ok {
+        // memory is the ONLY counter this answer measures, so it is the
+        // only one that can disqualify a row: the row used to vanish
+        // whenever its CPU clocks were unreadable, hiding a process whose
+        // memory we could read perfectly well
+        if !mem_ok {
             return None;
         }
         let mut session = 0u32;
@@ -1117,15 +1091,12 @@ fn query_one(e: super::prockill::ProcEntry) -> Option<RawProc> {
         } else {
             None
         };
-        let cpu_100ns = ((kernel.high as u64) << 32 | kernel.low as u64)
-            + ((user.high as u64) << 32 | user.low as u64);
         Some(RawProc {
             pid: e.pid,
             name: e.name,
             ppid: e.ppid,
             session,
             path,
-            cpu_100ns,
             ram_mb: counters.working_set_size as f64 / 1_048_576.0,
         })
     }
@@ -1133,14 +1104,6 @@ fn query_one(e: super::prockill::ProcEntry) -> Option<RawProc> {
 
 /// Canonical Win32 spelling (same deliberate allow as the icon
 /// structs in icons.rs and SHELLEXECUTEINFOW in elevate.rs).
-#[cfg(windows)]
-#[allow(clippy::upper_case_acronyms)]
-#[repr(C)]
-struct FILETIME {
-    low: u32,
-    high: u32,
-}
-
 #[cfg(windows)]
 #[repr(C)]
 struct PROCESS_MEMORY_COUNTERS {
@@ -1164,13 +1127,6 @@ const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
 extern "system" {
     fn OpenProcess(desired: u32, inherit: i32, pid: u32) -> *mut core::ffi::c_void;
     fn CloseHandle(handle: *mut core::ffi::c_void) -> i32;
-    fn GetProcessTimes(
-        handle: *mut core::ffi::c_void,
-        creation: *mut FILETIME,
-        exit: *mut FILETIME,
-        kernel: *mut FILETIME,
-        user: *mut FILETIME,
-    ) -> i32;
     fn ProcessIdToSessionId(pid: u32, session: *mut u32) -> i32;
     fn QueryFullProcessImageNameW(
         handle: *mut core::ffi::c_void,
@@ -1194,37 +1150,23 @@ pub fn query_top_processes() -> Result<TopProcesses, String> {
     // Fully native: one Toolhelp pass plus one limited handle per PID.
     // No PowerShell spawn per poll (the old one-second-plus cost center,
     // and the phantom PowerShell row it measured into its own answer).
-    // CPU% still needs two points in time, so the previous clocks live
-    // in the map below and newcomers read zero on first sighting.
+    // One measure only (resident memory), so this read is STATELESS: no
+    // previous sample, no map, no delta, and the same machine state
+    // always produces the same answer.
     let raws = native_snapshot().map_err(|e| {
         super::logging::warn(&format!("top processes query failed: {e}"));
         e
     })?;
-    let cores = std::thread::available_parallelism()
-        .map(|n| n.get() as f64)
-        .unwrap_or(1.0);
-    let now = std::time::Instant::now();
     let windir = super::system::windows_dir().to_string_lossy().into_owned();
     // self-measurement guard (generic on every machine): our own PID
     // plus anything parented to us (WebView hosts and any probe we ever
     // spawn) is the tool's own cost, never user background load.
     // Parentage rides the same snapshot, no second one.
     let own_pid = std::process::id();
-    let mut prev = cpu_prev().lock().unwrap_or_else(|p| p.into_inner());
-    // prune the dead first so the map never grows across weeks
-    let live: std::collections::HashSet<u32> = raws.iter().map(|r| r.pid).collect();
-    prev.retain(|pid, _| live.contains(pid));
     // rows travel with their exe path (never leaves the engine: paths can
     // contain the user name) until display names resolve below
     let mut rows: Vec<(TopProcess, Option<String>)> = Vec::new();
-    let mut total_cpu = 0.0;
-    let mut total_ram_mb = 0.0;
     for raw in raws {
-        let pct = match prev.get(&raw.pid) {
-            Some((t0, at)) => cpu_percent(*t0, raw.cpu_100ns, (now - *at).as_secs_f64(), cores),
-            None => 0.0,
-        };
-        prev.insert(raw.pid, (raw.cpu_100ns, now));
         // the game (all GameLoop processes) is never a suspect —
         // and neither is the tool itself nor anything it spawned
         if super::sampler::is_gameloop_process(&raw.name)
@@ -1234,14 +1176,9 @@ pub fn query_top_processes() -> Result<TopProcesses, String> {
         {
             continue;
         }
-        // background totals accumulate over everything non-excluded
-        // (display membership below must never shrink them)
-        total_cpu += pct;
-        total_ram_mb += raw.ram_mb;
         // the shared WebView2 runtime is OS-owned on every Windows
-        // 10/11 (Office, Search, widgets, WebViews): counted in the
-        // totals above like everything else, but never a displayed row
-        // (ending it would wound the hosts, ours included)
+        // 10/11 (Office, Search, widgets, WebViews): never a displayed
+        // row (ending it would wound the hosts, ours included)
         if raw
             .name
             .trim_end_matches(".exe")
@@ -1250,8 +1187,7 @@ pub fn query_top_processes() -> Result<TopProcesses, String> {
             continue;
         }
         // membership is every app group, idle or not: a quiet browser
-        // stays listed with its live (possibly zero) numbers instead of
-        // blinking in and out across polls
+        // stays listed instead of blinking in and out across polls
         rows.push((
             TopProcess {
                 kind: classify_process(raw.session, raw.path.as_deref(), &windir).into(),
@@ -1260,16 +1196,13 @@ pub fn query_top_processes() -> Result<TopProcesses, String> {
                 name: raw.name.clone(),
                 pid: raw.pid,
                 pids: vec![raw.pid],
-                cpu_pct: pct,
                 ram_mb: raw.ram_mb,
             },
             raw.path.filter(|p| !p.is_empty()),
         ));
     }
-    drop(prev);
-    // one row per program: same exe stem sums into its hottest member
-    // (a browser reads as one Brave, not seven workers). Totals above
-    // already counted everything, so grouping only shapes the display.
+    // one row per program: same exe stem sums into its biggest member
+    // (a browser reads as one Brave, not seven workers)
     let rows = group_by_exe(rows);
     let rows = rank_groups(rows);
     // display names resolve AFTER truncation, for kept rows only: unique
@@ -1299,11 +1232,7 @@ pub fn query_top_processes() -> Result<TopProcesses, String> {
         }
         out.push(row);
     }
-    Ok(TopProcesses {
-        processes: out,
-        total_cpu: (total_cpu * 10.0).round() / 10.0,
-        total_ram_mb: (total_ram_mb * 10.0).round() / 10.0,
-    })
+    Ok(TopProcesses { processes: out })
 }
 
 // ---------------------------------------------------------------------------
@@ -2873,19 +2802,12 @@ mod tests {
         );
     }
 
-    fn grouped_row(
-        name: &str,
-        pid: u32,
-        cpu: f64,
-        ram: f64,
-        kind: &str,
-    ) -> (TopProcess, Option<String>) {
+    fn grouped_row(name: &str, pid: u32, ram: f64, kind: &str) -> (TopProcess, Option<String>) {
         (
             TopProcess {
                 name: name.into(),
                 pid,
                 pids: vec![pid],
-                cpu_pct: cpu,
                 ram_mb: ram,
                 kind: kind.into(),
                 display_key: None,
@@ -2898,17 +2820,16 @@ mod tests {
     #[test]
     fn group_by_exe_sums_one_program_into_one_row() {
         let rows = vec![
-            grouped_row("brave", 10, 2.0, 100.0, "app"),
-            grouped_row("BRAVE", 11, 26.4, 64.0, "app"),
-            grouped_row("chrome", 20, 1.0, 50.0, "app"),
+            grouped_row("brave", 10, 100.0, "app"),
+            grouped_row("BRAVE", 11, 640.0, "app"),
+            grouped_row("chrome", 20, 50.0, "app"),
         ];
         let mut out = group_by_exe(rows);
         out.sort_by(|a, b| a.0.name.cmp(&b.0.name));
         assert_eq!(out.len(), 2);
         let brave = &out[0].0;
-        // sums, hottest member lends pid and face, its PID rides first
-        assert!((brave.cpu_pct - 28.4).abs() < 1e-9);
-        assert!((brave.ram_mb - 164.0).abs() < 1e-9);
+        // sums, biggest member lends pid and face, its PID rides first
+        assert!((brave.ram_mb - 740.0).abs() < 1e-9);
         assert_eq!(brave.pid, 11);
         assert_eq!(brave.pids, vec![11, 10]);
         assert_eq!(brave.kind, "app");
@@ -2918,28 +2839,14 @@ mod tests {
     #[test]
     fn group_kind_fails_safe_on_any_system_member() {
         let rows = vec![
-            grouped_row("svchost", 30, 1.0, 10.0, "system"),
-            grouped_row("svchost", 31, 5.0, 20.0, "app"),
+            grouped_row("svchost", 30, 10.0, "system"),
+            grouped_row("svchost", 31, 20.0, "app"),
         ];
         let out = group_by_exe(rows);
         assert_eq!(out.len(), 1);
         // a shared worker pool is never a close suggestion
         assert_eq!(out[0].0.kind, "system");
         assert_eq!(out[0].0.pids.len(), 2);
-    }
-
-    #[test]
-    fn cpu_percent_needs_two_points_and_stays_honest() {
-        // 1 CPU-second on 4 cores over 1 wall second = 25%
-        assert_eq!(cpu_percent(0, 10_000_000, 1.0, 4.0), 25.0);
-        // one decimal like the old sampler math (33.333 -> 33.3)
-        assert_eq!(cpu_percent(0, 10_000_000, 1.0, 3.0), 33.3);
-        // same instant twice reads zero, never NaN
-        assert_eq!(cpu_percent(5, 5, 0.0, 4.0), 0.0);
-        // a backwards clock saturates to zero, never negative
-        assert_eq!(cpu_percent(20_000_000, 10_000_000, 1.0, 4.0), 0.0);
-        // degenerate cores read zero, never infinite
-        assert_eq!(cpu_percent(0, 10_000_000, 1.0, 0.0), 0.0);
     }
 
     #[cfg(windows)]
@@ -2956,24 +2863,45 @@ mod tests {
         assert!(!hit.name.is_empty());
         assert!(hit.ram_mb > 0.0);
         assert!(hit.session.is_some());
-        assert!(hit.cpu_100ns > 0);
     }
 
     #[test]
     fn rank_groups_holds_ram_order_and_bounds() {
-        // hot-but-light sorts below idle-but-heavy: levels hold still,
-        // deltas would reshuffle every poll
+        // the order is memory, and only memory: a level holds still,
+        // a delta would reshuffle every poll
         let rows = vec![
-            grouped_row("hot", 1, 90.0, 10.0, "app"),
-            grouped_row("idle", 2, 0.0, 900.0, "app"),
-            grouped_row("mid", 3, 5.0, 100.0, "app"),
+            grouped_row("light", 1, 10.0, "app"),
+            grouped_row("heavy", 2, 900.0, "app"),
+            grouped_row("mid", 3, 100.0, "app"),
         ];
         let out = rank_groups(rows);
-        assert_eq!(out[0].0.name, "idle");
+        assert_eq!(out[0].0.name, "heavy");
         assert_eq!(out[1].0.name, "mid");
-        assert_eq!(out[2].0.name, "hot");
-        // zero-CPU members keep their seat (membership is not gated)
-        assert_eq!(out[0].0.cpu_pct, 0.0);
+        assert_eq!(out[2].0.name, "light");
+    }
+
+    #[test]
+    fn rank_groups_bounds_the_list() {
+        let rows: Vec<(TopProcess, Option<String>)> = (0..40)
+            .map(|i| {
+                (
+                    TopProcess {
+                        name: format!("p{i}"),
+                        pid: i + 1,
+                        pids: vec![i + 1],
+                        ram_mb: i as f64,
+                        kind: "app".into(),
+                        display_key: None,
+                        display_name: format!("p{i}"),
+                    },
+                    None,
+                )
+            })
+            .collect();
+        let out = rank_groups(rows);
+        assert_eq!(out.len(), MAX_TOP_ROWS);
+        // the bound keeps the biggest, never the first arrivals
+        assert_eq!(out[0].0.name, "p39");
     }
 
     #[test]

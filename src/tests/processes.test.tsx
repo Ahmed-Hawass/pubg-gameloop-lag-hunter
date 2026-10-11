@@ -1,7 +1,7 @@
-// tests/processes.test.tsx — the processes contract: a totals header
-// that never understates (every background process counts, not just the
-// displayed rows), then user apps versus system tasks from the engine's
-// own grouping (never guessed in the UI).
+// tests/processes.test.tsx — the processes contract: one actionable apps
+// list, measured on resident memory only (the engine sends no CPU and no
+// totals), each row names its RAM under its name, user apps versus system
+// tasks from the engine's own grouping (never guessed in the UI).
 
 import { describe, expect, it, vi } from "vitest";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
@@ -34,51 +34,68 @@ apiMock.processIcons.mockResolvedValue([]);
 
 const answer: TopProcesses = {
   processes: [
-    { name: "chrome", pid: 1, pids: [1], cpu_pct: 9.8, ram_mb: 287, kind: "app", display_key: null, display_name: "chrome" },
-    { name: "code", pid: 2, pids: [2], cpu_pct: 1.0, ram_mb: 287, kind: "app", display_key: null, display_name: "code" },
-    { name: "svchost", pid: 3, pids: [3], cpu_pct: 0.5, ram_mb: 79, kind: "system", display_key: null, display_name: "svchost" },
+    { name: "chrome", pid: 1, pids: [1], ram_mb: 287, kind: "app", display_key: null, display_name: "chrome" },
+    { name: "code", pid: 2, pids: [2], ram_mb: 287, kind: "app", display_key: null, display_name: "code" },
+    { name: "svchost", pid: 3, pids: [3], ram_mb: 79, kind: "system", display_key: null, display_name: "svchost" },
   ],
-  total_cpu: 13.7,
-  total_ram_mb: 546,
 };
 
 describe("ProcessesView", () => {
-  it("shows honest totals plus the apps list", async () => {
+  it("shows the apps list with each app's RAM under its name", async () => {
     apiMock.topProcesses.mockResolvedValue(answer);
     apiMock.getSettings.mockResolvedValue(settings());
     render(React.createElement(ProcessesView, { active: false }));
-    // totals come from the answer, not from summing the visible rows
-    await screen.findByText("13.7%");
-    expect(screen.getByText("546 MB")).toBeTruthy();
-    // one apps group with its guidance, system rows never render
-    expect(screen.getByText(en.groupAppsTitle)).toBeTruthy();
-    expect(screen.getByText(en.groupAppsHint)).toBeTruthy();
-    expect(screen.getByText("chrome")).toBeTruthy();
-    expect(screen.queryByText("svchost")).toBeNull();
+    await screen.findByText("chrome");
+    expect(screen.getByText("code")).toBeTruthy();
+    // the engine sends no CPU and no totals, but each row carries its
+    // own labeled RAM line: the order says heaviest first, the line
+    // says what the number is (both chrome and code hold 287 MB here)
+    expect(document.querySelector(".procs-about")?.textContent).toBe(en.procsAbout);
+    expect(screen.getAllByText(en.procRamUsage(287))).toHaveLength(2);
+    expect(screen.queryByText("13.7%")).toBeNull();
+    expect(screen.queryByText("546 MB")).toBeNull();
+    // no group heading above the one list
+    expect(document.querySelector(".proc-group")).toBeNull();
+    expect(document.querySelector(".totals")).toBeNull();
+  });
+
+  it("the standing one-liner survives the intro card being dismissed", async () => {
+    const user = userEvent.setup();
+    apiMock.topProcesses.mockResolvedValue(answer);
+    apiMock.getSettings.mockResolvedValue(settings());
+    apiMock.dismissIntroCard.mockResolvedValue(undefined);
+    render(React.createElement(ProcessesView, { active: false }));
+    // both are present on a first visit
+    expect(await screen.findByText(en.introProcessesTitle)).toBeTruthy();
+    expect(screen.getByText(en.procsAbout)).toBeTruthy();
+    // the card is one-shot; the description of the page is not
+    await user.click(screen.getByRole("button", { name: en.dialog.dismiss }));
+    await waitFor(() => {
+      expect(screen.queryByText(en.introProcessesTitle)).toBeNull();
+    });
+    expect(screen.getByText(en.procsAbout)).toBeTruthy();
   });
 
   it("system-kind rows never render, even alone", async () => {
     apiMock.topProcesses.mockResolvedValue({
       processes: [
-        { name: "dwm", pid: 9, pids: [9], cpu_pct: 2.0, ram_mb: 100, kind: "system", display_key: "procDwm", display_name: "dwm" },
+        { name: "dwm", pid: 9, pids: [9], ram_mb: 100, kind: "system", display_key: "procDwm", display_name: "dwm" },
       ],
-      total_cpu: 2.0,
-      total_ram_mb: 100,
     });
     apiMock.getSettings.mockResolvedValue(settings());
     render(React.createElement(ProcessesView, { active: false }));
-    // totals still count it, but no row invites action on it
+    // no apps on screen means the empty state, never a row (system tasks
+    // are not something the user can close)
     await screen.findByText(en.topProcessesEmpty);
-    expect(screen.queryByText(en.groupAppsTitle)).toBeNull();
+    expect(screen.queryByText("dwm")).toBeNull();
+    expect(screen.queryByText(en.procNames.procDwm)).toBeNull();
   });
 
   it("app names show verbatim, system rows stay off-screen", async () => {    apiMock.topProcesses.mockResolvedValue({
       processes: [
-        { name: "powershell", pid: 1, pids: [1], cpu_pct: 5.0, ram_mb: 50, kind: "system", display_key: "procPowershell", display_name: "powershell" },
-        { name: "brave", pid: 2, pids: [2], cpu_pct: 4.0, ram_mb: 400, kind: "app", display_key: null, display_name: "Brave" },
+        { name: "powershell", pid: 1, pids: [1], ram_mb: 50, kind: "system", display_key: "procPowershell", display_name: "powershell" },
+        { name: "brave", pid: 2, pids: [2], ram_mb: 400, kind: "app", display_key: null, display_name: "Brave" },
       ],
-      total_cpu: 9.0,
-      total_ram_mb: 450,
     });
     apiMock.getSettings.mockResolvedValue(settings());
     render(React.createElement(ProcessesView, { active: false }));
@@ -216,20 +233,21 @@ describe("ProcessesView", () => {
     await screen.findByText(en.errors.PROCESS_ACCESS_DENIED);
   });
 
-  it("a grouped app names its size and kills every member", async () => {
+  it("a grouped app counts its members in the confirm, not on the row", async () => {
     const user = userEvent.setup();
     apiMock.topProcesses.mockResolvedValue({
       processes: [
-        { name: "brave", pid: 11, pids: [11, 10, 12], cpu_pct: 28.4, ram_mb: 164, kind: "app", display_key: null, display_name: "Brave" },
+        { name: "brave", pid: 11, pids: [11, 10, 12], ram_mb: 164, kind: "app", display_key: null, display_name: "Brave" },
       ],
-      total_cpu: 28.4,
-      total_ram_mb: 164,
     });
     apiMock.getSettings.mockResolvedValue(settings());
     apiMock.endProcesses.mockResolvedValue(undefined);
     render(React.createElement(ProcessesView, { active: false }));
-    // one row for the whole program, sized honestly
-    await screen.findByText(en.procCount(3));
+    // one row for the whole program, and the row stays bare: the count
+    // only appears where it changes what happens (the confirm names how
+    // many windows the kill will take)
+    await screen.findByText("Brave");
+    expect(screen.queryByText(en.procCount(3))).toBeNull();
     await user.click(screen.getByText(en.endTask));
     await screen.findByText(en.endConfirmTitle("Brave"));
     expect(
@@ -261,31 +279,41 @@ describe("ProcessesView", () => {
     expect(imgs[0].getAttribute("src")).toBe("data:image/png;base64,iVBORw0KGgo");
   });
 
-  it("an idle app at 0.0% keeps its row with live numbers", async () => {
+  it("an app nobody measures still keeps its row (membership is not load-gated)", async () => {
     apiMock.topProcesses.mockResolvedValue({
       processes: [
-        { name: "brave", pid: 2, pids: [2, 3], cpu_pct: 0.0, ram_mb: 400, kind: "app", display_key: null, display_name: "Brave" },
+        { name: "brave", pid: 2, pids: [2, 3], ram_mb: 400, kind: "app", display_key: null, display_name: "Brave" },
       ],
-      total_cpu: 0.0,
-      total_ram_mb: 400,
     });
     apiMock.getSettings.mockResolvedValue(settings());
     render(React.createElement(ProcessesView, { active: false }));
-    // membership is not CPU-gated: zero reads honest, never hidden
-    // (totals header plus the row itself)
-    expect(await screen.findAllByText("0.0%")).toHaveLength(2);
-    expect(await screen.findAllByText("400 MB")).toHaveLength(2);
+    // the row carries its RAM line even so: the list is a "what can I
+    // close", not a leaderboard
+    expect(await screen.findByText("Brave")).toBeTruthy();
+    expect(screen.getByText(en.procRamUsage(400))).toBeTruthy();
+    expect(screen.queryByText(en.procCount(2))).toBeNull();
     expect(screen.getByText(en.endTask)).toBeTruthy();
+  });
+
+  it("a gigabyte-plus app reads in GB, never a four-digit MB count", async () => {
+    apiMock.topProcesses.mockResolvedValue({
+      processes: [
+        { name: "brave", pid: 2, pids: [2], ram_mb: 2048, kind: "app", display_key: null, display_name: "Brave" },
+      ],
+    });
+    apiMock.getSettings.mockResolvedValue(settings());
+    render(React.createElement(ProcessesView, { active: false }));
+    expect(await screen.findByText("Brave")).toBeTruthy();
+    expect(screen.getByText(en.procRamUsage(2048))).toBeTruthy();
+    expect(screen.queryByText(en.procRamUsage(287))).toBeNull();
   });
 
   it("duplicate program names render every row (keys are PIDs, not names)", async () => {
     apiMock.topProcesses.mockResolvedValue({
       processes: [
-        { name: "helper", pid: 11, pids: [11], cpu_pct: 3.0, ram_mb: 100, kind: "app", display_key: null, display_name: "Helper" },
-        { name: "helper", pid: 22, pids: [22], cpu_pct: 4.0, ram_mb: 120, kind: "app", display_key: null, display_name: "Helper" },
+        { name: "helper", pid: 11, pids: [11], ram_mb: 100, kind: "app", display_key: null, display_name: "Helper" },
+        { name: "helper", pid: 22, pids: [22], ram_mb: 120, kind: "app", display_key: null, display_name: "Helper" },
       ],
-      total_cpu: 7.0,
-      total_ram_mb: 220,
     });
     apiMock.getSettings.mockResolvedValue(settings());
     render(React.createElement(ProcessesView, { active: false }));

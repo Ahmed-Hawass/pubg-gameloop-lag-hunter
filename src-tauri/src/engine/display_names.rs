@@ -23,7 +23,7 @@ use std::sync::Mutex;
 /// Only processes whose names are stable across Windows builds belong
 /// here. User software is NEVER listed (infinite tail) — ProductName
 /// names it, raw names back it.
-const CURATED: [(&str, &str); 16] = [
+const CURATED: [(&str, &str); 15] = [
     ("powershell", "procPowershell"),
     ("cmd", "procCmd"),
     ("conhost", "procConsoleHost"),
@@ -39,11 +39,10 @@ const CURATED: [(&str, &str); 16] = [
     ("startmenuexperiencehost", "procStartMenu"),
     ("shellexperiencehost", "procShellExperience"),
     ("spoolsv", "procSpooler"),
-    // Edge WebView2 runtime: Microsoft's shared renderer on every
-    // Windows 10/11 (preinstalled or evergreen). Never a standalone app:
-    // its processes belong to their hosts (Office, Search, widgets, our
-    // own WebView). A platform rule, not a device list.
-    ("msedgewebview2", "procEdgeWebView"),
+    // msedgewebview2 is deliberately ABSENT: the WebView2 runtime is
+    // skipped by name before a row is ever built (ending it would wound
+    // the hosts, our own WebView included), so a key for it could never
+    // reach a row. The rule lives at the skip, not here.
 ];
 
 /// Machine key for a process name, if it is a curated staple.
@@ -274,8 +273,10 @@ mod tests {
         assert_eq!(curated_key("PowerShell.EXE"), Some("procPowershell"));
         assert_eq!(curated_key("svchost"), Some("procServiceHost"));
         assert_eq!(curated_key("dwm.exe"), Some("procDwm"));
-        // the shared WebView2 runtime is a platform staple, never an app
-        assert_eq!(curated_key("msedgewebview2.exe"), Some("procEdgeWebView"));
+        // the shared WebView2 runtime is NOT curated: the query skips it by
+        // name before any row exists, so a display key here could never
+        // be reached (a key that can never render is a lie in a table)
+        assert_eq!(curated_key("msedgewebview2.exe"), None);
         // user software is never curated (infinite tail): ProductName territory
         assert_eq!(curated_key("chrome.exe"), None);
         assert_eq!(curated_key("brave.exe"), None);
