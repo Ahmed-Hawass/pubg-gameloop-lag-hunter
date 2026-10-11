@@ -23,11 +23,11 @@ vi.mock("../i18n", () => ({
 }));
 
 const info: SystemInfo = {
-  cpu: { name: "Core i7-6820HQ", mhz: 2700, cores: 4, threads: 8 },
-  gpus: [{ name: "Quadro M2000M", vram_gb: 4, driver: "31.0.15.3645" }],
+  cpu: { name: "Intel(R) Core(TM) i7-6820HQ CPU @ 2.70GHz", max_mhz: 2700, cores: 8, threads: 16 },
+  gpus: [{ name: "NVIDIA Quadro M2000M", vram_gb: 4, driver: "31.0.15.3645" }],
   ram: { total_gb: 31.9, mem_type: "DDR3", speed_mhz: 2400 },
   disks: [
-    { name: "MTFDHBA512QFD-1AX1AABHA", media: "SSD", bus: "NVMe", size_gb: 477 },
+    { name: "Samsung SSD 970 EVO Plus", media: "SSD", bus: "NVMe", size_gb: 500, free_gb: 286 },
   ],
   display: { width: 1920, height: 1080, refresh_hz: 60, scale_pct: 100 },
   system: {
@@ -52,25 +52,34 @@ describe("SystemView", () => {
       configurable: true,
     });
     render(React.createElement(SystemView));
-    await screen.findByText("Core i7-6820HQ");
-    // spec lines compose from numbers, never raw backend English
-    expect(screen.getByText("2.70 GHz base")).toBeTruthy();
+    await screen.findByText("Intel Core i7-6820HQ");
+    // headline numbers first, labels second (never raw backend English)
+    expect(screen.getByText("2.70 GHz")).toBeTruthy();
+    expect(screen.getByText("8 cores · 16 threads")).toBeTruthy();
+    expect(screen.getByText("60 Hz")).toBeTruthy();
     expect(screen.getByText("1920x1080")).toBeTruthy();
+    expect(screen.getByText("Speed: 2400 MHz")).toBeTruthy();
+    expect(screen.getByText("Scale: 100%")).toBeTruthy();
+    expect(screen.getByText("32 GB")).toBeTruthy();
+    expect(screen.getByText("NVMe · 500 GB · 286 GB free")).toBeTruthy();
+    expect(screen.getByText("43% used")).toBeTruthy();
     expect(screen.getByText("Dell Precision 7510")).toBeTruthy();
+    expect(screen.getByText("Windows 11 Pro 25H2")).toBeTruthy();
     // the copy sheet is the same strings, pinned by the shared builder
     await user.click(screen.getByText(en.copySpecs));
     expect(writeText).toHaveBeenCalledOnce();
     const sheet = writeText.mock.calls[0][0] as string;
     expect(sheet).toBe(specSheet(info, en));
-    expect(sheet).toContain("Core i7-6820HQ");
+    expect(sheet).toContain("Intel Core i7-6820HQ");
     await screen.findByText(en.copiedSpecs);
   });
 
   it("missing values render honest placeholders, never blanks or guesses", async () => {
     apiMock.systemInfo.mockResolvedValue({
       ...info,
-      cpu: { name: "", mhz: null, cores: null, threads: null },
+      cpu: { name: "", max_mhz: null, cores: null, threads: null },
       gpus: [],
+      ram: { total_gb: 0, mem_type: null, speed_mhz: null },
       display: { width: null, height: null, refresh_hz: null, scale_pct: null },
       disks: [],
     });

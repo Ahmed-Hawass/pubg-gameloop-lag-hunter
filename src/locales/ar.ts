@@ -184,18 +184,20 @@ export const ar: Locale = {
   /** spec card labels */
   specCpu: "المعالج",
   specGpu: "كرت الشاشة",
-  specRam: "الذاكرة",
+  specRam: "الذاكرة المثبتة",
   specDisplay: "الشاشة",
   /** spec value labels (label: value lines, MSA-safe for every count) */
-  specBase: "أساسي",
   specCores: "الأنوية",
   specThreads: "الخيوط",
-  specDedicated: "مخصصة",
-  specDriver: "درايفر",
-  specScale: "مقياس",
+  specDedicated: "VRAM مخصصة",
+  specSpeedLabel: "السرعة",
+  specScaleLabel: "المقياس",
+  /** per-disk usage sentence (kind, size, and free share one line) */
+  diskFree: (gb: number) => `${Math.round(gb)} GB متاحة`,
+  diskUsed: (pct: number) => `الاستخدام ${Math.round(pct)}%`,
   /** device and system row labels */
   specModel: "الموديل",
-  specOs: "نظام التشغيل",
+  specOs: "ويندوز",
   specDirectx: "DirectX",
   /** copy-all button + its transient confirmation */
   copySpecs: "نسخ كل المواصفات",

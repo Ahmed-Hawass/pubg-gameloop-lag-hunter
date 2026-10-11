@@ -180,20 +180,22 @@ export const en = {
   storageTitle: "Storage",
   deviceSystemTitle: "Device and system",
   /** spec card labels */
-  specCpu: "CPU",
-  specGpu: "GPU",
-  specRam: "Memory",
+  specCpu: "Processor",
+  specGpu: "Graphics card",
+  specRam: "Installed RAM",
   specDisplay: "Display",
   /** spec value labels (label: value lines, MSA-safe for every count) */
-  specBase: "base",
-  specCores: "Cores",
-  specThreads: "Threads",
-  specDedicated: "dedicated",
-  specDriver: "Driver",
-  specScale: "Scale",
+  specCores: "cores",
+  specThreads: "threads",
+  specDedicated: "dedicated VRAM",
+  specSpeedLabel: "Speed",
+  specScaleLabel: "Scale",
+  /** per-disk usage sentence (kind, size, and free share one line) */
+  diskFree: (gb: number) => `${Math.round(gb)} GB free`,
+  diskUsed: (pct: number) => `${Math.round(pct)}% used`,
   /** device and system row labels */
   specModel: "Model",
-  specOs: "OS",
+  specOs: "Windows",
   specDirectx: "DirectX",
   /** copy-all button + its transient confirmation */
   copySpecs: "Copy all specs",

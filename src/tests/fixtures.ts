@@ -102,7 +102,7 @@ export function cleanupHistory(over: Partial<CleanupHistory> = {}): CleanupHisto
 
 export function systemInfo(over: Partial<SystemInfo> = {}): SystemInfo {
   return {
-    cpu: { name: "Core i7", mhz: 2700, cores: 4, threads: 8 },
+    cpu: { name: "Core i7", max_mhz: 2700, cores: 4, threads: 8 },
     gpus: [],
     ram: { total_gb: 16, mem_type: "DDR4", speed_mhz: 3200 },
     disks: [],

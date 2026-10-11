@@ -321,11 +321,14 @@ export interface DiskInfo {
   media: string;
   bus: string;
   size_gb: number;
+  /** free space summed over the disk's mounted volumes, null when unknown */
+  free_gb: number | null;
 }
 
 export interface CpuInfo {
   name: string;
-  mhz: number | null;
+  /** max boost clock in MHz (Win32 MaxClockSpeed), null when unreadable */
+  max_mhz: number | null;
   cores: number | null;
   threads: number | null;
 }

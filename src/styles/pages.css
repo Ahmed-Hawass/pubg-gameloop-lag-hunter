@@ -266,7 +266,7 @@
 .proc-end {
   flex: none;
   padding: 8px 16px;
-  border-radius: 10px;
+  border-radius: 5px;
   font-size: 13px;
   font-weight: 700;
   color: var(--text-3);
@@ -274,6 +274,12 @@
 .proc-end:disabled {
   opacity: 0.55;
   cursor: default;
+}
+/* end-task hover inks red (text only, never the fill): same treatment
+   as the trash action, and the danger itself still lives in the confirm
+   dialog, not on the row */
+.proc-end:hover:not(:disabled) {
+  color: var(--danger);
 }
 /* real program artwork: bare, no tile (the tile stays for glyphs
    only) — same footprint as the tile so rows never shift on resolve */

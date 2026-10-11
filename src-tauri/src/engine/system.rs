@@ -600,6 +600,10 @@ pub struct DiskInfo {
     pub media: String,
     pub bus: String,
     pub size_gb: f64,
+    /// free space summed over the disk's mounted volumes (a present zero
+    /// is real: a full disk reports 0 free. Blank reads as unknown, e.g.
+    /// unlettered or offline volumes the mapping cannot see).
+    pub free_gb: Option<f64>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -620,11 +624,13 @@ pub struct SystemInfo {
 }
 
 /// Processor identity: name plus the spec lines the rig card shows.
+/// mhz is the MAX boost clock (Win32_Processor.MaxClockSpeed), not the
+/// base: the card headlines it as the max, never as base.
 /// Anything unreadable is None and renders as "--", never a guess.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CpuInfo {
     pub name: String,
-    pub mhz: Option<u32>,
+    pub max_mhz: Option<u32>,
     pub cores: Option<u32>,
     pub threads: Option<u32>,
 }
@@ -702,9 +708,16 @@ fn memory_type_name(code: u32) -> Option<&'static str> {
     }
 }
 
-/// Primary-display DPI scale from the logon value (96 = 100%).
-/// Per-monitor awareness may differ; missing reads as unknown.
+/// Primary-display scale: the monitor's own effective DPI first (96 =
+/// 100%), the logon LogPixels value second. Windows only writes
+/// LogPixels when the scale differs from 100%, so a missing value used
+/// to read as unknown on exactly the machines running stock scale.
+/// Headless sessions have no monitor and may lack the value too: then
+/// the scale honestly stays unknown.
 fn display_scale_pct() -> Option<u32> {
+    if let Some(dpi) = primary_monitor_dpi() {
+        return Some((dpi * 100).div_ceil(96));
+    }
     let px: u32 = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
         .open_subkey(r"Control Panel\Desktop")
         .ok()?
@@ -714,6 +727,37 @@ fn display_scale_pct() -> Option<u32> {
         return None;
     }
     Some((px * 100).div_ceil(96))
+}
+
+/// Effective DPI of the primary monitor via shcore (always knows: the
+/// system itself renders from this number). Null handle or a failed
+/// call reads as unknown, never 96 by assumption.
+#[cfg(windows)]
+fn primary_monitor_dpi() -> Option<u32> {
+    // (0,0) with MONITOR_DEFAULTTOPRIMARY always resolves to the primary
+    // monitor outside headless sessions; POINT passes as two i32s, which
+    // is ABI-identical to the 8-byte struct.
+    const MONITOR_DEFAULTTOPRIMARY: u32 = 1;
+    const MDT_EFFECTIVE_DPI: i32 = 0;
+    const S_OK: i32 = 0;
+    unsafe {
+        let hmon = MonitorFromPoint(0, 0, MONITOR_DEFAULTTOPRIMARY);
+        if hmon.is_null() {
+            return None;
+        }
+        let mut dpi_x = 0u32;
+        let mut dpi_y = 0u32;
+        if GetDpiForMonitor(hmon, MDT_EFFECTIVE_DPI, &mut dpi_x, &mut dpi_y) != S_OK || dpi_x == 0 {
+            return None;
+        }
+        Some(dpi_x)
+    }
+}
+
+/// Non-Windows builds have no monitors to ask.
+#[cfg(not(windows))]
+fn primary_monitor_dpi() -> Option<u32> {
+    None
 }
 
 /// DirectX support level: the D3D12 runtime ships with Windows 10+ as an
@@ -737,7 +781,27 @@ Get-CimInstance Win32_VideoController | ForEach-Object { "gpu|$($_.Name)|$([math
 "ram|$([math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB,1))"
 $pm = Get-CimInstance Win32_PhysicalMemory | Select-Object -First 1
 "rammod|$($pm.SMBIOSMemoryType)|$($pm.Speed)"
-Get-PhysicalDisk | ForEach-Object { "disk|$($_.FriendlyName)|$($_.MediaType)|$($_.BusType)|$([math]::Round($_.Size/1GB,0))" }
+Get-PhysicalDisk | ForEach-Object {
+  $pd = $_
+  # free space summed over this disk's lettered volumes (DeviceId tracks
+  # the Get-Disk number, so partitions resolve to the right spindle).
+  # $sawVol stays false for letterless/offline layouts: blank reads as
+  # unknown, and a truly full disk still reports an honest 0.
+  $freeStr = ""
+  try {
+    $dn = [int]$pd.DeviceId
+    $sawVol = $false
+    $freeBytes = [int64]0
+    foreach ($pt in (Get-Partition -DiskNumber $dn -ErrorAction Stop)) {
+      if ($pt.DriveLetter) {
+        $vol = Get-Volume -DriveLetter $pt.DriveLetter -ErrorAction SilentlyContinue
+        if ($vol -and ($null -ne $vol.SizeRemaining)) { $sawVol = $true; $freeBytes += $vol.SizeRemaining }
+      }
+    }
+    if ($sawVol) { $freeStr = [math]::Round($freeBytes/1GB,0) }
+  } catch {}
+  "disk|$($pd.FriendlyName)|$($pd.MediaType)|$($pd.BusType)|$([math]::Round($pd.Size/1GB,0))|$freeStr"
+}
 $cs = Get-CimInstance Win32_ComputerSystem
 "sys|$($cs.Manufacturer)|$($cs.Model)"
 $os = Get-CimInstance Win32_OperatingSystem
@@ -757,7 +821,7 @@ $vr = (Get-CimInstance Win32_VideoController | Where-Object { $_.CurrentRefreshR
     let mut info = SystemInfo {
         cpu: CpuInfo {
             name: String::new(),
-            mhz: None,
+            max_mhz: None,
             cores: None,
             threads: None,
         },
@@ -792,7 +856,7 @@ $vr = (Get-CimInstance Win32_VideoController | Where-Object { $_.CurrentRefreshR
         match parts.next() {
             Some("cpu") => {
                 info.cpu.name = parts.next().unwrap_or("Unknown").trim().to_string();
-                info.cpu.mhz = parts.next().and_then(|v| v.trim().parse().ok());
+                info.cpu.max_mhz = parts.next().and_then(|v| v.trim().parse().ok());
                 info.cpu.cores = parts.next().and_then(|v| v.trim().parse().ok());
                 info.cpu.threads = parts.next().and_then(|v| v.trim().parse().ok());
             }
@@ -844,6 +908,7 @@ $vr = (Get-CimInstance Win32_VideoController | Where-Object { $_.CurrentRefreshR
                         media,
                         bus,
                         size_gb: size,
+                        free_gb: parse_optional_gb(parts.next()),
                     });
                 }
             }
@@ -880,6 +945,20 @@ $vr = (Get-CimInstance Win32_VideoController | Where-Object { $_.CurrentRefreshR
         }
     }
     Ok(info)
+}
+
+/// Optional gigabyte fields (per-disk free space): blank reads as unknown
+/// (letterless or offline layouts the mapping cannot see). A present zero
+/// is real: a full disk reports 0 free, not unknown.
+fn parse_optional_gb(raw: Option<&str>) -> Option<f64> {
+    raw.and_then(|v| {
+        let s = v.trim();
+        if s.is_empty() {
+            None
+        } else {
+            s.parse().ok()
+        }
+    })
 }
 
 /// OS release line: marketing DisplayVersion when present (25H2),
@@ -1133,6 +1212,23 @@ extern "system" {
         flags: u32,
         name: *mut u16,
         size: *mut u32,
+    ) -> i32;
+}
+
+#[cfg(windows)]
+#[link(name = "user32")]
+extern "system" {
+    fn MonitorFromPoint(x: i32, y: i32, flags: u32) -> *mut core::ffi::c_void;
+}
+
+#[cfg(windows)]
+#[link(name = "shcore")]
+extern "system" {
+    fn GetDpiForMonitor(
+        hmonitor: *mut core::ffi::c_void,
+        dpi_type: i32,
+        dpi_x: *mut u32,
+        dpi_y: *mut u32,
     ) -> i32;
 }
 
@@ -2720,6 +2816,25 @@ mod tests {
         // empty or marker-less reads 24-hour (today's behavior exactly)
         assert!(!s_time_format_is_12h(""));
         assert!(!s_time_format_is_12h("mm:ss tt"));
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn primary_monitor_reports_a_live_dpi() {
+        // the dev machine has a real display: the call must succeed with
+        // a positive DPI (headless CI has no monitor, hence windows-only)
+        let dpi = primary_monitor_dpi().expect("primary monitor answers on this machine");
+        assert!(dpi > 0);
+    }
+
+    #[test]
+    fn disk_free_blank_reads_unknown_but_zero_is_a_full_disk() {
+        // a present zero is real (a full disk reports 0 free, not unknown)
+        assert_eq!(parse_optional_gb(Some("286")), Some(286.0));
+        assert_eq!(parse_optional_gb(Some("0")), Some(0.0));
+        assert_eq!(parse_optional_gb(Some("")), None);
+        assert_eq!(parse_optional_gb(None), None);
+        assert_eq!(parse_optional_gb(Some("plenty")), None);
     }
 
     #[test]

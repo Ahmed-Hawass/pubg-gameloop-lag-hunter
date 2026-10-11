@@ -49,6 +49,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 - Top Processes is a plain list now: a standing one-liner says what it holds, and each row shows the app, its memory use, and End. Memory alone decides the order, so the page answers what to close with the number that justifies it. It lists 15 apps instead of 12.
+- The System tab headlines one number per card (processor speed, VRAM, refresh) with model names below, and storage rows show free space with a usage meter that turns red past 90%. The CPU frequency was mislabeled as base; the number is the max boost clock.
 - Tools and health pages share one look: a summary banner, featured warnings, and the full list below.
 - The System spec cards, storage rows, and About cost rows now lead with the same icon tile as the health and Tools rows. The tile stays neutral grey there, because a page that only reports an inventory has nothing to pass or fail.
 - One typeface everywhere, severity colors from a shared theme, and wall-clock times follow your Windows 12/24 setting.
