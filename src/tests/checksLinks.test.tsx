@@ -33,6 +33,7 @@ const checks: SystemChecks = {
   pagefile_mode: "manual",
   pagefile_mb: 4096,
   pagefile_ok: false,
+  pagefile_pending: false,
   laptop: true,
   on_ac: true,
   vt_enabled: true,

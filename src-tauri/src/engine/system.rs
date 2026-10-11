@@ -356,6 +356,14 @@ impl<T: Clone> TtlCache<T> {
             None => false,
         }
     }
+
+    /// drop the cached copy: a verified write must never sit behind a
+    /// stale read (the page file editor writes, then the health card
+    /// would serve the previous state for a full TTL)
+    fn invalidate(&self) {
+        let mut guard = self.value.lock().unwrap_or_else(|p| p.into_inner());
+        *guard = None;
+    }
 }
 
 /// top processes: "who is eating the machine RIGHT NOW" — short TTL, still
@@ -364,6 +372,12 @@ static TOP_PROCESSES_CACHE: TtlCache<TopProcesses> = TtlCache::new();
 /// system checks: power plan/pagefile/battery — people don't flip these
 /// mid-session; a longer window is fine
 static SYSTEM_CHECKS_CACHE: TtlCache<SystemChecks> = TtlCache::new();
+
+/// Drop the cached checks after a verified write, so the next read
+/// measures live instead of serving the pre-write state for a TTL.
+pub(crate) fn invalidate_checks() {
+    SYSTEM_CHECKS_CACHE.invalidate();
+}
 
 /// How long a top-processes snapshot stays fresh.
 const TOP_PROCESSES_TTL: std::time::Duration = std::time::Duration::from_secs(10);
@@ -1302,10 +1316,16 @@ pub struct SystemChecks {
     pub power_name: String,
     /// true = performance-class plan active
     pub power_ok: bool,
-    /// "auto" | "manual" | "off"
+    /// "auto" | "manual" | "off" — from the same registry flag+entries
+    /// the editor reads (single source; the old WMI flag disagreed
+    /// transiently across reboots and reported running sizes instead of
+    /// configured ones)
     pub pagefile_mode: String,
     pub pagefile_mb: u64,
     pub pagefile_ok: bool,
+    /// true while a verified page file write waits for a reboot (same
+    /// marker the editor shows; the running config still differs)
+    pub pagefile_pending: bool,
     /// true on laptops (a battery exists)
     pub laptop: bool,
     /// true when plugged in (always true on desktops)
@@ -1323,10 +1343,9 @@ pub struct SystemChecks {
     pub storage_sense: Option<bool>,
 }
 
-/// The Tools tab's switches, live from the registry — and ONLY that. The full
-/// system_checks batch costs a PowerShell spawn the Tools page never
-/// needs (it displays none of those rows); the tweak_states command
-/// serves this struct instead — microseconds, in-process.
+/// The Tools tab's switches, live from the registry plus three native
+/// powercfg reads (tens of ms each on the blocking pool) — never the
+/// full system_checks batch whose rows this page does not display.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct TweakStates {
     /// true when background recording is armed (same rule as SystemChecks)
@@ -1537,6 +1556,7 @@ $vt = (Get-CimInstance Win32_Processor | Select-Object -First 1).VirtualizationF
         pagefile_mode: "off".into(),
         pagefile_mb: 0,
         pagefile_ok: false,
+        pagefile_pending: false,
         laptop: false,
         on_ac: true,
         vt_enabled: true,
@@ -1594,6 +1614,16 @@ $vt = (Get-CimInstance Win32_Processor | Select-Object -First 1).VirtualizationF
     if c.storage_sense.is_none() {
         super::logging::warn("feature storagesense hidden: policy key missing on this build");
     }
+    // Page file from the registry (single source with the editor): the
+    // batch WMI flag above disagreed transiently across reboots and its
+    // MB was the running size, not the configured one. Unreadable keeps
+    // the batch values as fallback, never a guess.
+    if let Some((mode, mb)) = pagefile_health_from_registry() {
+        c.pagefile_mode = mode;
+        c.pagefile_mb = mb;
+        c.pagefile_ok = pagefile_ok(&c.pagefile_mode, c.pagefile_mb);
+    }
+    c.pagefile_pending = pagefile_pending();
     Ok(c)
 }
 
@@ -1859,6 +1889,80 @@ fn read_pagefile_raw() -> Option<PagefileRaw> {
     Some(PagefileRaw { automatic, entries })
 }
 
+/// Health verdict from the SAME registry flag+entries the editor reads
+/// (single source): the old WMI flag disagreed transiently across
+/// reboots and reported running sizes instead of configured ones.
+/// Returns (mode, configured MB): automatic flag = auto; explicit
+/// custom sizes summed for the 8GB floor; system-managed entries read
+/// as auto (Windows chose the sizes); unparseable entries read as
+/// manual with unknown sizes (a broken config warns, never ok).
+/// None = unreadable (the caller keeps its own fallback, never a guess).
+fn pagefile_health_from_registry() -> Option<(String, u64)> {
+    let raw = read_pagefile_raw()?;
+    if raw.automatic {
+        return Some(("auto".into(), 0));
+    }
+    let drives = fixed_drives();
+    if drives.is_empty() {
+        return None;
+    }
+    let parsed: Vec<(PagefileMode, Option<u32>)> = drives
+        .iter()
+        .map(|d| {
+            let (mode, _, max) = parse_drive_mode(&raw.entries, d);
+            (mode, max)
+        })
+        .collect();
+    Some(pagefile_health_from_parts(&parsed))
+}
+
+/// Pure verdict over one parsed mode per fixed drive (testable without
+/// touching the registry): explicit custom sizes summed for the 8GB
+/// floor; system-managed entries read as auto (Windows chose the sizes);
+/// unparseable entries read as manual with unknown sizes (a broken
+/// config warns, never ok); no entries at all reads off.
+fn pagefile_health_from_parts(parsed: &[(PagefileMode, Option<u32>)]) -> (String, u64) {
+    let mut custom_mb: u64 = 0;
+    let mut any_entries = false;
+    let mut any_broken = false;
+    for (mode, max) in parsed {
+        match mode {
+            PagefileMode::Custom => {
+                custom_mb += max.unwrap_or(0) as u64;
+                any_entries = true;
+            }
+            PagefileMode::System => {
+                any_entries = true;
+            }
+            PagefileMode::Unknown => {
+                any_broken = true;
+            }
+            PagefileMode::Off => {}
+        }
+    }
+    if custom_mb > 0 {
+        ("manual".into(), custom_mb)
+    } else if any_broken {
+        ("manual".into(), 0)
+    } else if any_entries {
+        ("auto".into(), 0)
+    } else {
+        ("off".into(), 0)
+    }
+}
+
+/// Pending-reboot marker for the health card: the same settings-store
+/// marker the editor shows (single source; self-clears on reboot).
+pub(crate) fn pagefile_pending() -> bool {
+    super::settings::load()
+        .pending_restart
+        .as_ref()
+        .is_some_and(|p| {
+            p.tweak == super::tweaks::PAGEFILE_SETTINGS_ID
+                && restart_pending_visible(p.at_uptime_ms, boot_uptime_ms())
+        })
+}
+
 /// The flag plus the raw entries for the write side's verifier (tweaks):
 /// same read, no second opinion about where the state lives.
 pub(crate) fn read_pagefile_flag_and_entries() -> Option<(bool, Vec<String>)> {
@@ -1977,13 +2081,7 @@ pub fn pagefile_settings() -> Result<PagefileSettings, String> {
             }
         })
         .collect();
-    let pending = super::settings::load()
-        .pending_restart
-        .as_ref()
-        .is_some_and(|p| {
-            p.tweak == super::tweaks::PAGEFILE_SETTINGS_ID
-                && restart_pending_visible(p.at_uptime_ms, boot_uptime_ms())
-        });
+    let pending = pagefile_pending();
     let ram_mb = ram_total_mb();
     let (rec_min, rec_max) = ram_mb.and_then(recommended_pagefile_mb).unzip();
     Ok(PagefileSettings {
@@ -3181,6 +3279,33 @@ mod tests {
         assert!(pagefile_ok("manual", 16384));
         assert!(!pagefile_ok("manual", 4096)); // the original real-world bug
         assert!(!pagefile_ok("off", 0));
+    }
+
+    #[test]
+    fn pagefile_health_reads_the_same_registry_as_the_editor() {
+        use super::PagefileMode;
+        // explicit custom sizes summed for the 8GB floor (the user's own
+        // 16-48GB machine reads manual/49152, never auto)
+        assert_eq!(
+            pagefile_health_from_parts(&[(PagefileMode::Custom, Some(49152))]),
+            ("manual".into(), 49152)
+        );
+        // system-managed entries read as auto (Windows chose the sizes)
+        assert_eq!(
+            pagefile_health_from_parts(&[(PagefileMode::System, None)]),
+            ("auto".into(), 0)
+        );
+        // unparseable entries read manual with unknown sizes (warns)
+        assert_eq!(
+            pagefile_health_from_parts(&[(PagefileMode::Unknown, None)]),
+            ("manual".into(), 0)
+        );
+        assert!(!pagefile_ok("manual", 0));
+        // no entries at all reads off
+        assert_eq!(
+            pagefile_health_from_parts(&[(PagefileMode::Off, None)]),
+            ("off".into(), 0)
+        );
     }
 
     #[test]

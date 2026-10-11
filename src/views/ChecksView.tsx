@@ -159,16 +159,25 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
         <div className="checks-head">
           <p className="checks-hint">{t.checksHint}</p>
         </div>
-        <EmptyState icon={<RefreshCw size={20} />} title={t.loading} hint="" spin />
+        <EmptyState icon={<RefreshCw size={18} />} title={t.loading} hint="" spin />
       </div>
     );
   }
 
-  const pagefileText = !checks.pagefile_ok
-    ? checks.pagefile_mode === "off"
+  // text follows the MODE (what Windows holds), the badge follows ok
+  // (whether it is healthy): a healthy custom file used to read
+  // "Managed by Windows" because the text keyed on ok instead of mode
+  const pagefileText =
+    checks.pagefile_mode === "off"
       ? t.pagefileOff
-      : t.pagefileManual(checks.pagefile_mb)
-    : t.pagefileAuto;
+      : checks.pagefile_mode === "manual"
+        ? t.pagefileManual(checks.pagefile_mb)
+        : t.pagefileAuto;
+  // pending reboot (same marker the editor shows): the configured state
+  // above is honest, but Windows still runs the old one until restart
+  const pagefileState = checks.pagefile_pending
+    ? `${pagefileText} · ${t.tweakPfPendingBadge}`
+    : pagefileText;
 
   const chargerBad = checks.laptop && !checks.on_ac;
 
@@ -224,7 +233,7 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
       ok: checks.pagefile_ok,
       funcIcon: <Database size={15} />,
       name: t.checkPagefile,
-      state: pagefileText,
+      state: pagefileState,
       hint: { title: t.checkPagefile, body: t.checkPagefileHint },
       onOpen: openInAppOr("pagefile", "system"),
     },
@@ -318,20 +327,24 @@ function CheckCard(props: {
   return (
     <div className={`card-sm check-row ${item.ok ? "verdict-ok" : "verdict-warn"}`}>
       <div className="check-top">
-        <span className="check-func">{item.funcIcon}</span>
-        <span className="check-name">{item.name}</span>
-        <span className="check-state">{item.state}</span>
+        <span className="icon-tile icon-func">{item.funcIcon}</span>
+        <div className="switch-body">
+          <span className="switch-name">
+            {item.name}
+            <button
+              type="button"
+              className="focus-ring-inset switch-hint"
+              aria-label={t.hintAbout(item.name)}
+              onClick={() => onHint(item.hint)}
+            >
+              <Info size={13} />
+            </button>
+          </span>
+          <span className="switch-state">{item.state}</span>
+        </div>
         <span className={`badge check-badge ${item.ok ? "ok" : "warn"}`}>
           {item.ok ? t.checkOkBadge : t.checkWarnBadge}
         </span>
-        <button
-          type="button"
-          className="focus-ring-inset switch-hint"
-          aria-label={t.hintAbout(item.name)}
-          onClick={() => onHint(item.hint)}
-        >
-          <Info size={13} />
-        </button>
       </div>
       {!item.ok && item.onOpen ? (
         <button className="focus-ring-inset row-act check-open" onClick={item.onOpen}>

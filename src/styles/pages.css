@@ -364,35 +364,22 @@
 }
 /* System health stays a single readable column at every width. The shared
   fullscreen rail gives it breathing room without splitting related cards.
-  Rows are single-line (glyph, name, state, badge, note button); the open
+  Rows share the Tools row shape (tile, name over muted sub-line, badge); the open
   shortcut drops to a second line on problem cards only. */
 .check-row {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 11px 16px;
+  padding: 14px 16px;
 }
 .check-top {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
-.check-func {
-  display: flex;
-  flex: none;
-  color: var(--text-3);
-}
-.check-name {
-  flex: 1;
-  min-width: 0;
-  font-size: 12.5px;
-  font-weight: 700;
-}
-.check-top .check-state {
-  flex: none;
-  font-size: 12px;
-  color: var(--text-3);
-  line-height: 1.45;
+.check-row.verdict-ok .icon-tile {
+  background: var(--primary-dim);
+  color: var(--primary);
 }
 .check-badge {
   font-size: 11px;

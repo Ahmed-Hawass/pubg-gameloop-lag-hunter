@@ -1023,6 +1023,8 @@ pub fn set_pagefile_settings_parent(
     // landed on the rare verify-after-exit-0 race.
     if verified {
         mark_pending_restart();
+        // the health card must not serve the pre-write state for a TTL
+        super::system::invalidate_checks();
     }
     super::logging::info(&format!(
         "pagefile settings set: automatic={automatic} drive={} verified={verified}",

@@ -401,6 +401,8 @@ export interface SystemChecks {
   pagefile_mode: "auto" | "manual" | "off";
   pagefile_mb: number;
   pagefile_ok: boolean;
+  /** a verified page file write waits for a reboot (same marker the editor shows) */
+  pagefile_pending: boolean;
   laptop: boolean;
   on_ac: boolean;
   /** true when CPU virtualization (VT) is enabled in firmware */

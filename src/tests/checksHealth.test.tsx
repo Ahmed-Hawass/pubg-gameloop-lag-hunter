@@ -33,6 +33,7 @@ const allGood: SystemChecks = {
   pagefile_mode: "auto",
   pagefile_mb: 0,
   pagefile_ok: true,
+  pagefile_pending: false,
   laptop: false,
   on_ac: true,
   vt_enabled: true,
@@ -46,6 +47,7 @@ const threeWarns: SystemChecks = {
   pagefile_mode: "manual",
   pagefile_mb: 4096,
   pagefile_ok: false,
+  pagefile_pending: false,
   laptop: true,
   on_ac: true,
   vt_enabled: true,
@@ -113,6 +115,22 @@ describe("ChecksView health summary", () => {
     render(React.createElement(ChecksView, { active: false, onOpenTool: vi.fn() }));
     await screen.findByText(en.dialog.somethingWrong);
     expect(screen.getByRole("button", { name: en.refresh })).toBeTruthy();
+  });
+
+  it("a pending page file write names the reboot wait", async () => {
+    apiMock.systemChecks.mockResolvedValue({
+      ...allGood,
+      pagefile_mode: "manual",
+      pagefile_mb: 16384,
+      pagefile_ok: true,
+      pagefile_pending: true,
+    });
+    apiMock.getSettings.mockResolvedValue(settings());
+    render(React.createElement(ChecksView, { active: false, onOpenTool: vi.fn() }));
+    // configured truth plus the same pending badge the editor shows,
+    // composed into one state line
+    const state = await screen.findByText((_, el) => el?.textContent === `${en.pagefileManual(16384)} · ${en.tweakPfPendingBadge}`);
+    expect(state.getAttribute("class")).toContain("switch-state");
   });
 
   it("hint buttons announce their context, never a bare duplicate", async () => {
