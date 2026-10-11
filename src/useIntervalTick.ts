@@ -6,6 +6,12 @@
 
 import { useEffect, useRef } from "react";
 
+/** slow backstop cadence for cheap reads (Tools tweaks): external changes
+    while a page sits open must surface within a minute, and powercfg plus
+    registry reads cost tens of ms, so one shared constant beats two
+    literals drifting apart. */
+export const BACKSTOP_POLL_MS = 60000;
+
 export function useIntervalTick(active: boolean, ms: number, onTick: () => void): void {
   const tickRef = useRef(onTick);
   // latest closure without re-subscribing the timer every render

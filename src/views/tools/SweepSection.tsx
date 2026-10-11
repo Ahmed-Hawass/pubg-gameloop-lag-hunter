@@ -11,7 +11,7 @@ import { api, type CleanupCategory, type CleanupHistory, type CleanupResult, typ
 import type { Notice } from "../../errors";
 import { useLang } from "../../i18n";
 import { useHour12 } from "../../useHour12";
-import { cleanupHistoryLine, defaultCheckedIds, formatSweepBytes, BYTES_PER_GB } from "./summary";
+import { cleanupHistoryLine, defaultCheckedIds, formatSweepBytes, BYTES_PER_GB, BYTES_PER_MB } from "./summary";
 import { useModalSignal, useYieldToAppDialog } from "./useModalSignals";
 import type { Locale } from "../../locales/en";
 
@@ -236,8 +236,8 @@ export function SweepSection(props: {
   const clHero =
     clFreedBytes >= BYTES_PER_GB
       ? { num: (clFreedBytes / BYTES_PER_GB).toFixed(1), unit: "GB" }
-      : { num: (clFreedBytes / 1048576).toFixed(1), unit: "MB" };
-  const clFreedMb = Math.round((clFreedBytes / 1048576) * 10) / 10;
+      : { num: (clFreedBytes / BYTES_PER_MB).toFixed(1), unit: "MB" };
+  const clFreedMb = Math.round((clFreedBytes / BYTES_PER_MB) * 10) / 10;
   /** one row per measured place (shared by both groups so the two lists
       can never drift apart in behavior) */
   const renderClRows = (cats: CleanupCategory[]) =>
@@ -419,7 +419,7 @@ export function SweepSection(props: {
                 <span className="cleanup-hero-num">
                   {clSelectedBytes >= BYTES_PER_GB
                     ? (clSelectedBytes / BYTES_PER_GB).toFixed(1)
-                    : (clSelectedBytes / 1048576).toFixed(1)}
+                    : (clSelectedBytes / BYTES_PER_MB).toFixed(1)}
                 </span>
                 <span className="cleanup-hero-unit">
                   {clSelectedBytes >= BYTES_PER_GB ? "GB" : "MB"}

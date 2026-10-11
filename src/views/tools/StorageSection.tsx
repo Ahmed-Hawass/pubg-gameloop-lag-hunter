@@ -8,7 +8,7 @@ import { useEffect, type ReactNode } from "react";
 import { Recycle, RefreshCw, SlidersHorizontal } from "lucide-react";
 import { EmptyState } from "../../components/components";
 import { SummaryArchive, VerdictBanner } from "../../components/sections";
-import { useIntervalTick } from "../../useIntervalTick";
+import { useIntervalTick, BACKSTOP_POLL_MS } from "../../useIntervalTick";
 import type { Notice } from "../../errors";
 import { useLang } from "../../i18n";
 import { SwitchRow } from "./SwitchRow";
@@ -50,7 +50,7 @@ export function StorageSection(props: {
   // changes while open must surface within a minute, cheaply.
   useIntervalTick(
     active,
-    60000,
+    BACKSTOP_POLL_MS,
     () => {
       if (tweaks.isBusy()) return;
       void tweaks.reloadSwitches();

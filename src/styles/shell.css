@@ -130,6 +130,7 @@
 }
 
 .win-controls button.close:hover {
+  /* native Windows close red, exact and unthemed on purpose */
   background: #e81123;
   color: #fff;
 }
@@ -292,11 +293,17 @@
   max-width: min(100%, 1100px);
   margin-inline: auto;
   padding-inline-end: 4px;
-  /* bottom breathing room inside every scroller: the focus ring reaches
-     4px past its control (2px outline plus 2px offset) and outlines never
-     push the scrollport, so a last-child button (About footer links, the
-     System copy button) had its ring and descenders clipped at scroll-end.
-     Same family as the tools top-room rule in pages.css. */
+  /* definite height plus an explicit shrink floor: the flex chain
+     above should already constrain this box, but height:100% makes the
+     scroll container independent of flex-minimum subtleties across
+     WebView2 builds (without a constrained height, overflow-y never
+     engages and long lists render cut with a dead wheel). */
+  height: 100%;
+  min-height: 0;
+  /* bottom breathing room inside every scroller: last-child controls
+     (About footer links, the System copy button) keep clearance below
+     so nothing reads cramped at scroll-end. Same family as the tools
+     top-room rule in pages.css. */
   padding-block-end: 8px;
   scrollbar-width: thin;
   scrollbar-color: var(--border-2) transparent;

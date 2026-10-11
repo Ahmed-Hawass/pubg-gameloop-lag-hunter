@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Database, RefreshCw } from "lucide-react";
 import { EmptyState } from "../../components/components";
-import { PageIntro } from "../../components/sections";
+import { LINK_HIGHLIGHT_MS, PageIntro } from "../../components/sections";
 import type { Notice } from "../../errors";
 import { useLang } from "../../i18n";
 import { PagefileEditor } from "./PagefileEditor";
@@ -49,7 +49,7 @@ export function PagefileSection(props: {
     const timer = window.setTimeout(() => {
       setLinkedId(null);
       onLinkDone();
-    }, 2200);
+    }, LINK_HIGHLIGHT_MS);
     return () => window.clearTimeout(timer);
     // one-shot per link arrival, like the Reports openId effect
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -69,8 +69,10 @@ export function summarizePagefileUsage(s: PagefileSettings | null): {
     page: one-decimal MB (measured, never estimated) and the stored ISO
     stamp as a locale-free date plus the OS-convention time. The same
     shapes the storage summary used before the card split. */
+/** bytes in one MiB: the single divisor for MB display (see BYTES_PER_GB) */
+export const BYTES_PER_MB = 1048576;
 export function cleanupMb(bytes: number): number {
-  return Math.round((bytes / 1048576) * 10) / 10;
+  return Math.round((bytes / BYTES_PER_MB) * 10) / 10;
 }
 
 /** measured-bytes display for one sweep place: GB above 1 GB, MB
@@ -82,7 +84,7 @@ export const BYTES_PER_GB = 1073741824;
 export function formatSweepBytes(bytes: number | null): string {
   if (bytes == null) return "--";
   if (bytes >= BYTES_PER_GB) return `${(bytes / BYTES_PER_GB).toFixed(1)} GB`;
-  return `${(bytes / 1048576).toFixed(1)} MB`;
+  return `${(bytes / BYTES_PER_MB).toFixed(1)} MB`;
 }
 
 /** default tick set after a quick scan: every non-empty place ticked

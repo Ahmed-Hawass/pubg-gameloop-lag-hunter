@@ -20,6 +20,10 @@
   --warn-dim: rgba(245, 197, 24, 0.12);
   --danger: #ff5a52;
   --danger-dim: rgba(255, 90, 82, 0.12);
+  /* focus reds live literally with the shared focus utilities in
+     components.css (explicit #ff5a52 / #d92d20 per review: values
+     track --danger, but the utility is the single place that names
+     them, never a second token to drift) */
   /* state quads — pale solid bg + dark ink (identical in both themes, so
      the pair reads on either): cards, banners, and badges only. Rule:
      state text rides its bg-* with its text-* ink; text on plain

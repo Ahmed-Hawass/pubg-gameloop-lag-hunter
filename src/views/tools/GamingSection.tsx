@@ -16,8 +16,8 @@ import {
   Zap,
 } from "lucide-react";
 import { Button, EmptyState } from "../../components/components";
-import { SummaryArchive, VerdictBanner } from "../../components/sections";
-import { useIntervalTick } from "../../useIntervalTick";
+import { SummaryArchive, VerdictBanner, LINK_HIGHLIGHT_MS } from "../../components/sections";
+import { useIntervalTick, BACKSTOP_POLL_MS } from "../../useIntervalTick";
 import type { Notice } from "../../errors";
 import { useLang } from "../../i18n";
 import { SwitchRow } from "./SwitchRow";
@@ -81,7 +81,7 @@ export function GamingSection(props: {
   // off-tab, and while the document is hidden.
   useIntervalTick(
     active,
-    60000,
+    BACKSTOP_POLL_MS,
     () => {
       if (tweaks.isBusy()) return;
       void tweaks.reloadSwitches();
@@ -110,7 +110,7 @@ export function GamingSection(props: {
     const timer = window.setTimeout(() => {
       setLinkedId(null);
       onLinkDone();
-    }, 2200);
+    }, LINK_HIGHLIGHT_MS);
     return () => window.clearTimeout(timer);
     // one-shot per link arrival, like the Reports openId effect
     // eslint-disable-next-line react-hooks/exhaustive-deps

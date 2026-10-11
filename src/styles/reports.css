@@ -162,6 +162,12 @@
   flex-direction: column;
   padding: 0;
   overflow: hidden;
+  /* never shrink below the rows: as a flex item with clipped overflow
+     the automatic minimum is zero, so a long list absorbed all the
+     shrink instead of the page — bottom rows rendered cut with a dead
+     wheel and no scrollbar while the actions below stayed visible.
+     flex:none pins it to content height and the page scrolls instead. */
+  flex: none;
 }
 /* one shared surface with dividers (not a card per row): rows flush to
    the card edges (no inner padding gap flashing around a hovered row),

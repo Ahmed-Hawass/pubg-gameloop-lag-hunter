@@ -48,6 +48,9 @@ export function AppSidebar(props: {
         >
           <button
             className={`focus-ring sb-item ${view === tab.id ? "is-active" : ""}`}
+            // collapsed rail shows icons only: the tooltip is visual, so
+            // the accessible name rides here (expanded labels name it)
+            aria-label={collapsed ? tab.label : undefined}
             // the active tab is announced as current (visual
             // is-active styling is invisible to screen readers)
             aria-current={view === tab.id ? "page" : undefined}
@@ -68,6 +71,7 @@ export function AppSidebar(props: {
       <Tip text={collapsed ? t.about : ""}>
         <button
           className={`focus-ring sb-item ${view === "about" ? "is-active" : ""}`}
+          aria-label={collapsed ? t.about : undefined}
           onClick={onAbout}
         >
           <Info size={17} />

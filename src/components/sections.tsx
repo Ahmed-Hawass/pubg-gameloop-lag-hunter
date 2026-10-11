@@ -71,6 +71,11 @@ export function SummaryArchive(props: {
   );
 }
 
+/** deep-link highlight lifetime: the ringed row settles back after one
+    beat in Gaming and Pagefile alike (a single constant, not two
+    literals counting the same seconds). */
+export const LINK_HIGHLIGHT_MS = 2200;
+
 /** one-shot page guidance: the intro card while unseen, the plain page
     header (or nothing) once dismissed. Replaces the identical
     hook-plus-conditional in Processes, Pagefile, and Sweep. Mount-timing

@@ -38,7 +38,8 @@
 }
 /* the FILLED danger — used where the destructive action is the point
    (the running-scan Stop button, the delete-dialog confirm): solid
-   danger fill with white text in both themes */
+   danger fill with white text in both themes (literal white, not a
+   token: no theme text token stays white-on-red in both modes) */
 .btn-danger-filled {
   background: var(--fill-danger);
   border-color: var(--fill-danger);

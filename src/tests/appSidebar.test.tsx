@@ -82,4 +82,12 @@ describe("AppSidebar", () => {
     const collapsedBtn = screen.getByRole("button", { name: en.expandMenu });
     expect(collapsedBtn.getAttribute("aria-expanded")).toBe("false");
   });
+
+  it("names icon-only tabs when collapsed", () => {
+    open({ collapsed: true });
+    // labels are hidden on the rail: the accessible name rides the
+    // button itself (tooltips are visual-only)
+    expect(screen.getByRole("button", { name: en.monitor })).toBeTruthy();
+    expect(screen.getByRole("button", { name: en.about })).toBeTruthy();
+  });
 });

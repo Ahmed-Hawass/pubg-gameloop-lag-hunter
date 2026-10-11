@@ -39,6 +39,9 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - The health banner and loading state carry no manual refresh (the silent poll plus focus re-reads own freshness); the error state keeps the only retry.
 - The System copy button keeps a fixed width, so confirming the copy no longer flickers the scrollbar.
 - Keyboard focus is one explicit red tone everywhere (green already dresses resting states like switch ON, so a green ring vanished where it matters most): one shared utility turns the border of bordered controls and paints a single inset ring on the rest.
+- Collapsed sidebar tabs announce their names to screen readers (they were icon-only with a visual-only tooltip).
+- Long reports lists always scroll: scroll pages carry an explicit shrink floor instead of relying on it.
+- Long session lists no longer render cut with a dead wheel: the list pins to content height so the page scrolls instead of the list absorbing the shrink.
 
 ### Changed
 - Tools and health pages share one look: a summary banner, featured warnings, and the full list below.
