@@ -126,17 +126,44 @@
 .spec-card:hover .spec-head svg {
   transform: scale(1.18);
 }
-/* spec names wrap to two lines (CPU/GPU strings run long: a single
-   clipped line hid the model number); beyond that an ellipsis plus the
-   full name on hover */
-.spec-name {
-  font-size: 14.5px;
+/* headline number on every spec card (one per card: max boost, VRAM,
+   refresh): the 19px/700 scale matches the welcome cost tiles, so the
+   page reads numbers first, labels second */
+.spec-value {
+  font-size: 19px;
   font-weight: 700;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  color: var(--text-1);
+  letter-spacing: -0.01em;
+}
+/* identity line under the subs (short CPU and GPU names): quieter than
+   the headline, clipped with the full name on hover */
+.spec-more {
+  font-size: 11.5px;
+  color: var(--text-3);
   overflow: hidden;
-  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* per-disk usage meter inside the row text: green normally, red past
+   90% used (same critical-full red as Windows Explorer's low-space bar).
+   No yellow band: a 75%-used disk is healthy, warn would cry wolf. The
+   fill is a block with a width percent, so it grows from the
+   inline-start side in both directions with no physical properties. */
+.disk-meter {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--elev-3);
+  overflow: hidden;
+  margin-block-start: 5px;
+}
+.disk-meter-fill {
+  display: block;
+  height: 100%;
+  background: var(--fill-success);
+}
+.disk-meter-fill.crit {
+  background: var(--fill-danger);
 }
 .spec-sub {
   font-size: 12px;
@@ -173,6 +200,14 @@
 }
 /* the disk glyph rides the same neutral tile as the spec cards (shape
    from .icon-tile, ink from .icon-func) */
+.spec-row .icon-tile svg {
+  transition: transform 0.2s var(--ease);
+}
+/* same icon nudge as the spec cards above: the tile shape was unified,
+   so its hover must not stay behind on these rows */
+.spec-row:hover .icon-tile svg {
+  transform: scale(1.18);
+}
 .spec-row-text {
   display: flex;
   flex-direction: column;
