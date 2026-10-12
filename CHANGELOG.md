@@ -50,8 +50,8 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - System health cards share the Tools row shape (tinted icon tile, name over muted state line, same row height), so the two pages read as one.
 - The health page file card reads the same registry the editor writes (the old WMI flag disagreed across reboots), and names a pending reboot with the editor's own badge instead of showing the old state as current.
 - The page icon keeps its size when the one-time intro card is dismissed (the card and the plain header drew the same tile at two different scales).
-- Buttons and window controls draw every icon at one size (four different glyph sizes had
-- The Play triangles point forward in Arabic, like the rest of the interface reads. crept into neighbouring buttons, and the three caption buttons had three of their own).
+- Buttons and window controls draw every icon at one size (four different glyph sizes had crept into neighbouring buttons, and the three caption buttons had three of their own).
+- The Play triangles point forward in Arabic, like the rest of the interface reads.
 
 ### Changed
 - Top Processes is a plain list now: a standing one-liner says what it holds, and each row shows the app, its memory use, and End. Memory alone decides the order, so the page answers what to close with the number that justifies it. It lists 15 apps instead of 12.
