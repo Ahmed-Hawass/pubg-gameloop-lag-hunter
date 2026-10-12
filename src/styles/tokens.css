@@ -80,8 +80,8 @@
   --sweep-mid: rgba(83, 252, 24, 0.3);
   --sweep-near: rgba(83, 252, 24, 0.42);
   /* shape & motion */
-  --radius: 12px;
-  --radius-sm: 9px;
+  --radius: 6px;
+  --radius-sm: 5px;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 

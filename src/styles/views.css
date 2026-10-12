@@ -13,7 +13,8 @@
 /* controls row: normal rounded-rect Start + duration + clock */
 /* event-log toggle: full-width quiet button (same ghost materials as
    row actions); the chevron turns with the expanded state. Reports owns
-   the toggle now — Monitor has no live log to collapse. */
+   the toggle now — Monitor has no live log to collapse. Flat like every
+   button: fill shifts, no border appears. */
 .feed-toggle {
   display: flex;
   align-items: center;
@@ -22,18 +23,17 @@
   width: 100%;
   padding: 8px;
   background: var(--elev-1);
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
   color: var(--text-2);
   font: inherit;
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
-  transition: color 0.12s, border-color 0.12s, background 0.12s;
+  transition: color 0.12s, background 0.12s;
 }
 .feed-toggle:hover {
   color: var(--hover-text);
-  border-color: var(--hover-border);
   background: var(--hover-bg);
 }
 .feed-toggle svg {
@@ -175,7 +175,7 @@
 .monitor .btn-hero {
   padding: 14px 32px;
   font-size: 15px;
-  border-radius: 12px;
+  border-radius: 6px;
 }
 .monitor .btn-hero svg {
   flex: none;

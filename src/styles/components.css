@@ -6,7 +6,7 @@
   align-items: center;
   gap: 8px;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: 5px;
   font: inherit;
   font-weight: 700;
   cursor: pointer;
@@ -50,12 +50,13 @@
 }
 .btn-ghost {
   background: var(--elev-3);
-  border-color: var(--border);
+  /* flat button language: the fill alone says button, no border in
+     either state (borders live on cards and inputs, never on buttons) */
+  border-color: transparent;
   color: var(--text-1);
 }
 .btn-ghost:hover {
   background: var(--hover-bg);
-  border-color: var(--hover-border);
   color: var(--hover-text);
 }
 .is-disabled {
@@ -185,7 +186,7 @@
   flex: none;
   width: 32px;
   height: 32px;
-  border-radius: 9px;
+  border-radius: 5px;
   background: var(--elev-3);
   color: var(--text-2);
 }
@@ -218,7 +219,7 @@
   display: flex;
   flex-direction: column;
   background: var(--elev-3);
-  border-radius: 10px;
+  border-radius: 5px;
   overflow: hidden;
 }
 .inset-row {
@@ -244,7 +245,7 @@
   align-self: flex-start;
   background: none;
   border: none;
-  border-radius: 7px;
+  border-radius: 4px;
   color: var(--text-2);
   font: inherit;
   font-size: 12.5px;
@@ -265,18 +266,30 @@
   color: inherit;
   background: none;
 }
-/* row action: ghost materials in a compact footprint, shared by the
-   session-row delete and the health-card open buttons */
+/* row action: ghost fill in a compact footprint, shared by the
+   session-row delete and the health-card open buttons. Flat like every
+   button: border stays transparent, hover only shifts fill and ink. */
 .row-act {
   background: var(--elev-3);
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   cursor: pointer;
-  transition: color 0.12s, border-color 0.12s, background 0.12s;
+  transition: color 0.12s, background 0.12s;
 }
 .row-act:hover {
   color: var(--hover-text);
-  border-color: var(--hover-border);
   background: var(--hover-bg);
+}
+/* light-theme balance (trial values, eyeball before keeping): without
+   borders the flat fill needs one step more depth on paper, or buttons
+   sink into the page. Hover must darken with it — the stock hover fill
+   is lighter than the trial fill and would invert the feel. */
+[data-theme="light"] .btn-ghost,
+[data-theme="light"] .row-act {
+  background: #dfe4dc;
+}
+[data-theme="light"] .btn-ghost:hover:not(.is-disabled),
+[data-theme="light"] .row-act:hover {
+  background: #d5dbd1;
 }
 
 /* Entrance keyframes shared by every view (single definition: @keyframes
@@ -369,7 +382,7 @@
 .note-fix-box {
   background: #ffffff;
   color: var(--ink-fix);
-  border-radius: 8px;
+  border-radius: 4px;
   padding: 8px 12px;
   font-size: 12px;
   display: flex;
@@ -478,16 +491,18 @@
   width: 26px;
   height: 26px;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: 4px;
   background: transparent;
   color: var(--text-3);
   cursor: pointer;
-  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  transition: color 0.15s, background 0.15s;
 }
 .card-x:hover {
+  /* no hover border: same transparent-reserve rule as the sidebar
+     collapse (the intro variant below already keeps its border
+     transparent on hover) */
   color: var(--hover-text);
   background: var(--hover-bg);
-  border-color: var(--hover-border);
 }
 .card-x.intro-x {
   color: var(--text-info);
@@ -616,11 +631,11 @@
 
 .progress-md {
   min-height: 38px;
-  border-radius: 10px;
+  border-radius: 5px;
 }
 
 .progress-md .progress-fill {
-  border-radius: 8px;
+  border-radius: 4px;
 }
 
 .um-progress-text {
@@ -669,7 +684,7 @@
   font-size: 11.5px;
   padding: 4px 8px;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: 4px;
   background: transparent;
   transition: color 0.15s, background 0.15s, border-color 0.15s;
 }

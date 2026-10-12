@@ -54,6 +54,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - The System spec cards, storage rows, and About cost rows now lead with the same icon tile as the health and Tools rows. The tile stays neutral grey there, because a page that only reports an inventory has nothing to pass or fail.
 - One typeface everywhere, severity colors from a shared theme, and wall-clock times follow your Windows 12/24 setting.
 - Closing the window asks first only when work is in flight (scan, download, or cleanup).
+- Buttons are flat now: the fill alone marks a control, no border appears on hover, and corners are tighter across the app. Tool cards read slightly smaller.
 
 ### Removed
 - The Processes manual Refresh button (the silent 2s poll covers it).

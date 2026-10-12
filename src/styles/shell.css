@@ -47,7 +47,7 @@
 .titlebar-icon {
   width: 20px;
   height: 20px;
-  border-radius: 5px;
+  border-radius: 3px;
   flex: none;
 }
 
@@ -69,12 +69,14 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  transition: color 0.15s, background 0.15s;
 }
 .sb-collapse:hover {
+  /* same hover as the tabs above (ink + fill, no border): the collapse
+     used to gain a hover border the tabs never draw, which read as a
+     different control family in the same rail */
   color: var(--hover-text);
   background: var(--hover-bg);
-  border-color: var(--hover-border);
 }
 .sidebar.is-collapsed .sb-collapse {
   padding: 9px 0;
@@ -181,7 +183,9 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.12s, color 0.12s;
+  /* border-color rides along: without it the active border snaps
+     instantly while the fill fades, flashing an outline-then-fill */
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
 
 .sb-item:hover:not(.is-active) {
@@ -336,7 +340,7 @@
 :is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::-webkit-scrollbar-thumb,
 .monitor::-webkit-scrollbar-thumb {
   background: var(--border-2);
-  border-radius: 4px;
+  border-radius: 2px;
 }
 :is(.content, .content > div) > :is(.reports, .sys, .procs, .checks, .tools, .about, .settings-page, .monitor)::-webkit-scrollbar-thumb:hover,
 .monitor::-webkit-scrollbar-thumb:hover {

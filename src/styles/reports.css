@@ -118,11 +118,11 @@
   flex-wrap: wrap;
   align-self: flex-start;
 }
-/* delete-all keeps the ghost fill/border of its neighbor; only the hover
-   turns red — same language as the row delete buttons (sl-act-danger) */
+/* delete-all keeps the ghost fill of its neighbor; only the ink turns
+   red on hover — same language as the row delete buttons
+   (sl-act-danger). Flat: no border in either state. */
 .btn.reports-delete-all:hover:not(:disabled) {
   color: var(--danger);
-  border-color: var(--danger-dim);
 }
 
 /* session row actions (delete only — folder is global now) */
@@ -139,12 +139,11 @@
   justify-content: center;
   width: 28px;
   height: 28px;
-  border-radius: 7px;
+  border-radius: 4px;
   color: var(--text-3);
 }
 .sl-act-danger:hover {
   color: var(--danger);
-  border-color: var(--danger-dim);
 }
 
 /* responsive session rows on narrow windows */

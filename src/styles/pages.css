@@ -33,7 +33,7 @@
   line-height: 20px;
   font-weight: 600;
   padding: 9px 4px;
-  border-radius: 6px;
+  border-radius: 3px;
   cursor: pointer;
   text-align: center;
   white-space: nowrap;
@@ -405,7 +405,7 @@
    only the labeled-button sizing and type stay here */
 .check-open {
   flex: none;
-  border-radius: 7px;
+  border-radius: 4px;
   color: var(--text-2);
   font: inherit;
   font-size: 11.5px;
@@ -486,29 +486,29 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 6px;
-  padding: 24px;
+  padding: 20px;
   cursor: pointer;
   font: inherit;
   text-align: start;
   color: var(--text-1);
-  transition: border-color 0.12s, background 0.12s;
+  transition: background 0.12s;
 }
 /* hover only where a pointer can leave (hover-capable devices): on touch
    a tap sticks :hover with no mouseleave, painting a permanent faint
    highlight until the next tap elsewhere. No lift either: translateY
    extends the scrollable overflow and flashed the page scrollbar, while
-   color alone never moves layout. */
+   color alone never moves layout. Background shifts alone (flat like
+   every button): the card border never animates on hover. */
 @media (hover: hover) {
   .tool-card:hover {
     background: var(--hover-bg);
-    border-color: var(--hover-border);
   }
 }
 /* (focus ring comes from the shared .focus-ring utility) */
 /* spot illustration: theme-picked SVG asset, one comfortable reading size */
 .tool-spot {
-  width: 168px;
-  height: 168px;
+  width: 144px;
+  height: 144px;
   flex: none;
   margin-block-end: 8px;
 }
@@ -693,7 +693,7 @@
 .cleanup-bars {
   display: flex;
   height: 8px;
-  border-radius: 4px;
+  border-radius: 2px;
   overflow: hidden;
   background: var(--elev-3);
 }
@@ -705,7 +705,7 @@
 .cleanup-dot {
   width: 10px;
   height: 10px;
-  border-radius: 3px;
+  border-radius: 2px;
   flex: none;
 }
 /* footer: the take on the reading-start side, both actions pinned to
@@ -827,7 +827,7 @@
   gap: 2px;
   background: var(--elev-3);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 5px;
   padding: 10px 12px;
   color: var(--text-1);
   font: inherit;
@@ -879,7 +879,7 @@
   width: 130px;
   background: var(--elev-3);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 4px;
   padding: 8px 10px;
   color: var(--text-1);
   font: inherit;
@@ -957,7 +957,7 @@
   justify-content: center;
   padding: 2px;
   border: none;
-  border-radius: 6px;
+  border-radius: 3px;
   background: transparent;
   color: var(--text-3);
   cursor: pointer;
@@ -1057,7 +1057,7 @@
   margin: 2px 0 0;
 }
 .about-mark-img {
-  border-radius: 11px;
+  border-radius: 6px;
   flex: none;
   animation: settle-in 0.45s var(--ease) both;
 }
@@ -1134,10 +1134,9 @@
   padding: 4px 2px 0;
 }
 /* footer links ride the standard ghost Button; the support one keeps its
-   warm accent on hover */
+   warm accent on hover (ink only — flat like every button) */
 .about-support:hover {
   color: var(--warn);
-  border-color: var(--warn-dim);
 }
 .about-made {
   display: inline-flex;
@@ -1231,7 +1230,7 @@
   line-height: 20px;
   font-weight: 600;
   padding: 9px 18px;
-  border-radius: 6px;
+  border-radius: 3px;
   cursor: pointer;
   text-align: center;
   white-space: nowrap;

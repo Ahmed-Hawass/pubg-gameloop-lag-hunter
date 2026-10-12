@@ -36,22 +36,24 @@
   justify-content: center;
   width: 30px;
   height: 30px;
-  border-radius: 8px;
+  border-radius: 4px;
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-3);
   cursor: pointer;
-  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  transition: color 0.15s, background 0.15s;
 }
 .welcome-lang-btn:hover {
+  /* no hover border: the base border is transparent reserve space, same
+     rule as the sidebar collapse (a border appearing on hover reads as
+     a different control family) */
   color: var(--text-2);
   background: var(--hover-bg);
-  border-color: var(--hover-border);
   outline: none;
 }
 
 .welcome-icon {
-  border-radius: 16px;
+  border-radius: 8px;
   animation: settle-in 0.5s var(--ease) both;
 }
 
