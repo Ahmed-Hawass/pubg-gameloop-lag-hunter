@@ -728,6 +728,12 @@
   font-weight: 700;
   color: var(--text-1);
 }
+/* standing one-liner under a page title (scope lines, reused hint
+   copy): plain text on the page surface */
+.page-head-sub {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
   color: var(--text-2);
 }
 /* custom page file form: same card language as switch rows (elev-1
