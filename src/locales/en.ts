@@ -17,60 +17,60 @@ export const en = {
     dismiss: "Dismiss",
     delete: "Delete",
     deleteTitle: "Delete this session?",
-    deleteBody: "Its samples and report will be permanently removed from your PC.",
+    deleteBody: "Its samples and report will be permanently deleted from this PC.",
     deleteAllTitle: "Delete all sessions?",
     deleteAllBody: (n: number) =>
-      `All ${n} saved sessions and their reports will be permanently removed from your PC.`,
-    scanNeedsGame: "The game must be running to start a scan",
+      `All ${n} saved sessions and their reports will be permanently deleted from this PC.`,
+    scanNeedsGame: "Start the game to begin scanning",
     scanNeedsGameBody:
-      "PUBG Mobile must be running inside GameLoop before a scan can start. Start the game, then press Start again.",
+      "PUBG Mobile needs to be running in GameLoop before a scan can start. Launch the game, then click Start scan again.",
     somethingWrong: "Something went wrong",
     /** a novel backend error the code table doesn't know: the locale
         explains, the raw message rides along as a technical line */
-    unknownErrorBody: (raw: string) => `An unexpected error occurred. Technical detail: ${raw}`,
+    unknownErrorBody: (raw: string) => `An unexpected error occurred. Technical details: ${raw}`,
     gameloopClosed: "GameLoop was closed",
     gameloopClosedBody:
-      "The game closed while the scan was running, so we stopped it and saved the report. Start a new scan when you're back in the game.",
+      "The game closed during the scan, so the scan was stopped and its report saved. Start a new scan when you're back in the game.",
     firstRunAdvice: "For accurate results",
     firstRunAdviceBody:
-      "Start GameLoop and the game first, then press Start, and stay in the game while scanning. Minimizing GameLoop pauses GPU monitoring, and closing it ends the scan.",
+      "Launch GameLoop and the game first, then click Start scan and stay in the game while it runs. Minimizing GameLoop pauses GPU monitoring, and closing it ends the scan.",
     gameAdviceTitle: "One tip before your first scan",
     gameAdviceBody:
-      "Close background apps before playing. Browsers, downloads, and chat programs compete with the game for the processor, and each of them can appear in the results as a cause of stuttering.",
+      "Close background apps before you play. Browsers, downloads, and chat apps compete with the game for CPU time, and any of them can show up in the results as a cause of stutter.",
     backgroundAdviceTitle: "Stay in the game while scanning",
     backgroundAdviceBody:
-      "The game window was in the background during this scan. GPU analysis pauses while the window is minimized, and other measurements continue. For the most complete results, stay inside the game until the scan finishes.",
+      "The game window was in the background during this scan. GPU analysis pauses while the window is minimized; other measurements continue. For the most complete results, stay in the game until the scan finishes.",
     exitTitle: "Exit before finishing?",
-    exitBodyScan: "A scan is running. It will stop and its report will be saved.",
-    exitBodyDownload: "An update is downloading. It will be cancelled.",
+    exitBodyScan: "A scan is running. It will stop, and its report will be saved.",
+    exitBodyDownload: "An update is downloading. The download will be cancelled.",
     exitBodyCleaning: "A cleanup is running. It will stop.",
     exitConfirm: "Exit",
     emulatorUpdatedTitle: "GameLoop was updated",
     emulatorUpdatedBody: (v: string) =>
-      `GameLoop is now on ${v}. Windows ties graphics settings to each install location, so re-check the Tools switches and flip back anything the update switched off.`,
+      `GameLoop is now on version ${v}. Windows stores graphics preferences per install location, so check the switches in Tools and turn back on anything the update reset.`,
   },
 
   // ---- error codes from the backend ----
   errors: {
-    GAMELOOP_NOT_RUNNING: "PUBG Mobile isn't running inside GameLoop. Start the game first.",
+    GAMELOOP_NOT_RUNNING: "PUBG Mobile isn't running in GameLoop. Start the game first.",
     SESSION_ALREADY_RUNNING: "A scan is already running.",
     SESSION_STOPPING: "The previous scan is still being saved. Try again in a moment.",
-    SESSION_RUNNING: "The active scan cannot be deleted.",
+    SESSION_RUNNING: "The active scan can't be deleted.",
     APP_SHUTTING_DOWN: "The app is closing. Please try again.",
-    PF_READ_FAILED: "Could not read the page file settings.",
-    PF_DRIVE_INVALID: "That drive is not available for a page file.",
-    PF_MODE_INVALID: "That page file mode is not valid.",
-    PF_NO_SPACE: "Could not read free space on that drive, refusing to guess a bound.",
-    PF_INITIAL_INVALID: "The initial size is not valid for that drive.",
-    PF_MAX_INVALID: "The maximum size is not valid for that drive.",
-    PF_WRITE_FAILED: "Windows refused the page file change.",
-    POWERSHELL_TIMEOUT: "Checking the system took too long. Try again.",
+    PF_READ_FAILED: "Couldn't read the page file settings.",
+    PF_DRIVE_INVALID: "That drive can't be used for a page file.",
+    PF_MODE_INVALID: "That page file mode isn't valid.",
+    PF_NO_SPACE: "Couldn't read the free space on that drive, so no size limit was applied.",
+    PF_INITIAL_INVALID: "The initial size isn't valid for that drive.",
+    PF_MAX_INVALID: "The maximum size isn't valid for that drive.",
+    PF_WRITE_FAILED: "Windows rejected the page file change.",
+    POWERSHELL_TIMEOUT: "The system check took too long. Try again.",
     EMULATOR_UNKNOWN:
-      "GameLoop seems to be running a build this tool does not recognize yet. If the game is running, update Lag Hunter to the latest version.",
-    PROCESS_NOT_FOUND: "That app already closed. Nothing was stopped.",
-    PROCESS_ACCESS_DENIED: "Windows refused to stop that app. It needs administrator rights.",
-    PROCESS_KILL_FAILED: "That app could not be stopped. Try again.",
-    PROCESS_REFUSED: "That process is protected and can never be stopped from here.",
+      "This GameLoop version isn't recognized yet. If the game is running, update Lag Hunter to the latest version.",
+    PROCESS_NOT_FOUND: "That app has already closed, so nothing was ended.",
+    PROCESS_ACCESS_DENIED: "Windows denied the request to end that app. Administrator rights are required.",
+    PROCESS_KILL_FAILED: "Couldn't end that app. Try again.",
+    PROCESS_REFUSED: "That process is protected and can't be ended from here.",
   } as Record<string, string>,
 
   // ---- report highlights (composed in the UI from event kinds) ----
@@ -78,28 +78,28 @@ export const en = {
     disk_queue: "Disk under load",
     disk_busy: "Disk under load",
     hard_faults: "Heavy file loading from disk",
-    cpu_saturation: "CPU reached its limit",
-    cpu_throttle: "CPU reduced its speed under load",
+    cpu_saturation: "CPU maxed out",
+    cpu_throttle: "CPU throttled under load",
     mem_pressure: "Memory under pressure",
     paging_churn: "Background file shuffling",
-    gpu_mem_idle: "GPU in power-saving while rendering",
+    gpu_mem_idle: "GPU in power-saving mode while rendering",
     gpu_activity_cliff: "GPU activity dropped sharply",
     gpu_activity_cliff_loaded: "GPU activity dropped under load",
     gpu_clock_low: "GPU clock was low",
     gpu_temp: "GPU temperature high",
     spike: "Sustained performance drop",
-    nothing: "Nothing notable happened during the session.",
+    nothing: "Nothing notable happened during this session.",
     noSamples: "No samples were captured in this session.",
-    mostly_background: "Most of this session was spent outside the game, so the results may not reflect a real match.",
+    mostly_background: "The game was in the background for most of this session, so the results may not reflect a real match.",
   } as Record<string, string>,
 
   // ---- report metrics (composed in the UI from machine keys + numbers) ----
   metrics: {
-    cpuPeak: (v: number) => `CPU peaked around ${v}% under load.`,
-    cpuPerfMin: (v: number) => `CPU dropped to ${v}% of its speed at some point.`,
+    cpuPeak: (v: number) => `CPU peaked at around ${v}% under load.`,
+    cpuPerfMin: (v: number) => `CPU speed dropped to ${v}% of full speed at one point.`,
     ramFreeMin: (v: number) => `At least ${v} MB of RAM stayed free.`,
-    gpuTempMax: (v: number) => `GPU reached ${v}\u00B0C at its hottest.`,
-    gpuUsageAvg: (v: number) => `GPU averaged around ${v}% usage while rendering.`,
+    gpuTempMax: (v: number) => `GPU peaked at ${v}\u00B0C.`,
+    gpuUsageAvg: (v: number) => `GPU usage averaged around ${v}% while rendering.`,
   } as Record<string, (v: number) => string>,
 
   menu: "Menu",
@@ -125,7 +125,7 @@ export const en = {
   zoomLarge: "Large",
   showUnsupportedTitle: "Show unavailable options",
   showUnsupportedHint:
-    "Shows Tools rows this machine cannot run, greyed with the reason. Switches stay off: nothing here can be turned on.",
+    "Shows Tools options this PC can't use, dimmed with the reason. Their switches stay off because none of them can be turned on.",
   settingOff: "Off",
   settingOn: "On",
   // language names in the picker: every user-facing string lives here,
@@ -140,7 +140,7 @@ export const en = {
   introResetAction: "Show again",
   /** (?) behind the re-show group: what the button does (every card
       closed with X comes back on its page) */
-  introResetHint: "Shows again every introduction card you closed with X.",
+  introResetHint: "Brings back every introduction card you closed with X.",
   // small measurement units (translated, not hardcoded Latin)
   gbUnit: "GB",
   minUnit: "m",
@@ -149,31 +149,31 @@ export const en = {
   // ---- first-run welcome (three slides, once ever) ----
   welcomeTitle: "PUBG GameLoop Lag Hunter",
   welcomeWhat:
-    "Analyze your PUBG Mobile performance on GameLoop, detect stutters, and uncover exactly what's causing them.",
+    "Analyze your PUBG Mobile performance on GameLoop, find stutters, and see exactly what's causing them.",
   /** slide 1: what it finds (titles reuse the short card names) */
   welcomeFindsLabel: "What it finds",
-  welcomeCardDisk: "Disk paging storms",
+  welcomeCardDisk: "Heavy disk paging",
   welcomeFindDiskDesc: "The game freezes while loading files",
-  welcomeCardCpu: "CPU saturation & throttling",
+  welcomeCardCpu: "CPU maxing out and throttling",
   welcomeFindCpuDesc: "Your processor can't keep up in big fights",
   welcomeCardGpu: "Hidden GPU slowdowns",
-  welcomeFindGpuDesc: "We catch quiet power dips and pin the right settings",
+  welcomeFindGpuDesc: "We spot silent power dips and point to the right setting",
   welcomeNextBtn: "Next",
   /** slide 2: how it works, then the sample, then the cost */
-  welcomeHowTitle: "Press Start, then play normally",
-  welcomeHowSub: "It measures in the background and hands you the cause with a fix",
+  welcomeHowTitle: "Click Start scan, then play normally",
+  welcomeHowSub: "It measures in the background and shows you the cause and the fix",
   welcomeSampleLabel: "What you will see",
   welcomeBack: "Back",
   welcomeSkip: "Skip",
   /** slide 3: what it costs (values stay Latin in both languages) */
-  welcomeTrustTitle: "It costs you almost nothing",
+  welcomeTrustTitle: "Almost no overhead",
   welcomeCostCpuVal: "<1%",
   welcomeCostCpuLabel: "CPU while scanning",
   welcomeCostRamVal: "25 MB",
   welcomeCostRamLabel: "of RAM",
   welcomeCostPrivacyVal: "Local",
   welcomeCostPrivacyLabel: "reports never leave your PC",
-  welcomeBegin: "Let's start",
+  welcomeBegin: "Get started",
 
   // ---- system tab ----
   /** one-shot page intro: the page name plus its one-number-per-part
@@ -204,53 +204,44 @@ export const en = {
   /** copy-all button + its transient confirmation */
   copySpecs: "Copy all specs",
   copiedSpecs: "Copied",
-  copySpecsFailed: "Could not copy. Select the text manually.",
+  copySpecsFailed: "Couldn't copy. Select the text manually.",
   psLimitedTitle: "Running in limited mode",
   psLimitedBody:
-    "PowerShell is unavailable, so some checks run on safe defaults: device tuning is skipped, clock times may read in UTC, and GPU pause/resume detection is muted. Scans still work; the core counters are native Windows.",
+    "PowerShell isn't available, so some checks fall back to safe defaults: device tuning is skipped, clock times may show in UTC, and GPU pause/resume detection is off. Scans still work, and the core counters are read directly from Windows.",
 
   // ---- top processes tab ----
-  /** one-shot page card (title plus page-level guidance, never option
-      mechanics): the close-before-playing decision and the apps versus
-      system-tasks rule */
-  introProcessesTitle: "Close the heavy apps before you play",
+  introProcessesTitle: "Close heavy apps before you play",
   introProcessesBody:
-    "These are the apps using the most memory right now, game excluded. Close what you don't need before playing.",
+    "These are the apps using the most memory right now, not counting the game. Close what you don't need before you play.",
   /** always-on one-liner above the list (the intro card is one-shot and
       disappears): the action and what the user gets for it, in their
       words. The scope and the ordering live in the intro card and the
       page header, not here */
-  procsAbout: "Close the apps you are not using to free up memory for your game.",
+  procsAbout: "Close apps you aren't using to free up memory for your game.",
   topProcessesEmpty: "Nothing significant is running",
   refresh: "Refresh",
-  /** end-task action on every row: confirm names the app,
-      unsaved work may be lost */
   endTask: "End",
   endingTask: "Ending...",
-  endConfirmTitle: (name: string) => `Stop ${name}?`,
+  endConfirmTitle: (name: string) => `End ${name}?`,
   endConfirmBody: (name: string) =>
-    `${name} will close immediately. Unsaved work in it will be lost.`,
-  /** grouped confirm: the count string comes from procCount (one MSA
-      site), so this key never pluralizes itself */
+    `${name} will close immediately and any unsaved work in it will be lost.`,
   endConfirmBodyCount: (name: string, count: string) =>
-    `${name} (${count}) will close immediately. Unsaved work in them will be lost.`,
-  /** the grouped-process count, now only the confirm dialog names it
-      (MSA-safe counts live here alone, like spikeCount) */
-  procCount: (n: number) => `${n} process${n === 1 ? "" : "es"}`,
+    `${name} (${count}) will close immediately and any unsaved work in them will be lost.`,
+  procCount: (n: number) => `${n} ${n === 1 ? "process" : "processes"}`,
   /** per-row RAM line under the app name: the number plus what it is,
       so a bare figure never sits unexplained. At and above a gigabyte
       the figure reads in GB (same threshold as the sweep summary),
       never a four-digit MB count */
   procRamUsage: (mb: number) =>
     mb >= 1024
-      ? `Memory usage: ${(mb / 1024).toFixed(1)} GB`
-      : `Memory usage: ${Math.round(mb)} MB`,
+      ? `RAM usage: ${(mb / 1024).toFixed(1)} GB`
+      : `RAM usage: ${Math.round(mb)} MB`,
   /** curated process display names (stable OS staples only; user
       software names itself via ProductName, raw names back both) */
   procNames: {
     procPowershell: "PowerShell",
     procCmd: "Command Prompt",
-    procConsoleHost: "Console Host",
+    procConsoleHost: "Console Window Host",
     procServiceHost: "Service Host",
     procCsrss: "Client Server Runtime",
     procDwm: "Desktop Window Manager",
@@ -271,21 +262,19 @@ export const en = {
 
   // ---- system checks tab ----
   checksHint:
-    "Your device's most important settings in one place: what helps your game and what quietly slows it down. Details are one click away.",
-  /** one-shot page card: the smooth-or-stuttering verdict and the
-      one-click fix path (healthy quiet is a feature, not emptiness) */
+    "Your device's key settings in one place: what helps your game and what quietly slows it down.",
   introHealthTitle: "What quietly slows your game",
   introHealthBody:
-    "A few Windows settings decide smooth or stuttering play. Anything marked goes straight to its fix with one click.",
+    "A few Windows settings decide whether play is smooth or stuttery. Anything flagged takes you straight to its fix in one click.",
   checkPower: "Power plan",
   checkPagefile: "Virtual memory (page file)",
   checkCharger: "Power source",
   checkVt: "CPU virtualization (VT)",
   vtOk: "Enabled",
-  vtWarn: "Disabled: enable it in BIOS for smooth emulation",
+  vtWarn: "Disabled: turn it on in the BIOS for smooth emulation",
   checkDvr: "Background recording (DVR)",
   dvrOk: "Off",
-  dvrWarn: "On: turn off Record what happened in Gaming settings",
+  dvrWarn: "On: turn off Record what happened in Windows Gaming settings",
   checkOkBadge: "Good",
   checkWarnBadge: "Needs attention",
   /** (?) buttons: screen-reader name carries the "about" context so it is
@@ -293,21 +282,21 @@ export const en = {
   hintAbout: (name: string) => `About ${name}`,
   /** summary banner: one-glance verdict above the cards, derived in the
       UI from the five checks (no backend change — counts warn cards) */
-  healthAllGood: "All good",
-  healthAllGoodSub: "Nothing on this device is holding your game back",
-  healthNeedsTitle: (n: number) => `${n} setting${n === 1 ? "" : "s"} needs attention`,
+  healthAllGood: "Everything looks good",
+  healthAllGoodSub: "Nothing on this PC is holding your game back",
+  healthNeedsTitle: (n: number) => `${n} ${n === 1 ? "setting needs" : "settings need"} attention`,
   healthNeedsSub: "Everything else looks good",
   /** header above the full archive list (attention cards repeat above it
       as the featured summary, so this labels what follows, not a filter) */
   healthAllSettings: "All settings",
   powerOk: (name: string) => name,
-  powerWarn: (name: string) => `${name}: switch to High performance for stable FPS`,
-  pagefileAuto: "Managed by Windows",
-  pagefileManual: (mb: number) => `${(mb / 1024).toFixed(0)} GB fixed. Below 8 GB can cause stutters`,
-  pagefileOff: "Disabled, a classic cause of heavy lag",
+  powerWarn: (name: string) => `${name}: switch to High performance for stable frame rates`,
+  pagefileAuto: "Managed automatically by Windows",
+  pagefileManual: (mb: number) => `${(mb / 1024).toFixed(0)} GB fixed. Anything below 8 GB can cause stutters`,
+  pagefileOff: "Disabled, a common cause of severe stutter",
   chargerOk: "Plugged in",
-  chargerWarn: "On battery: the device throttles and results become unreliable",
-  openSettings: "Open setting",
+  chargerWarn: "On battery: the device throttles, so results become unreliable",
+  openSettings: "Open settings",
   /** health-card button whose fix lives inside Tools (DVR today): same
       promise as openSettings, but the destination is in-app */
   openInTools: "Open in Tools",
@@ -317,13 +306,13 @@ export const en = {
       same note); the rest own theirs. States and effect timing stay in
       the card's own desc/state lines, never duplicated here. */
   checkPowerHint:
-    "The power plan decides whether your processor may run at full speed. Saver plans slow the CPU down to save battery, and that shows up as stutters in fights.",
+    "The power plan decides whether the processor is allowed to run at full speed. Power-saver plans slow it down to stretch battery life, which shows up as stutter in fights.",
   checkPagefileHint:
-    "The pagefile is backup memory on disk for moments when RAM fills up. Too small or disabled means hitches while maps and textures load. Letting Windows manage it automatically suits most devices.",
+    "The page file is backup memory on disk, used when RAM fills up. If it's too small or disabled, you get stutter while maps and textures load. Letting Windows manage it automatically suits most PCs.",
   checkVtHint:
-    "Virtualization lets GameLoop use your CPU directly instead of slow software emulation. Only you can change it, from the BIOS before Windows starts.",
+    "Virtualization lets GameLoop use your processor directly instead of slow software emulation. It can only be changed manually, from the BIOS before Windows starts.",
   checkChargerHint:
-    "Laptops slow themselves down on battery to protect it. A scan on battery measures a throttled device, so its results mislead. Plug in before playing or scanning.",
+    "Laptops slow themselves down on battery to protect it. A scan on battery measures a throttled device, so its results can mislead. Plug in before you play or scan.",
 
   // ---- tools tab ----
   tools: "Tools",
@@ -344,7 +333,7 @@ export const en = {
     "Every Windows setting that costs you frames, on a switch of its own. Changes apply live; unsupported rows stay grey, with the reason.",
   toolPagefileDesc: "Fewer stutters when memory fills up",
   toolCleanup: "Disk cleanup",
-  toolCleanupDesc: "Reclaim disk space, nothing important touched",
+  toolCleanupDesc: "Get disk space back without touching anything important",
   /** landing status badge over the gaming card (on/shown optimized):
       same rules as the details rows, via the shared summary */
   toolBadgeOptimized: (on: number, total: number) => `${on}/${total} optimized`,
@@ -361,7 +350,7 @@ export const en = {
   tweakDvrTitle: "Turn off background recording (DVR)",
   tweakSsTitle: "Turn on automatic cleanup",
   tweakGameModeTitle: "Turn on Game Mode",
-  tweakGpuTitle: "Run GameLoop on high-performance GPU",
+  tweakGpuTitle: "Run GameLoop on the high-performance GPU",
   tweakFsoTitle: "Turn off fullscreen optimizations",
   tweakMouseTitle: "Turn off mouse acceleration",
   tweakWindowedTitle: "Turn on optimizations for windowed games",
@@ -370,59 +359,54 @@ export const en = {
       timing), never invented numbers. No revert pattern: the switch
       itself is the way back, saying so every time is noise. */
   tweakDvrHint:
-    "Background recording keeps the last seconds of your play saved at all times, so the encoder and the disk never rest during a match. Turning it off removes a constant thief of GPU and disk with no downside for gameplay.",
+    "Background recording keeps the last few seconds of your play saved at all times, so the video encoder and the disk never get a break during a match. Turning it off removes a constant drain on the GPU and disk, with no downside for gameplay.",
   tweakSsHint:
-    "Windows deletes temporary files on its own when the drive runs low. It prevents a full drive, it does not free a drive that is already full. Turning it off stops future cleanups.",
+    "Windows deletes temporary files on its own when free disk space runs low. This prevents a full disk, but it won't free space on a disk that's already full. Turning it off stops future cleanups.",
   tweakGameModeHint:
-    "Asks Windows to favor the game with CPU time and to hold update interruptions while you play. Independent frame-time tests show it mainly smooths sudden dips on devices running browsers or chat apps next to the game; a few CPU-maxed titles run better with it off. Leave it on unless a specific game stutters.",
+    "Asks Windows to prioritize the game for CPU time and hold back update interruptions while you play. Independent frame-time tests show it mainly smooths sudden dips, especially on PCs running a browser or chat app next to the game; a few CPU-bound titles run better with it off. Leave it on unless one specific game stutters.",
   tweakGpuHint:
-    "On laptops with two graphics cards, Windows may run the game on the weaker built-in card to save power. This pins GameLoop to the powerful card instead. It changes nothing on single-GPU devices, and turning it off hands the choice back to Windows.",
+    "On laptops with two graphics cards, Windows may run the game on the weaker built-in one to save power. This option pins GameLoop to the stronger GPU instead. It changes nothing on PCs with a single graphics card, and turning it off hands the decision back to Windows.",
   tweakFsoHint:
-    "Some titles pace their frames worse under the Windows fullscreen handling and feel smoother without it. The effect differs per game, so this is a per-title experiment, not a universal win.",
+    "Some games pace their frames worse under Windows' fullscreen handling and feel smoother without it. The effect varies by game, so treat it as a per-title experiment, not a guaranteed win.",
   tweakMouseHint:
-    "Pointer acceleration makes the cursor travel further the faster you move your hand. Turning it off gives the same cursor travel for the same hand movement every time. Pure feel, it does not change FPS.",
+    "Pointer acceleration makes the cursor travel farther the faster you move your hand. Turning it off gives the same cursor distance for the same hand movement every time. It's purely about feel and doesn't change frame rate.",
   tweakWindowedHint:
-    "Modern Windows can present windowed and borderless games with lower latency through a newer path. Microsoft documents smoother play for these modes when the toggle is on. Turning it off restores the old path.",
+    "Modern Windows can present windowed and borderless games with lower latency through a newer path. Microsoft documents smoother play in these modes when this switch is on. Turning it off restores the old path.",
   tweakPfTitle: "Virtual memory (page file)",
   /** one-shot page card: the why (borrowed disk instead of a crash)
       and the honest default (automatic suits almost everyone) */
-  introPagefileTitle: "Backup room for when memory fills up",
+  introPagefileTitle: "A safety net for when memory fills up",
   introPagefileBody:
-    "When RAM fills up, Windows borrows disk space so the game keeps going instead of crashing. Automatic suits almost everyone.",
-  tweakPfAutoLabel: "Automatically manage paging file size for all drives",
+    "When RAM fills up, Windows borrows disk space so the game keeps running instead of crashing. This mirrors the system dialog: only the drive you pick changes, after a restart, and automatic suits almost everyone.",
+  tweakPfAutoLabel: "Automatically manage page file size for all drives",
   tweakPfDrivesLabel: "Drives",
   /** short drive-card lines (letter rides its own span, so no drive
       prefix here): free space and mode stay separate spans */
   tweakPfDriveFreeShort: (gb: number) => `${gb} GB free`,
-  tweakPfDriveNoSpaceShort: "free space unknown",
+  tweakPfDriveNoSpaceShort: "Free space unknown",
   tweakPfModeLabel: "Mode",
   tweakPfModeSystem: "System managed size",
   tweakPfModeCustom: "Custom size",
-  tweakPfModeOff: "No paging file",
-  tweakPfModeUnknown: "Unreadable",
-  tweakPfDriveCustom: (min: number, max: number) => `Custom ${min}–${max} MB`,
+  tweakPfModeOff: "No page file",
+  tweakPfModeUnknown: "Couldn't be read",
+  tweakPfDriveCustom: (min: number, max: number) => `Custom: ${min}–${max} MB`,
   tweakPfMinLabel: "Initial size (MB)",
   tweakPfMaxLabel: "Maximum size (MB)",
   tweakPfApply: "Apply",
-  /** status strip (mode state plus installed RAM) and the engine
-      recommendation next to the inputs: values stay Latin */
+  /** engine recommendation next to the inputs: values stay Latin */
   pfRecommend: (gb: number, min: number, max: number) =>
-    `Recommended for ${gb} GB RAM: ${min.toLocaleString("en-US")}–${max.toLocaleString("en-US")} MB`,
-  /** committed sizes for the "Currently using" strip line (manual mode
-      only): the sum of custom initials plus the live drive count.
-      Values stay Latin; the all-system variant names no sum because
-      those sizes are Windows-owned. */
+    `Recommended for ${gb} GB of RAM: ${min.toLocaleString("en-US")}–${max.toLocaleString("en-US")} MB`,
   tweakPfWarnOffTitle: (drive: string) => `Remove the page file on ${drive}?`,
   tweakPfWarnOffBody: (drive: string) =>
-    `Without a page file on ${drive}, out-of-memory crashes are likely under load. This takes effect after you restart Windows.`,
+    `Without a page file on ${drive}, out-of-memory crashes are likely under load. The change takes effect after you restart Windows.`,
   tweakPfWarnSmallTitle: "Small page file?",
   tweakPfWarnSmallBody: (drive: string, max: number) =>
-    `Below 8 GB has caused stutters on real devices. Set ${max} MB on ${drive} anyway?`,
+    `Sizes below 8 GB have caused stutters on real PCs. Set ${max} MB on ${drive} anyway?`,
   tweakPfPending: "Restart Windows to apply the page file change.",
   tweakPfPendingBadge: "Restart needed",
   rebootTitle: "Restart Windows?",
   rebootBody:
-    "The page file change applies after a restart. Restarting now reboots Windows immediately.",
+    "The page file change takes effect after a restart. Restarting now will reboot Windows immediately.",
   rebootNow: "Restart",
   rebootLater: "Later",
   tweakPowerTitle: "Turn on High performance",
@@ -430,45 +414,37 @@ export const en = {
       card shows when, the (?) shows what and why) */
   tweakEffectNow: "Takes effect immediately",
   tweakEffectReopen: "Close and reopen the game to apply",
-  tweakEffectSignin: "Takes effect after signing out of Windows and back in",
+  tweakEffectSignin: "Takes effect after you sign out of Windows and back in",
   tweakPowerHint:
-    "Puts the processor on full speed by switching to the High performance plan. If the plan is missing it is restored first with Windows' own command, then switched on. Turning it off brings back the plan you had; devices locked to Balanced-only mode hide this row instead.",
+    "Runs the processor at full speed by switching to the High performance plan. If the plan is missing, it's restored first with Windows' own command, then switched on. Turning it off brings back the plan you had before; PCs locked to Balanced-only mode hide this row instead.",
   /** summary banner over the gaming rows (same pattern as the health
       tab): one-glance verdict derived from the rendered rows, zero
       backend cost */
   tweakBannerGood: "All optimized",
-  tweakBannerGoodSub: "Every tweak holds its recommended state",
-  tweakBannerNeeds: (n: number) => `${n} tweak${n === 1 ? "" : "s"} needs attention`,
+  tweakBannerGoodSub: "Every tweak is at its recommended setting",
+  tweakBannerNeeds: (n: number) => `${n} ${n === 1 ? "tweak needs" : "tweaks need"} attention`,
   tweakBannerNeedsSub: "Everything else is optimized",
-  /** archive title under the featured repeat (same pattern as the
-      gaming page; future switches join this list, never the banner) */
   storageAllTitle: "All storage options",
   /** header above the full archive list (attention rows repeat above it
       as the featured summary, so this labels what follows, not a filter) */
   tweakAllTweaks: "All tweaks",
   /** reason line under a greyed-out row whose precondition the user can
-      fix (GameLoop exes not resolved). Rows that can never work here
-      hide by default; the show-unsupported preference reveals them
-      greyed with one of the reasons below (never flippable). */
-  tweakNeedsGameloop: "Needs GameLoop installed on this PC.",
-  tweakNeedsWin11: "Needs Windows 11 or later on this PC.",
-  tweakNeeds1803: "Needs Windows 10 version 1803 or later.",
-  tweakHiddenS0: "Unavailable here: this device runs Modern Standby (S0) power only.",
-  tweakHiddenUltimate: "Unavailable here: Ultimate Performance is already active.",
-  /** discover line on the gaming page (no count: hidden rows are
-      invisible by design, the number would need plural forms for a
-      line whose only job is pointing at the preference) */
+      fix (GameLoop exes not resolved) — never shown for rows that can
+      never work here (those hide instead) */
+  tweakNeedsGameloop: "Requires GameLoop to be installed on this PC.",
+  tweakNeedsWin11: "Requires Windows 11 or later on this PC.",
+  tweakNeeds1803: "Requires Windows 10 version 1803 or later.",
+  tweakHiddenS0: "Unavailable here: this device only supports Modern Standby (S0) power management.",
+  tweakHiddenUltimate: "Unavailable here: the Ultimate Performance plan is already active.",
   showUnsupportedLink: "Show unavailable options",
-  tweakFailed: "The change could not be verified and was not applied.",
+  tweakFailed: "The change couldn't be verified, so it wasn't applied.",
   /** storage sweep: scan four safe places, delete only the ticked ones */
   cleanupTitle: "Clean temporary files",
-  /** one-shot page card: the trust rule (important stuff is never
-      even listed) plus what counts as leftovers */
-  introCleanupTitle: "Only you decide what goes",
+  introCleanupTitle: "You decide what gets deleted",
   introCleanupBody:
-    "Everything here is leftovers Windows and apps forgot: temporary files, old logs, finished reports. Tick what you no longer need; anything important is never listed.",
+    "Everything here is leftovers that Windows and apps forgot to remove: temporary files, old logs, finished reports. Tick what you no longer need; anything important is never listed.",
   cleanupDesc:
-    "Reclaims disk space from safe places. Only what you tick gets deleted, nothing important is ever touched.",
+    "Frees disk space from safe locations. Only what you tick is deleted, and nothing important is ever touched.",
   cleanupScan: "Scan",
   cleanupScanning: "Scanning...",
   cleanupRescan: "Scan again",
@@ -476,54 +452,51 @@ export const en = {
   cleanupCleaning: "Cleaning...",
   cleanupSelectAll: "Select all",
   cleanupDeselectAll: "Deselect all",
-  cleanupNothing: "Nothing to clean: every measured place is already empty.",
-  cleanupScanFailed: "The scan could not read this PC. Try again.",
+  cleanupNothing: "Nothing to clean: every scanned location is already empty.",
+  cleanupScanFailed: "Couldn't read this PC during the scan. Try again.",
   cleanupFreed: (mb: number) => `Freed ${mb} MB, measured before and after.`,
   cleanupUnmeasured:
-    "Plus freed space Windows would not let us measure, so it stays out of the number above.",
+    "Windows also wouldn't let us measure some of the space freed, so it isn't included in the number above.",
   /** scanned hero + cleaned payoff labels (the numbers ride their own
       lines, units stay Latin in both languages) */
   cleanupReadyToFree: "ready to free up",
   cleanupCleanedTag: "Your disk has a little more room to breathe.",
-  /** sweep memory lines (last run + last-30-days, bytes only): the same
-      shapes the storage summary used before the card split, restored
-      for the landing card and the sweep page */
   cleanupLastNever: "Never cleaned yet.",
-  cleanupLast: (mb: number, when: string) => `Last clean: ${mb} MB on ${when}.`,
+  cleanupLast: (mb: number, when: string) => `Last cleanup: ${mb} MB on ${when}.`,
   cleanup30d: (mb: number) => `Last 30 days: ${mb} MB.`,
   cleanupScanningCat: (name: string) => `Scanning ${name}...`,
   cleanupCleaningCat: (name: string) => `Cleaning ${name}...`,
   cleanupConfirmTitle: "Delete the selected files?",
   cleanupConfirmBody: (names: string) =>
-    `This permanently deletes temporary files in: ${names}. Only the ticked places are touched, files in use are skipped.`,
+    `This permanently deletes temporary files in: ${names}. Only the ticked locations are touched, and files in use are skipped.`,
   cleanupCatUserTemp: "My temporary files",
   cleanupCatUserTempHint:
-    "Leftovers your apps left in your own temp folder. Safe to delete, apps rebuild what they still need.",
+    "Leftovers your apps left in your own temp folder. Safe to delete; apps rebuild whatever they still need.",
   cleanupCatSystemTemp: "Windows temporary files",
   cleanupCatSystemTempHint:
-    "Leftovers Windows services and installers left behind. Safe to delete.",
+    "Leftovers from Windows services and installers. Safe to delete.",
   cleanupCatRecycle: "Recycle Bin",
   cleanupCatRecycleHint:
-    "Files you already deleted that still occupy drive space. Emptying it is permanent, check it first.",
+    "Files you deleted yourself that still take up space. Emptying it is permanent, so review it first.",
   cleanupCatDelivery: "Update sharing cache",
   cleanupCatDeliveryHint:
-    "Windows Update files kept to share with other PCs on your network. Safe to delete, Windows re-downloads what it needs.",
+    "Windows Update files kept so they can be shared with other PCs on your network. Safe to delete; Windows re-downloads what it needs.",
   /** opt-in deep scan: same card flips to its results, never auto-ticked */
   cleanupDeepScan: "Deep scan",
   cleanupModeQuick: "Quick",
   cleanupModeDeep: "Deep",
   cleanupCatThumb: "Thumbnail previews",
   cleanupCatThumbHint:
-    "Cached image previews Windows rebuilds on its own. Safe to delete.",
+    "Cached image previews that Windows rebuilds on its own. Safe to delete.",
   cleanupCatReports: "Finished error reports",
   cleanupCatReportsHint:
-    "Old Windows error reports already sent or abandoned. Safe to delete.",
+    "Old Windows error reports that were already sent or abandoned. Safe to delete.",
   cleanupCatDumps: "Old crash dumps",
   cleanupCatDumpsHint:
-    "Crash memory files older than 30 days. Recent dumps are never touched, they may explain a fresh crash.",
+    "Crash memory dumps older than 30 days. Recent dumps are never touched, because they may explain a recent crash.",
   cleanupCatDownload: "Update leftovers",
   cleanupCatDownloadHint:
-    "Downloaded update files Windows no longer needs. Run after updates finish; Windows re-downloads what it still needs.",
+    "Downloaded update files Windows no longer needs. Best run after updates finish; Windows re-downloads anything it still needs.",
   cleanupCatLogs: "System log files",
   cleanupCatLogsHint:
     "Old Windows logs that pile up after updates. Files from the last 7 days are never touched.",
@@ -531,19 +504,19 @@ export const en = {
   // ---- about tab ----
   aboutTitle: "PUBG GameLoop Lag Hunter",
   aboutWhat:
-    "Analyze your PUBG Mobile performance on GameLoop, detect stutters, and uncover exactly what's causing them.",
-  aboutImpact: "What it costs your device",
+    "Analyzes your PUBG Mobile performance on GameLoop, finds stutters, and shows exactly what's causing them.",
+  aboutImpact: "What it costs your PC",
   aboutImpactItems: [
-    "Under 1% CPU while scanning: it measures, it doesn't compete",
-    "~25 MB of RAM, less than one browser tab",
-    "~200 KB per minute of scanning on disk",
+    "Under 1% CPU while scanning: it measures, it doesn't compete with the game",
+    "About 25 MB of RAM, less than a single browser tab",
+    "About 200 KB per minute of scanning on disk",
     "Your reports stay on your PC",
-    "It changes a setting only when you flip its switch yourself",
+    "It never changes a setting unless you flip its switch yourself",
   ],
   aboutUpdate: "Updates",
   aboutCheckUpdate: "Check for updates",
   aboutUpToDate: "You're on the latest version",
-  aboutNewVersion: "A new version is available. Download it",
+  aboutNewVersion: "A new version is available. Download it now",
   aboutUpdateErr: "Couldn't check right now. Try again later",
   aboutSupport: "Buy me a coffee",
   aboutGitHub: "GitHub",
@@ -552,13 +525,13 @@ export const en = {
 
   // ---- update modal ----
   updateAvailableTitle: "A new version is available",
-  updateDownload: "Update",
+  updateDownload: "Download update",
   updateClose: "Close",
   updateCancel: "Cancel",
   updateDownloading: "Downloading…",
   updateRetry: "Try again",
   updateDoneTitle: "Update downloaded",
-  updateDoneHint: "Close the app and run the new file whenever you're ready.",
+  updateDoneHint: "Close the app and run the new file when you're ready.",
   updateOpenFolder: "Open folder",
   updateOk: "Done",
   updateFailedTitle: "Download failed",
@@ -580,113 +553,107 @@ export const en = {
 
   // ---- monitor: idle state (one centered column: the session plan) ----
   scanPlanKicker: "Ready to scan",
-  // the big duration number is split from its unit so the number can read
-  // at display size; the unit takes the minutes because Arabic plurals and
-  // word order differ from English, and both locales must stay honest.
+  // the big number is rendered separately; the unit only has to agree with it
   scanPlanUnit: (_m: number) => "min session",
   scanStep1: "Start the scan",
   scanStep2: "Play normally",
   scanStep3: "Read the report",
   scanIdleStart: "Start scan",
-  scanIdleCloseApps:
-    "Close your browser and heavy apps. The scan measures the whole machine.",
+  scanIdleCloseApps: "Close your browser and heavy apps. The scan measures the whole machine.",
 
   // ---- monitor: running state (the user is away) ----
   scanRunningTitle: "Leave this window and go play",
-  scanRunningBody: "We are measuring. You will get the result when it is done.",
-  // the live doubt this screen settles: "can I minimize this?" Asked and
-  // answered where the window is actually open — idle could only promise
-  // it in theory, so the sentence moved here instead of being duplicated.
+  scanRunningBody: "Measuring now. You'll get the result when it's done.",
+  // the live doubt this screen settles: "can I minimize this?"
   scanRunningNote:
-    "Nothing to watch. You can minimize this window, the scan keeps running.",
+    "Nothing to watch. You can minimize this window; the scan keeps running.",
   scanElapsed: "Elapsed",
   scanRemainingLabel: "Auto-stop in",
   scanRemaining: (m: number) => `${m} min left`,
   scanSamples: "Samples",
   scanOfSession: "of session",
   scanMoments: (n: number) => `${n} moment${n === 1 ? "" : "s"} captured`,
-  scanStop: "Stop the scan",
+  scanStop: "Stop scan",
 
   // ---- monitor: result state (never auto-dismisses) ----
-  scanResultLagTitle: "Lag was captured",
+  scanResultLagTitle: "Lag captured",
   scanResultCleanTitle: "Nothing unusual",
-  scanResultOver: (m: number) => `Over your ${m} minute session`,
+  scanResultOver: (m: number) => `Over a ${m}-minute session`,
   scanResultSeconds: "seconds",
-  scanResultMoments: "Moments",
+  scanResultMoments: "moments",
   scanResultTopSignal: "Top signal",
   scanResultNone: "None",
-  scanResultOpenReport: "Open the full report",
+  scanResultOpenReport: "Open full report",
   scanResultAgain: "Scan again",
-  scanResultFootnote:
-    "The report has the timeline, every moment, and what to do about it.",
+  scanResultFootnote: "The report has the timeline, every moment, and what to do about each one.",
 
   // ---- diagnoses (by engine key, mirrors the backend dictionary) ----
   diagnoses: {
     disk_wait: {
-      title: "Game was waiting on disk",
+      title: "The game was waiting on the disk",
       simple:
-        "The game stalled while loading its files from disk, causing severe lag when dropping into the map and during crowded fights.",
-      fix: "Increase the pagefile size and allocate more RAM to GameLoop in its settings.",
+        "The game stalled while loading files from disk, which causes severe stutter when dropping into the map and during crowded fights.",
+      fix: "Increase the page file size and give GameLoop more RAM in its settings.",
     },
     cpu_busy: {
       title: "CPU at its limit",
-      simple: "The processor was running at full capacity: the game needed more processing cores than were available.",
-      fix: "Limit GameLoop to physical cores only, and close background apps (browsers, Discord) before playing.",
+      simple: "The processor was running at full capacity: the game needed more CPU cores than were available.",
+      fix: "Limit GameLoop to physical cores only, and close background apps (browsers, Discord) before you play.",
     },
     cpu_throttle: {
-      title: "CPU slowing itself down",
-      simple: "The processor temperature rose, so it reduced its speed to protect itself, and performance dropped sharply under load.",
-      fix: "Clean the cooling fans, use a cooling pad, and keep the charger connected.",
+      title: "CPU is slowing itself down",
+      simple: "The processor got hot, so it lowered its speed to protect itself, and performance dropped sharply under load.",
+      fix: "Clean the cooling fans, use a cooling pad, and keep the charger plugged in.",
     },
     mem_low: {
       title: "Memory nearly full",
       simple: "Memory filled up and the game kept moving files between RAM and disk, and every transfer caused a stutter.",
-      fix: "Close background apps and increase the pagefile size.",
+      fix: "Close background apps and increase the page file size.",
     },
     paging_churn: {
       title: "Background file shuffling",
       simple:
-        "The system was moving game files between RAM and disk in the background, even though both were running normally. It's normal housekeeping, not a shortage, but each move can show up as a tiny hitch.",
-      fix: "Give GameLoop more RAM in its settings. If it keeps happening, increase the pagefile size on an SSD.",
+        "The system was moving game files between RAM and disk in the background even though both were healthy. This is normal and doesn't mean you're short on resources, but each transfer can show up as a small stutter.",
+      fix: "Give GameLoop more RAM in its settings. If it keeps happening, increase the page file size on an SSD.",
     },
     gpu_wake: {
-      title: "GPU returning from power-saving mode",
+      title: "GPU waking from power-saving mode",
       simple:
-        "The graphics card switched to a power-saving state between scenes and needed time to return to full performance, and that transition appeared as a visible hitch.",
-      fix: "In the GPU control panel (NVIDIA Control Panel), set GameLoop's power management to 'Prefer maximum performance': add every GameLoop process, not just the game. If it still appears, the driver is trimming memory clocks in light scenes (common on laptops with hybrid graphics); the effect is usually a brief hitch between scenes, not a persistent problem.",
+        "The GPU dropped into power-saving mode between scenes and needed a moment to return to full speed, which showed up as a visible hitch.",
+      fix: "In your GPU control panel (NVIDIA Control Panel), set GameLoop's power management to \"Prefer maximum performance\" and add every GameLoop process, not just the game. If it still happens, the driver is probably lowering memory clocks in light scenes (common on laptops with hybrid graphics). The effect is usually a brief hitch between scenes, not a lasting problem.",
     },
     scene_hitch: {
       title: "First-time scene loading",
       simple:
-        "The first time a scene appears (lobby or a new map), the system prepares its graphics, causing one brief hitch, then full smoothness. Revisiting the same scene is smooth because it has been cached.",
-      fix: "There is no permanent fix. It eases as scenes repeat and shrinks with GPU driver updates.",
+        "When a scene appears for the first time (like the lobby or a new map), your PC prepares its graphics, which causes one small hitch and then smooth play. Returning to the same scene is smooth because it's now cached.",
+      fix: "There's no permanent fix. It eases as scenes repeat and improves with GPU driver updates.",
     },
     gpu_busy: {
       title: "GPU at its limit",
-      simple: "The graphics card was operating at full capacity, and the frame rate dropped as a result.",
-      fix: "Reduce the game resolution or graphics quality by one step.",
+      simple: "The GPU was running at full capacity, which lowered the frame rate.",
+      fix: "Lower the game's resolution or graphics quality by one step.",
     },
   } as Record<string, { title: string; simple: string; fix: string }>,
 
   // ---- reports ----
   sessions: "Sessions",
-  sessionsHint: "Every finished scan is saved on your PC with its full report. Click one to read it here.",
+  sessionsHint: "Every finished scan is saved on your PC with its full report. Click a session to read it here.",
   /** totals card labels (numbers ride their own lines, so no plural
       forms are ever needed) */
   reportTotalSessions: "sessions",
   reportTotalIssues: "had issues",
   noSessions: "No sessions yet",
-  noSessionsHint: "Run a scan from the Monitor tab. Finished sessions show up here with their reports.",
+  noSessionsHint: "Run a scan from the Monitor tab. Finished sessions appear here with their reports.",
   loadingSessions: "Loading sessions...",
   /** deep link to a session id that is no longer saved (deleted meanwhile) */
-  reportNotFound: "That session is no longer saved on this PC.",
+  reportNotFound: "This session is no longer saved on this PC.",
   allSessions: "All sessions",
   sessionReport: "Session report",
   whatWeFound: "What we found",
   keyMoments: "Key moments",
   theNumbers: "The numbers",
   noIssuesCaptured: "No issues captured",
-  noIssuesCapturedHint: "This session had no notable findings. If you felt lag anyway, run a longer scan while it happens.",
+  noIssuesCapturedHint: "This session had nothing notable. If you felt lag anyway, run a longer scan while it's happening.",
   openReportFile: "Open report file",
   openSessionsFolder: "Open sessions folder",
   deleteSession: "Delete session",
@@ -697,7 +664,7 @@ export const en = {
   lagCaptured: "Lag captured",
   partial: "Partial",
   samples: "samples",
-  spikeCount: (n: number) => `${n} spike${n > 1 ? "s" : ""}`,
+  spikeCount: (n: number) => `${n} spike${n === 1 ? "" : "s"}`,
 };
 
 export type Locale = typeof en;

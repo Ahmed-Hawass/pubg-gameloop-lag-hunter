@@ -24,11 +24,11 @@ describe("sweep memory formatting", () => {
       last_30d_bytes: 20971520,
     };
     expect(cleanupHistoryLine(en, h, false, "en")).toBe(
-      "Last clean: 10 MB on 2026-09-20 14:30. · Last 30 days: 20 MB.",
+      `${en.cleanupLast(10, "2026-09-20 14:30")} · ${en.cleanup30d(20)}`,
     );
     // a 12-hour machine reads its own convention, same shapes
     expect(cleanupHistoryLine(en, h, true, "en")).toBe(
-      "Last clean: 10 MB on 2026-09-20 2:30 PM. · Last 30 days: 20 MB.",
+      `${en.cleanupLast(10, "2026-09-20 2:30 PM")} · ${en.cleanup30d(20)}`,
     );
     expect(cleanupHistoryLine(en, h, true, "ar")).toContain("2:30 م");
     expect(

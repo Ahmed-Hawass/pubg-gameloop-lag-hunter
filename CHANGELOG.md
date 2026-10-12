@@ -60,6 +60,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - One typeface everywhere, severity colors from a shared theme, and wall-clock times follow your Windows 12/24 setting.
 - Closing the window asks first only when work is in flight (scan, download, or cleanup).
 - Buttons are flat now: the fill alone marks a control, no border appears on hover, and corners are tighter across the app. Tool cards read slightly smaller.
+- Every screen's copy was rewritten in English and Arabic: shorter sentences, plainer words, and the same numbers, names, and units.
 
 ### Removed
 - The Processes manual Refresh button (the silent 2s poll covers it).
