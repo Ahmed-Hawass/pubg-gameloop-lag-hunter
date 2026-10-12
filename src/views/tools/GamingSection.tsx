@@ -128,8 +128,10 @@ export function GamingSection(props: {
         <div className="section-top">
           <PageIntro
             id="gaming"
-            title={t.toolGamingTweaks}
-            body={t.introGamingBody}
+            headerTitle={t.toolGamingTweaks}
+            headerSub={t.toolGamingTweaksDesc}
+            cardTitle={t.introGamingTitle}
+            cardBody={t.introGamingBody}
           />
           {headerTrail}
         </div>
@@ -381,22 +383,16 @@ export function GamingSection(props: {
 
   return (
     <>
-      {/* one header per section, always: the intro card replaces the
-          plain page header until dismissed (same contract as the
-          pagefile and cleanup sections) */}
+      {/* standing page header plus the one-shot card below it (the
+          header keeps the section name; the card keeps its own
+          friendly title, never the same words twice) */}
       <div className="section-top">
         <PageIntro
           id="gaming"
-          title={t.toolGamingTweaks}
-          body={t.introGamingBody}
-          fallback={
-            <div className="page-head">
-              <span className="page-head-text">
-                <span className="page-head-title">{t.toolGamingTweaks}</span>
-                <span className="page-head-sub">{t.introGamingBody}</span>
-              </span>
-            </div>
-          }
+          headerTitle={t.toolGamingTweaks}
+          headerSub={t.toolGamingTweaksDesc}
+          cardTitle={t.introGamingTitle}
+          cardBody={t.introGamingBody}
         />
         {headerTrail}
       </div>

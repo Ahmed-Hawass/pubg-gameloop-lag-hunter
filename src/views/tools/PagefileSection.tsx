@@ -63,24 +63,16 @@ export function PagefileSection(props: {
   // lands, so the spinner is the only visible thing meanwhile.
   return (
     <div className="check-list" ref={listRef}>
-      {/* one header per page, always: the intro card replaces the plain
-          page header until dismissed (same title and body, plain text
-          in both states) */}
+      {/* standing page header plus the one-shot card below it (the
+          header keeps the section name with its short scope line; the
+          card keeps the friendly title and the full guidance) */}
       <div className="section-top">
         <PageIntro
           id="pagefile"
-          title={t.introPagefileTitle}
-          body={t.introPagefileBody}
-          fallback={
-            /* plain page header (not a card, not collapsible): the back
-               control rides the same row at the inline end */
-            <div className="page-head">
-              <span className="page-head-text">
-                <span className="page-head-title">{t.tweakPfTitle}</span>
-                <span className="page-head-sub">{t.introPagefileBody}</span>
-              </span>
-            </div>
-          }
+          headerTitle={t.tweakPfTitle}
+          headerSub={t.toolPagefileDesc}
+          cardTitle={t.introPagefileTitle}
+          cardBody={t.introPagefileBody}
         />
         {headerTrail}
       </div>

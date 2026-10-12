@@ -227,20 +227,24 @@ describe("ToolsView gaming switches", () => {
     expect(screen.getByText(en.tools)).toBeTruthy();
   });
 
-  it("gaming section opens under a one-shot intro with a plain fallback", async () => {
+  it("gaming section opens under a standing header with the card below it", async () => {
     const user = userEvent.setup();
     openGaming();
     await user.click(screen.getByText(en.toolGamingTweaks));
-    await screen.findByText(en.introGamingBody);
+    // the header names the section from the first paint (short scope
+    // line, never the card body), the card explains it once below
+    const head = document.querySelector(".page-head");
+    expect(head?.textContent).toContain(en.toolGamingTweaks);
+    expect(head?.textContent).toContain(en.toolGamingTweaksDesc);
+    await screen.findByText(en.introGamingTitle);
+    expect(screen.getByText(en.introGamingBody)).toBeTruthy();
     await user.click(screen.getByRole("button", { name: en.dialog.dismiss }));
     await waitFor(() => {
       expect(apiMock.dismissIntroCard).toHaveBeenCalledWith("gaming");
     });
-    // the card leaves, the plain header keeps title plus body
+    // the card leaves, the standing header stays
     expect(document.querySelector(".intro-card")).toBeNull();
-    const head = document.querySelector(".page-head");
-    expect(head?.textContent).toContain(en.toolGamingTweaks);
-    expect(head?.textContent).toContain(en.introGamingBody);
+    expect(document.querySelector(".page-head")?.textContent).toContain(en.toolGamingTweaks);
   });
 
   it("back control rides the header row end, opposite the title", async () => {
@@ -248,11 +252,11 @@ describe("ToolsView gaming switches", () => {
     openGaming();
     await user.click(screen.getByText(en.toolGamingTweaks));
     await screen.findByText(en.tweakDvrTitle);
-    // one shared row: header (card or plain) plus the back control at
-    // the inline end, never a lonely button row above
+    // one shared row: header-plus-card block plus the back control
+    // at the inline end, never a lonely button row above
     const top = document.querySelector(".section-top");
     expect(top).toBeTruthy();
     expect(top?.querySelector(".back-btn")?.textContent).toContain(en.toolsBack);
-    expect(top?.querySelector(".page-head, .intro-card")).toBeTruthy();
+    expect(top?.querySelector(".page-head")).toBeTruthy();
   });
 });

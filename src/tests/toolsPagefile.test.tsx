@@ -131,15 +131,25 @@ describe("ToolsView page file editor", () => {
     expect(screen.getByText(en.tweakPfModeCustom)).toBeTruthy();
   });
 
-  it("intro card stands in for the header until dismissed", async () => {
+  it("standing header stays while the intro card is dismissed", async () => {
     const user = userEvent.setup();
     apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
+    apiMock.dismissIntroCard.mockResolvedValue(undefined);
     await openPagefile(user, []);
-    // new user: the intro card stands in for the header (title plus
-    // body, plain text like every header), so no plain header renders
-    // under it (one header per page, always)
+    // first visit: the header names the section and the card explains
+    // it once below (short scope line above, full guidance in the card,
+    // never the same sentence twice)
+    const head = document.querySelector(".page-head");
+    expect(head?.textContent).toContain(en.tweakPfTitle);
+    expect(head?.textContent).toContain(en.toolPagefileDesc);
     await screen.findByText(en.introPagefileTitle);
-    expect(document.querySelector(".page-head")).toBeNull();
+    await user.click(screen.getByRole("button", { name: en.dialog.dismiss }));
+    await waitFor(() => {
+      expect(apiMock.dismissIntroCard).toHaveBeenCalledWith("pagefile");
+    });
+    // the card leaves, the standing header stays
+    expect(document.querySelector(".intro-card")).toBeNull();
+    expect(document.querySelector(".page-head")?.textContent).toContain(en.tweakPfTitle);
   });
 
   it("landing badge agrees with the editor verdict", async () => {

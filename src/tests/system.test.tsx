@@ -98,20 +98,23 @@ describe("SystemView", () => {
     expect(dashes.length).toBeGreaterThan(3);
   });
 
-  it("shows a one-shot intro until X persists it away", async () => {
+  it("shows a one-shot intro under a standing header until X persists it away", async () => {
     const user = userEvent.setup();
     apiMock.systemInfo.mockResolvedValue(info);
     render(React.createElement(SystemView));
+    // the header names the place from the first paint (it never waits
+    // on the card), the card explains it once below the header
+    const head = document.querySelector(".page-head");
+    expect(head?.textContent).toContain(en.system);
+    expect(head?.textContent).toContain(en.systemScope);
     await screen.findByText(en.introSystemTitle);
     expect(screen.getByText(en.introSystemBody)).toBeTruthy();
     await user.click(screen.getByRole("button", { name: en.dialog.dismiss }));
     await waitFor(() => {
       expect(apiMock.dismissIntroCard).toHaveBeenCalledWith("system");
     });
-    // the card leaves, the plain header keeps the tab name plus body
+    // the card leaves, the standing header stays
     expect(document.querySelector(".intro-card")).toBeNull();
-    const head = document.querySelector(".page-head");
-    expect(head?.textContent).toContain(en.system);
-    expect(head?.textContent).toContain(en.introSystemBody);
+    expect(document.querySelector(".page-head")?.textContent).toContain(en.system);
   });
 });

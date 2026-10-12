@@ -18,6 +18,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - Interface zoom (80 to 125 percent) with Ctrl+=/-/0 shortcuts, one-shot intro cards per page, and a two-slide welcome.
 - GameLoop v7 support alongside v6, including a one-time notice when the client updates (saved preferences may need one re-flip).
 - Named page headers everywhere: System, health, Tools, and the gaming and storage sections each open with a one-shot intro plus a standing title, so no page starts cold.
+- Every page header stands on its own now: the title plus a short scope line show on the first paint (loading, error, and empty states included) with the one-shot card below them, instead of the card standing in for the header until dismissed. The gaming and storage cards take their own friendly titles, so the header and the card never read the same words twice.
 - Reports shows its sessions hint as a standing line instead of hiding it behind a (?) button, and the Storage section describes the page instead of narrating its single switch.
 - The Tools back button rides each section header row (opposite the title) instead of a lonely row above.
 - The page file editor dropped its status strip and (?) note: the intro now carries the single-drive and restart warnings.

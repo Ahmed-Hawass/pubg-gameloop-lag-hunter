@@ -326,24 +326,16 @@ export function SweepSection(props: {
   };
   return (
     <div className="check-list">
-      {/* one header per page, always: the intro card replaces the plain
-          page header until dismissed (same title and body, plain text
-          in both states) */}
+      {/* standing page header plus the one-shot card below it (the
+          header keeps the section name with its short scope line; the
+          card keeps the friendly title and the full guidance) */}
       <div className="section-top">
         <PageIntro
           id="cleanup"
-          title={t.introCleanupTitle}
-          body={t.introCleanupBody}
-          fallback={
-            /* plain page header (not a card, not collapsible): the back
-               control rides the same row at the inline end */
-            <div className="page-head">
-              <span className="page-head-text">
-                <span className="page-head-title">{t.toolCleanup}</span>
-                <span className="page-head-sub">{t.introCleanupBody}</span>
-              </span>
-            </div>
-          }
+          headerTitle={t.toolCleanup}
+          headerSub={t.toolCleanupDesc}
+          cardTitle={t.introCleanupTitle}
+          cardBody={t.introCleanupBody}
         />
         {headerTrail}
       </div>

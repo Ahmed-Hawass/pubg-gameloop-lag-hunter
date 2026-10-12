@@ -151,7 +151,7 @@ describe("ToolsView storage card", () => {
     expect(screen.getAllByText(en.tweakSsTitle)).toHaveLength(2);
   });
 
-  it("storage section opens under a one-shot intro with a plain fallback", async () => {
+  it("storage section opens under a standing header with the card below it", async () => {
     const user = userEvent.setup();
     apiMock.tweakStates.mockResolvedValue(tweakStates({ storage_sense: true }));
     apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
@@ -168,15 +168,19 @@ describe("ToolsView storage card", () => {
       }),
     );
     await user.click(screen.getByText(en.toolStorage));
-    await screen.findByText(en.introStorageBody);
+    // the header names the section from the first paint (short scope
+    // line, never the card body), the card explains it once below
+    const head = document.querySelector(".page-head");
+    expect(head?.textContent).toContain(en.toolStorage);
+    expect(head?.textContent).toContain(en.toolStorageDesc);
+    await screen.findByText(en.introStorageTitle);
+    expect(screen.getByText(en.introStorageBody)).toBeTruthy();
     await user.click(screen.getByRole("button", { name: en.dialog.dismiss }));
     await waitFor(() => {
       expect(apiMock.dismissIntroCard).toHaveBeenCalledWith("storage");
     });
-    // the card leaves, the plain header keeps title plus body
+    // the card leaves, the standing header stays
     expect(document.querySelector(".intro-card")).toBeNull();
-    const head = document.querySelector(".page-head");
-    expect(head?.textContent).toContain(en.toolStorage);
-    expect(head?.textContent).toContain(en.introStorageBody);
+    expect(document.querySelector(".page-head")?.textContent).toContain(en.toolStorage);
   });
 });

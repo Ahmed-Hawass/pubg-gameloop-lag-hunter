@@ -180,6 +180,10 @@ export const en = {
       promise (the cards below deliver it) */
   introSystemTitle: "Your PC by the numbers",
   introSystemBody: "Every part of your PC, summed up in the one number that counts.",
+  /** scope line under the System tab title: the standing header shows it
+      on every visit (loading and error states included); the one-shot
+      card below owns the longer promise, so this never repeats it */
+  systemScope: "Processor, memory, graphics, and storage at a glance.",
   yourRig: "Your device",
   storageTitle: "Storage",
   deviceSystemTitle: "Device and system",
@@ -328,7 +332,10 @@ export const en = {
   toolGamingTweaks: "Gaming performance",
   toolGamingTweaksDesc: "Performance switches for smoother play",
   /** one-shot intro for the gaming section: what the switches do and
-      the two row rules (verify live, greyed means unsupported) */
+      the two row rules (verify live, greyed means unsupported).
+      The card takes its own friendly title (the standing header keeps
+      the section name, same split as every other page) */
+  introGamingTitle: "Reclaim your frames",
   introGamingBody:
     "Every Windows setting that costs you frames, on a switch of its own. Changes apply live; unsupported rows stay grey, with the reason.",
   toolPagefileDesc: "Fewer stutters when memory fills up",
@@ -340,7 +347,10 @@ export const en = {
   toolStorage: "Storage",
   toolStorageDesc: "Automatic cleanup plus a manual sweep for junk files.",
   /** one-shot intro for the storage section: who decides and who
-      reports (mirrors the gaming intro contract above) */
+      reports (mirrors the gaming intro contract above).
+      The card takes its own friendly title (the standing header keeps
+      the section name, same split as every other page) */
+  introStorageTitle: "Keep your disk tidy",
   introStorageBody:
     "Watch your disk space and keep it tidy, automatically or on demand.",
 

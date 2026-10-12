@@ -202,6 +202,10 @@ export const ar: Locale = {
       promise (the cards below deliver it) */
   introSystemTitle: "جهازك بالأرقام",
   introSystemBody: "كل قطعة في جهازك برقمها الأهم.",
+  /** scope line under the System tab title: the standing header shows it
+      on every visit (loading and error states included); the one-shot
+      card below owns the longer promise, so this never repeats it */
+  systemScope: "المعالج والذاكرة وبطاقة الرسوميات والتخزين بنظرة واحدة.",
   yourRig: "جهازك",
   storageTitle: "وحدات التخزين",
   deviceSystemTitle: "الجهاز والنظام",
@@ -356,7 +360,10 @@ export const ar: Locale = {
   toolGamingTweaks: "أداء الألعاب",
   toolGamingTweaksDesc: "مفاتيح أداء لتجربة لعب أكثر سلاسة",
   /** one-shot intro for the gaming section: what the switches do and
-      the two row rules (verify live, greyed means unsupported) */
+      the two row rules (verify live, greyed means unsupported).
+      The card takes its own friendly title (the standing header keeps
+      the section name, same split as every other page) */
+  introGamingTitle: "استعد إطاراتك",
   introGamingBody:
     "كل إعداد في ويندوز يسرق الإطارات له مفتاحه الخاص. التغييرات تُطبق فورًا، والصفوف غير المدعومة تبقى رمادية مع ذكر السبب.",
   toolPagefileDesc: "تقطيع أقل عند امتلاء الذاكرة",
@@ -368,7 +375,10 @@ export const ar: Locale = {
   toolStorage: "التخزين",
   toolStorageDesc: "تنظيف تلقائي مع فحص يدوي للملفات غير الضرورية.",
   /** one-shot intro for the storage section: who decides and who
-      reports (mirrors the gaming intro contract above) */
+      reports (mirrors the gaming intro contract above).
+      The card takes its own friendly title (the standing header keeps
+      the section name, same split as every other page) */
+  introStorageTitle: "حافظ على قرصك مرتبًا",
   introStorageBody:
     "راقب مساحة القرص وحافظ عليها مرتبة، تلقائيًا أو عند الطلب.",
 

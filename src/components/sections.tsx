@@ -76,31 +76,43 @@ export function SummaryArchive(props: {
     literals counting the same seconds). */
 export const LINK_HIGHLIGHT_MS = 2200;
 
-/** one-shot page guidance: the intro card while unseen, the plain page
-    header (or nothing) once dismissed. Replaces the identical
-    hook-plus-conditional in Processes, Pagefile, and Sweep. Mount-timing
-    contract: use only where no early return precedes it (the hook must
-    fire on mount, not one tick after the data lands, or the card pops
-    in late — ChecksView keeps its own top-level call for this reason).
-    Title plus body, no icon: headers went plain text everywhere. */
+/** standing page header plus the one-shot guidance card below it: the
+    header names the place on every visit (loading, error, and empty
+    states included), the card explains it once until dismissed.
+    Replaces the identical header-plus-conditional in every view.
+    The header sub is always the short scope line, never the card body
+    (both visible at once must never read the same sentence twice).
+    Mount-timing contract: use only where no early return precedes it
+    (the hook must fire on mount, not one tick after the data lands, or
+    the card pops in late — ChecksView keeps its own top-level call for
+    this reason). Title plus body, no icon: headers went plain text
+    everywhere. */
 export function PageIntro(props: {
   id: string;
-  title: string;
-  body: string;
-  fallback?: ReactNode;
+  headerTitle: string;
+  headerSub: string;
+  cardTitle: string;
+  cardBody: string;
 }) {
-  const { id, title, body, fallback } = props;
+  const { id, headerTitle, headerSub, cardTitle, cardBody } = props;
   const { t } = useLang();
   const intro = useIntroCard(id);
-  if (intro.show) {
-    return (
-      <IntroCard
-        title={title}
-        body={body}
-        dismissLabel={t.dialog.dismiss}
-        onDismiss={intro.dismiss}
-      />
-    );
-  }
-  return <>{fallback ?? null}</>;
+  return (
+    <div className="page-intro">
+      <div className="page-head">
+        <span className="page-head-text">
+          <span className="page-head-title">{headerTitle}</span>
+          <span className="page-head-sub">{headerSub}</span>
+        </span>
+      </div>
+      {intro.show ? (
+        <IntroCard
+          title={cardTitle}
+          body={cardBody}
+          dismissLabel={t.dialog.dismiss}
+          onDismiss={intro.dismiss}
+        />
+      ) : null}
+    </div>
+  );
 }

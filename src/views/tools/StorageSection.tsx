@@ -69,8 +69,10 @@ export function StorageSection(props: {
         <div className="section-top">
           <PageIntro
             id="storage"
-            title={t.toolStorage}
-            body={t.introStorageBody}
+            headerTitle={t.toolStorage}
+            headerSub={t.toolStorageDesc}
+            cardTitle={t.introStorageTitle}
+            cardBody={t.introStorageBody}
           />
           {headerTrail}
         </div>
@@ -114,22 +116,16 @@ export function StorageSection(props: {
 
   return (
     <>
-      {/* one header per section, always: the intro card replaces the
-          plain page header until dismissed (same contract as the
-          pagefile and cleanup sections) */}
+      {/* standing page header plus the one-shot card below it (the
+          header keeps the section name; the card keeps its own
+          friendly title, never the same words twice) */}
       <div className="section-top">
         <PageIntro
           id="storage"
-          title={t.toolStorage}
-          body={t.introStorageBody}
-          fallback={
-            <div className="page-head">
-              <span className="page-head-text">
-                <span className="page-head-title">{t.toolStorage}</span>
-                <span className="page-head-sub">{t.introStorageBody}</span>
-              </span>
-            </div>
-          }
+          headerTitle={t.toolStorage}
+          headerSub={t.toolStorageDesc}
+          cardTitle={t.introStorageTitle}
+          cardBody={t.introStorageBody}
         />
         {headerTrail}
       </div>

@@ -78,6 +78,16 @@ describe("ProcessesView", () => {
     expect(screen.getByText(en.procsAbout)).toBeTruthy();
   });
 
+  it("names the page while the list is still loading", async () => {
+    // the read never lands: the title must not wait on the data
+    apiMock.topProcesses.mockReturnValue(new Promise(() => {}));
+    apiMock.getSettings.mockResolvedValue(settings());
+    render(React.createElement(ProcessesView, { active: false }));
+    expect(await screen.findByText(en.topProcesses)).toBeTruthy();
+    expect(screen.getByText(en.procsAbout)).toBeTruthy();
+    expect(screen.getByText(en.loading)).toBeTruthy();
+  });
+
   it("system-kind rows never render, even alone", async () => {
     apiMock.topProcesses.mockResolvedValue({
       processes: [

@@ -139,8 +139,10 @@ export function SystemView() {
       <div className="sys">
         <PageIntro
           id="system"
-          title={t.introSystemTitle}
-          body={t.introSystemBody}
+          headerTitle={t.system}
+          headerSub={t.systemScope}
+          cardTitle={t.introSystemTitle}
+          cardBody={t.introSystemBody}
         />
         <EmptyState icon={<Cpu size={18} />} title={t.dialog.somethingWrong} hint={error} />
         <div className="sys-retry">
@@ -160,8 +162,10 @@ export function SystemView() {
       <div className="sys">
         <PageIntro
           id="system"
-          title={t.introSystemTitle}
-          body={t.introSystemBody}
+          headerTitle={t.system}
+          headerSub={t.systemScope}
+          cardTitle={t.introSystemTitle}
+          cardBody={t.introSystemBody}
         />
         <EmptyState icon={<RefreshCw size={18} />} title={t.loading} hint="" spin />
       </div>
@@ -178,21 +182,15 @@ export function SystemView() {
 
   return (
     <div className="sys">
-      {/* one header per page, always: the intro card replaces the plain
-          page header until dismissed (the header keeps the tab name
-          like health and processes; the card keeps the friendly title) */}
+      {/* standing page header plus the one-shot card below it (the
+          header keeps the tab name like health and processes; the card
+          keeps the friendly title) */}
       <PageIntro
         id="system"
-        title={t.introSystemTitle}
-        body={t.introSystemBody}
-        fallback={
-          <div className="page-head">
-            <span className="page-head-text">
-              <span className="page-head-title">{t.system}</span>
-              <span className="page-head-sub">{t.introSystemBody}</span>
-            </span>
-          </div>
-        }
+        headerTitle={t.system}
+        headerSub={t.systemScope}
+        cardTitle={t.introSystemTitle}
+        cardBody={t.introSystemBody}
       />
       {/* the rig: four spec cards, each headlining one number */}
       <section className="sys-section">

@@ -135,10 +135,15 @@ export function ProcessesView(props: { active: boolean }) {
 
   return (
     <div className="procs">
+      {/* standing page header plus the one-shot card below it, above
+          every state (loading, error, empty, and list): the title must
+          never wait on the data */}
       <PageIntro
         id="processes"
-        title={t.introProcessesTitle}
-        body={t.introProcessesBody}
+        headerTitle={t.topProcesses}
+        headerSub={t.procsAbout}
+        cardTitle={t.introProcessesTitle}
+        cardBody={t.introProcessesBody}
       />
       {/* a LOAD failure is a page state with a manual retry (the silent
           2s poll keeps running underneath) — never a modal, never an
@@ -165,15 +170,6 @@ export function ProcessesView(props: { active: boolean }) {
         <EmptyState icon={<Activity size={18} />} title={t.topProcessesEmpty} hint="" />
       ) : (
         <>
-          {/* standing page header: tab name plus the one-liner, glued
-              like every other page (a loose paragraph below the title
-              read as two separate blocks) */}
-          <div className="page-head">
-            <span className="page-head-text">
-              <span className="page-head-title">{t.topProcesses}</span>
-              <span className="page-head-sub">{t.procsAbout}</span>
-            </span>
-          </div>
           {/* one list, no group heading: a lone title above a lone list
               is a label for the obvious */}
           <ul className="card proc-list">

@@ -61,10 +61,10 @@ async function openSweep(
   );
   await user.click(screen.getByText(en.toolCleanup));
   // the page opens on the idle hero (spot art, no collapse, no read
-  // to wait for — header is the intro card or, when dismissed, the
-  // plain title, so assert structure, not either text)
+  // to wait for — the standing header is always up, the intro card
+  // below it until dismissed, so assert structure, not either text)
   await waitFor(() => {
-    expect(document.querySelector(".page-head, .intro-card")).toBeTruthy();
+    expect(document.querySelector(".page-head")).toBeTruthy();
   });
   expect(document.querySelector(".cleanup-idle img.tool-spot")).toBeTruthy();
   expect(apiMock.storageScan).not.toHaveBeenCalled();
@@ -146,13 +146,17 @@ describe("ToolsView storage sweep", () => {
     await screen.findByText(en.cleanupReadyToFree);
   });
 
-  it("shows the plain header once its intro is dismissed", async () => {
+  it("standing header stays while the intro card is dismissed", async () => {
     const user = userEvent.setup();
     await openSweep(user, cleanupHistory(), ["cleanup"]);
-    // one header per page: the plain title returns, the intro is gone
+    // dismissed card: the standing header (title plus short scope
+    // line) stays, the intro is gone
     const head = document.querySelector(".page-head")!;
     expect(head.querySelector(".page-head-title")?.textContent).toBe(
       en.toolCleanup,
+    );
+    expect(head.querySelector(".page-head-sub")?.textContent).toBe(
+      en.toolCleanupDesc,
     );
     expect(screen.queryByText(en.introCleanupTitle)).toBeNull();
     // the history line still shows under the header
@@ -229,8 +233,13 @@ describe("ToolsView storage sweep", () => {
       }),
     );
     await user.click(screen.getByText(en.toolCleanup));
+    // first visit: the standing header names the section and the card
+    // explains it once below (short scope line above, full guidance
+    // in the card, never the same sentence twice)
+    const head = document.querySelector(".page-head");
+    expect(head?.textContent).toContain(en.toolCleanup);
+    expect(head?.textContent).toContain(en.toolCleanupDesc);
     await screen.findByText(en.introCleanupTitle);
-    expect(document.querySelector(".page-head")).toBeNull();
     // same shapes, converted pixels (the date stays locale-free)
     await screen.findByText(
       `${en.cleanupLast(10, "2026-09-20 2:30 PM")} · ${en.cleanup30d(20)}`,
