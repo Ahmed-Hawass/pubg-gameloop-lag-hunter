@@ -468,7 +468,7 @@ export default function App() {
 
   return (
     <div className="shell">
-      <TitleBar version={appVersion} onRequestExit={requestExit} updateAvailable={updateInfo != null} />
+      <TitleBar version={appVersion} onRequestExit={requestExit} />
       <div className="shell-body">
         {/* null = settings still loading (IPC round-trip): show NOTHING
             decisive. The old bug rendered the main UI immediately, then

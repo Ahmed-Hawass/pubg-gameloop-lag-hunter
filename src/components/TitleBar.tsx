@@ -19,12 +19,9 @@ import appIcon from "../assets/app-icon.png";
 export function TitleBar(props: {
   version: string;
   onRequestExit: () => void;
-  /** a newer release is known: a quiet dot rides the version (the
-      sidebar About dot and the heading dot stay the action sites) */
-  updateAvailable?: boolean;
 }) {
   const { t } = useLang();
-  const { version, onRequestExit, updateAvailable } = props;
+  const { version, onRequestExit } = props;
   const [maximized, setMaximized] = useState(false);
 
   // track the maximized state for the toggle's tooltip and icon
@@ -68,13 +65,6 @@ export function TitleBar(props: {
           <span className="titlebar-version num" data-tauri-drag-region>
             v{version}
           </span>
-        ) : null}
-        {updateAvailable ? (
-          <span
-            className="titlebar-dot"
-            role="status"
-            aria-label={t.updateAvailableTitle}
-          />
         ) : null}
       </div>
       <div className="win-controls">

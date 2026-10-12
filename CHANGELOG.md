@@ -54,7 +54,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - The page icon keeps its size when the one-time intro card is dismissed (the card and the plain header drew the same tile at two different scales).
 - Buttons and window controls draw every icon at one size (four different glyph sizes had crept into neighbouring buttons, and the three caption buttons had three of their own).
 - The Play triangles point forward in Arabic, like the rest of the interface reads.
-- The update dots (title bar, sidebar About entry, Updates heading) are larger with a slow halo pulse, so a new version is harder to miss. The pulse holds still under reduced-motion settings.
+- A new version is harder to miss: the sidebar About entry and the Updates heading carry a larger dot with a slow halo pulse (the pulse holds still under reduced-motion settings), and the title bar stays quiet so one release is never announced twice.
 
 ### Changed
 - Top Processes is a plain list now: a standing one-liner says what it holds, and each row shows the app, its memory use, and End. Memory alone decides the order, so the page answers what to close with the number that justifies it. It lists 15 apps instead of 12.

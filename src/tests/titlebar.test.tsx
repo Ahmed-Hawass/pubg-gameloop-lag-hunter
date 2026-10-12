@@ -1,6 +1,7 @@
 // tests/titlebar.test.tsx — the window chrome contract: version text,
-// update dot only when a release is known, double-click toggles
-// maximize, restore glyph differs from maximize.
+// never an update dot (the sidebar About dot and the heading dot own
+// the signal), double-click toggles maximize, restore glyph differs
+// from maximize.
 
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -36,16 +37,11 @@ function open(props: Partial<React.ComponentProps<typeof TitleBar>> = {}) {
 }
 
 describe("TitleBar", () => {
-  it("shows the version with no dot when up to date", async () => {
+  it("shows the version with never an update dot", async () => {
     open();
     await screen.findByText("v1.6.0");
+    // the chrome carries no signal by design (sidebar + heading own it)
     expect(document.querySelector(".titlebar-dot")).toBeNull();
-  });
-
-  it("dots the version when a release is known", async () => {
-    open({ updateAvailable: true });
-    await screen.findByText("v1.6.0");
-    expect(document.querySelector(".titlebar-dot")).toBeTruthy();
   });
 
   it("double-clicking the drag region toggles maximize", async () => {

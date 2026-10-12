@@ -23,19 +23,6 @@
   border-block-end: 1px solid var(--border);
 }
 
-/* update signal in the chrome: the same 9px warn dot as the sidebar,
-   riding the version text (the About page owns the action). The slow
-   halo pulse is the whole signal — size and motion, never a new color. */
-.titlebar-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--fill-warning);
-  box-shadow: 0 0 0 3px var(--warn-dim);
-  animation: update-ping 2.2s ease-in-out infinite;
-  flex: none;
-}
-
 .titlebar-left {
   flex: 1;
   height: 100%;
