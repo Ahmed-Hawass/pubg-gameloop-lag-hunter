@@ -10,7 +10,6 @@ import {
   Plug,
   RefreshCw,
   ShieldAlert,
-  ShieldCheck,
   Video,
   Zap,
 } from "lucide-react";
@@ -258,9 +257,16 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
 
   return (
     <div className="checks">
+      {/* standing page header (the intro card below is one-shot guidance;
+          this names the place and stays) */}
+      <div className="page-head">
+        <span className="page-head-text">
+          <span className="page-head-title">{t.systemHealth}</span>
+          <span className="page-head-sub">{t.checksHint}</span>
+        </span>
+      </div>
       {intro.show ? (
         <IntroCard
-          icon={<ShieldCheck size={18} />}
           title={t.introHealthTitle}
           body={t.introHealthBody}
           dismissLabel={t.dialog.dismiss}

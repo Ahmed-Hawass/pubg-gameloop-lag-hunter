@@ -10,13 +10,15 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { en } from "../locales/en";
 import { ToolsView } from "../views/ToolsView";
-import { cleanupHistory, pagefileSettings, tweakStates } from "./fixtures";
+import { cleanupHistory, pagefileSettings, settings, tweakStates } from "./fixtures";
 
 const apiMock = vi.hoisted(() => ({
   tweakStates: vi.fn(),
   pagefileSettings: vi.fn(),
   cleanupHistory: vi.fn(),
   clockHour12: vi.fn(),
+  getSettings: vi.fn(),
+  dismissIntroCard: vi.fn(),
   setTweak: vi.fn(),
   storageScan: vi.fn(),
   storageDeepScan: vi.fn(),
@@ -25,6 +27,11 @@ const apiMock = vi.hoisted(() => ({
   applyPagefileSettings: vi.fn(),
   scheduleReboot: vi.fn(),
 }));
+
+// page intros read settings on mount: default to a fresh machine (every
+// card shows) unless a test overrides the dismissed list below
+apiMock.getSettings.mockResolvedValue(settings());
+apiMock.dismissIntroCard.mockResolvedValue(undefined);
 
 vi.mock("../bridge", () => ({
   api: apiMock,
@@ -142,5 +149,34 @@ describe("ToolsView storage card", () => {
     );
     expect(screen.getByText(en.storageAllTitle)).toBeTruthy();
     expect(screen.getAllByText(en.tweakSsTitle)).toHaveLength(2);
+  });
+
+  it("storage section opens under a one-shot intro with a plain fallback", async () => {
+    const user = userEvent.setup();
+    apiMock.tweakStates.mockResolvedValue(tweakStates({ storage_sense: true }));
+    apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
+    apiMock.cleanupHistory.mockResolvedValue(cleanupHistory());
+    apiMock.clockHour12.mockResolvedValue(false);
+    render(
+      React.createElement(ToolsView, {
+        active: true,
+        toolOpenId: null,
+        onToolOpened: vi.fn(),
+        onCleaningChange: vi.fn(),
+        showUnsupported: false,
+        onShowUnsupported: vi.fn(),
+      }),
+    );
+    await user.click(screen.getByText(en.toolStorage));
+    await screen.findByText(en.introStorageBody);
+    await user.click(screen.getByRole("button", { name: en.dialog.dismiss }));
+    await waitFor(() => {
+      expect(apiMock.dismissIntroCard).toHaveBeenCalledWith("storage");
+    });
+    // the card leaves, the plain header keeps title plus body
+    expect(document.querySelector(".intro-card")).toBeNull();
+    const head = document.querySelector(".page-head");
+    expect(head?.textContent).toContain(en.toolStorage);
+    expect(head?.textContent).toContain(en.introStorageBody);
   });
 });

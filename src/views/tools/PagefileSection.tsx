@@ -4,8 +4,8 @@
 // its read and its state (this shell only gates the first paint and
 // lands the health-card link).
 
-import { useEffect, useRef, useState } from "react";
-import { Database, RefreshCw } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { RefreshCw } from "lucide-react";
 import { EmptyState } from "../../components/components";
 import { LINK_HIGHLIGHT_MS, PageIntro } from "../../components/sections";
 import type { Notice } from "../../errors";
@@ -19,8 +19,10 @@ export function PagefileSection(props: {
   onLinkDone: () => void;
   showHint: (title: string, body: string) => void;
   failNotice: (notice: Notice | null) => void;
+  /** back control from the shell, rendered at the header row end */
+  headerTrail?: ReactNode;
 }) {
-  const { active, linkTarget, onLinkDone, showHint, failNotice } = props;
+  const { active, linkTarget, onLinkDone, showHint, failNotice, headerTrail } = props;
   const { t } = useLang();
   /** one-shot page guidance (the header keeps its title only): the
       why and the honest automatic default (owned by PageIntro below) */
@@ -63,26 +65,26 @@ export function PagefileSection(props: {
   return (
     <div className="check-list" ref={listRef}>
       {/* one header per page, always: the intro card replaces the plain
-          page header until dismissed (it carries its own icon and title,
-          a second header under it would only repeat both) */}
-      <PageIntro
-        id="pagefile"
-        icon={<Database size={18} />}
-        title={t.introPagefileTitle}
-        body={t.introPagefileBody}
-        fallback={
-          /* plain page header (not a card, not collapsible): the shell
-             back button above already says where this lives */
-          <div className="page-head">
-            <span className="icon-tile icon-tile-lg">
-              <Database size={18} />
-            </span>
-            <span className="page-head-text">
-              <span className="page-head-title">{t.tweakPfTitle}</span>
-            </span>
-          </div>
-        }
-      />
+          page header until dismissed (same title and body, plain text
+          in both states) */}
+      <div className="section-top">
+        <PageIntro
+          id="pagefile"
+          title={t.introPagefileTitle}
+          body={t.introPagefileBody}
+          fallback={
+            /* plain page header (not a card, not collapsible): the back
+               control rides the same row at the inline end */
+            <div className="page-head">
+              <span className="page-head-text">
+                <span className="page-head-title">{t.tweakPfTitle}</span>
+                <span className="page-head-sub">{t.introPagefileBody}</span>
+              </span>
+            </div>
+          }
+        />
+        {headerTrail}
+      </div>
       {pfFailed === null ? (
         <EmptyState
           icon={<RefreshCw size={18} />}

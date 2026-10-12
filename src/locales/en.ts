@@ -176,6 +176,10 @@ export const en = {
   welcomeBegin: "Let's start",
 
   // ---- system tab ----
+  /** one-shot page intro: the page name plus its one-number-per-part
+      promise (the cards below deliver it) */
+  introSystemTitle: "Your PC by the numbers",
+  introSystemBody: "Every part of your PC, summed up in the one number that counts.",
   yourRig: "Your device",
   storageTitle: "Storage",
   deviceSystemTitle: "Device and system",
@@ -328,8 +332,16 @@ export const en = {
       v2 goes stable */
   toolsBeta: "Beta",
   toolsBack: "Tools",
-  toolGamingTweaks: "Game performance",
+  /** scope line under the Tools landing title: what the tab holds at a
+      glance (per-card descriptions below own the details, this never
+      repeats them) */
+  toolsScope: "Tweaks, cleanup, and virtual memory. Every change is verified on the spot.",
+  toolGamingTweaks: "Gaming performance",
   toolGamingTweaksDesc: "Performance switches for smoother play",
+  /** one-shot intro for the gaming section: what the switches do and
+      the two row rules (verify live, greyed means unsupported) */
+  introGamingBody:
+    "Every Windows setting that costs you frames, on a switch of its own. Changes apply live; unsupported rows stay grey, with the reason.",
   toolPagefileDesc: "Fewer stutters when memory fills up",
   toolCleanup: "Disk cleanup",
   toolCleanupDesc: "Reclaim disk space, nothing important touched",
@@ -338,6 +350,10 @@ export const en = {
   toolBadgeOptimized: (on: number, total: number) => `${on}/${total} optimized`,
   toolStorage: "Storage",
   toolStorageDesc: "Automatic cleanup plus a manual sweep for junk files.",
+  /** one-shot intro for the storage section: who decides and who
+      reports (mirrors the gaming intro contract above) */
+  introStorageBody:
+    "Watch your disk space and keep it tidy, automatically or on demand.",
 
   // ---- tweaks (Tools tab writes — switch mirrors live state).
   // Row copy is the name alone; the definition plus the effect timing

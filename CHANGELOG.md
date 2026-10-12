@@ -17,6 +17,9 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - Headless companion (`laghunter-cli.exe`): scan, list sessions, and open reports from a terminal, sharing sessions with the app.
 - Interface zoom (80 to 125 percent) with Ctrl+=/-/0 shortcuts, one-shot intro cards per page, and a two-slide welcome.
 - GameLoop v7 support alongside v6, including a one-time notice when the client updates (saved preferences may need one re-flip).
+- Named page headers everywhere: System, health, Tools, and the gaming and storage sections each open with a one-shot intro plus a standing title, so no page starts cold.
+- Reports shows its sessions hint as a standing line instead of hiding it behind a (?) button, and the Storage section describes the page instead of narrating its single switch.
+- The Tools back button rides each section header row (opposite the title) instead of a lonely row above.
 
 ### Fixed
 - The Storage scan measures the Recycle Bin again (it always read empty before).

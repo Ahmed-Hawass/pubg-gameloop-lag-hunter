@@ -9,13 +9,15 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { en } from "../locales/en";
 import { ToolsView } from "../views/ToolsView";
-import { cleanupHistory, pagefileSettings, tweakStates } from "./fixtures";
+import { cleanupHistory, pagefileSettings, settings, tweakStates } from "./fixtures";
 
 const apiMock = vi.hoisted(() => ({
   tweakStates: vi.fn(),
   pagefileSettings: vi.fn(),
   cleanupHistory: vi.fn(),
   clockHour12: vi.fn(),
+  getSettings: vi.fn(),
+  dismissIntroCard: vi.fn(),
   setTweak: vi.fn(),
   storageScan: vi.fn(),
   storageDeepScan: vi.fn(),
@@ -24,6 +26,11 @@ const apiMock = vi.hoisted(() => ({
   applyPagefileSettings: vi.fn(),
   scheduleReboot: vi.fn(),
 }));
+
+// page intros read settings on mount: default to a fresh machine (every
+// card shows) unless a test overrides the dismissed list below
+apiMock.getSettings.mockResolvedValue(settings());
+apiMock.dismissIntroCard.mockResolvedValue(undefined);
 
 vi.mock("../bridge", () => ({
   api: apiMock,
@@ -210,5 +217,42 @@ describe("ToolsView gaming switches", () => {
     });
     expect(screen.queryByText(en.tweakFailed)).toBeNull();
     expect(screen.queryByText(en.dialog.somethingWrong)).toBeNull();
+  });
+
+  it("landing names the tab with its scope line above the cards", async () => {
+    openGaming();
+    // static header, not an intro card: present on every visit, and it
+    // states the tab rule instead of repeating the card descriptions
+    expect(await screen.findByText(en.toolsScope)).toBeTruthy();
+    expect(screen.getByText(en.tools)).toBeTruthy();
+  });
+
+  it("gaming section opens under a one-shot intro with a plain fallback", async () => {
+    const user = userEvent.setup();
+    openGaming();
+    await user.click(screen.getByText(en.toolGamingTweaks));
+    await screen.findByText(en.introGamingBody);
+    await user.click(screen.getByRole("button", { name: en.dialog.dismiss }));
+    await waitFor(() => {
+      expect(apiMock.dismissIntroCard).toHaveBeenCalledWith("gaming");
+    });
+    // the card leaves, the plain header keeps title plus body
+    expect(document.querySelector(".intro-card")).toBeNull();
+    const head = document.querySelector(".page-head");
+    expect(head?.textContent).toContain(en.toolGamingTweaks);
+    expect(head?.textContent).toContain(en.introGamingBody);
+  });
+
+  it("back control rides the header row end, opposite the title", async () => {
+    const user = userEvent.setup();
+    openGaming();
+    await user.click(screen.getByText(en.toolGamingTweaks));
+    await screen.findByText(en.tweakDvrTitle);
+    // one shared row: header (card or plain) plus the back control at
+    // the inline end, never a lonely button row above
+    const top = document.querySelector(".section-top");
+    expect(top).toBeTruthy();
+    expect(top?.querySelector(".back-btn")?.textContent).toContain(en.toolsBack);
+    expect(top?.querySelector(".page-head, .intro-card")).toBeTruthy();
   });
 });

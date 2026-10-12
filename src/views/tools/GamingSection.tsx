@@ -16,7 +16,7 @@ import {
   Zap,
 } from "lucide-react";
 import { Button, EmptyState } from "../../components/components";
-import { SummaryArchive, VerdictBanner, LINK_HIGHLIGHT_MS } from "../../components/sections";
+import { PageIntro, SummaryArchive, VerdictBanner, LINK_HIGHLIGHT_MS } from "../../components/sections";
 import { useIntervalTick, BACKSTOP_POLL_MS } from "../../useIntervalTick";
 import type { Notice } from "../../errors";
 import { useLang } from "../../i18n";
@@ -35,8 +35,10 @@ export function GamingSection(props: {
       (owned by App like the theme: pills, link, and page share it) */
   showUnsupported: boolean;
   onShowUnsupported: () => void;
+  /** back control from the shell, rendered at the header row end */
+  headerTrail?: ReactNode;
 }) {
-  const { active, linkTarget, onLinkDone, showHint, failNotice, showUnsupported, onShowUnsupported } = props;
+  const { active, linkTarget, onLinkDone, showHint, failNotice, showUnsupported, onShowUnsupported, headerTrail } = props;
   const { t } = useLang();
   const tweaks = useTweaks(failNotice);
   /** deep-link highlight row id: ringed for a moment, cleared with the link */
@@ -123,6 +125,14 @@ export function GamingSection(props: {
     const failed = tweaks.loadError !== null;
     return (
       <div className="check-list">
+        <div className="section-top">
+          <PageIntro
+            id="gaming"
+            title={t.toolGamingTweaks}
+            body={t.introGamingBody}
+          />
+          {headerTrail}
+        </div>
         <EmptyState
           icon={failed ? <SlidersHorizontal size={18} /> : <RefreshCw size={18} />}
           title={failed ? t.dialog.somethingWrong : t.loading}
@@ -371,6 +381,25 @@ export function GamingSection(props: {
 
   return (
     <>
+      {/* one header per section, always: the intro card replaces the
+          plain page header until dismissed (same contract as the
+          pagefile and cleanup sections) */}
+      <div className="section-top">
+        <PageIntro
+          id="gaming"
+          title={t.toolGamingTweaks}
+          body={t.introGamingBody}
+          fallback={
+            <div className="page-head">
+              <span className="page-head-text">
+                <span className="page-head-title">{t.toolGamingTweaks}</span>
+                <span className="page-head-sub">{t.introGamingBody}</span>
+              </span>
+            </div>
+          }
+        />
+        {headerTrail}
+      </div>
       {/* one-glance verdict, same pattern as the health tab: derived
           from the rendered rows, zero backend cost */}
       <VerdictBanner

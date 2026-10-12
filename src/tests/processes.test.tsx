@@ -50,7 +50,9 @@ describe("ProcessesView", () => {
     // the engine sends no CPU and no totals, but each row carries its
     // own labeled RAM line: the order says heaviest first, the line
     // says what the number is (both chrome and code hold 287 MB here)
-    expect(document.querySelector(".procs-about")?.textContent).toBe(en.procsAbout);
+    expect(document.querySelector(".page-head-sub")?.textContent).toBe(en.procsAbout);
+    // standing page title above the one-liner: tab name, always on
+    expect(screen.getByText(en.topProcesses)).toBeTruthy();
     expect(screen.getAllByText(en.procRamUsage(287))).toHaveLength(2);
     expect(screen.queryByText("13.7%")).toBeNull();
     expect(screen.queryByText("546 MB")).toBeNull();

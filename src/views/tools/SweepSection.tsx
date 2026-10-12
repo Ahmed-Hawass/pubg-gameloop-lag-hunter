@@ -3,7 +3,7 @@
 // runners, confirm): the section never scans by itself, the Scan button
 // below is the only trigger, so the sweep costs nothing until asked.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { CheckCircle2, Info, Trash2 } from "lucide-react";
 import { Button, Dialog } from "../../components/components";
 import { PageIntro } from "../../components/sections";
@@ -63,8 +63,10 @@ export function SweepSection(props: {
   failNotice: (notice: Notice | null) => void;
   /** reports cleanup activity to the shell (the exit confirm needs it) */
   onCleaningChange?: (active: boolean) => void;
+  /** back control from the shell, rendered at the header row end */
+  headerTrail?: ReactNode;
 }) {
-  const { showHint, failNotice, onCleaningChange } = props;
+  const { showHint, failNotice, onCleaningChange, headerTrail } = props;
   const { t, lang } = useLang();
   const hour12 = useHour12();
   /** one-shot page guidance (the header keeps its title only): the
@@ -321,26 +323,26 @@ export function SweepSection(props: {
   return (
     <div className="check-list">
       {/* one header per page, always: the intro card replaces the plain
-          page header until dismissed (it carries its own icon and title,
-          a second header under it would only repeat both) */}
-      <PageIntro
-        id="cleanup"
-        icon={<Trash2 size={18} />}
-        title={t.introCleanupTitle}
-        body={t.introCleanupBody}
-        fallback={
-          /* plain page header (not a card, not collapsible): the shell
-             back button above already says where this lives */
-          <div className="page-head">
-            <span className="icon-tile icon-tile-lg">
-              <Trash2 size={18} />
-            </span>
-            <span className="page-head-text">
-              <span className="page-head-title">{t.toolCleanup}</span>
-            </span>
-          </div>
-        }
-      />
+          page header until dismissed (same title and body, plain text
+          in both states) */}
+      <div className="section-top">
+        <PageIntro
+          id="cleanup"
+          title={t.introCleanupTitle}
+          body={t.introCleanupBody}
+          fallback={
+            /* plain page header (not a card, not collapsible): the back
+               control rides the same row at the inline end */
+            <div className="page-head">
+              <span className="page-head-text">
+                <span className="page-head-title">{t.toolCleanup}</span>
+                <span className="page-head-sub">{t.introCleanupBody}</span>
+              </span>
+            </div>
+          }
+        />
+        {headerTrail}
+      </div>
       {/* sweep memory under the header (last run plus last-30-days):
           past measured truth, never a reason to scan */}
       {clHistory ? (

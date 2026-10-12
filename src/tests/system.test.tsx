@@ -3,16 +3,24 @@
 // sheet reuses the exact on-screen strings (pinned, not hand-copied).
 
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { en } from "../locales/en";
 import { specSheet, SystemView } from "../views/SystemView";
 import type { SystemInfo } from "../bridge";
+import { settings } from "./fixtures";
 
 const apiMock = vi.hoisted(() => ({
   systemInfo: vi.fn(),
+  getSettings: vi.fn(),
+  dismissIntroCard: vi.fn(),
 }));
+
+// the page intro reads settings on mount: default to a fresh machine
+// (the card shows) unless a test overrides the dismissed list below
+apiMock.getSettings.mockResolvedValue(settings());
+apiMock.dismissIntroCard.mockResolvedValue(undefined);
 
 vi.mock("../bridge", () => ({
   api: apiMock,
@@ -88,5 +96,22 @@ describe("SystemView", () => {
     // every missing slot shows the placeholder (cards, display, disks)
     const dashes = screen.getAllByText("--");
     expect(dashes.length).toBeGreaterThan(3);
+  });
+
+  it("shows a one-shot intro until X persists it away", async () => {
+    const user = userEvent.setup();
+    apiMock.systemInfo.mockResolvedValue(info);
+    render(React.createElement(SystemView));
+    await screen.findByText(en.introSystemTitle);
+    expect(screen.getByText(en.introSystemBody)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: en.dialog.dismiss }));
+    await waitFor(() => {
+      expect(apiMock.dismissIntroCard).toHaveBeenCalledWith("system");
+    });
+    // the card leaves, the plain header keeps the tab name plus body
+    expect(document.querySelector(".intro-card")).toBeNull();
+    const head = document.querySelector(".page-head");
+    expect(head?.textContent).toContain(en.system);
+    expect(head?.textContent).toContain(en.introSystemBody);
   });
 });

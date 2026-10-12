@@ -11,13 +11,20 @@ import { act, render } from "@testing-library/react";
 import { en } from "../locales/en";
 import { GamingSection } from "../views/tools/GamingSection";
 import { StorageSection } from "../views/tools/StorageSection";
-import { tweakStates } from "./fixtures";
+import { settings, tweakStates } from "./fixtures";
 
 const apiMock = vi.hoisted(() => ({
   tweakStates: vi.fn(),
   setTweak: vi.fn(),
   openWindowsPanel: vi.fn(),
+  getSettings: vi.fn(),
+  dismissIntroCard: vi.fn(),
 }));
+
+// page intros read settings on mount: default to a fresh machine (every
+// card shows) unless a test overrides the dismissed list below
+apiMock.getSettings.mockResolvedValue(settings());
+apiMock.dismissIntroCard.mockResolvedValue(undefined);
 
 vi.mock("../bridge", () => ({
   api: apiMock,

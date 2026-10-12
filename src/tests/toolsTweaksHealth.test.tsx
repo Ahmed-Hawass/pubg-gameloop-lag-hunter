@@ -9,13 +9,15 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { en } from "../locales/en";
 import { ToolsView } from "../views/ToolsView";
-import { cleanupHistory, pagefileSettings, tweakStates } from "./fixtures";
+import { cleanupHistory, pagefileSettings, settings, tweakStates } from "./fixtures";
 
 const apiMock = vi.hoisted(() => ({
   tweakStates: vi.fn(),
   pagefileSettings: vi.fn(),
   cleanupHistory: vi.fn(),
   clockHour12: vi.fn(),
+  getSettings: vi.fn(),
+  dismissIntroCard: vi.fn(),
   setTweak: vi.fn(),
   storageScan: vi.fn(),
   storageDeepScan: vi.fn(),
@@ -24,6 +26,11 @@ const apiMock = vi.hoisted(() => ({
   applyPagefileSettings: vi.fn(),
   scheduleReboot: vi.fn(),
 }));
+
+// page intros read settings on mount: default to a fresh machine (every
+// card shows) unless a test overrides the dismissed list below
+apiMock.getSettings.mockResolvedValue(settings());
+apiMock.dismissIntroCard.mockResolvedValue(undefined);
 
 vi.mock("../bridge", () => ({
   api: apiMock,

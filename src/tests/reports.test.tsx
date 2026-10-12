@@ -91,6 +91,15 @@ function open(props: Partial<React.ComponentProps<typeof ReportsView>> = {}, hou
 }
 
 describe("ReportsView", () => {
+  it("names the page with a standing hint line under the title", async () => {
+    apiMock.sessionEntries.mockResolvedValue([]);
+    open();
+    // the hint moved out of the (?) into a standing line: always
+    // visible, never behind a tap
+    expect(await screen.findByText(en.sessionsHint)).toBeTruthy();
+    expect(screen.getByText(en.sessions)).toBeTruthy();
+  });
+
   it("lists sessions and opens the translated report on row click", async () => {
     const user = userEvent.setup();
     apiMock.sessionEntries.mockResolvedValue(entries);

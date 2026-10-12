@@ -137,7 +137,6 @@ export function ProcessesView(props: { active: boolean }) {
     <div className="procs">
       <PageIntro
         id="processes"
-        icon={<Activity size={18} />}
         title={t.introProcessesTitle}
         body={t.introProcessesBody}
       />
@@ -166,9 +165,15 @@ export function ProcessesView(props: { active: boolean }) {
         <EmptyState icon={<Activity size={18} />} title={t.topProcessesEmpty} hint="" />
       ) : (
         <>
-          {/* always on: the intro card above is one-shot and leaves, and
-              the rows alone never say who is in them or how they sort */}
-          <p className="procs-about">{t.procsAbout}</p>
+          {/* standing page header: tab name plus the one-liner, glued
+              like every other page (a loose paragraph below the title
+              read as two separate blocks) */}
+          <div className="page-head">
+            <span className="page-head-text">
+              <span className="page-head-title">{t.topProcesses}</span>
+              <span className="page-head-sub">{t.procsAbout}</span>
+            </span>
+          </div>
           {/* one list, no group heading: a lone title above a lone list
               is a label for the obvious */}
           <ul className="card proc-list">

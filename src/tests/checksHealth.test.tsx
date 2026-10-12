@@ -145,4 +145,15 @@ describe("ChecksView health summary", () => {
       expect(label.startsWith("About ")).toBe(true);
     });
   });
+
+  it("names the page with a standing header above the banner", async () => {
+    apiMock.systemChecks.mockResolvedValue(allGood);
+    apiMock.getSettings.mockResolvedValue(settings());
+    render(React.createElement(ChecksView, { active: false, onOpenTool: vi.fn() }));
+    await screen.findByText(en.healthAllGood);
+    // permanent identity (unlike the one-shot card): tab name plus the
+    // standing scope line, both above the verdict banner
+    expect(screen.getByText(en.systemHealth)).toBeTruthy();
+    expect(screen.getByText(en.checksHint)).toBeTruthy();
+  });
 });

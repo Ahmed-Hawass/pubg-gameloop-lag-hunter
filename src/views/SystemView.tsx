@@ -15,6 +15,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { Button, Dialog, EmptyState } from "../components/components";
+import { PageIntro } from "../components/sections";
 import { api, type SystemInfo } from "../bridge";
 import { toErrorBody } from "../errors";
 import { useLang } from "../i18n";
@@ -136,6 +137,11 @@ export function SystemView() {
   if (error) {
     return (
       <div className="sys">
+        <PageIntro
+          id="system"
+          title={t.introSystemTitle}
+          body={t.introSystemBody}
+        />
         <EmptyState icon={<Cpu size={18} />} title={t.dialog.somethingWrong} hint={error} />
         <div className="sys-retry">
           <Button
@@ -152,6 +158,11 @@ export function SystemView() {
   if (!info) {
     return (
       <div className="sys">
+        <PageIntro
+          id="system"
+          title={t.introSystemTitle}
+          body={t.introSystemBody}
+        />
         <EmptyState icon={<RefreshCw size={18} />} title={t.loading} hint="" spin />
       </div>
     );
@@ -167,6 +178,22 @@ export function SystemView() {
 
   return (
     <div className="sys">
+      {/* one header per page, always: the intro card replaces the plain
+          page header until dismissed (the header keeps the tab name
+          like health and processes; the card keeps the friendly title) */}
+      <PageIntro
+        id="system"
+        title={t.introSystemTitle}
+        body={t.introSystemBody}
+        fallback={
+          <div className="page-head">
+            <span className="page-head-text">
+              <span className="page-head-title">{t.system}</span>
+              <span className="page-head-sub">{t.introSystemBody}</span>
+            </span>
+          </div>
+        }
+      />
       {/* the rig: four spec cards, each headlining one number */}
       <section className="sys-section">
         <h3 className="sys-title">{t.yourRig}</h3>

@@ -3,7 +3,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronDown, Clock, FileText, FileWarning, Folder, RefreshCw, Trash2 } from "lucide-react";
-import { Button, Dialog, EmptyState, Hint, NoteCard, Tip, diagnosisIcon, APP_DIALOG_OPEN_EVENT } from "../components/components";
+import { Button, Dialog, EmptyState, NoteCard, Tip, diagnosisIcon, APP_DIALOG_OPEN_EVENT } from "../components/components";
 import { api, type FriendlyReport, type SessionEntry } from "../bridge";
 import { errorDialog, toErrorBody, type Notice } from "../errors";
 import { useLang } from "../i18n";
@@ -365,8 +365,8 @@ export function ReportsView(props: {
     <div className="reports">
       <div className="reports-title-row">
         <h2 className="reports-title">{t.sessions}</h2>
-        <Hint text={t.sessionsHint} />
       </div>
+      <p className="page-head-sub">{t.sessionsHint}</p>
       {loadFailed ? (
         // the LIST failed to load: a page state with a retry (never a
         // modal - the one surface stays free for action failures), same

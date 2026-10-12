@@ -7,7 +7,7 @@
 import { useEffect, type ReactNode } from "react";
 import { Recycle, RefreshCw, SlidersHorizontal } from "lucide-react";
 import { EmptyState } from "../../components/components";
-import { SummaryArchive, VerdictBanner } from "../../components/sections";
+import { PageIntro, SummaryArchive, VerdictBanner } from "../../components/sections";
 import { useIntervalTick, BACKSTOP_POLL_MS } from "../../useIntervalTick";
 import type { Notice } from "../../errors";
 import { useLang } from "../../i18n";
@@ -18,8 +18,10 @@ export function StorageSection(props: {
   active: boolean;
   showHint: (title: string, body: string) => void;
   failNotice: (notice: Notice | null) => void;
+  /** back control from the shell, rendered at the header row end */
+  headerTrail?: ReactNode;
 }) {
-  const { active, showHint, failNotice } = props;
+  const { active, showHint, failNotice, headerTrail } = props;
   const { t } = useLang();
   const tweaks = useTweaks(failNotice);
 
@@ -64,6 +66,14 @@ export function StorageSection(props: {
     const failed = tweaks.loadError !== null;
     return (
       <div className="check-list">
+        <div className="section-top">
+          <PageIntro
+            id="storage"
+            title={t.toolStorage}
+            body={t.introStorageBody}
+          />
+          {headerTrail}
+        </div>
         <EmptyState
           icon={failed ? <SlidersHorizontal size={18} /> : <RefreshCw size={18} />}
           title={failed ? t.dialog.somethingWrong : t.loading}
@@ -104,6 +114,25 @@ export function StorageSection(props: {
 
   return (
     <>
+      {/* one header per section, always: the intro card replaces the
+          plain page header until dismissed (same contract as the
+          pagefile and cleanup sections) */}
+      <div className="section-top">
+        <PageIntro
+          id="storage"
+          title={t.toolStorage}
+          body={t.introStorageBody}
+          fallback={
+            <div className="page-head">
+              <span className="page-head-text">
+                <span className="page-head-title">{t.toolStorage}</span>
+                <span className="page-head-sub">{t.introStorageBody}</span>
+              </span>
+            </div>
+          }
+        />
+        {headerTrail}
+      </div>
       {/* one-glance verdict, same pattern as the gaming page: derived
           from the rendered rows, zero backend cost. Hidden while
           unread (a badge that cannot be read is hidden, like every

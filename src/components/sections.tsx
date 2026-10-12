@@ -81,21 +81,20 @@ export const LINK_HIGHLIGHT_MS = 2200;
     hook-plus-conditional in Processes, Pagefile, and Sweep. Mount-timing
     contract: use only where no early return precedes it (the hook must
     fire on mount, not one tick after the data lands, or the card pops
-    in late — ChecksView keeps its own top-level call for this reason). */
+    in late — ChecksView keeps its own top-level call for this reason).
+    Title plus body, no icon: headers went plain text everywhere. */
 export function PageIntro(props: {
   id: string;
-  icon: ReactNode;
   title: string;
   body: string;
   fallback?: ReactNode;
 }) {
-  const { id, icon, title, body, fallback } = props;
+  const { id, title, body, fallback } = props;
   const { t } = useLang();
   const intro = useIntroCard(id);
   if (intro.show) {
     return (
       <IntroCard
-        icon={icon}
         title={title}
         body={body}
         dismissLabel={t.dialog.dismiss}

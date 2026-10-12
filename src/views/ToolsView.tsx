@@ -153,12 +153,17 @@ export function ToolsView(props: {
   }, [notice, hint]);
 
   if (openCard) {
+    // back control rides the section header row (inline end, opposite
+    // the title): passed down as the header trail so all four sections
+    // share one row shape instead of repeating this button
+    const backBtn = (
+      <button className="focus-ring-inset back-btn" onClick={() => setOpenCard(null)}>
+        <ArrowLeft size={16} />
+        {t.toolsBack}
+      </button>
+    );
     return (
       <div className="tools">
-        <button className="focus-ring-inset back-btn" onClick={() => setOpenCard(null)}>
-          <ArrowLeft size={16} />
-          {t.toolsBack}
-        </button>
         {openCard === "gaming" ? (
           <GamingSection
             active={active}
@@ -168,6 +173,7 @@ export function ToolsView(props: {
             failNotice={setNotice}
             showUnsupported={showUnsupported}
             onShowUnsupported={onShowUnsupported}
+            headerTrail={backBtn}
           />
         ) : openCard === "pagefile" ? (
           <PagefileSection
@@ -176,18 +182,21 @@ export function ToolsView(props: {
             onLinkDone={onToolOpened}
             showHint={showHint}
             failNotice={setNotice}
+            headerTrail={backBtn}
           />
         ) : openCard === "cleanup" ? (
           <SweepSection
             showHint={showHint}
             failNotice={setNotice}
             onCleaningChange={onCleaningChange}
+            headerTrail={backBtn}
           />
         ) : (
           <StorageSection
             active={active}
             showHint={showHint}
             failNotice={setNotice}
+            headerTrail={backBtn}
           />
         )}
         {/* background note behind a row's (?) button — the same unified
@@ -218,8 +227,16 @@ export function ToolsView(props: {
 
   return (
     <div className="tools">
-      {/* no intro paragraph: it duplicated the card description below
-          almost verbatim — the card carries the meaning alone */}
+      {/* standing page header (title plus scope line): the old intro
+          paragraph died because it repeated the card descriptions below;
+          this names the tab and states the one rule all four cards share
+          instead, so it cannot duplicate them */}
+      <div className="page-head">
+        <span className="page-head-text">
+          <span className="page-head-title">{t.tools}</span>
+          <span className="page-head-sub">{t.toolsScope}</span>
+        </span>
+      </div>
       <div className="tools-grid">
         <button className="focus-ring card tool-card" onClick={() => setOpenCard("gaming")}>
           <img

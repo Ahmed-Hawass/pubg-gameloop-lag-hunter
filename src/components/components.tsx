@@ -126,21 +126,21 @@ export function EmptyState(props: { icon: ReactNode; title: string; hint: string
 // ---------------------------------------------------------------------------
 // IntroCard — one-shot page guidance for new users: what lives on this
 // page and what to do first (never option mechanics: those stay behind
-// each row's (?) button). Dumb surface, parents own the once-ever
-// gating. Info fill, never a severity tone; the X owns its own
-// accessible name (Tip is visual-only).
+// each row's (?) button). Title plus body, no icon anywhere (page
+// headers went plain text everywhere, so a tile here would reintroduce
+// the one shape the cleanup removed). Dumb surface, parents own the
+// once-ever gating. Info fill, never a severity tone; the X owns its
+// own accessible name (Tip is visual-only).
 // ---------------------------------------------------------------------------
 export function IntroCard(props: {
-  icon: ReactNode;
   title: string;
   body: string;
   dismissLabel: string;
   onDismiss: () => void;
 }) {
-  const { icon, title, body, dismissLabel, onDismiss } = props;
+  const { title, body, dismissLabel, onDismiss } = props;
   return (
     <div className="card-sm intro-card">
-      <span className="icon-tile icon-tile-lg intro-ico">{icon}</span>
       <div className="intro-text">
         <span className="intro-title">{title}</span>
         <p>{body}</p>

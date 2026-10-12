@@ -178,6 +178,10 @@ export const ar: Locale = {
   welcomeBegin: "لنبدأ",
 
   // ---- system tab ----
+  /** one-shot page intro: the page name plus its one-number-per-part
+      promise (the cards below deliver it) */
+  introSystemTitle: "جهازك بالأرقام",
+  introSystemBody: "كل قطعة في جهازك برقمها الأهم.",
   yourRig: "جهازك",
   storageTitle: "وحدات التخزين",
   deviceSystemTitle: "الجهاز والنظام",
@@ -328,8 +332,16 @@ export const ar: Locale = {
       v2 goes stable */
   toolsBeta: "تجريبية",
   toolsBack: "الأدوات",
+  /** scope line under the Tools landing title: what the tab holds at a
+      glance (per-card descriptions below own the details, this never
+      repeats them) */
+  toolsScope: "ضبط ويندوز وتنظيف القرص والذاكرة الظاهرية. كل تغيير يتحقق منه فورًا.",
   toolGamingTweaks: "أداء الألعاب",
-  toolGamingTweaksDesc: "مفاتيح أداء للعب أنعم",
+  toolGamingTweaksDesc: "مفاتيح أداء لتجربة لعب أكثر سلاسة",
+  /** one-shot intro for the gaming section: what the switches do and
+      the two row rules (verify live, greyed means unsupported) */
+  introGamingBody:
+    "كل إعداد في ويندوز يسرق الإطارات له مفتاحه الخاص. التغييرات تُطبق فورًا، والصفوف غير المدعومة تبقى رمادية مع ذكر السبب.",
   toolPagefileDesc: "تقطيع أقل عند امتلاء الذاكرة",
   toolCleanup: "تنظيف القرص",
   toolCleanupDesc: "استعد مساحة القرص دون المساس بالمهم",
@@ -337,7 +349,11 @@ export const ar: Locale = {
       same rules as the details rows, via the shared summary */
   toolBadgeOptimized: (on: number, total: number) => `${on}/${total} محسّن`,
   toolStorage: "التخزين",
-  toolStorageDesc: "تنظيف تلقائي مع فحص يدوي للملفات المؤقتة.",
+  toolStorageDesc: "تنظيف تلقائي مع فحص يدوي للملفات غير الضرورية.",
+  /** one-shot intro for the storage section: who decides and who
+      reports (mirrors the gaming intro contract above) */
+  introStorageBody:
+    "راقب مساحة القرص وحافظ عليها مرتبة، تلقائيًا أو عند الطلب.",
 
   // ---- tweaks (Tools tab writes — switch mirrors live state).
   // Row copy is the name alone; the definition plus the effect timing
