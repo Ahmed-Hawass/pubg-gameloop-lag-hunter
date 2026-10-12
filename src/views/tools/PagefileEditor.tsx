@@ -358,13 +358,18 @@ export function PagefileEditor(props: {
                 )}
               </p>
             ) : null}
-            <Button
-              label={t.tweakPfApply}
-              className="pf-apply"
-              disabled={writeBusy || pfUnchanged}
-              onClick={() => void applyPf()}
-            />
           </div>
+          {/* the commit action rides below the manual block, never inside
+              it: the block dims when automatic is on, and a dimmed Apply
+              reads locked even while it is the one live control (the
+              manual-to-automatic switch). Its own disabled state stays
+              the only signal. */}
+          <Button
+            label={t.tweakPfApply}
+            className="pf-apply"
+            disabled={writeBusy || pfUnchanged}
+            onClick={() => void applyPf()}
+          />
         </div>
       ) : null}
       {/* pending reboot note, inside the card (self-clearing on reboot,

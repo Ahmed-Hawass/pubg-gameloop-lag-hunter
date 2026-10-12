@@ -784,7 +784,9 @@
 }
 /* automatic on greys the manual controls (the dialog's own language:
    the list is visible but inert); every control inside is also natively
-   disabled, this is only the visual echo */
+   disabled, this is only the visual echo. The Apply action lives below
+   this block, never inside it, so the dim can never touch the one
+   control that stays live (the manual-to-automatic switch). */
 .pf-manual.is-disabled {
   opacity: 0.55;
 }
@@ -833,10 +835,13 @@
 }
 /* the commit action owns its row: full-width primary with centered
    label (the shared .btn never centers: it shrink-wraps everywhere
-   else, so centering stays here, not in the primitive) */
+   else, so centering stays here, not in the primitive). It rides below
+   the dimmable manual block, so it keeps the block's own 8px rhythm
+   with a top margin instead of the flex gap it left behind. */
 .pf-apply {
   width: 100%;
   justify-content: center;
+  margin-block-start: 8px;
 }
 .pf-fields {
   display: flex;

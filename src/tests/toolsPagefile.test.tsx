@@ -131,6 +131,40 @@ describe("ToolsView page file editor", () => {
     expect(screen.getByText(en.tweakPfModeCustom)).toBeTruthy();
   });
 
+  it("checking automatic enables Apply outside the dimmed block", async () => {
+    const user = userEvent.setup();
+    apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
+    apiMock.dismissIntroCard.mockResolvedValue(undefined);
+    apiMock.validatePagefileSettings.mockResolvedValue(null);
+    apiMock.applyPagefileSettings.mockResolvedValue({
+      id: "pagefile-settings",
+      previous: null,
+      value: 1,
+      verified: true,
+    });
+    await openPagefile(user, []);
+    // manual live state: the box starts unchecked
+    const box = screen.getByRole("checkbox", { name: en.tweakPfAutoLabel });
+    expect(box).not.toBeChecked();
+    await user.click(box);
+    expect(box).toBeChecked();
+    // the manual block dims, but Apply rides below it (never dimmed):
+    // enabled the moment anything differs from live
+    const apply = screen.getByRole("button", { name: en.tweakPfApply });
+    expect(apply).toBeEnabled();
+    expect(apply.closest(".pf-manual")).toBeNull();
+    // the write goes through with the flag on and ends in the
+    // one-time reboot offer (automatic needs no confirm)
+    await user.click(apply);
+    await waitFor(() => {
+      expect(apiMock.validatePagefileSettings).toHaveBeenCalledWith(true, "C:", "system", "", "");
+    });
+    await waitFor(() => {
+      expect(apiMock.applyPagefileSettings).toHaveBeenCalled();
+    });
+    await screen.findByText(en.rebootTitle);
+  });
+
   it("standing header stays while the intro card is dismissed", async () => {
     const user = userEvent.setup();
     apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());

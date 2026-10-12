@@ -22,6 +22,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - Reports shows its sessions hint as a standing line instead of hiding it behind a (?) button, and the Storage section describes the page instead of narrating its single switch.
 - The Tools back button rides each section header row (opposite the title) instead of a lonely row above.
 - The page file editor dropped its status strip and (?) note: the intro now carries the single-drive and restart warnings.
+- The page file Apply button rides below the manual-controls block instead of inside it, so switching to automatic management no longer paints Apply with the block's dimmed look while it is the live control.
 - The cleanup idle hero trades its repeated title and text for spot art.
 
 ### Fixed
