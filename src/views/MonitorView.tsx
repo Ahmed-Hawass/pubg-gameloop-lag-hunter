@@ -148,8 +148,9 @@ function IdleState(props: {
         >
           {/* lucide Play, filled: the whole app speaks lucide, so the hero
               glyph does too — no bespoke SVG to maintain. fill rides the
-              button ink in both themes, stroke off. */}
-          <Play size={20} fill="currentColor" stroke="none" aria-hidden="true" />
+              button ink in both themes, stroke off. flip-rtl faces it
+              with the reading direction (forward is left in Arabic). */}
+          <Play size={20} fill="currentColor" stroke="none" aria-hidden="true" className="flip-rtl" />
           <span>{t.scanIdleStart}</span>
         </button>
         <div className="plan-tips">

@@ -156,7 +156,7 @@ export function WelcomeView(props: { onDone: () => void }) {
               {t.welcomeBack}
             </button>
             <button className="focus-ring btn btn-primary btn-lg welcome-cta" onClick={props.onDone}>
-              <Play size={16} fill="currentColor" stroke="none" aria-hidden="true" />
+              <Play size={16} fill="currentColor" stroke="none" aria-hidden="true" className="flip-rtl" />
               {t.welcomeBegin}
             </button>
           </div>

@@ -330,6 +330,17 @@
 .btn:hover:not(.is-disabled) svg {
   transform: scale(1.18);
 }
+/* directional glyphs face reading direction (a play triangle points
+   forward: right in Latin, left in Arabic). Opt-in by class, never
+   global: spinners, checks, and symmetric glyphs must not flip. The
+   hover nudge combines with the mirror, or the glyph would snap back
+   straight on hover. */
+html[dir="rtl"] .flip-rtl {
+  transform: scaleX(-1);
+}
+html[dir="rtl"] .btn:hover:not(.is-disabled) .flip-rtl {
+  transform: scaleX(-1) scale(1.18);
+}
 
 /* NoteCard — solid highlighter fills (title, body, and fix box all in
    the card ink: dark on amber, white on red). Severity reads from the
