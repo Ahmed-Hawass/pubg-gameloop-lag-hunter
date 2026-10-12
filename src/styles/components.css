@@ -207,10 +207,7 @@
   inline-size: 15px;
   block-size: 15px;
 }
-.icon-tile-lg > svg {
-  inline-size: 18px;
-  block-size: 18px;
-}
+
 /* inset divider list: one measured answer on a sunk surface (sweep
    results, cost rows, visibility rows) — container plus rows, dividers
    included; per-domain classes keep only their extras */
