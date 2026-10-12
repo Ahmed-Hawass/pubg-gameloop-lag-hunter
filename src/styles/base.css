@@ -28,11 +28,16 @@ body {
   font-family: var(--font-ui);
   font-variant-numeric: tabular-nums;
 }
-/* reduced motion: spinners freeze (they signal waiting, never progress).
-   !important because base loads before the rules that arm animations. */
+/* reduced motion: spinners freeze (they signal waiting, never progress),
+   and the update-dot halo holds still (the static ring stays — the
+   signal itself must never vanish). !important because base loads
+   before the rules that arm animations. */
 @media (prefers-reduced-motion: reduce) {
   .spin,
-  .empty-ico.spin svg {
+  .empty-ico.spin svg,
+  .titlebar-dot,
+  .sb-dot,
+  .about-dot {
     animation: none !important;
   }
 }

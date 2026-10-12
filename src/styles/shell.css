@@ -23,13 +23,16 @@
   border-block-end: 1px solid var(--border);
 }
 
-/* update signal in the chrome: the same 7px warn dot as the sidebar,
-   riding the version text (the About page owns the action) */
+/* update signal in the chrome: the same 9px warn dot as the sidebar,
+   riding the version text (the About page owns the action). The slow
+   halo pulse is the whole signal — size and motion, never a new color. */
 .titlebar-dot {
-  width: 7px;
-  height: 7px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   background: var(--fill-warning);
+  box-shadow: 0 0 0 3px var(--warn-dim);
+  animation: update-ping 2.2s ease-in-out infinite;
   flex: none;
 }
 
@@ -214,11 +217,13 @@
   position: absolute;
   top: 7px;
   inset-inline-end: 9px;
-  width: 7px;
-  height: 7px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   background: var(--warn);
   border: 2px solid var(--bg-1);
+  box-shadow: 0 0 0 3px var(--warn-dim);
+  animation: update-ping 2.2s ease-in-out infinite;
   pointer-events: none;
 }
 
@@ -256,9 +261,9 @@
   padding: 10px 0;
 }
 /* collapsed rail: the corner dot re-anchors to the centered glyph
-   (half the 7px dot off the middle — logical, mirrors with RTL) */
+   (half the 9px dot off the middle — logical, mirrors with RTL) */
 .sidebar.is-collapsed .sb-dot {
-  inset-inline-end: calc(50% - 3.5px);
+  inset-inline-end: calc(50% - 4.5px);
 }
 
 .sidebar.is-collapsed .sb-label {

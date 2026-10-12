@@ -1077,12 +1077,15 @@
   flex-wrap: wrap;
 }
 /* the dot beside the Updates heading — mirrors the sidebar's About dot:
-   warn-yellow like the "new version" copy, never green */
+   warn-yellow like the "new version" copy, never green. Same 9px size
+   and halo pulse as the other two update signals. */
 .about-dot {
-  width: 7px;
-  height: 7px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   background: var(--fill-warning);
+  box-shadow: 0 0 0 3px var(--warn-dim);
+  animation: update-ping 2.2s ease-in-out infinite;
   display: inline-block;
   margin-inline-start: 2px;
 }
