@@ -634,8 +634,8 @@
   opacity: 0.55;
   cursor: default;
 }
-/* idle hero: the only invitation before the first scan (icon, name,
-   promise, then the mode pills + Scan below do the work) */
+/* idle hero: spot art as the only invitation before the first scan
+   (mode pills + Scan ride below it, like the concept) */
 .cleanup-idle {
   display: flex;
   flex-direction: column;
@@ -643,28 +643,6 @@
   text-align: center;
   gap: 4px;
   padding: 18px 10px 6px;
-}
-.cleanup-idle-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
-  background: var(--primary-dim);
-  color: var(--primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  margin-block-end: 8px;
-}
-.cleanup-idle-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-1);
-}
-.cleanup-idle-desc {
-  font-size: 12px;
-  color: var(--text-2);
-  line-height: 1.55;
 }
 /* payoff hero after a verified clean: the measured number big, the
    tagline warm, Scan again as the way back (the work card returns on
@@ -750,29 +728,7 @@
   font-weight: 700;
   color: var(--text-1);
 }
-/* status strip inside the editor card: committed sizes on the
-   reading-start side, installed RAM after it, (?) on the end side */
-.pf-status-strip {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: var(--elev-3);
-  border-radius: 8px;
-  padding: 8px 12px;
-  font-size: 12px;
   color: var(--text-2);
-}
-.pf-status-state {
-  flex: 1;
-  min-width: 0;
-}
-.pf-status-ram {
-  flex: none;
-  color: var(--text-3);
-  font-variant-numeric: tabular-nums;
-}
-.pf-status-strip .switch-hint {
-  margin-inline-start: auto;
 }
 /* custom page file form: same card language as switch rows (elev-1
    surface, border, radius), labels above Latin-digit inputs; flex follows

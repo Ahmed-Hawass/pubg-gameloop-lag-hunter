@@ -17,12 +17,11 @@ export function PagefileSection(props: {
   /** deep-link target (null = no link); only "pagefile" lands here */
   linkTarget: string | null;
   onLinkDone: () => void;
-  showHint: (title: string, body: string) => void;
   failNotice: (notice: Notice | null) => void;
   /** back control from the shell, rendered at the header row end */
   headerTrail?: ReactNode;
 }) {
-  const { active, linkTarget, onLinkDone, showHint, failNotice, headerTrail } = props;
+  const { active, linkTarget, onLinkDone, failNotice, headerTrail } = props;
   const { t } = useLang();
   /** one-shot page guidance (the header keeps its title only): the
       why and the honest automatic default (owned by PageIntro below) */
@@ -97,7 +96,6 @@ export function PagefileSection(props: {
         active={active}
         linkedId={linkedId}
         onPfSettled={setPfFailed}
-        showHint={showHint}
         failNotice={failNotice}
       />
     </div>

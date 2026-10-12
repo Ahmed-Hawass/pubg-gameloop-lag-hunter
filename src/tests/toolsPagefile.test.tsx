@@ -114,7 +114,7 @@ describe("ToolsView page file editor", () => {
     expect(apiMock.scheduleReboot).not.toHaveBeenCalled();
   });
 
-  it("names the committed sizes under the strip in manual mode", async () => {
+  it("shows no status strip: drives and modes render without a committed-sizes line", async () => {
     const user = userEvent.setup();
     apiMock.pagefileSettings.mockResolvedValue(
       pagefileSettings({
@@ -124,34 +124,20 @@ describe("ToolsView page file editor", () => {
     );
     await openPagefile(user);
     await screen.findByText(en.tweakPfTitle);
-    // 16,384 MB committed on one live drive (Latin digits either way)
-    await screen.findByText(en.pfCurrentlyUsing("16,384", 1));
-  });
-
-  it("hides the usage line on automatic, names system sizes instead", async () => {
-    const user = userEvent.setup();
-    // automatic: Windows owns the sizes, any sum would be invented
-    apiMock.pagefileSettings.mockResolvedValue(pagefileSettings({ automatic: true }));
-    await openPagefile(user);
-    await screen.findByText(en.tweakPfTitle);
-    expect(screen.queryByText(/Currently using/)).toBeNull();
-    expect(screen.queryByText(/managed by Windows/)).toBeNull();
-  });
-
-  it("names the all-system setup instead of summing zeros", async () => {
-    const user = userEvent.setup();
-    apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
-    await openPagefile(user);
-    await screen.findByText(en.tweakPfTitle);
-    await screen.findByText(en.pfSystemSizes(1));
+    // the strip is gone (its warnings live in the intro body now): no
+    // committed-sizes line, no RAM line, the drive still lists
+    expect(document.querySelector(".pf-status-strip")).toBeNull();
+    expect(screen.getByText("C:")).toBeTruthy();
+    expect(screen.getByText(en.tweakPfModeCustom)).toBeTruthy();
   });
 
   it("intro card stands in for the header until dismissed", async () => {
     const user = userEvent.setup();
     apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
     await openPagefile(user, []);
-    // new user: the intro carries its own icon and title, so no plain
-    // header renders under it (one header per page, always)
+    // new user: the intro card stands in for the header (title plus
+    // body, plain text like every header), so no plain header renders
+    // under it (one header per page, always)
     await screen.findByText(en.introPagefileTitle);
     expect(document.querySelector(".page-head")).toBeNull();
   });

@@ -45,26 +45,6 @@ export function summarizePagefile(s: PagefileSettings | null): boolean | null {
   );
 }
 
-/** committed page file sizes for the "Currently using" strip line: the
-    sum of custom initials (the reservation Windows holds now) plus the
-    live drive count. Null = no line: automatic mode (sizes are
-    Windows-owned, any sum would be invented) or nothing live at all.
-    Unreadable ("unknown") drives are never claimed. */
-export function summarizePagefileUsage(s: PagefileSettings | null): {
-  sumMb: number;
-  live: number;
-  allSystem: boolean;
-} | null {
-  if (!s || s.automatic) return null;
-  const live = s.drives.filter((d) => d.mode === "system" || d.mode === "custom");
-  if (live.length === 0) return null;
-  return {
-    sumMb: live.reduce((sum, d) => sum + (d.mode === "custom" ? (d.min_mb ?? 0) : 0), 0),
-    live: live.length,
-    allSystem: live.every((d) => d.mode === "system"),
-  };
-}
-
 /** sweep-memory formatting, shared by the landing card and the sweep
     page: one-decimal MB (measured, never estimated) and the stored ISO
     stamp as a locale-free date plus the OS-convention time. The same

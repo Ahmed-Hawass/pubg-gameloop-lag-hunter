@@ -60,8 +60,13 @@ async function openSweep(
     }),
   );
   await user.click(screen.getByText(en.toolCleanup));
-  // the page opens on the idle hero (no collapse, no read to wait for)
-  await screen.findByText(en.cleanupTitle);
+  // the page opens on the idle hero (spot art, no collapse, no read
+  // to wait for — header is the intro card or, when dismissed, the
+  // plain title, so assert structure, not either text)
+  await waitFor(() => {
+    expect(document.querySelector(".page-head, .intro-card")).toBeTruthy();
+  });
+  expect(document.querySelector(".cleanup-idle img.tool-spot")).toBeTruthy();
   expect(apiMock.storageScan).not.toHaveBeenCalled();
 }
 
@@ -117,8 +122,8 @@ describe("ToolsView storage sweep", () => {
       { id: "user_temp", freed_bytes: 10485760 },
     ]);
     await openSweep(user);
-    // idle: hero with the mode pills, no list yet
-    expect(screen.getByText(en.cleanupTitle)).toBeTruthy();
+    // idle: spot hero with the mode pills, no list yet
+    expect(document.querySelector(".cleanup-idle img.tool-spot")).toBeTruthy();
     expect(document.querySelector(".cleanup-list")).toBeNull();
     // scanned: selected hero plus one bar segment per measured place
     await user.click(screen.getByText(en.cleanupScan));
@@ -224,8 +229,6 @@ describe("ToolsView storage sweep", () => {
       }),
     );
     await user.click(screen.getByText(en.toolCleanup));
-    await screen.findByText(en.cleanupTitle);
-    // new user: the intro card stands in for the header
     await screen.findByText(en.introCleanupTitle);
     expect(document.querySelector(".page-head")).toBeNull();
     // same shapes, converted pixels (the date stays locale-free)

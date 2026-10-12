@@ -4,7 +4,7 @@
 // below is the only trigger, so the sweep costs nothing until asked.
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { CheckCircle2, Info, Trash2 } from "lucide-react";
+import { CheckCircle2, Info } from "lucide-react";
 import { Button, Dialog } from "../../components/components";
 import { PageIntro } from "../../components/sections";
 import { api, type CleanupCategory, type CleanupHistory, type CleanupResult, type CleanupScan } from "../../bridge";
@@ -13,6 +13,9 @@ import { useLang } from "../../i18n";
 import { useHour12 } from "../../useHour12";
 import { cleanupHistoryLine, defaultCheckedIds, formatSweepBytes, BYTES_PER_GB, BYTES_PER_MB } from "./summary";
 import { useModalSignal, useYieldToAppDialog } from "./useModalSignals";
+import { useSpotTheme } from "./useSpotTheme";
+import spotCleanDark from "../../assets/spot-clean-temp-dark.svg?url";
+import spotCleanLight from "../../assets/spot-clean-temp-light.svg?url";
 import type { Locale } from "../../locales/en";
 
 /** categorical dot/bar color per place (identity, never severity:
@@ -68,6 +71,7 @@ export function SweepSection(props: {
 }) {
   const { showHint, failNotice, onCleaningChange, headerTrail } = props;
   const { t, lang } = useLang();
+  const spotTheme = useSpotTheme();
   const hour12 = useHour12();
   /** one-shot page guidance (the header keeps its title only): the
       trust rule and what counts as leftovers (owned by PageIntro below) */
@@ -375,11 +379,13 @@ export function SweepSection(props: {
               (mode pills + Scan ride below it, like the concept) */}
           {!clScanned && !clBusy ? (
             <div className="cleanup-idle">
-              <span className="cleanup-idle-icon">
-                <Trash2 size={26} aria-hidden="true" />
-              </span>
-              <div className="cleanup-idle-title">{t.cleanupTitle}</div>
-              <div className="cleanup-idle-desc">{t.cleanupDesc}</div>
+              <img
+                className="tool-spot"
+                src={spotTheme === "light" ? spotCleanLight : spotCleanDark}
+                alt=""
+                aria-hidden="true"
+                draggable={false}
+              />
             </div>
           ) : null}
           {clScanError ? <p className="tool-note">{clScanError}</p> : null}

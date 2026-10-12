@@ -387,8 +387,6 @@ export const ar: Locale = {
   introPagefileTitle: "مساحة احتياطية عند امتلاء الذاكرة",
   introPagefileBody:
     "عند امتلاء الذاكرة يستعير ويندوز مساحة من القرص لتواصل اللعبة بدلا من الانهيار. الوضع التلقائي يناسب الجميع تقريبا.",
-  tweakPfHint:
-    "يطابق مربع حوار الذاكرة الظاهرية في ويندوز: إدارة تلقائية لجميع الأقراص، أو لكل قرص حجم يديره النظام أو مخصص أو بدون page file. يتغير القرص المحدد فقط، وتبقى بقية الأقراص كما هي تمامًا. تُطبق التغييرات بعد إعادة تشغيل ويندوز.",
   tweakPfAutoLabel: "إدارة حجم page file تلقائيًا لجميع الأقراص",
   tweakPfDrivesLabel: "الأقراص",
   /** short drive-card lines (letter rides its own span, so no drive
@@ -406,13 +404,8 @@ export const ar: Locale = {
   tweakPfApply: "تطبيق",
   /** status strip (mode state plus installed RAM) and the engine
       recommendation next to the inputs: values stay Latin */
-  pfRamInstalled: (gb: number) => `${gb} جيجابايت ذاكرة مثبتة`,
   pfRecommend: (gb: number, min: number, max: number) =>
     `الموصى به لذاكرة ${gb} جيجابايت: ${min.toLocaleString("en-US")}–${max.toLocaleString("en-US")} ميجابايت`,
-  pfCurrentlyUsing: (sum: string, n: number) =>
-    `الحجم المستخدم حاليا ${sum} MB على ${n === 1 ? "قرص واحد" : n === 2 ? "قرصين" : n >= 3 && n <= 10 ? `${n} أقراص` : `${n} قرصا`}`,
-  pfSystemSizes: (n: number) =>
-    `على ${n === 1 ? "قرص واحد" : n === 2 ? "قرصين" : n >= 3 && n <= 10 ? `${n} أقراص` : `${n} قرصا`}: الأحجام تحت إدارة ويندوز`,
   tweakPfWarnOffTitle: (drive: string) => `إزالة page file على ${drive}؟`,
   tweakPfWarnOffBody: (drive: string) =>
     `بدون page file على ${drive}، أعطال نفاد الذاكرة مرجحة تحت الحمل. يُطبق بعد إعادة تشغيل ويندوز.`,

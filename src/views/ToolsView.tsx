@@ -180,7 +180,6 @@ export function ToolsView(props: {
             active={active}
             linkTarget={toolOpenId}
             onLinkDone={onToolOpened}
-            showHint={showHint}
             failNotice={setNotice}
             headerTrail={backBtn}
           />

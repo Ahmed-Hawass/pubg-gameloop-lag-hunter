@@ -1,6 +1,5 @@
-// tests/toolsSummary.test.ts — shared Tools math: the "Currently using"
-// rule (manual custom initials plus the live count, never a guess) and
-// the sweep-memory line shapes (last run plus last-30-days, or never).
+// tests/toolsSummary.test.ts — shared Tools math: the sweep-memory
+// line shapes (last run plus last-30-days, or never).
 
 import { describe, expect, it } from "vitest";
 import { en } from "../locales/en";
@@ -10,55 +9,7 @@ import {
   cleanupWhen,
   defaultCheckedIds,
   formatSweepBytes,
-  summarizePagefileUsage,
 } from "../views/tools/summary";
-import { pagefileSettings } from "./fixtures";
-
-describe("summarizePagefileUsage", () => {
-  it("stays silent on automatic, empty, and unreadable setups", () => {
-    expect(summarizePagefileUsage(null)).toBeNull();
-    expect(summarizePagefileUsage(pagefileSettings({ automatic: true }))).toBeNull();
-    expect(
-      summarizePagefileUsage(
-        pagefileSettings({
-          automatic: false,
-          drives: [{ drive: "C:", free_mb: 1, mode: "off", min_mb: null, max_mb: null }],
-        }),
-      ),
-    ).toBeNull();
-    // unknown is unreadable: never claimed as live
-    expect(
-      summarizePagefileUsage(
-        pagefileSettings({
-          automatic: false,
-          drives: [{ drive: "C:", free_mb: null, mode: "unknown", min_mb: null, max_mb: null }],
-        }),
-      ),
-    ).toBeNull();
-  });
-
-  it("sums custom initials and counts every live drive", () => {
-    expect(
-      summarizePagefileUsage(
-        pagefileSettings({
-          automatic: false,
-          drives: [
-            { drive: "C:", free_mb: 50000, mode: "custom", min_mb: 16384, max_mb: 49152 },
-            { drive: "D:", free_mb: 90000, mode: "system", min_mb: null, max_mb: null },
-          ],
-        }),
-      ),
-    ).toEqual({ sumMb: 16384, live: 2, allSystem: false });
-  });
-
-  it("names the all-system setup instead of summing zeros", () => {
-    expect(summarizePagefileUsage(pagefileSettings())).toEqual({
-      sumMb: 0,
-      live: 1,
-      allSystem: true,
-    });
-  });
-});
 
 describe("sweep memory formatting", () => {
   it("renders one-decimal MB and the short stamp", () => {

@@ -389,8 +389,6 @@ export const en = {
   introPagefileTitle: "Backup room for when memory fills up",
   introPagefileBody:
     "When RAM fills up, Windows borrows disk space so the game keeps going instead of crashing. Automatic suits almost everyone.",
-  tweakPfHint:
-    "Mirrors the Windows Virtual Memory dialog: automatic management for all drives, or per-drive system-managed, custom, or no paging file. Only the selected drive ever changes; every other drive is preserved exactly. Changes apply after you restart Windows.",
   tweakPfAutoLabel: "Automatically manage paging file size for all drives",
   tweakPfDrivesLabel: "Drives",
   /** short drive-card lines (letter rides its own span, so no drive
@@ -408,17 +406,12 @@ export const en = {
   tweakPfApply: "Apply",
   /** status strip (mode state plus installed RAM) and the engine
       recommendation next to the inputs: values stay Latin */
-  pfRamInstalled: (gb: number) => `${gb} GB RAM installed`,
   pfRecommend: (gb: number, min: number, max: number) =>
     `Recommended for ${gb} GB RAM: ${min.toLocaleString("en-US")}–${max.toLocaleString("en-US")} MB`,
   /** committed sizes for the "Currently using" strip line (manual mode
       only): the sum of custom initials plus the live drive count.
       Values stay Latin; the all-system variant names no sum because
       those sizes are Windows-owned. */
-  pfCurrentlyUsing: (sum: string, n: number) =>
-    `Currently using ${sum} MB across ${n} drive${n === 1 ? "" : "s"}`,
-  pfSystemSizes: (n: number) =>
-    `Across ${n} drive${n === 1 ? "" : "s"}: sizes managed by Windows`,
   tweakPfWarnOffTitle: (drive: string) => `Remove the page file on ${drive}?`,
   tweakPfWarnOffBody: (drive: string) =>
     `Without a page file on ${drive}, out-of-memory crashes are likely under load. This takes effect after you restart Windows.`,

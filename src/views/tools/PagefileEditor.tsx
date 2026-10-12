@@ -6,7 +6,7 @@
 // page-level loading/error gate).
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Database, Info } from "lucide-react";
+import { Database } from "lucide-react";
 import { Button, Dialog, EmptyState } from "../../components/components";
 import {
   api,
@@ -16,7 +16,6 @@ import {
 import { toErrorBody, type Notice } from "../../errors";
 import { useLang } from "../../i18n";
 import { useModalSignal, useYieldToAppDialog } from "./useModalSignals";
-import { summarizePagefileUsage } from "./summary";
 import { syncPagefileWorkingCopies } from "./pagefileSync";
 
 export function PagefileEditor(props: {
@@ -25,10 +24,9 @@ export function PagefileEditor(props: {
   linkedId: string | null;
   /** first read settled (mount or retry): failed = inline error territory */
   onPfSettled: (failed: boolean) => void;
-  showHint: (title: string, body: string) => void;
   failNotice: (notice: Notice | null) => void;
 }) {
-  const { active, linkedId, onPfSettled, showHint, failNotice } = props;
+  const { active, linkedId, onPfSettled, failNotice } = props;
   const { t } = useLang();
   /** Virtual Memory-style editor: the backend's single read (global
       automatic flag + one live state per fixed drive). Null = not read
@@ -236,16 +234,6 @@ export function PagefileEditor(props: {
     void runPfApply();
   };
 
-  // RAM for the strip, rounded to whole GB for a quiet readout
-  // (31.9 GB installs read "32 GB RAM", never a jittery decimal)
-  const ramGb =
-    pfSettings?.ram_total_mb != null
-      ? Math.round(pfSettings.ram_total_mb / 1024)
-      : null;
-  /** committed sizes for the "Currently using" strip line (null = no
-      line: automatic mode or nothing live — never a guessed number) */
-  const pfUsage = summarizePagefileUsage(pfSettings);
-
   return (
     <>
       {/* read failure: the editor shows nothing guessed (an inline
@@ -258,38 +246,13 @@ export function PagefileEditor(props: {
         />
       ) : null}
       {/* the editor owns its page open: no summary row, no collapse.
-          The strip up top names what Windows holds now (committed sizes
-          in manual mode, installed RAM always); the mode itself lives
-          on the checkbox underneath, so no state is stated twice. The
-          deep-link ring lands on this card. */}
+          Drives, mode, and inputs below; the deep-link ring lands on
+          this card. */}
       {pfSettings ? (
         <div
           data-tweak="pagefile"
           className={`card-sm pf-form${linkedId === "pagefile" ? " is-linked" : ""}`}
         >
-          <div className="pf-status-strip">
-            {pfUsage ? (
-              <span className="pf-status-state">
-                {pfUsage.allSystem
-                  ? t.pfSystemSizes(pfUsage.live)
-                  : t.pfCurrentlyUsing(
-                      pfUsage.sumMb.toLocaleString("en-US"),
-                      pfUsage.live,
-                    )}
-              </span>
-            ) : null}
-            {ramGb !== null ? (
-              <span className="pf-status-ram">{t.pfRamInstalled(ramGb)}</span>
-            ) : null}
-            <button
-              type="button"
-              className="focus-ring-inset switch-hint"
-              aria-label={t.tweakPfTitle}
-              onClick={() => showHint(t.tweakPfTitle, t.tweakPfHint)}
-            >
-              <Info size={13} />
-            </button>
-          </div>
           <label className="pf-auto">
             <input
               type="checkbox"

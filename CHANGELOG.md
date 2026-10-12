@@ -20,6 +20,8 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - Named page headers everywhere: System, health, Tools, and the gaming and storage sections each open with a one-shot intro plus a standing title, so no page starts cold.
 - Reports shows its sessions hint as a standing line instead of hiding it behind a (?) button, and the Storage section describes the page instead of narrating its single switch.
 - The Tools back button rides each section header row (opposite the title) instead of a lonely row above.
+- The page file editor dropped its status strip and (?) note: the intro now carries the single-drive and restart warnings.
+- The cleanup idle hero trades its repeated title and text for spot art.
 
 ### Fixed
 - The Storage scan measures the Recycle Bin again (it always read empty before).
