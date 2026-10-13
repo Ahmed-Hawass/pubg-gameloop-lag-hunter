@@ -128,7 +128,7 @@ export function SweepSection(props: {
   const clName = (id: string) => CL_NAME_GETTERS[id]?.(t) ?? id;
   const clColor = (id: string) => CL_CATEGORY_COLORS[id] ?? "#8A8F98";
   const clHintBody = (id: string) => CL_HINT_GETTERS[id]?.(t) ?? t.cleanupDesc;
-  const clSize = (bytes: number | null) => formatSweepBytes(bytes);
+  const clSize = (bytes: number | null, partial = false) => formatSweepBytes(bytes, partial);
   const clProgress = (phase: "scan" | "clean") => (ev: { event: string; id: string; index: number; total: number }) => {
     if (ev.event !== "category") return;
     setClPhase(phase);
@@ -288,7 +288,7 @@ export function SweepSection(props: {
               </button>
             </span>
           </span>
-          <span className="cleanup-size">{clSize(c.bytes)}</span>
+          <span className="cleanup-size">{clSize(c.bytes, c.partial)}</span>
         </div>
       );
     });
@@ -468,6 +468,14 @@ export function SweepSection(props: {
             ...(clDeep?.categories ?? []),
           ].every((c) => (c.bytes ?? 0) <= 0) ? (
             <p className="tool-note">{t.cleanupNothing}</p>
+          ) : null}
+          {(clScan ?? clDeep) &&
+          !clBusy &&
+          [
+            ...(clScan?.categories ?? []),
+            ...(clDeep?.categories ?? []),
+          ].some((c) => c.partial) ? (
+            <p className="tool-note">{t.cleanupPartialNote}</p>
           ) : null}
           {/* live progress: one step per category (honest granularity,
               never a fake per-byte bar) */}

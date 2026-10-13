@@ -45,6 +45,14 @@ describe("sweep place display", () => {
     expect(formatSweepBytes(2147483648)).toBe("2.0 GB");
   });
 
+  it("marks partial sums with ~ and leaves exact numbers bare", () => {
+    expect(formatSweepBytes(10485760, true)).toBe("~10.0 MB");
+    expect(formatSweepBytes(2147483648, true)).toBe("~2.0 GB");
+    expect(formatSweepBytes(10485760, false)).toBe("10.0 MB");
+    // unknown stays unknown: no "~" on a "--"
+    expect(formatSweepBytes(null, true)).toBe("--");
+  });
+
   it("ticks every non-empty place by default, never zero or unknown", () => {
     expect(
       defaultCheckedIds([

@@ -4,7 +4,8 @@
 // line), the landing card shows the last run without a badge, scan runs
 // first (never on open), category names come from machine-key records,
 // only non-empty places auto-tick, zero/unreadable rows are muted and
-// never cleaned, and Clean deletes exactly the ticked ids.
+// never cleaned, partial rows wear "~" with one shared legend, and Clean
+// deletes exactly the ticked ids.
 
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
@@ -88,6 +89,28 @@ describe("ToolsView storage sweep", () => {
     const unknown = screen.getByRole("checkbox", { name: en.cleanupCatRecycle });
     expect(unknown).not.toBeChecked();
     expect(unknown).toBeDisabled();
+  });
+
+  it("partial rows show ~, stay ticked, and explain the mark once", async () => {
+    const user = userEvent.setup();
+    apiMock.storageScan.mockResolvedValue({
+      categories: [
+        { id: "user_temp", bytes: 10485760, partial: true },
+        { id: "system_temp", bytes: null, partial: false },
+        { id: "recycle_bin", bytes: null, partial: false },
+      ],
+      history: cleanupHistory(),
+    });
+    await openSweep(user);
+    await user.click(screen.getByText(en.cleanupScan));
+    // the partial sum wears its mark but the row stays actionable
+    // (the clean path skips what it cannot touch, like the measure)
+    await screen.findByText("~10.0 MB");
+    const ticked = screen.getByRole("checkbox", { name: en.cleanupCatUserTemp });
+    expect(ticked).toBeChecked();
+    expect(ticked).toBeEnabled();
+    // one shared legend under the list, never one per row
+    expect(screen.getByText(en.cleanupPartialNote)).toBeTruthy();
   });
 
   it("cleans exactly the ticked ids after confirming", async () => {

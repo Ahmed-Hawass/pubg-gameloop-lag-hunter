@@ -81,9 +81,9 @@ export function pagefileSettings(
 export function cleanupScan(): CleanupScan {
   return {
     categories: [
-      { id: "user_temp", bytes: 10485760 },
-      { id: "system_temp", bytes: 0 },
-      { id: "recycle_bin", bytes: null },
+      { id: "user_temp", bytes: 10485760, partial: false },
+      { id: "system_temp", bytes: 0, partial: false },
+      { id: "recycle_bin", bytes: null, partial: false },
     ],
     history: { last_freed_bytes: 0, last_at: null, last_30d_bytes: 0 },
   };

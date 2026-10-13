@@ -498,6 +498,11 @@ export const ar: Locale = {
   cleanupDeselectAll: "إلغاء تحديد الكل",
   cleanupNothing: "لا يوجد ما يُنظَّف: جميع الأماكن المفحوصة فارغة بالفعل.",
   cleanupScanFailed: "تعذّرت قراءة بيانات هذا الجهاز أثناء الفحص. حاول مرة أخرى.",
+  /** shared legend for the "~" marker on sweep rows (shown once under
+      the list, only while a partial row is visible): what the mark
+      means and what to do about it. Never invents the hidden remainder. */
+  cleanupPartialNote:
+    "العلامة ~ تعني أن ويندوز منع قراءة بعض الملفات، فالرقم يحسب ما أمكنت قراءته فقط.",
   cleanupFreed: (mb: number) => `حُرّر ${mb} MB، بحسب القياس قبل التنظيف وبعده.`,
   cleanupUnmeasured:
     "هناك أيضًا مساحة محرَّرة لم يسمح ويندوز بقياسها، لذلك لا تدخل في الرقم أعلاه.",

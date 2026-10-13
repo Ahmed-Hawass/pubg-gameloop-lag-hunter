@@ -72,10 +72,13 @@ pub fn is_cleanup_id(id: &str) -> bool {
 }
 
 /// One measured place: None bytes = could not be read (honest no-data).
+/// partial = some entries refused, so bytes counts only what was
+/// readable (the UI marks it "~", never a bare exact number).
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct CleanupCategory {
     pub id: String,
     pub bytes: Option<u64>,
+    pub partial: bool,
 }
 
 /// Measured result per category: before minus after, saturating.
@@ -121,24 +124,78 @@ pub fn scan() -> CleanupScan {
     scan_with(|_, _, _| {})
 }
 
+/// What one walk found: the readable sum, how many entries refused,
+/// and whether the number is partial. Denied entries still poison the
+/// EXACTNESS (never a short exact number — that is how a bin full of
+/// denied WER subdirs once read as "almost empty"), but a partial sum
+/// with a "~" on screen beats a dead "--": the clean path already skips
+/// what it cannot touch, so a partial row stays actionable.
+struct MeasureReport {
+    bytes: Option<u64>,
+    denied: u64,
+    partial: bool,
+}
+
+impl MeasureReport {
+    /// Exact answer (nothing refused, or nothing measurable by design):
+    /// the only constructor outside the capped walk.
+    fn exact(bytes: Option<u64>) -> Self {
+        Self {
+            bytes,
+            denied: 0,
+            partial: false,
+        }
+    }
+}
+
+/// The rule table, pure so the semantics stay pinned by test: denied
+/// entries poison exactness, never the number itself; an empty readable
+/// walk is an exact zero; an unreadable or unseen root is unknown.
+fn finalize_measure(total: u64, denied: u64, seen_any: bool) -> MeasureReport {
+    if !seen_any {
+        return MeasureReport {
+            bytes: None,
+            denied,
+            partial: false,
+        };
+    }
+    if denied > 0 {
+        if total > 0 {
+            return MeasureReport {
+                bytes: Some(total),
+                denied,
+                partial: true,
+            };
+        }
+        return MeasureReport {
+            bytes: None,
+            denied,
+            partial: false,
+        };
+    }
+    MeasureReport::exact(Some(total))
+}
+
 /// One measuring function per category id: the single source every
 /// scan, clean-verdict, and elevated-sidecar read goes through, so the
-/// three can never disagree about what a category means.
-fn measure_category(id: &str) -> Option<u64> {
+/// three can never disagree about what a category means. Unknown ids
+/// and unresolvable roots read as an exact nothing (same as before).
+fn measure_category(id: &str) -> MeasureReport {
     match id {
-        USER_TEMP_ID => user_temp_dir().and_then(dir_size_capped),
-        SYSTEM_TEMP_ID => system_temp_dir().and_then(dir_size_capped),
-        RECYCLE_BIN_ID => recycle_bin_bytes(),
+        USER_TEMP_ID => user_temp_dir().map(dir_size_capped),
+        SYSTEM_TEMP_ID => system_temp_dir().map(dir_size_capped),
+        RECYCLE_BIN_ID => recycle_bin_bytes().map(|b| MeasureReport::exact(Some(b))),
         // a machine that never cached peer data has no dir at all:
         // that is 0 cleanable bytes (a fact), not unreadable.
-        DELIVERY_OPT_ID => delivery_opt_bytes(),
-        THUMB_CACHE_ID => thumb_cache_bytes(),
-        ERROR_REPORTS_ID => error_reports_bytes(),
-        OLD_MINIDUMPS_ID => old_minidumps_bytes(),
-        UPDATE_DOWNLOAD_ID => update_download_bytes(),
-        SYSTEM_LOGS_ID => system_logs_bytes(),
+        DELIVERY_OPT_ID => Some(delivery_opt_bytes()),
+        THUMB_CACHE_ID => thumb_cache_bytes().map(|b| MeasureReport::exact(Some(b))),
+        ERROR_REPORTS_ID => Some(error_reports_bytes()),
+        OLD_MINIDUMPS_ID => Some(old_minidumps_bytes()),
+        UPDATE_DOWNLOAD_ID => Some(update_download_bytes()),
+        SYSTEM_LOGS_ID => Some(system_logs_bytes()),
         _ => None,
     }
+    .unwrap_or(MeasureReport::exact(None))
 }
 
 /// Scan with a per-category progress callback (index, total, id).
@@ -153,9 +210,29 @@ fn scan_ids_with(ids: &[&str], progress: impl Fn(u64, u64, &str)) -> CleanupScan
     let total = ids.len() as u64;
     for (i, id) in ids.iter().enumerate() {
         progress(i as u64, total, id);
+        let report = measure_category(id);
+        // diagnostic only (scans are user-triggered, so no spam risk):
+        // without the denied count, a "--" on a user machine is silence.
+        // A partial sum names its readable MB so the log stays useful
+        // even where the screen shows "~".
+        if report.denied > 0 {
+            if let Some(bytes) = report.bytes {
+                super::logging::warn(&format!(
+                    "cleanup measure partial: {id} readable={}MB denied={}",
+                    bytes / 1_048_576,
+                    report.denied
+                ));
+            } else {
+                super::logging::warn(&format!(
+                    "cleanup measure incomplete: {id} denied={}",
+                    report.denied
+                ));
+            }
+        }
         categories.push(CleanupCategory {
             id: (*id).into(),
-            bytes: measure_category(id),
+            bytes: report.bytes,
+            partial: report.partial,
         });
     }
     CleanupScan {
@@ -164,9 +241,9 @@ fn scan_ids_with(ids: &[&str], progress: impl Fn(u64, u64, &str)) -> CleanupScan
     }
 }
 
-fn delivery_opt_bytes() -> Option<u64> {
+fn delivery_opt_bytes() -> MeasureReport {
     match delivery_opt_dir() {
-        None => Some(0),
+        None => MeasureReport::exact(Some(0)),
         Some(dir) => dir_size_capped(dir),
     }
 }
@@ -218,7 +295,7 @@ pub fn clean_selected_with(
     }
     let before: std::collections::HashMap<String, Option<u64>> = ids
         .iter()
-        .map(|id| (id.clone(), measure_category(id)))
+        .map(|id| (id.clone(), measure_category(id).bytes))
         .collect();
     // admin categories first, through one UAC prompt for the whole click.
     // The parent often cannot re-read admin places itself (denied
@@ -250,7 +327,7 @@ pub fn clean_selected_with(
     }
     let after: std::collections::HashMap<String, Option<u64>> = ids
         .iter()
-        .map(|id| (id.clone(), measure_category(id)))
+        .map(|id| (id.clone(), measure_category(id).bytes))
         .collect();
     let results: Vec<CleanupResult> = ids
         .iter()
@@ -332,12 +409,13 @@ pub fn run_admin_clean(ids: &[String]) -> Result<(), String> {
         if !is_admin_category(id) {
             return Err(format!("refused outside elevated scope: {id}"));
         }
-        before.insert(id.clone(), measure_category(id));
+        before.insert(id.clone(), measure_category(id).bytes);
     }
     clean_admin(ids)?;
     let mut freed = serde_json::Map::new();
     for id in ids {
-        if let (Some(Some(b)), Some(a)) = (before.get(id), measure_category(id)) {
+        let after = measure_category(id);
+        if let (Some(Some(b)), Some(a)) = (before.get(id), after.bytes) {
             freed.insert(id.clone(), serde_json::Value::from(b.saturating_sub(a)));
         }
     }
@@ -720,16 +798,19 @@ fn syslog_dir() -> Option<PathBuf> {
     None
 }
 
-fn update_download_bytes() -> Option<u64> {
+fn update_download_bytes() -> MeasureReport {
     match update_download_dir() {
         // never staged an update here: 0 cleanable bytes, not unreadable
-        None => Some(0),
+        None => MeasureReport::exact(Some(0)),
         Some(dir) => dir_size_capped(dir),
     }
 }
 
-fn system_logs_bytes() -> Option<u64> {
-    old_files_size(&syslog_dir()?, SYSLOG_KEEP_MS)
+fn system_logs_bytes() -> MeasureReport {
+    // unreadable mtimes count as fresh by design (never delete what
+    // cannot be dated), so no denied concept survives here.
+    let bytes = syslog_dir().and_then(|d| old_files_size(&d, SYSLOG_KEEP_MS));
+    MeasureReport::exact(bytes)
 }
 
 fn thumb_cache_bytes() -> Option<u64> {
@@ -757,27 +838,41 @@ fn thumb_cache_bytes() -> Option<u64> {
     Some(total)
 }
 
-fn error_reports_bytes() -> Option<u64> {
+fn error_reports_bytes() -> MeasureReport {
     let dirs = wer_dirs();
     if dirs.is_empty() {
         // never reported on this machine: 0 cleanable bytes, not unreadable
-        return Some(0);
+        return MeasureReport::exact(Some(0));
     }
     // every existing root must read cleanly: filter_map would silently
     // drop a denied dir and present the short sum as exact (a denied WER
     // branch once read as "almost empty")
     let mut total = 0u64;
+    let mut denied = 0u64;
+    let mut poisoned = false;
+    let mut partial = false;
     for dir in dirs {
-        total = total.saturating_add(dir_size_capped(dir)?);
+        let report = dir_size_capped(dir);
+        denied += report.denied;
+        partial = partial || report.partial;
+        match report.bytes {
+            Some(b) => total = total.saturating_add(b),
+            None => poisoned = true,
+        }
     }
-    Some(total)
+    MeasureReport {
+        bytes: (!poisoned).then_some(total),
+        denied,
+        partial: partial && !poisoned,
+    }
 }
 
 /// Stale dumps only: fresh ones (inside MINIDUMP_KEEP_MS) are excluded
 /// from BOTH measure and delete, so a recent crash's evidence can never
 /// be swept away by its own diagnostician.
-fn old_minidumps_bytes() -> Option<u64> {
-    old_files_size(&minidump_dir()?, MINIDUMP_KEEP_MS)
+fn old_minidumps_bytes() -> MeasureReport {
+    let bytes = minidump_dir().and_then(|d| old_files_size(&d, MINIDUMP_KEEP_MS));
+    MeasureReport::exact(bytes)
 }
 
 /// Sum of files older than `keep_ms` (direct children only: dumps land
@@ -792,8 +887,15 @@ fn old_files_size(dir: &Path, keep_ms: i64) -> Option<u64> {
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0);
     let mut total = 0u64;
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return None;
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        // a missing dir is normal (no minidumps ever = no dir): silent.
+        // A denied root is a real blind spot on this machine: name it.
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+            super::logging::warn(&format!("cleanup measure refused: {}", dir.display()));
+            return None;
+        }
+        Err(_) => return None,
     };
     for entry in entries.flatten() {
         let path = entry.path();
@@ -824,10 +926,11 @@ fn old_files_size(dir: &Path, keep_ms: i64) -> Option<u64> {
 /// measurement to None: a partial sum parading as exact is how a bin
 /// full of denied WER subdirs once read as "almost empty". Callers
 /// render None as "--", never as 0.
-fn dir_size_capped(root: PathBuf) -> Option<u64> {
+fn dir_size_capped(root: PathBuf) -> MeasureReport {
     use std::io::ErrorKind;
     let denied = |e: &std::io::Error| e.kind() == ErrorKind::PermissionDenied;
     let mut total: u64 = 0;
+    let mut denied_count: u64 = 0;
     let mut stack: Vec<(PathBuf, u8)> = vec![(root, 0)];
     let mut seen_any = false;
     while let Some((dir, depth)) = stack.pop() {
@@ -836,9 +939,13 @@ fn dir_size_capped(root: PathBuf) -> Option<u64> {
         }
         let entries = match std::fs::read_dir(&dir) {
             Ok(entries) => entries,
-            // a denied root was already None before; a denied subdir
-            // poisons just as honestly
-            Err(e) if denied(&e) => return None,
+            // a denied dir poisons the SUM (never a short exact number)
+            // but the walk continues counting, so the log can name the
+            // cause instead of leaving a bare "--" behind
+            Err(e) if denied(&e) => {
+                denied_count += 1;
+                continue;
+            }
             Err(_) => continue,
         };
         seen_any = true;
@@ -846,7 +953,10 @@ fn dir_size_capped(root: PathBuf) -> Option<u64> {
             let path = entry.path();
             let meta = match std::fs::symlink_metadata(&path) {
                 Ok(meta) => meta,
-                Err(e) if denied(&e) => return None,
+                Err(e) if denied(&e) => {
+                    denied_count += 1;
+                    continue;
+                }
                 Err(_) => continue,
             };
             if meta.is_symlink() {
@@ -859,11 +969,10 @@ fn dir_size_capped(root: PathBuf) -> Option<u64> {
             }
         }
     }
-    if seen_any {
-        Some(total)
-    } else {
-        None
-    }
+    // preserved exactness contract via finalize_measure: denied with
+    // a readable sum reports partial, denied with nothing (or an
+    // unseen root) stays unknown.
+    finalize_measure(total, denied_count, seen_any)
 }
 
 #[cfg(windows)]
@@ -1036,8 +1145,23 @@ mod tests {
         std::fs::write(dir.join("a.bin"), vec![0u8; 100]).unwrap();
         std::fs::create_dir_all(dir.join("sub")).unwrap();
         std::fs::write(dir.join("sub").join("b.bin"), vec![0u8; 50]).unwrap();
-        assert_eq!(dir_size_capped(dir.clone()), Some(150));
+        assert_eq!(dir_size_capped(dir.clone()).bytes, Some(150));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn partial_rule_table() {
+        // denied with a readable sum reports partial, never exact;
+        // denied with nothing readable (or an unseen root) stays
+        // unknown; a clean walk (even empty) stays exact.
+        let p = finalize_measure(150, 3, true);
+        assert_eq!((p.bytes, p.denied, p.partial), (Some(150), 3, true));
+        let p = finalize_measure(0, 2, true);
+        assert_eq!((p.bytes, p.denied, p.partial), (None, 2, false));
+        let p = finalize_measure(0, 0, false);
+        assert_eq!((p.bytes, p.denied, p.partial), (None, 0, false));
+        let p = finalize_measure(0, 0, true);
+        assert_eq!((p.bytes, p.denied, p.partial), (Some(0), 0, false));
     }
 
     #[test]
@@ -1048,7 +1172,7 @@ mod tests {
         std::fs::write(dir.join("sub").join("b.tmp"), "y").unwrap();
         empty_dir_contents(&dir);
         assert!(dir.is_dir(), "the dir itself must survive");
-        assert_eq!(dir_size_capped(dir.clone()), Some(0));
+        assert_eq!(dir_size_capped(dir.clone()).bytes, Some(0));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

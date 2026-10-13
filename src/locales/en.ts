@@ -464,6 +464,11 @@ export const en = {
   cleanupDeselectAll: "Deselect all",
   cleanupNothing: "Nothing to clean: every scanned location is already empty.",
   cleanupScanFailed: "Couldn't read this PC during the scan. Try again.",
+  /** shared legend for the "~" marker on sweep rows (shown once under
+      the list, only while a partial row is visible): what the mark
+      means and what to do about it. Never invents the hidden remainder. */
+  cleanupPartialNote:
+    "A ~ mark means Windows blocked reading some files, so the number counts only what could be read.",
   cleanupFreed: (mb: number) => `Freed ${mb} MB, measured before and after.`,
   cleanupUnmeasured:
     "Windows also wouldn't let us measure some of the space freed, so it isn't included in the number above.",

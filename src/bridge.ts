@@ -521,10 +521,13 @@ export interface PagefileSettings {
 export type PagefileWarning = "off" | "small" | null;
 
 /** one measured sweep place (mirrors CleanupCategory in engine/cleanup.rs;
-    bytes null = unreadable, the UI shows "--", never a guess) */
+    bytes null = unreadable, the UI shows "--", never a guess; partial =
+    some entries refused, so bytes counts only what was readable and the
+    UI marks it "~") */
 export interface CleanupCategory {
   id: string;
   bytes: number | null;
+  partial: boolean;
 }
 /** measured freed bytes per swept category (null = unmeasurable,
     the UI says so instead of printing 0) */

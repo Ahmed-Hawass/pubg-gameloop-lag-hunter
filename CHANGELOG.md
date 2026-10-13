@@ -61,6 +61,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - A new version is harder to miss: the sidebar About entry and the Updates heading carry a larger dot with a slow halo pulse (the pulse holds still under reduced-motion settings), and the title bar stays quiet so one release is never announced twice.
 
 ### Changed
+- Sweep rows Windows could only partly read show an approximate `~` number with one shared explanation line, and stay cleanable, instead of a dead `--`.
 - Top Processes is a plain list now: a standing one-liner says what it holds, and each row shows the app, its memory use, and End. Memory alone decides the order, so the page answers what to close with the number that justifies it. It lists 15 apps instead of 12.
 - The System tab headlines one number per card (processor speed, VRAM, refresh) with model names below, and storage rows show free space with a usage meter that turns red past 90%. The CPU frequency was mislabeled as base; the number is the max boost clock.
 - Tools and health pages share one look: a summary banner, featured warnings, and the full list below.

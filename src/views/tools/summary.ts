@@ -56,15 +56,17 @@ export function cleanupMb(bytes: number): number {
 }
 
 /** measured-bytes display for one sweep place: GB above 1 GB, MB
-    below, "--" when unreadable (never a guess). Latin units either
-    way, like every other measurement. Extracted from the sweep
-    section so faces share the shape. */
+    below, "--" when unreadable (never a guess), "~" prefix when partial
+    (some entries refused, so the number counts only what was readable).
+    Latin units either way, like every other measurement. Extracted from
+    the sweep section so faces share the shape. */
 /** bytes in one GiB: the single threshold/divisor for GB display */
 export const BYTES_PER_GB = 1073741824;
-export function formatSweepBytes(bytes: number | null): string {
+export function formatSweepBytes(bytes: number | null, partial = false): string {
   if (bytes == null) return "--";
-  if (bytes >= BYTES_PER_GB) return `${(bytes / BYTES_PER_GB).toFixed(1)} GB`;
-  return `${(bytes / BYTES_PER_MB).toFixed(1)} MB`;
+  const body =
+    bytes >= BYTES_PER_GB ? `${(bytes / BYTES_PER_GB).toFixed(1)} GB` : `${(bytes / BYTES_PER_MB).toFixed(1)} MB`;
+  return partial ? `~${body}` : body;
 }
 
 /** default tick set after a quick scan: every non-empty place ticked
