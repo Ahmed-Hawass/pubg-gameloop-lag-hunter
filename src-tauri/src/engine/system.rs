@@ -1910,7 +1910,9 @@ struct PagefileRaw {
 }
 
 fn read_pagefile_raw() -> Option<PagefileRaw> {
-    let (automatic, entries) = read_pagefile_flag_and_entries()?;
+    // health stays silent on unreadable (it polls): the editor path
+    // below logs the stage instead, so one of the two always explains.
+    let (automatic, entries) = read_pagefile_flag_and_entries().ok()?;
     Some(PagefileRaw { automatic, entries })
 }
 
@@ -1988,20 +1990,43 @@ pub(crate) fn pagefile_pending() -> bool {
         })
 }
 
+/// Which registry step refused the pagefile read (for the diagnostic
+/// log only: the UI still sees one PF_READ_FAILED, but the log names
+/// the stage so a failure on a user machine is diagnosable post-hoc).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PagefileReadStage {
+    RegistryOpen,
+    FlagValue,
+    Entries,
+}
+
 /// The flag plus the raw entries for the write side's verifier (tweaks):
 /// same read, no second opinion about where the state lives.
-pub(crate) fn read_pagefile_flag_and_entries() -> Option<(bool, Vec<String>)> {
+pub(crate) fn read_pagefile_flag_and_entries() -> Result<(bool, Vec<String>), PagefileReadStage> {
+    use PagefileReadStage::*;
     let hklm = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE);
     let mem = hklm
         .open_subkey(r"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management")
-        .ok()?;
-    let auto: u32 = mem.get_value("AutomaticManagedPagefile").ok()?;
+        .map_err(|_| RegistryOpen)?;
+    // A missing flag is not corruption: Windows itself defaults to
+    // automatic management when the value is absent (the dialog shows
+    // checked), so the read follows the OS instead of refusing. Any
+    // other read error still refuses — an unreadable flag is not an
+    // answer. Logged at info (a legitimate state), never warn.
+    let auto: bool = match mem.get_value::<u32, _>("AutomaticManagedPagefile") {
+        Ok(v) => v == 1,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            super::logging::info("pagefile flag missing, assuming automatic (Windows default)");
+            true
+        }
+        Err(_) => return Err(FlagValue),
+    };
     let entries: Vec<String> = match mem.get_value("PagingFiles") {
         Ok(entries) => entries,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
-        Err(_) => return None,
+        Err(_) => return Err(Entries),
     };
-    Some((auto == 1, entries))
+    Ok((auto, entries))
 }
 
 /// Pure half of the per-drive read: first entry addressed to this drive
@@ -2088,9 +2113,18 @@ const DRIVE_FIXED: u32 = 3;
 /// key (the UI translates); per-drive free space may still be None, which
 /// only gates custom writes on that drive.
 pub fn pagefile_settings() -> Result<PagefileSettings, String> {
-    let raw = read_pagefile_raw().ok_or_else(|| "PF_READ_FAILED".to_string())?;
+    let raw = match read_pagefile_flag_and_entries() {
+        Ok((automatic, entries)) => PagefileRaw { automatic, entries },
+        // diagnostic only (the UI keeps one PF_READ_FAILED): without the
+        // stage, a failure on a user machine is indistinguishable noise.
+        Err(stage) => {
+            super::logging::warn(&format!("pagefile read failed at {stage:?}"));
+            return Err("PF_READ_FAILED".into());
+        }
+    };
     let drives = fixed_drives();
     if drives.is_empty() {
+        super::logging::warn("pagefile read: no fixed drives listed");
         return Err("PF_READ_FAILED".into());
     }
     let states = drives

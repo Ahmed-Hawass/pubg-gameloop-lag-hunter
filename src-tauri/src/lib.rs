@@ -972,6 +972,32 @@ pub fn run() {
             engine::logging::cleanup_old_logs();
             engine::logging::info("app starting");
             engine::logging::info(&format!("app version: {}", engine::VERSION));
+            // boot environment snapshot (one line per launch): the rig line
+            // below covers OS/RAM/disks, but TEMP resolvability and the
+            // pagefile read never appear anywhere — and both have failed
+            // silently on real machines. Cheap sync reads only.
+            {
+                let temp_ok = std::env::var_os("TEMP")
+                    .or_else(|| std::env::var_os("TMP"))
+                    .map(std::path::PathBuf::from)
+                    .is_some_and(|p| p.is_dir());
+                let drives = engine::system::fixed_drives().len();
+                match engine::system::pagefile_settings() {
+                    Ok(pf) => engine::logging::info(&format!(
+                        "boot env: temp={} drives={} pagefile=ok automatic={}",
+                        if temp_ok { "ok" } else { "missing" },
+                        drives,
+                        pf.automatic,
+                    )),
+                    // the stage-naming WARN inside already fired: this line
+                    // only keeps the outcome word in the boot block.
+                    Err(_) => engine::logging::info(&format!(
+                        "boot env: temp={} drives={} pagefile=unreadable",
+                        if temp_ok { "ok" } else { "missing" },
+                        drives,
+                    )),
+                }
+            }
             // the sessions root is born with the first session otherwise;
             // make sure it exists from boot (cheap mkdir, idempotent)
             engine::storage::ensure_sessions_root();

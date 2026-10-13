@@ -882,7 +882,7 @@ fn rebuild_pagefile_entries(
 /// disagree about what "done" looks like. Unreadable mid-write reads as
 /// not-done, never as done.
 fn pagefile_matches(valid: &ValidatedPagefileApply) -> bool {
-    let Some((automatic, entries)) = super::system::read_pagefile_flag_and_entries() else {
+    let Ok((automatic, entries)) = super::system::read_pagefile_flag_and_entries() else {
         return false;
     };
     if automatic != valid.automatic {

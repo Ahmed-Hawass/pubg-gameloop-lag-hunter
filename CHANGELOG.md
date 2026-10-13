@@ -29,6 +29,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - Tool section intro cards span the full width below the header row instead of squeezing beside the back button.
+- The Virtual Memory editor opens even when Windows has lost its automatic-management flag: it follows the Windows default instead of refusing, and names the failing registry step in the log when it truly cannot read.
 - The Storage scan measures the Recycle Bin again (it always read empty before).
 - Starting a session no longer freezes the Stop button while the app prepares.
 - Sidebar tooltips no longer stick on screen or appear as empty bubbles after expanding.
