@@ -24,6 +24,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - The page file editor dropped its status strip and (?) note: the intro now carries the single-drive and restart warnings.
 - The page file Apply button rides below the manual-controls block instead of inside it, so switching to automatic management no longer paints Apply with the block's dimmed look while it is the live control.
 - The window now goes down to 500 by 400 (from 960 by 620), so it fits a snapped half side by side with the game on ordinary screens. The layout was eyeballed at the new floor page by page.
+- Hovering the maximize button now opens the Windows snap-layouts picker, like any native app. The buttons stay drawn by us; only the invisible hit target underneath is native.
 - The cleanup idle hero trades its repeated title and text for spot art.
 
 ### Fixed

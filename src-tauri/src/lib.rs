@@ -2,6 +2,7 @@
 // The UI is a dumb display: it sends commands and receives pushes. No logic.
 
 pub mod engine;
+pub mod snap_overlay;
 
 use std::time::Duration;
 
@@ -937,6 +938,7 @@ pub fn run() {
             open_path,
             open_url,
             get_version,
+            snap_overlay::sync_snap_overlay,
             check_update,
             update_already_announced,
             announce_update,

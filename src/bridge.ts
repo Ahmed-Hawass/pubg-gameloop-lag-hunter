@@ -162,6 +162,43 @@ export async function toggleMaximizeWindow(): Promise<void> {
   await getCurrentWindow().toggleMaximize();
 }
 
+/** Geometry of the custom maximize button for the native snap-layouts
+    hit target (CSS px plus devicePixelRatio): the backend parks one
+    transparent child window over it so the OS sees a maximize button.
+    RTL-safe: the caller measures the real button, never assumes a side. */
+export interface SnapOverlayRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  scale: number;
+}
+
+/** Move (or hide, on null) the snap-layouts hit target. The backend
+    degrades to no-flyout instead of failing, so this never rejects. */
+export async function syncSnapOverlay(rect: SnapOverlayRect | null): Promise<void> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("sync_snap_overlay", { rect });
+}
+
+/** Overlay mouse reports (enter/leave/click): the native hit target owns
+    the mouse over the maximize button, so the button's own :hover cannot
+    fire — the shell mirrors the highlight from here instead, and a click
+    runs the same toggle as the button itself. */
+export async function onSnapOverlay(
+  cb: (kind: "enter" | "leave" | "click") => void,
+): Promise<() => void> {
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  const unEnter = await getCurrentWindow().listen("snap-overlay-enter", () => cb("enter"));
+  const unLeave = await getCurrentWindow().listen("snap-overlay-leave", () => cb("leave"));
+  const unClick = await getCurrentWindow().listen("snap-overlay-click", () => cb("click"));
+  return () => {
+    unEnter();
+    unLeave();
+    unClick();
+  };
+}
+
 export async function closeWindow(): Promise<void> {
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
   await getCurrentWindow().close();

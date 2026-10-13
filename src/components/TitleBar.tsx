@@ -4,12 +4,14 @@
 // the maximized state for its tooltip and icon.
 // ALL tooltips are the app's own (Tip component) — never the OS one.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Minus, PictureInPicture2, Square, X } from "lucide-react";
 import {
   isWindowMaximized,
   minimizeWindow,
+  onSnapOverlay,
   onWindowResized,
+  syncSnapOverlay,
   toggleMaximizeWindow,
 } from "../bridge";
 import { Tip } from "./components";
@@ -20,9 +22,14 @@ export function TitleBar(props: {
   version: string;
   onRequestExit: () => void;
 }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const { version, onRequestExit } = props;
   const [maximized, setMaximized] = useState(false);
+  /** hover mirror for the maximize button: the native snap overlay owns
+      the mouse over it, so :hover cannot fire — enter/leave drive the
+      same fill instead. Keyboard focus keeps the real :focus path. */
+  const [snapHover, setSnapHover] = useState(false);
+  const maxBtnRef = useRef<HTMLButtonElement | null>(null);
 
   // track the maximized state for the toggle's tooltip and icon
   useEffect(() => {
@@ -38,6 +45,60 @@ export function TitleBar(props: {
       unlisten.then((f) => f()).catch(() => {});
     };
   }, []);
+
+  // overlay mouse reports: hover mirrors the highlight, a click runs the
+  // same toggle as the button itself (the overlay owns mouse only —
+  // keyboard Enter/Space still reach the real button).
+  useEffect(() => {
+    const unlisten = onSnapOverlay((kind) => {
+      if (kind === "enter") setSnapHover(true);
+      else if (kind === "leave") setSnapHover(false);
+      else void toggleMaximizeWindow();
+    });
+    return () => {
+      unlisten.then((f) => f()).catch(() => {});
+    };
+  }, []);
+
+  // overlay geometry: the hit target tracks the real button rect
+  // (debounced — resize fires per tick while dragging, and an invoke per
+  // tick would spam the main thread with moves). Re-runs when the
+  // language flips: RTL mirrors the button to the other corner.
+  useEffect(() => {
+    let timer = 0;
+    let unlistenResize: (() => void) | undefined;
+    let observer: ResizeObserver | undefined;
+    const sync = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const el = maxBtnRef.current;
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        void syncSnapOverlay({
+          x: r.left,
+          y: r.top,
+          width: r.width,
+          height: r.height,
+          scale: window.devicePixelRatio || 1,
+        }).catch(() => {});
+      }, 120);
+    };
+    sync();
+    if (typeof ResizeObserver !== "undefined" && maxBtnRef.current) {
+      observer = new ResizeObserver(() => sync());
+      observer.observe(maxBtnRef.current);
+    }
+    void onWindowResized(() => sync()).then((u) => {
+      unlistenResize = u;
+    });
+    return () => {
+      window.clearTimeout(timer);
+      observer?.disconnect();
+      unlistenResize?.();
+      // no stale hit area: a torn-down shell leaves nothing clickable
+      void syncSnapOverlay(null).catch(() => {});
+    };
+  }, [lang]);
 
   return (
     <div className="titlebar">
@@ -84,7 +145,8 @@ export function TitleBar(props: {
         </Tip>
         <Tip text={maximized ? t.restore : t.maximize}>
           <button
-            className="focus-ring-inset"
+            ref={maxBtnRef}
+            className={`focus-ring-inset${snapHover ? " snap-hover" : ""}`}
             aria-label={maximized ? t.restore : t.maximize}
             onClick={() => {
               void toggleMaximizeWindow();

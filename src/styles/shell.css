@@ -116,7 +116,10 @@
   transition: background 0.12s;
 }
 
-.win-controls button:hover {
+/* snap-hover rides the maximize button only (the overlay owns its
+   mouse, so :hover cannot fire there): the same fill as hover. */
+.win-controls button:hover,
+.win-controls button.snap-hover {
   background: var(--elev-3);
   color: var(--text-1);
 }

@@ -59,6 +59,8 @@ vi.mock("../bridge", () => ({
   minimizeWindow: vi.fn(),
   toggleMaximizeWindow: vi.fn(),
   onWindowResized: vi.fn().mockResolvedValue(() => {}),
+  syncSnapOverlay: vi.fn().mockResolvedValue(undefined),
+  onSnapOverlay: vi.fn().mockResolvedValue(() => {}),
 }));
 
 vi.mock("../i18n", () => ({

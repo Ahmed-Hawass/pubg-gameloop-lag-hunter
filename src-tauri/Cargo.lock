@@ -2710,6 +2710,7 @@ version = "1.6.0"
 dependencies = [
  "ctrlc",
  "png 0.18.1",
+ "raw-window-handle",
  "serde",
  "serde_json",
  "sha2",
@@ -2720,6 +2721,7 @@ dependencies = [
  "tauri-plugin-single-instance",
  "ureq",
  "url",
+ "windows-sys 0.59.0",
  "winreg",
 ]
 
