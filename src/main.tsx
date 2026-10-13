@@ -3,7 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { LanguageProvider } from "./i18n";
 import { installNativeBehavior } from "./webBehavior";
-import { api, setWebviewZoom, showMainWindow } from "./bridge";
+import { api, logFrontendError, setWebviewZoom, showMainWindow } from "./bridge";
 // fonts: subset + base64-inlined (Google Sans latin, Cairo arabic) — first in
 // the import order so every style that follows resolves against loaded faces;
 // no fontsource fetch, no first-paint swap
@@ -19,6 +19,18 @@ import "./styles/welcome.css";
 import appIcon from "./assets/app-icon.png";
 
 installNativeBehavior();
+
+// last-resort crash reporting: a React render failure on a user machine
+// otherwise leaves zero traces (the window just stays hidden). The
+// listeners themselves never throw (fire-and-forget invoke), so they
+// cannot loop on their own failure. Diagnostic only — the UI itself
+// stays exactly as it was.
+window.addEventListener("error", (ev) => {
+  void logFrontendError(`error: ${ev.message} @${ev.filename}:${ev.lineno}`).catch(() => {});
+});
+window.addEventListener("unhandledrejection", (ev) => {
+  void logFrontendError(`rejection: ${String(ev.reason)}`).catch(() => {});
+});
 
 // apply the saved UI zoom as early as the theme seed: the read races
 // the first-paint reveal above, so non-100% users see at most one

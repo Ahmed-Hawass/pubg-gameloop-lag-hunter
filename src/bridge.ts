@@ -145,6 +145,14 @@ export async function isWindowMaximized(): Promise<boolean> {
   return getCurrentWindow().isMaximized();
 }
 
+/** Report a frontend crash to the backend log (diagnostic only, never
+    user-facing): without this, a React render failure on a user machine
+    leaves zero traces. The backend truncates. */
+export async function logFrontendError(message: string): Promise<void> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("log_frontend_error", { message });
+}
+
 /** Subscribe to window resizes (used to re-read the maximized state). */
 export async function onWindowResized(cb: () => void): Promise<() => void> {
   const { getCurrentWindow } = await import("@tauri-apps/api/window");

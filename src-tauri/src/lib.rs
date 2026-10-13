@@ -347,6 +347,11 @@ async fn storage_clean(
         Err(e) => {
             if e != "cancelled" {
                 engine::logging::warn(&format!("ipc storage_clean failed: {e}"));
+            } else {
+                // the UI stays silent by agreement (a refusal is a choice),
+                // but the log keeps one quiet line: a tester declining UAC
+                // and reporting "nothing happens" is otherwise invisible.
+                engine::logging::info("ipc storage_clean cancelled by user");
             }
         }
     }
@@ -726,10 +731,13 @@ async fn download_update(
     .map_err(|e| format!("download task failed: {e}"))
     .and_then(|r| r);
     // a non-"cancelled" failure is LOGGED (a cancel is a user choice, not
-    // a failure worth a warn line)
+    // a failure worth a warn line) — but one quiet info line stays, or a
+    // declined prompt plus "nothing happens" is invisible in hindsight.
     if let Err(e) = &res {
         if e != "cancelled" {
             engine::logging::warn(&format!("ipc download_update failed: {e}"));
+        } else {
+            engine::logging::info("ipc download_update cancelled by user");
         }
     }
     if res.is_err() {
@@ -796,6 +804,18 @@ fn open_path_inner(path: &str, app: &tauri::AppHandle) -> Result<(), String> {
 #[tauri::command]
 fn get_version() -> String {
     engine::VERSION.to_string()
+}
+
+/// Frontend crash reports (window.onerror / unhandled rejections):
+/// diagnostic only, never user-facing. Without this, a React render
+/// failure on a user machine leaves zero traces (the window just stays
+/// hidden). Truncated: a render loop must not log-bomb. ERROR level so
+/// it always gets through the size cap.
+#[tauri::command]
+fn log_frontend_error(message: String) -> Result<(), String> {
+    let short: String = message.chars().take(500).collect();
+    engine::logging::error(&format!("frontend: {short}"));
+    Ok(())
 }
 
 /// Hosts we ever open in the system browser. This is the REAL enforcement
@@ -938,6 +958,7 @@ pub fn run() {
             open_path,
             open_url,
             get_version,
+            log_frontend_error,
             snap_overlay::sync_snap_overlay,
             check_update,
             update_already_announced,
