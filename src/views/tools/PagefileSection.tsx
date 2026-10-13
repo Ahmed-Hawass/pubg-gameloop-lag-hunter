@@ -66,16 +66,14 @@ export function PagefileSection(props: {
       {/* standing page header plus the one-shot card below it (the
           header keeps the section name with its short scope line; the
           card keeps the friendly title and the full guidance) */}
-      <div className="section-top">
-        <PageIntro
-          id="pagefile"
-          headerTitle={t.tweakPfTitle}
-          headerSub={t.toolPagefileDesc}
-          cardTitle={t.introPagefileTitle}
-          cardBody={t.introPagefileBody}
-        />
-        {headerTrail}
-      </div>
+      <PageIntro
+        id="pagefile"
+        headerTitle={t.tweakPfTitle}
+        headerSub={t.toolPagefileDesc}
+        cardTitle={t.introPagefileTitle}
+        cardBody={t.introPagefileBody}
+        headerTrail={headerTrail}
+      />
       {pfFailed === null ? (
         <EmptyState
           icon={<RefreshCw size={18} />}

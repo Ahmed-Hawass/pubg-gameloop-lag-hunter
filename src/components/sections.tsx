@@ -1,9 +1,9 @@
 // sections.tsx — shared page-section shapes: the one-glance verdict
 // banner and the featured-plus-archive list shared by Checks, Gaming,
-// and Storage, plus the one-shot page intro (with its plain-header
-// fallback). Three copies of each lived in the views; edit once here
-// and all follow. Class names stay identical, so no test or style
-// changes ride along.
+// and Storage, plus the one-shot page intro (standing header row with
+// an optional back control, one-shot card below it at full width).
+// Every view shared one copy of each; edit once here and all follow.
+// Class names stay identical, so no test or style changes ride along.
 
 import { Fragment, type ReactNode, type RefObject } from "react";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
@@ -82,6 +82,10 @@ export const LINK_HIGHLIGHT_MS = 2200;
     Replaces the identical header-plus-conditional in every view.
     The header sub is always the short scope line, never the card body
     (both visible at once must never read the same sentence twice).
+    The card always rides BELOW the header row at full width (never
+    beside the back control: a squeezed card reads broken next to a
+    full-width verdict banner). Callers with a back control pass it as
+    headerTrail; the row keeps the header, the card keeps the width.
     Mount-timing contract: use only where no early return precedes it
     (the hook must fire on mount, not one tick after the data lands, or
     the card pops in late — ChecksView keeps its own top-level call for
@@ -93,17 +97,23 @@ export function PageIntro(props: {
   headerSub: string;
   cardTitle: string;
   cardBody: string;
+  /** back control: rides the header row at the inline end (Tools
+      sections only — pages without one render the header alone) */
+  headerTrail?: ReactNode;
 }) {
-  const { id, headerTitle, headerSub, cardTitle, cardBody } = props;
+  const { id, headerTitle, headerSub, cardTitle, cardBody, headerTrail } = props;
   const { t } = useLang();
   const intro = useIntroCard(id);
   return (
     <div className="page-intro">
-      <div className="page-head">
-        <span className="page-head-text">
-          <span className="page-head-title">{headerTitle}</span>
-          <span className="page-head-sub">{headerSub}</span>
-        </span>
+      <div className="section-top">
+        <div className="page-head">
+          <span className="page-head-text">
+            <span className="page-head-title">{headerTitle}</span>
+            <span className="page-head-sub">{headerSub}</span>
+          </span>
+        </div>
+        {headerTrail}
       </div>
       {intro.show ? (
         <IntroCard

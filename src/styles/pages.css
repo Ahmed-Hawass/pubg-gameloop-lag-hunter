@@ -469,9 +469,11 @@
     grid-template-columns: 1fr;
   }
 }
-/* section top row: the standing header-plus-card block plus the back
-   control at the inline end, opposite the title — one row instead of
-   a lonely button row above. Logical flow mirrors it in RTL for free. */
+/* section top row: the standing header plus the back control at the
+   inline end, opposite the title — one row instead of a lonely button
+   row above. The one-shot card rides BELOW this row at full width
+   (inside the row it would squeeze beside the button). Logical flow
+   mirrors it in RTL for free. */
 .section-top {
   display: flex;
   align-items: flex-start;

@@ -28,6 +28,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - The cleanup idle hero trades its repeated title and text for spot art.
 
 ### Fixed
+- Tool section intro cards span the full width below the header row instead of squeezing beside the back button.
 - The Storage scan measures the Recycle Bin again (it always read empty before).
 - Starting a session no longer freezes the Stop button while the app prepares.
 - Sidebar tooltips no longer stick on screen or appear as empty bubbles after expanding.

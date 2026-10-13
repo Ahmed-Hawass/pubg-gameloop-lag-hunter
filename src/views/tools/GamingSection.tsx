@@ -125,16 +125,14 @@ export function GamingSection(props: {
     const failed = tweaks.loadError !== null;
     return (
       <div className="check-list">
-        <div className="section-top">
-          <PageIntro
-            id="gaming"
-            headerTitle={t.toolGamingTweaks}
-            headerSub={t.toolGamingTweaksDesc}
-            cardTitle={t.introGamingTitle}
-            cardBody={t.introGamingBody}
-          />
-          {headerTrail}
-        </div>
+        <PageIntro
+          id="gaming"
+          headerTitle={t.toolGamingTweaks}
+          headerSub={t.toolGamingTweaksDesc}
+          cardTitle={t.introGamingTitle}
+          cardBody={t.introGamingBody}
+          headerTrail={headerTrail}
+        />
         <EmptyState
           icon={failed ? <SlidersHorizontal size={18} /> : <RefreshCw size={18} />}
           title={failed ? t.dialog.somethingWrong : t.loading}
@@ -386,16 +384,14 @@ export function GamingSection(props: {
       {/* standing page header plus the one-shot card below it (the
           header keeps the section name; the card keeps its own
           friendly title, never the same words twice) */}
-      <div className="section-top">
-        <PageIntro
-          id="gaming"
-          headerTitle={t.toolGamingTweaks}
-          headerSub={t.toolGamingTweaksDesc}
-          cardTitle={t.introGamingTitle}
-          cardBody={t.introGamingBody}
-        />
-        {headerTrail}
-      </div>
+      <PageIntro
+        id="gaming"
+        headerTitle={t.toolGamingTweaks}
+        headerSub={t.toolGamingTweaksDesc}
+        cardTitle={t.introGamingTitle}
+        cardBody={t.introGamingBody}
+        headerTrail={headerTrail}
+      />
       {/* one-glance verdict, same pattern as the health tab: derived
           from the rendered rows, zero backend cost */}
       <VerdictBanner

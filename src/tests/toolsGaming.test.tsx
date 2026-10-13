@@ -252,11 +252,14 @@ describe("ToolsView gaming switches", () => {
     openGaming();
     await user.click(screen.getByText(en.toolGamingTweaks));
     await screen.findByText(en.tweakDvrTitle);
-    // one shared row: header-plus-card block plus the back control
-    // at the inline end, never a lonely button row above
+    // one shared row: header plus the back control at the inline end,
+    // never a lonely button row above — and the intro card rides BELOW
+    // the row at full width, never squeezed beside the button
     const top = document.querySelector(".section-top");
     expect(top).toBeTruthy();
     expect(top?.querySelector(".back-btn")?.textContent).toContain(en.toolsBack);
     expect(top?.querySelector(".page-head")).toBeTruthy();
+    expect(top?.querySelector(".intro-card")).toBeNull();
+    expect(document.querySelector(".page-intro .intro-card")).toBeTruthy();
   });
 });

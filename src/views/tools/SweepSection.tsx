@@ -329,16 +329,14 @@ export function SweepSection(props: {
       {/* standing page header plus the one-shot card below it (the
           header keeps the section name with its short scope line; the
           card keeps the friendly title and the full guidance) */}
-      <div className="section-top">
-        <PageIntro
-          id="cleanup"
-          headerTitle={t.toolCleanup}
-          headerSub={t.toolCleanupDesc}
-          cardTitle={t.introCleanupTitle}
-          cardBody={t.introCleanupBody}
-        />
-        {headerTrail}
-      </div>
+      <PageIntro
+        id="cleanup"
+        headerTitle={t.toolCleanup}
+        headerSub={t.toolCleanupDesc}
+        cardTitle={t.introCleanupTitle}
+        cardBody={t.introCleanupBody}
+        headerTrail={headerTrail}
+      />
       {/* sweep memory under the header (last run plus last-30-days):
           past measured truth, never a reason to scan */}
       {clHistory ? (

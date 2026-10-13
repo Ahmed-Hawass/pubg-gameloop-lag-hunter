@@ -66,16 +66,14 @@ export function StorageSection(props: {
     const failed = tweaks.loadError !== null;
     return (
       <div className="check-list">
-        <div className="section-top">
-          <PageIntro
-            id="storage"
-            headerTitle={t.toolStorage}
-            headerSub={t.toolStorageDesc}
-            cardTitle={t.introStorageTitle}
-            cardBody={t.introStorageBody}
-          />
-          {headerTrail}
-        </div>
+        <PageIntro
+          id="storage"
+          headerTitle={t.toolStorage}
+          headerSub={t.toolStorageDesc}
+          cardTitle={t.introStorageTitle}
+          cardBody={t.introStorageBody}
+          headerTrail={headerTrail}
+        />
         <EmptyState
           icon={failed ? <SlidersHorizontal size={18} /> : <RefreshCw size={18} />}
           title={failed ? t.dialog.somethingWrong : t.loading}
@@ -119,16 +117,14 @@ export function StorageSection(props: {
       {/* standing page header plus the one-shot card below it (the
           header keeps the section name; the card keeps its own
           friendly title, never the same words twice) */}
-      <div className="section-top">
-        <PageIntro
-          id="storage"
-          headerTitle={t.toolStorage}
-          headerSub={t.toolStorageDesc}
-          cardTitle={t.introStorageTitle}
-          cardBody={t.introStorageBody}
-        />
-        {headerTrail}
-      </div>
+      <PageIntro
+        id="storage"
+        headerTitle={t.toolStorage}
+        headerSub={t.toolStorageDesc}
+        cardTitle={t.introStorageTitle}
+        cardBody={t.introStorageBody}
+        headerTrail={headerTrail}
+      />
       {/* one-glance verdict, same pattern as the gaming page: derived
           from the rendered rows, zero backend cost. Hidden while
           unread (a badge that cannot be read is hidden, like every
