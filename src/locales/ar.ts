@@ -34,7 +34,25 @@ export const ar: Locale = {
   minimize: "تصغير",
   maximize: "تكبير",
   restore: "استعادة",
-  close: "إغلاق",
+  /** زر X لم يعد يخرج: يخفي النافذة في منطقة الإعلام، فلا يجوز أن يدعي إغلاق التطبيق */
+  hideToTray: "إخفاء في الدرج",
+
+  // ---- tray (the notification-area icon) ----
+  trayOpen: "فتح",
+  trayQuickScan: "فحص سريع",
+  /** the scan item while measuring: the live percent rides in the label so
+      the menu itself answers progress (same number as the tooltip, Latin
+      digits and percent sign like every unit in both languages) */
+  trayStopScan: (pct: number) => `إيقاف الفحص (${pct}%)`,
+  trayExit: "خروج",
+  /** idle tooltip: the app name only (the menu carries the actions) */
+  trayTooltipIdle: "PUBG GameLoop Lag Hunter",
+  /** scanning tooltip: the live percent is the only signal a hidden-window
+      user gets that a scan is still measuring */
+  trayTooltipScanning: (pct: number) => `جارٍ الفحص… ${pct}%`,
+  /** finished tooltip: a verdict is waiting to be read (shows until the
+      verdict card is dismissed or its session is deleted) */
+  trayTooltipDone: "اكتمل الفحص، افتح لرؤية النتيجة",
 
   // ---- dialog (unified, replaces toasts) ----
   dialog: {

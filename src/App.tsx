@@ -22,7 +22,14 @@ import { ToolsView } from "./views/ToolsView";
 import { AboutView } from "./views/AboutView";
 import { SettingsView } from "./views/SettingsView";
 import { WelcomeView } from "./views/WelcomeView";
-import { api, closeWindow, onEngineState, type StatusPayload, type UpdateInfo } from "./bridge";
+import { api, isWindowVisible, logFrontendInfo, onEngineState, onTrayExit, onTrayQuickScan, quitApp, revealWindow, setTrayActive, setTrayTooltip, showMainWindow, syncTrayLabels, type StatusPayload, type UpdateInfo } from "./bridge";
+import {
+  hasLiveResult,
+  quickScanIntent,
+  scanPercent,
+  trayPercentToPush,
+  TOOLTIP_STEP_PCT,
+} from "./tray";
 import { useLang } from "./i18n";
 import { errorDialog } from "./errors";
 import { shouldShowUpdateModal } from "./updateFlow";
@@ -34,7 +41,7 @@ import { UpdateModal } from "./components/UpdateModal";
 type View = "monitor" | "system" | "processes" | "checks" | "tools" | "reports" | "settings" | "about";
 
 export default function App() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const [status, setStatus] = useState<StatusPayload>({ status: "idle", ui: null });
   const [busy, setBusy] = useState(false);
   const [durationSecs, setDurationSecs] = useState<number>(300);
@@ -129,6 +136,22 @@ export default function App() {
     return () => document.removeEventListener("keydown", onKey);
   }, [zoomIn, zoomOut, resetZoom]);
 
+  // Alt+F4 exits through the gate (quiet work quits, in-flight work
+  // confirms): the backend cannot tell Alt+F4 apart from the taskbar close
+  // button, so the split lives here where the keystroke is visible. X and
+  // the taskbar button keep hiding. If the WebView ever swallows this
+  // keystroke, the close falls back to a plain hide — never a quit.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.altKey && e.key === "F4") {
+        e.preventDefault();
+        requestExit();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [requestExit]);
+
   const showSettingsError = (error: unknown) => {
     const raw = typeof error === "string" ? error : String(error);
     setDialogTitle(t.dialog.somethingWrong);
@@ -183,6 +206,18 @@ export default function App() {
     };
   }, []);
 
+  // the update modal reveals a hidden window instead of announcing itself
+  // to nobody: a scan can run hidden to the tray while the startup check
+  // lands, and the manual About check can fire from a hidden window too.
+  const openUpdateModal = useCallback(() => {
+    void isWindowVisible()
+      .then((visible) => {
+        if (!visible) void showMainWindow().catch(() => {});
+      })
+      .catch(() => {})
+      .finally(() => setUpdateModal(true));
+  }, []);
+
   // the once-per-version rule (pure logic in updateFlow.ts). Gated by
   // onboardingDone: a FIRST-RUN user must never meet the update modal —
   // not over the welcome screen, not over the advice dialog that follows
@@ -199,12 +234,12 @@ export default function App() {
             announced ? updateInfo.version : null,
           )
         ) {
-          setUpdateModal(true);
+          openUpdateModal();
           void api.announceUpdate(updateInfo.version).catch(() => {});
         }
       })
       .catch(() => {});
-  }, [updateInfo, firstRunAdviceUp, gameAdviceUp, backgroundAdviceUp, onboardingDone]);
+  }, [updateInfo, firstRunAdviceUp, gameAdviceUp, backgroundAdviceUp, onboardingDone, openUpdateModal]);
 
   // state pushes land here (live + final): a finished session caused by
   // GameLoop dying gets its explanation dialog — once per session, never
@@ -318,7 +353,10 @@ export default function App() {
     });
   };
 
-  const toggle = async () => {
+  // true when the toggle landed (started or stopped), false when it raised
+  // a dialog instead (the tray's silent start uses this to decide whether
+  // the window needs to come back; the Monitor button ignores the answer).
+  const toggle = async (): Promise<boolean> => {
     setBusy(true);
     try {
       if (status.status === "running") {
@@ -326,6 +364,7 @@ export default function App() {
       } else {
         setStatus(await api.sessionStart(durationSecs));
       }
+      return true;
     } catch (e) {
       const raw = typeof e === "string" ? e : String(e);
       const d = errorDialog(raw, t.errors, {
@@ -337,6 +376,7 @@ export default function App() {
       setDialogTitle(d.title);
       setDialogBody(d.body);
       setDialogKey(d.key);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -436,10 +476,165 @@ export default function App() {
   }, [status, onboardingDone, backgroundAdviceDone, firstRunAdviceUp, gameAdviceUp]);
 
   // a session deleted from Reports must not linger as a "finished" state
-  const effectiveStatus: StatusPayload =
-    status.ui?.session != null && deletedSessions.includes(status.ui.session)
-      ? { status: "idle", ui: null }
-      : status;
+  // (memoized: tray effects depend on it, and a fresh object per render
+  // would re-fire them with no state change).
+  const effectiveStatus: StatusPayload = useMemo(
+    () =>
+      status.ui?.session != null && deletedSessions.includes(status.ui.session)
+        ? { status: "idle", ui: null }
+        : status,
+    [status, deletedSessions],
+  );
+
+  // ---- tray wiring (the notification-area icon) ----
+  // Labels live in the locales like every other string: push them on mount,
+  // on every language switch, and whenever the scan item wording moves
+  // (idle words, then Stop with the live percent in 5% steps). Percent
+  // steps are the only frequent push, and the effect fires only when the
+  // composed text actually changes, so the native menu is never rebuilt
+  // mid-click over nothing. Failures are silent on purpose (the window path
+  // still works when the icon is unavailable).
+  // the label percent moves in the same 5% steps as the tooltip (one
+  // number, two surfaces), so a scan pushes about twenty label updates,
+  // never one per second.
+  const trayScanLabel = (() => {
+    const pct = scanPercent(effectiveStatus);
+    if (pct === null) return t.trayQuickScan;
+    const step = pct === 100 ? 100 : Math.floor(pct / TOOLTIP_STEP_PCT) * TOOLTIP_STEP_PCT;
+    return t.trayStopScan(step);
+  })();
+  useEffect(() => {
+    void syncTrayLabels({
+      open: t.trayOpen,
+      scan: trayScanLabel,
+      exit: t.trayExit,
+    }).catch(() => {});
+  }, [t, lang, trayScanLabel]);
+
+  // Tray icon color follows the same transition: green while measuring,
+  // gray otherwise. One push per transition, never per tick.
+  const trayBusy =
+    effectiveStatus.status === "running" || effectiveStatus.status === "stopping";
+  useEffect(() => {
+    void setTrayActive(trayBusy).catch(() => {});
+  }, [trayBusy]);
+
+  // Live tooltip: the scan percent while running, a done line while a
+  // verdict waits unread, the app name otherwise. Throttled by
+  // trayPercentToPush (a push per state tick is an IPC flood), and the exact
+  // text is never pushed twice in a row (idle, done, and each percent step
+  // are distinct strings, so comparing text covers language switches and
+  // idle-to-done turns with no extra bookkeeping).
+  const trayLastSentRef = useRef<number | null>(null);
+  const trayLastTextRef = useRef<string | null>(null);
+  useEffect(() => {
+    const next = trayPercentToPush(effectiveStatus, trayLastSentRef.current);
+    if (next === null) return;
+    const text =
+      next === 0
+        ? hasLiveResult(effectiveStatus, dismissedSession)
+          ? t.trayTooltipDone
+          : t.trayTooltipIdle
+        : t.trayTooltipScanning(next);
+    if (text === trayLastTextRef.current) return;
+    trayLastSentRef.current = next;
+    trayLastTextRef.current = text;
+    void setTrayTooltip(text).catch(() => {});
+  }, [effectiveStatus, dismissedSession, t]);
+
+  // Tray menu events. An explicit Quick scan press always means a new
+  // scan, even over an unread verdict (its report stays saved in Reports).
+  // Silent while hidden: the window comes back only when it needs eyes (a
+  // start failure that raises a dialog, or a scan already winding down).
+  // Exit runs the gate (quiet work quits silently, in-flight work reveals
+  // first and then confirms). Refs keep the subscription mount-once.
+  const trayStatusRef = useRef(effectiveStatus);
+  useEffect(() => {
+    trayStatusRef.current = effectiveStatus;
+  }, [effectiveStatus]);
+  const trayToggleRef = useRef(toggle);
+  useEffect(() => {
+    trayToggleRef.current = toggle;
+  });
+  const trayOnboardingRef = useRef(onboardingDone);
+  useEffect(() => {
+    trayOnboardingRef.current = onboardingDone;
+  }, [onboardingDone]);
+  // A tray scan request already in flight (double-click on the menu):
+  // the second press is dropped so it can never double a start or a stop.
+  const trayOpRef = useRef(false);
+  useEffect(() => {
+    let cancelled = false;
+    let unQuick: (() => void) | undefined;
+    let unExit: (() => void) | undefined;
+    void onTrayQuickScan(() => {
+      if (cancelled || trayOpRef.current) return;
+      const intent = quickScanIntent(trayStatusRef.current);
+      if (intent === "stop") {
+        // a scan is measuring: stop it silently while hidden (the done
+        // tooltip later tells the user a verdict is waiting)
+        trayOpRef.current = true;
+        void logFrontendInfo("tray quick scan: stop").catch(() => {});
+        void trayToggleRef.current().then((landed) => {
+          trayOpRef.current = false;
+          if (cancelled) return;
+          void logFrontendInfo(`tray quick scan: stop done (landed=${landed})`).catch(() => {});
+          if (!landed) {
+            void revealWindow().catch(() => {});
+            setView("monitor");
+          }
+        });
+        return;
+      }
+      if (intent === "show") {
+        // a scan winding down: the user pressed to see, so land on the
+        // monitor in a visible window
+        void logFrontendInfo("tray quick scan: show").catch(() => {});
+        void revealWindow().catch(() => {});
+        setView("monitor");
+        return;
+      }
+      if (trayOnboardingRef.current !== true) {
+        // welcome not finished: there is no session plan to run from, so
+        // show the welcome flow instead of starting behind its back
+        void logFrontendInfo("tray quick scan: show welcome").catch(() => {});
+        void revealWindow().catch(() => {});
+        return;
+      }
+      // silent start: stay hidden unless the toggle raises a dialog in
+      // the hidden window, then reveal it and land on the monitor so the
+      // failure is actually seen.
+      trayOpRef.current = true;
+      void logFrontendInfo(`tray quick scan: ${intent}`).catch(() => {});
+      void trayToggleRef.current().then((landed) => {
+        trayOpRef.current = false;
+        if (cancelled) return;
+        void logFrontendInfo(`tray quick scan: done (landed=${landed})`).catch(() => {});
+        if (!landed) {
+          void revealWindow().catch(() => {});
+          setView("monitor");
+        }
+      });
+    })
+      .then((u) => {
+        if (!cancelled) unQuick = u;
+        else u();
+      })
+      .catch(() => {});
+    void onTrayExit(() => {
+      if (!cancelled) requestExit();
+    })
+      .then((u) => {
+        if (!cancelled) unExit = u;
+        else u();
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      unQuick?.();
+      unExit?.();
+    };
+  }, [requestExit]);
 
   // hide every tooltip the moment the modal surface opens (a dialog
   // mounting under a parked cursor never fires mouseleave, leaving its
@@ -452,6 +647,22 @@ export default function App() {
       dispatchAppDialogOpen();
     }
   }, [dialogKey, updateModal, updateInfo, exitConfirm]);
+
+  // No dialog may ever sit in a hidden window: a modal the user cannot see
+  // is a dead app from their side (a stuck scan, a confirm nobody answers).
+  // The dedicated paths above already reveal first, so this backstop only
+  // fires for dialogs raised by state pushes (a game that died mid hidden
+  // scan, a one-shot advice firing on a tray-started session). Rare by
+  // construction: it runs only when a dialog surface appears.
+  const modalUp = dialogKey !== null || exitConfirm !== null || (updateModal && updateInfo !== null);
+  useEffect(() => {
+    if (!modalUp) return;
+    void isWindowVisible()
+      .then((visible) => {
+        if (!visible) void revealWindow().catch(() => {});
+      })
+      .catch(() => {});
+  }, [modalUp]);
 
   const tabs: SidebarTab[] = useMemo(
     () => [
@@ -468,7 +679,7 @@ export default function App() {
 
   return (
     <div className="shell">
-      <TitleBar version={appVersion} onRequestExit={requestExit} />
+      <TitleBar version={appVersion} />
       <div className="shell-body">
         {/* null = settings still loading (IPC round-trip): show NOTHING
             decisive. The old bug rendered the main UI immediately, then
@@ -561,7 +772,7 @@ export default function App() {
                 <AboutView
                   updateInfo={updateInfo}
                   version={appVersion}
-                  onOpenUpdateModal={() => setUpdateModal(true)}
+                  onOpenUpdateModal={openUpdateModal}
                   onUpdateFound={(info) => setUpdateInfo(info)}
                 />
               </div>
@@ -605,7 +816,7 @@ export default function App() {
           confirmLabel={t.dialog.exitConfirm}
           cancelLabel={t.dialog.cancel}
           onConfirm={() => {
-            void closeWindow();
+            void quitApp();
           }}
           onClose={() => setExitConfirm(null)}
         />

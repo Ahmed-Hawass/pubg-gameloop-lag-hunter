@@ -8,7 +8,26 @@ export const en = {
   minimize: "Minimize",
   maximize: "Maximize",
   restore: "Restore",
-  close: "Close",
+  /** the X button no longer quits: it hides the window to the notification
+      area, so it must not claim to close the app */
+  hideToTray: "Hide to tray",
+
+  // ---- tray (the notification-area icon) ----
+  trayOpen: "Open",
+  trayQuickScan: "Quick scan",
+  /** the scan item while measuring: the live percent rides in the label so
+      the menu itself answers progress (same number as the tooltip, Latin
+      digits and percent sign like every unit in both languages) */
+  trayStopScan: (pct: number) => `Stop scan (${pct}%)`,
+  trayExit: "Exit",
+  /** idle tooltip: the app name only (the menu carries the actions) */
+  trayTooltipIdle: "PUBG GameLoop Lag Hunter",
+  /** scanning tooltip: the live percent is the only signal a hidden-window
+      user gets that a scan is still measuring */
+  trayTooltipScanning: (pct: number) => `Scanning… ${pct}%`,
+  /** finished tooltip: a verdict is waiting to be read (shows until the
+      verdict card is dismissed or its session is deleted) */
+  trayTooltipDone: "Scan complete, open to see the verdict",
 
   // ---- dialog (unified, replaces toasts) ----
   dialog: {

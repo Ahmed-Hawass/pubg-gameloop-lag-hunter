@@ -3,11 +3,15 @@
 // data-tauri-drag-region. Resizable window: maximize toggles and tracks
 // the maximized state for its tooltip and icon.
 // ALL tooltips are the app's own (Tip component) — never the OS one.
+// The X button HIDES to the tray (never quits): Exit lives in the tray menu
+// and runs the exit gate there, so a running scan survives dismissing the window.
 
 import { useEffect, useRef, useState } from "react";
 import { Minus, PictureInPicture2, Square, X } from "lucide-react";
 import {
+  hideWindow,
   isWindowMaximized,
+  logFrontendError,
   minimizeWindow,
   onSnapOverlay,
   onWindowResized,
@@ -20,10 +24,9 @@ import appIcon from "../assets/app-icon.png";
 
 export function TitleBar(props: {
   version: string;
-  onRequestExit: () => void;
 }) {
   const { t, lang } = useLang();
-  const { version, onRequestExit } = props;
+  const { version } = props;
   const [maximized, setMaximized] = useState(false);
   /** hover mirror for the maximize button: the native snap overlay owns
       the mouse over it, so :hover cannot fire — enter/leave drive the
@@ -155,12 +158,14 @@ export function TitleBar(props: {
             {maximized ? <PictureInPicture2 size={13} /> : <Square size={13} />}
           </button>
         </Tip>
-        <Tip text={t.close}>
+        <Tip text={t.hideToTray}>
           <button
             className="focus-ring-inset close"
-            aria-label={t.close}
+            aria-label={t.hideToTray}
             onClick={() => {
-              onRequestExit();
+              void hideWindow().catch((e) => {
+                void logFrontendError(`hide window failed: ${String(e)}`).catch(() => {});
+              });
             }}
           >
             <X size={13} />

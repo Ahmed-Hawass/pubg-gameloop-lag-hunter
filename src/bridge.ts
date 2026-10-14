@@ -153,6 +153,15 @@ export async function logFrontendError(message: string): Promise<void> {
   await invoke("log_frontend_error", { message });
 }
 
+/** A low-volume info line to the backend log (diagnostic only, never
+    user-facing). Reserved for rare user-driven decisions the backend cannot
+    see on its own (tray menu choices and their outcome). Never call this on
+    a hot path: tooltip pushes and state ticks stay unlogged by design. */
+export async function logFrontendInfo(message: string): Promise<void> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("log_frontend_info", { message });
+}
+
 /** Subscribe to window resizes (used to re-read the maximized state). */
 export async function onWindowResized(cb: () => void): Promise<() => void> {
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
@@ -163,6 +172,13 @@ export async function onWindowResized(cb: () => void): Promise<() => void> {
 export async function minimizeWindow(): Promise<void> {
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
   await getCurrentWindow().minimize();
+}
+
+/** Hide the main window to the tray (the X button path). Never quits:
+    the scan keeps measuring while hidden, and Exit lives in the tray menu. */
+export async function hideWindow(): Promise<void> {
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  await getCurrentWindow().hide();
 }
 
 export async function toggleMaximizeWindow(): Promise<void> {
@@ -207,9 +223,76 @@ export async function onSnapOverlay(
   };
 }
 
-export async function closeWindow(): Promise<void> {
+/** The real exit: arm the backend quit flag, then close. A plain
+    `close()` would now be a HIDE (the app lives in the notification area),
+    so every quit in the app goes through here: the tray's quiet Exit path
+    and the exit confirm alike. */
+export async function quitApp(): Promise<void> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("quit_app");
+}
+
+/** Is the main window on screen? (the update modal reveals a hidden window
+    instead of announcing itself to nobody) */
+export async function isWindowVisible(): Promise<boolean> {
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
-  await getCurrentWindow().close();
+  return getCurrentWindow().isVisible();
+}
+
+// ---- tray (the notification-area icon) ---------------------------------------
+// The native surface is Rust's (tray.rs); the COPY is ours (locales). These
+// wrappers are the seam: labels and tooltip go up, the two actions come back
+// down as events.
+
+/** Re-label the tray menu. Sent on mount and on every language switch so the
+    menu never carries a language of its own. */
+export async function syncTrayLabels(labels: {
+  open: string;
+  scan: string;
+  exit: string;
+}): Promise<void> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("tray_set_labels", labels);
+}
+
+/** The tray tooltip: the live scan percent while a scan runs, the exit rule
+    otherwise. The caller throttles (a push per state tick is an IPC flood). */
+export async function setTrayTooltip(text: string): Promise<void> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("tray_set_tooltip", { text });
+}
+
+/** Bring the main window back (un-minimize, show, focus). Called only when
+    the frontend needs eyes: an exit confirm over in-flight work, a
+    quick-scan failure, or a state already waiting to be read. Silent paths
+    never call it, so a quiet quit or a clean quick start never flashes. */
+export async function revealWindow(): Promise<void> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("tray_reveal");
+}
+
+/** Swap the tray icon between idle gray and busy green. Called on scan
+    transitions only (the icon carries no percent, so per-tick pushes would
+    be pure noise next to the throttled tooltip). */
+export async function setTrayActive(active: boolean): Promise<void> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("tray_set_active", { active });
+}
+
+/** Tray menu "Quick scan": starts silently while hidden. The handler reveals
+    the window only when it needs eyes (a start failure, or a state already
+    waiting to be read). */
+export async function onTrayQuickScan(cb: () => void): Promise<() => void> {
+  const un = await listen("tray://quick-scan", () => cb());
+  return un;
+}
+
+/** Tray menu "Exit": runs the exit gate. NOT a quit on its own: quiet work
+    quits silently, and a running scan or an active download still gets its
+    confirm in a revealed window. */
+export async function onTrayExit(cb: () => void): Promise<() => void> {
+  const un = await listen("tray://exit", () => cb());
+  return un;
 }
 
 /** Native save dialog (the update download's destination picker). */
