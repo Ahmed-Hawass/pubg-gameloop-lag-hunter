@@ -163,6 +163,22 @@ describe("App pushed dialogs", () => {
     expect(screen.getAllByText(en.dialog.gameloopClosed)).toHaveLength(1);
   });
 
+  it("stopping mid-startup is quiet success, never an error dialog", async () => {
+    const user = userEvent.setup();
+    boot({ status: "idle", ui: null });
+    await screen.findByText(en.scanIdleStart);
+    apiMock.sessionStart.mockRejectedValue("SESSION_STOPPED_DURING_START");
+    apiMock.getState.mockResolvedValue({ status: "idle", ui: null });
+    await user.click(screen.getByText(en.scanIdleStart));
+    await waitFor(() => {
+      expect(apiMock.getState).toHaveBeenCalled();
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    // the stop already won: no dialog, no technical line, just the idle page
+    expect(screen.queryByText(en.dialog.somethingWrong)).toBeNull();
+    expect(await screen.findByText(en.scanIdleStart)).toBeTruthy();
+  });
+
   it("X hides to the tray instead of quitting (even mid-scan)", async () => {
     const user = userEvent.setup();
     boot({

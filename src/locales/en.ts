@@ -72,6 +72,10 @@ export const en = {
   // ---- error codes from the backend ----
   errors: {
     GAMELOOP_NOT_RUNNING: "PUBG Mobile isn't running in GameLoop. Start the game first.",
+    /** no install evidence anywhere: GameLoop was never installed here,
+        so "start the game" would be the wrong advice */
+    GAMELOOP_NOT_INSTALLED:
+      "GameLoop isn't installed on this PC. Install GameLoop first, then start a scan.",
     SESSION_ALREADY_RUNNING: "A scan is already running.",
     SESSION_STOPPING: "The previous scan is still being saved. Try again in a moment.",
     SESSION_RUNNING: "The active scan can't be deleted.",

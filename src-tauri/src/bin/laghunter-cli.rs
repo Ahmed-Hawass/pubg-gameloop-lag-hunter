@@ -359,6 +359,9 @@ fn cmd_scan(minutes: u64, quiet: bool, no_color: bool) -> i32 {
                 "GAMELOOP_NOT_RUNNING" => {
                     "Game is not running inside GameLoop. Start PUBG Mobile, then scan again.".to_string()
                 }
+                "GAMELOOP_NOT_INSTALLED" => {
+                    "GameLoop is not installed on this PC. Install GameLoop, then scan again.".to_string()
+                }
                 "EMULATOR_UNKNOWN" => {
                     "GameLoop runs a build this tool does not recognize yet. Update laghunter to the latest version.".to_string()
                 }

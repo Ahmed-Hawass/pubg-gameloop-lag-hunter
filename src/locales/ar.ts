@@ -97,6 +97,10 @@ export const ar: Locale = {
   // ---- error codes from the backend ----
   errors: {
     GAMELOOP_NOT_RUNNING: "لعبة PUBG Mobile ليست قيد التشغيل داخل GameLoop. شغّلها أولًا.",
+    /** no install evidence anywhere: GameLoop was never installed here,
+        so "start the game" would be the wrong advice */
+    GAMELOOP_NOT_INSTALLED:
+      "GameLoop غير مثبّت على هذا الجهاز. ثبّته أولًا، ثم ابدأ الفحص.",
     SESSION_ALREADY_RUNNING: "هناك فحص قيد التشغيل بالفعل.",
     SESSION_STOPPING: "لا يزال الفحص السابق قيد الحفظ. حاول مرة أخرى بعد قليل.",
     SESSION_RUNNING: "لا يمكن حذف الفحص الجاري.",

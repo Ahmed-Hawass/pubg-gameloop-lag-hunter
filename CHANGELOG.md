@@ -30,6 +30,9 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - The window now hides to the notification area instead of quitting (the X button and the taskbar button hide; Alt+F4 exits). The tray icon offers Open, a scan item, and Exit: Exit quits at once when idle and asks first when a scan, download, or cleanup is running, the scan item starts directly while hidden (even over an unread verdict) and turns into Stop scan with the live percent while a scan runs, the icon stays gray while idle and turns green while measuring, Alt+F4 exits through the same gate instead of hiding, and the tooltip shows the live scan percent while running and names a finished verdict until you open it.
 
 ### Fixed
+- Stopping a scan mid-startup is quiet success instead of an "unexpected error" dialog naming SESSION_STOPPED_DURING_START (the stop already won, nothing failed).
+- Windows 11 boxes upgraded from 10 no longer report as Windows 10: the display name follows the build number (11-only builds read Windows 11) and keeps the edition.
+- Starting a scan with no install evidence says GameLoop is not installed instead of telling the user to start the game; an unrecognized build alongside install evidence also says to start the game (a boot or update transient) instead of demanding an app update.
 - Tool section intro cards span the full width below the header row instead of squeezing beside the back button.
 - The Virtual Memory editor opens even when Windows has lost its automatic-management flag: it follows the Windows default instead of refusing, and names the failing registry step in the log when it truly cannot read.
 - The Storage scan measures the Recycle Bin again (it always read empty before).

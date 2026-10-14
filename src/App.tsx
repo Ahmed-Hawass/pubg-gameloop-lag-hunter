@@ -367,6 +367,16 @@ export default function App() {
       return true;
     } catch (e) {
       const raw = typeof e === "string" ? e : String(e);
+      if (raw.includes("SESSION_STOPPED_DURING_START")) {
+        // the user stopped mid-startup: the stop already won and the start
+        // correctly aborted, so there is nothing to report — refresh the
+        // snapshot quietly instead of crying wolf with an error dialog
+        await api
+          .getState()
+          .then(setStatus)
+          .catch(() => {});
+        return true;
+      }
       const d = errorDialog(raw, t.errors, {
         somethingWrong: t.dialog.somethingWrong,
         scanNeedsGame: t.dialog.scanNeedsGame,

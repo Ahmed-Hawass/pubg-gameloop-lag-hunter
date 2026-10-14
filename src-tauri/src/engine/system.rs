@@ -519,6 +519,25 @@ extern "system" {
     fn GetSystemWindowsDirectoryW(buf: *mut u16, size: u32) -> u32;
 }
 
+/// Display name from a possibly-stale Windows name + the build number.
+/// Upgrade leftovers are real: a box moved 10→11 can still report
+/// ProductName "Windows 10 ..." while the build is 11-only (>= 22000).
+/// The build is the truth; the old name only donates its edition tail
+/// ("Pro", "Enterprise", ...). Anything else passes through untouched.
+fn os_display_name(name: &str, build: &str) -> String {
+    let build_num: u32 = build.trim().parse().unwrap_or(0);
+    if build_num >= 22000 {
+        if let Some(edition) = name.split("Windows 10").nth(1) {
+            let edition = edition.trim();
+            if edition.is_empty() {
+                return "Windows 11".to_string();
+            }
+            return format!("Windows 11 {edition}");
+        }
+    }
+    name.trim().to_string()
+}
+
 /// Windows build identity for the boot log, read straight from the registry
 /// (no PowerShell spawn, no elevation): `ProductName` + `CurrentBuildNumber`.
 /// This is what makes any user-sent log readable on the 10/11 axis — the
@@ -535,10 +554,11 @@ pub fn os_identity() -> String {
     let name = read("ProductName");
     // "Windows 10 Pro" / "Windows 11 Pro" + build. Missing reads degrade to
     // just the build (never an empty string: "os=?" is worse than "os=build")
-    let label = if name.is_empty() {
+    let fixed = os_display_name(&name, &build);
+    let label = if fixed.is_empty() {
         format!("build={build}")
     } else {
-        format!("{name} build={build}")
+        format!("{fixed} build={build}")
     };
     if build.is_empty() {
         "unknown".into()
@@ -924,14 +944,17 @@ $vr = (Get-CimInstance Win32_VideoController | Where-Object { $_.CurrentRefreshR
             }
             Some("os") => {
                 let caption = parts.next().unwrap_or("").trim().to_string();
+                let build = parts.next().unwrap_or("").trim().to_string();
                 if !caption.is_empty() {
-                    // "Microsoft Windows 11 Pro" → compact display form
-                    info.system.os_caption = caption
+                    // "Microsoft Windows 11 Pro" → compact display form,
+                    // repaired against the build: WMI can still report a
+                    // stale "Windows 10 ..." caption on an 11-only build
+                    let compact = caption
                         .strip_prefix("Microsoft ")
                         .unwrap_or(&caption)
                         .to_string();
+                    info.system.os_caption = os_display_name(&compact, &build);
                 }
-                let build = parts.next().unwrap_or("").trim().to_string();
                 info.system.os_release = os_release_name(&build);
             }
             Some("disp") => {
@@ -2890,6 +2913,35 @@ mod tests {
         let named = os_release_name("22631");
         assert!(!named.is_empty());
         assert!(named.contains("build") || named.chars().any(|c| c == 'H'));
+    }
+
+    #[test]
+    fn os_display_name_repairs_stale_win10_caption() {
+        // the upgraded-box case from a real log: ProductName still says 10
+        // while the build is 11-only — the edition tail survives the repair
+        assert_eq!(
+            os_display_name("Microsoft Windows 10 Pro", "26200"),
+            "Windows 11 Pro"
+        );
+        assert_eq!(
+            os_display_name("Windows 10 Enterprise", "26100"),
+            "Windows 11 Enterprise"
+        );
+        // already-11 and genuine-10 names pass through untouched
+        assert_eq!(
+            os_display_name("Microsoft Windows 11 Pro", "22631"),
+            "Microsoft Windows 11 Pro"
+        );
+        assert_eq!(
+            os_display_name("Microsoft Windows 10 Pro", "19045"),
+            "Microsoft Windows 10 Pro"
+        );
+        // empty and unparsable inputs never invent a name
+        assert_eq!(os_display_name("", "26200"), "");
+        assert_eq!(
+            os_display_name("Microsoft Windows 10 Pro", "not-a-build"),
+            "Microsoft Windows 10 Pro"
+        );
     }
 
     #[test]

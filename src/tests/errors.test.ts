@@ -34,6 +34,13 @@ describe("errorDialog", () => {
     expect(d.body).toBe(en.errors.SESSION_STOPPING);
   });
 
+  it("maps a missing install to its own copy, never the start-the-game gate", () => {
+    const d = errorDialog("GAMELOOP_NOT_INSTALLED", en.errors, COPY);
+    expect(d.title).toBe(en.dialog.somethingWrong);
+    expect(d.body).toBe(en.errors.GAMELOOP_NOT_INSTALLED);
+    expect(d.key).toBe("GAMELOOP_NOT_INSTALLED");
+  });
+
   it("maps an unrecognized emulator build to its honest copy, never the game gate", () => {
     // EMULATOR_UNKNOWN must not collapse into GAMELOOP_NOT_RUNNING: the
     // game may well be running under a build we have no card for

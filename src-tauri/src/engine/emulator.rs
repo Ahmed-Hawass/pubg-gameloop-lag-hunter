@@ -318,6 +318,19 @@ pub fn log_presence_evidence() {
     super::logging::info(&presence_evidence_summary(&names, &reg));
 }
 
+/// Any install evidence at all: separates "installed but closed" from
+/// "never installed", and a mid-boot transient (helper up, family not yet)
+/// from a truly foreign build — using only existence-validated reads.
+/// v7/v6 installs arrive validated; Uninstall entries do not (only the
+/// resolver checks them), so this validates those here: a stale entry
+/// pointing at a deleted dir proves nothing installed.
+pub fn has_install_evidence(reg: &RegistrySnapshot) -> bool {
+    if reg.v7_install.is_some() || !reg.v6_installs.is_empty() {
+        return true;
+    }
+    reg.uninstall_dirs.iter().any(|d| PathBuf::from(d).exists())
+}
+
 /// Install roots for the exe resolver, strongest evidence first:
 /// live Uninstall dirs (any build), v7 direct, v6 subkeys, stocks.
 /// All existence-validated — a stale key to a deleted dir contributes
@@ -525,6 +538,29 @@ mod tests {
             &reg(None, None, vec![], vec![r"C:\GL8"], vec![]),
         );
         assert_eq!(d, Detected::Absent);
+    }
+
+    #[test]
+    fn install_evidence_separates_installed_from_clean() {
+        // validated installs count on every platform (no disk touch)
+        let with_v7 = reg(Some("7.0.19.05"), Some(r"C:\GL\v7"), vec![], vec![], vec![]);
+        assert!(has_install_evidence(&with_v7));
+        let with_v6 = reg(None, None, vec![r"C:\GL\v6"], vec![], vec![]);
+        assert!(has_install_evidence(&with_v6));
+        // Uninstall dirs are validated against the live filesystem: the
+        // temp dir exists everywhere (even Linux CI), a bogus path nowhere
+        let live = std::env::temp_dir().to_string_lossy().to_string();
+        let with_uninstall = reg(None, None, vec![], vec![live.as_str()], vec![]);
+        assert!(has_install_evidence(&with_uninstall));
+        let stale = reg(
+            None,
+            None,
+            vec![],
+            vec![r"C:\definitely-not-here-zzz"],
+            vec![],
+        );
+        assert!(!has_install_evidence(&stale));
+        assert!(!has_install_evidence(&empty_reg()));
     }
 
     #[test]

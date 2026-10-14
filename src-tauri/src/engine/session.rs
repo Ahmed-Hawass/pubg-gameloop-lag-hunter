@@ -222,19 +222,40 @@ impl Engine {
 
         // GATE: no game, no scan. The numbers only mean something in-game.
         // v6: an emulator process IS the game (per-game runtime). v7: the
-        // client idles with no game, so RunningAppInfo decides. Unknown
-        // builds get their own honest key, never the "not running" lie.
+        // client idles with no game, so RunningAppInfo decides. Install
+        // evidence (read again here: the blocked path is rare and
+        // user-initiated) separates the honest answers below.
         match sampler::presence() {
             sampler::Presence::GameRunning => {}
             sampler::Presence::UnknownVersion => {
                 super::logging::info("start blocked: unrecognized emulator build");
                 super::emulator::log_presence_evidence();
+                // a helper up with no family yet (client boot/update window)
+                // is a transient, not a foreign build, when something is
+                // genuinely installed: say "start the game", keep the
+                // evidence line above for either case
+                if super::emulator::has_install_evidence(&super::emulator::read_snapshot()) {
+                    super::logging::info(
+                        "start blocked: transient unknown, install evidence present",
+                    );
+                    return Err("GAMELOOP_NOT_RUNNING".into());
+                }
                 return Err("EMULATOR_UNKNOWN".into());
             }
-            sampler::Presence::ClientIdle | sampler::Presence::Absent => {
+            sampler::Presence::ClientIdle => {
                 super::logging::info("start blocked: game not running in GameLoop");
                 super::emulator::log_presence_evidence();
                 return Err("GAMELOOP_NOT_RUNNING".into());
+            }
+            sampler::Presence::Absent => {
+                super::logging::info("start blocked: no emulator evidence at all");
+                super::emulator::log_presence_evidence();
+                // installed-but-closed still means "start the game"; only a
+                // box with nothing installed anywhere earns its own key
+                if super::emulator::has_install_evidence(&super::emulator::read_snapshot()) {
+                    return Err("GAMELOOP_NOT_RUNNING".into());
+                }
+                return Err("GAMELOOP_NOT_INSTALLED".into());
             }
         }
 
