@@ -423,9 +423,12 @@ html[dir="rtl"] .btn:hover:not(.is-disabled) .flip-rtl {
   align-self: center;
 }
 
-/* EmptyState */
+/* EmptyState — flat panel, no frame: the medallion follows the tile
+   corner language (5px like icon-tile), and its hover carries the exact
+   button-glyph treatment (same nudge, same easing). Spinning loaders are
+   excluded from the hover: the running animation owns their transform. */
 .empty {
-  border: 1px dashed var(--border);
+  border: none;
   border-radius: var(--radius);
   padding: 26px;
   text-align: center;
@@ -434,27 +437,36 @@ html[dir="rtl"] .btn:hover:not(.is-disabled) .flip-rtl {
   width: 38px;
   height: 38px;
   margin: 0 auto 12px;
-  border-radius: 50%;
+  border-radius: 5px;
   background: var(--primary-dim);
   display: flex;
   align-items: center;
   justify-content: center;
+}
+.empty svg {
+  transition: transform 0.2s var(--ease);
+}
+.empty:hover .empty-ico:not(.spin) svg {
+  transform: scale(1.18);
 }
 .empty-ico svg {
   width: 18px;
   height: 18px;
   color: var(--primary);
 }
-/* loading moment: a larger circle with a spinning glyph (same panel,
-   same shape — motion is the only difference) */
+/* loading moment: the same medallion with a spinning glyph (same panel,
+   same shape and size — motion is the only difference) */
 .empty-ico.spin {
-  width: 44px;
-  height: 44px;
+  width: 38px;
+  height: 38px;
+  /* the generic .spin utility would rotate this whole tile (it spins any
+     bearer): the medallion stays static, only its glyph below spins */
+  animation: none;
 }
 .empty-ico.spin svg {
-  width: 20px;
-  height: 20px;
-  animation: spin 1s linear infinite;
+  width: 18px;
+  height: 18px;
+  animation: spin 1.5s linear infinite;
 }
 .empty-title {
   font-size: 14.5px;

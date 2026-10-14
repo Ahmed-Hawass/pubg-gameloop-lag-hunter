@@ -18,6 +18,13 @@
 }
 
 /* back button — shared .back-btn primitive, nothing page-specific left */
+/* reader back row mirrors the Tools header row: the button rides the
+   inline end (justify-content follows the reading direction, so RTL
+   mirrors for free), opposite where a title would sit */
+.report-back-row {
+  display: flex;
+  justify-content: flex-end;
+}
 
 /* report header — surface comes from .card, layout only below */
 .report-head {

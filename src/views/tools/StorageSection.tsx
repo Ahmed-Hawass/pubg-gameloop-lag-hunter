@@ -5,7 +5,7 @@
 // their read through useTweaks; this shell only gates the first paint.
 
 import { useEffect, type ReactNode } from "react";
-import { Recycle, RefreshCw, SlidersHorizontal } from "lucide-react";
+import { Recycle, RotateCw, SlidersHorizontal } from "lucide-react";
 import { EmptyState } from "../../components/components";
 import { PageIntro, SummaryArchive, VerdictBanner } from "../../components/sections";
 import { useIntervalTick, BACKSTOP_POLL_MS } from "../../useIntervalTick";
@@ -75,7 +75,7 @@ export function StorageSection(props: {
           headerTrail={headerTrail}
         />
         <EmptyState
-          icon={failed ? <SlidersHorizontal size={18} /> : <RefreshCw size={18} />}
+          icon={failed ? <SlidersHorizontal size={18} /> : <RotateCw size={18} />}
           title={failed ? t.dialog.somethingWrong : t.loading}
           hint={failed ? (tweaks.loadError ?? "") : ""}
           spin={!failed}

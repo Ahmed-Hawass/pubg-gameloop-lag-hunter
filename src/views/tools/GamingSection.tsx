@@ -10,7 +10,7 @@ import {
   Gamepad2,
   Monitor,
   Mouse,
-  RefreshCw,
+  RotateCw,
   SlidersHorizontal,
   Video,
   Zap,
@@ -134,7 +134,7 @@ export function GamingSection(props: {
           headerTrail={headerTrail}
         />
         <EmptyState
-          icon={failed ? <SlidersHorizontal size={18} /> : <RefreshCw size={18} />}
+          icon={failed ? <SlidersHorizontal size={18} /> : <RotateCw size={18} />}
           title={failed ? t.dialog.somethingWrong : t.loading}
           hint={tweaks.loadError ?? ""}
           spin={!failed}

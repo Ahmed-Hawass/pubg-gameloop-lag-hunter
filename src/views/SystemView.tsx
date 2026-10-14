@@ -13,6 +13,7 @@ import {
   MemoryStick,
   Monitor,
   RefreshCw,
+  RotateCw,
 } from "lucide-react";
 import { Button, Dialog, EmptyState } from "../components/components";
 import { PageIntro } from "../components/sections";
@@ -167,7 +168,7 @@ export function SystemView() {
           cardTitle={t.introSystemTitle}
           cardBody={t.introSystemBody}
         />
-        <EmptyState icon={<RefreshCw size={18} />} title={t.loading} hint="" spin />
+        <EmptyState icon={<RotateCw size={18} />} title={t.loading} hint="" spin />
       </div>
     );
   }

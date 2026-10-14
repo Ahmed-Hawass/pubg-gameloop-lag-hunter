@@ -5,7 +5,7 @@
 // lands the health-card link).
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { RefreshCw } from "lucide-react";
+import { RotateCw } from "lucide-react";
 import { EmptyState } from "../../components/components";
 import { LINK_HIGHLIGHT_MS, PageIntro } from "../../components/sections";
 import type { Notice } from "../../errors";
@@ -76,7 +76,7 @@ export function PagefileSection(props: {
       />
       {pfFailed === null ? (
         <EmptyState
-          icon={<RefreshCw size={18} />}
+          icon={<RotateCw size={18} />}
           title={t.loading}
           hint=""
           spin

@@ -9,6 +9,7 @@ import {
   Info,
   Plug,
   RefreshCw,
+  RotateCw,
   ShieldAlert,
   Video,
   Zap,
@@ -158,7 +159,7 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
         <div className="checks-head">
           <p className="checks-hint">{t.checksHint}</p>
         </div>
-        <EmptyState icon={<RefreshCw size={18} />} title={t.loading} hint="" spin />
+        <EmptyState icon={<RotateCw size={18} />} title={t.loading} hint="" spin />
       </div>
     );
   }

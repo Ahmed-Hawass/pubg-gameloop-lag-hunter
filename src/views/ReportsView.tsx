@@ -2,7 +2,7 @@
 // Content comes from the engine (keys + English fallbacks); the UI translates.
 
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronDown, Clock, FileText, FileWarning, Folder, RefreshCw, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronDown, Clock, FileText, FileWarning, Folder, RotateCw, Trash2 } from "lucide-react";
 import { Button, Dialog, EmptyState, NoteCard, Tip, diagnosisIcon, APP_DIALOG_OPEN_EVENT } from "../components/components";
 import { api, type FriendlyReport, type SessionEntry } from "../bridge";
 import { errorDialog, toErrorBody, type Notice } from "../errors";
@@ -247,10 +247,12 @@ export function ReportsView(props: {
     // findings carry keys –” translate; fall back to the backend's English text
     return (
       <div className="reports">
-        <button className="focus-ring-inset back-btn" onClick={() => setReport(null)}>
-          <ArrowLeft size={16} />
-          {t.allSessions}
-        </button>
+        <div className="report-back-row">
+          <button className="focus-ring-inset back-btn" onClick={() => setReport(null)}>
+            <ArrowLeft size={16} />
+            {t.allSessions}
+          </button>
+        </div>
 
         <div className="card report-head">
           <div className="report-head-title">
@@ -377,7 +379,7 @@ export function ReportsView(props: {
           hint={loadFailed}
         />
       ) : entries === null ? (
-        <EmptyState icon={<RefreshCw size={18} />} title={t.loadingSessions} hint="" spin />
+        <EmptyState icon={<RotateCw size={18} />} title={t.loadingSessions} hint="" spin />
       ) : entries.length === 0 ? (
         <EmptyState
           icon={<FileWarning size={18} />}

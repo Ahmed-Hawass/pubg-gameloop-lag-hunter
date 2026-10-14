@@ -7,7 +7,7 @@
 // engine's TTL cache decides whether a real query is needed).
 
 import { useEffect, useRef, useState } from "react";
-import { Activity, AppWindow, RefreshCw } from "lucide-react";
+import { Activity, AppWindow, RefreshCw, RotateCw } from "lucide-react";
 import { Button, Dialog, EmptyState } from "../components/components";
 import { PageIntro } from "../components/sections";
 import { useIntervalTick } from "../useIntervalTick";
@@ -165,7 +165,7 @@ export function ProcessesView(props: { active: boolean }) {
           />
         </>
       ) : procs === null ? (
-        <EmptyState icon={<RefreshCw size={18} />} title={t.loading} hint="" spin />
+        <EmptyState icon={<RotateCw size={18} />} title={t.loading} hint="" spin />
       ) : apps.length === 0 ? (
         <EmptyState icon={<Activity size={18} />} title={t.topProcessesEmpty} hint="" />
       ) : (
