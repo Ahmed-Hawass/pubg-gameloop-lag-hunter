@@ -26,6 +26,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - The window now goes down to 500 by 400 (from 960 by 620), so it fits a snapped half side by side with the game on ordinary screens. The layout was eyeballed at the new floor page by page.
 - Hovering the maximize button now opens the Windows snap-layouts picker, like any native app. The buttons stay drawn by us; only the invisible hit target underneath is native.
 - The cleanup idle hero trades its repeated title and text for spot art.
+- The window now hides to the notification area instead of quitting (the X button and the taskbar button hide; Alt+F4 exits). The tray icon offers Open, a scan item, and Exit: Exit quits at once when idle and asks first when a scan, download, or cleanup is running, the scan item starts directly while hidden (even over an unread verdict) and turns into Stop scan with the live percent while a scan runs, the icon stays gray while idle and turns green while measuring, Alt+F4 exits through the same gate instead of hiding, and the tooltip shows the live scan percent while running and names a finished verdict until you open it.
 
 ### Fixed
 - Tool section intro cards span the full width below the header row instead of squeezing beside the back button.
@@ -67,7 +68,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - Tools and health pages share one look: a summary banner, featured warnings, and the full list below.
 - The System spec cards, storage rows, and About cost rows now lead with the same icon tile as the health and Tools rows. The tile stays neutral grey there, because a page that only reports an inventory has nothing to pass or fail.
 - One typeface everywhere, severity colors from a shared theme, and wall-clock times follow your Windows 12/24 setting.
-- Closing the window asks first only when work is in flight (scan, download, or cleanup).
+- Exiting asks first only when work is in flight (scan, download, or cleanup). Closing the window hides it to the notification area instead of quitting.
 - Buttons are flat now: the fill alone marks a control, no border appears on hover, and corners are tighter across the app. Tool cards read slightly smaller.
 - Every screen's copy was rewritten in English and Arabic: shorter sentences, plainer words, and the same numbers, names, and units.
 

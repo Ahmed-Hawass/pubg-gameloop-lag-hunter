@@ -11,6 +11,8 @@
     "core:window:allow-close",
     "core:window:allow-is-maximized",
     "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-is-visible",
     "core:webview:allow-set-webview-zoom",
     "dialog:allow-save",
     {

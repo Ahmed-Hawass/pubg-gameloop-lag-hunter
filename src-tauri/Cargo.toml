@@ -24,7 +24,12 @@ path = "src/bin/laghunter-cli.rs"
 tauri-build = { version = "2.6.3", features = [] }
 
 [dependencies]
-tauri = { version = "2.11.3", features = [] }
+# tray-icon: the notification-area icon (module tray.rs). Not a default
+# feature of tauri, and the app is built without it today only because the
+# window WAS the app — the tray is what makes hiding to the icon honest.
+# image-png: decode the two baked tray variants (gray idle, green busy)
+# from PNG bytes — same pure-Rust codec family as the icons module.
+tauri = { version = "2.11.3", features = ["tray-icon", "image-png"] }
 tauri-plugin-opener = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-dialog = "2"

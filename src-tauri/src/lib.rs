@@ -3,6 +3,7 @@
 
 pub mod engine;
 pub mod snap_overlay;
+pub mod tray;
 
 use std::time::Duration;
 
@@ -806,6 +807,69 @@ fn get_version() -> String {
     engine::VERSION.to_string()
 }
 
+// ---- tray (the notification-area icon, see module tray) ---------------------
+// The native surface lives in Rust, the COPY lives in the frontend locales:
+// these commands are the only place the two meet.
+
+// Re-label the tray menu. Sent on mount and on every language switch, so the
+// menu never shows a language of its own.
+#[tauri::command]
+fn tray_set_labels(open: String, scan: String, exit: String, app: tauri::AppHandle) {
+    if let Err(e) = tray::set_labels(&app, &open, &scan, &exit) {
+        engine::logging::warn(&format!("ipc tray_set_labels failed: {e}"));
+    }
+}
+
+// The live tooltip (scan percent while running, the exit rule otherwise).
+// Throttled by the frontend — a tooltip per state tick would be an IPC flood.
+#[tauri::command]
+fn tray_set_tooltip(text: String, app: tauri::AppHandle) {
+    if let Err(e) = tray::set_tooltip(&app, &text) {
+        engine::logging::warn(&format!("ipc tray_set_tooltip failed: {e}"));
+    }
+}
+
+/// Bring the main window back (un-minimize, show, focus). The frontend
+/// calls this only when it needs eyes: an exit confirm over in-flight
+/// work, a quick-scan failure, or a state already waiting to be read.
+/// Silent paths (a quiet quit, a clean quick-scan start) never call it.
+#[tauri::command]
+fn tray_reveal(app: tauri::AppHandle) {
+    engine::logging::info("tray reveal requested by frontend");
+    tray::reveal(&app);
+}
+
+/// Swap the tray icon between idle gray and busy green. Pushed on scan
+/// transitions only (a push per state tick would be pointless: the icon
+/// has no percent, the tooltip already carries it).
+#[tauri::command]
+fn tray_set_active(active: bool, app: tauri::AppHandle) {
+    if let Err(e) = tray::set_busy(&app, active) {
+        engine::logging::warn(&format!("ipc tray_set_active failed: {e}"));
+    } else {
+        engine::logging::info(if active {
+            "tray icon busy (green)"
+        } else {
+            "tray icon idle (gray)"
+        });
+    }
+}
+
+/// The real exit: arm the quit flag, then ask for the close. The close
+/// handler lets it through ONLY with that flag set, so the backend safety net
+/// (cancel download, stop + save the session) runs. Reached from the tray
+/// Exit item only: the X button hides and never quits.
+#[tauri::command]
+fn quit_app(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    engine::logging::info("app quitting (close requested)");
+    tray::begin_quit();
+    let win = app
+        .get_webview_window(tray::MAIN_WINDOW)
+        .ok_or_else(|| "main window is gone".to_string())?;
+    win.close().map_err(|e| format!("close failed: {e}"))
+}
+
 /// Frontend crash reports (window.onerror / unhandled rejections):
 /// diagnostic only, never user-facing. Without this, a React render
 /// failure on a user machine leaves zero traces (the window just stays
@@ -815,6 +879,17 @@ fn get_version() -> String {
 fn log_frontend_error(message: String) -> Result<(), String> {
     let short: String = message.chars().take(500).collect();
     engine::logging::error(&format!("frontend: {short}"));
+    Ok(())
+}
+
+/// Frontend info lines (tray menu decisions and their outcome): diagnostic
+/// only, never user-facing. Same truncation as the error path. Callers must
+/// keep this rare (user clicks and failures only): anything per-tick would
+/// log-bomb just like a render loop would.
+#[tauri::command]
+fn log_frontend_info(message: String) -> Result<(), String> {
+    let short: String = message.chars().take(500).collect();
+    engine::logging::info(&format!("frontend: {short}"));
     Ok(())
 }
 
@@ -908,11 +983,9 @@ pub fn run() {
         // ONE instance only: a second launch focuses the existing window and exits.
         // Two instances would race over the same sessions folder (same-second ids collide).
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            use tauri::Manager;
-            if let Some(win) = app.get_webview_window("main") {
-                let _ = win.show();
-                let _ = win.set_focus();
-            }
+            // the same reveal the tray uses: a second launch means "show me
+            // the app I already have", hidden to the icon or not
+            tray::reveal(app);
         }))
         .invoke_handler(tauri::generate_handler![
             session_start,
@@ -959,6 +1032,12 @@ pub fn run() {
             open_url,
             get_version,
             log_frontend_error,
+            log_frontend_info,
+            tray_set_labels,
+            tray_set_tooltip,
+            tray_reveal,
+            tray_set_active,
+            quit_app,
             snap_overlay::sync_snap_overlay,
             check_update,
             update_already_announced,
@@ -968,8 +1047,25 @@ pub fn run() {
             open_download_folder,
         ])
         .on_window_event(|window, event| {
-            // graceful exit: a running session finalizes its files before the app dies
-            if let tauri::WindowEvent::CloseRequested { .. } = event {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                // the snap overlay is a child window we park and hide; it
+                // must never react to the main window's close contract
+                if window.label() != tray::MAIN_WINDOW {
+                    return;
+                }
+                if !tray::is_quitting() {
+                    // Every plain close that reaches here (the X button hides
+                    // directly; Alt+F4 is intercepted by the frontend gate)
+                    // is a HIDE: the app lives in the notification area, and
+                    // a half-hour scan must survive the user dismissing the
+                    // window. Nothing destructive runs on this path — the
+                    // safety net below belongs to a real quit only.
+                    api.prevent_close();
+                    let _ = window.hide();
+                    engine::logging::info("window hidden to tray");
+                    return;
+                }
+                // graceful exit: a running session finalizes its files before the app dies
                 // an in-flight update download is cancelled and its partial
                 // file removed — nothing half-written outlives the app
                 engine::update::cancel_active();
@@ -979,7 +1075,6 @@ pub fn run() {
                         let _ = eng.stop();
                     }
                 }
-                let _ = window; // silence unused in non-windows builds
             }
         })
         .setup(|_app| {
@@ -1052,6 +1147,11 @@ pub fn run() {
 
             let handle = _app.handle().clone();
             spawn_state_pusher(handle);
+
+            // the notification-area icon: the app's second face. Built here
+            // (before the window is even shown) with empty labels — the
+            // frontend pushes the localized text the moment it mounts.
+            tray::build(_app.handle());
 
             // Warm the system caches ASYNC (never on the setup thread):
             // rig info on a first machine run pays the PowerShell hardware
