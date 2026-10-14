@@ -61,10 +61,10 @@ cargo fmt --manifest-path src-tauri/Cargo.toml --check
 
 ## Before You Open a PR
 
-Make sure:
+Make sure (CI is disabled repo-wide for now, so this list runs locally
+instead of on a push):
 
-* CI passes, it runs the same things on `windows-latest`: eslint, vitest
-  with coverage floor, the frontend
+* eslint, vitest with coverage floor, the frontend
   build (which type-checks the locale bond: `ar.ts` must match `en.ts`
   key-for-key), engine tests with all targets, clippy with `-D warnings`,
   fmt check, both audits, and the version sync gate

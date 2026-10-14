@@ -87,7 +87,7 @@ tasklist (GameLoop probe)       ─┘
 
 Monitoring and diagnosis never modify anything.
 
-System health shows statuses and points at the fix; **the user flips the switch**. Every change states its value explicitly in both directions, is verified by re-reading Windows, and leaves an audit line in the log.
+System health shows statuses and points at the fix; **the user flips the switch**, in Tools or in the Startup apps tab. Every change states its value explicitly in both directions, is verified by re-reading Windows, and leaves an audit line in the log.
 
 ### 📏 No fabricated numbers
 
@@ -130,7 +130,7 @@ Every human-facing string lives in the locale files.
 
 ---
 
-## Success Criteria for v1.6
+## Success Criteria
 
 A player finishes a laggy match and opens the report.
 

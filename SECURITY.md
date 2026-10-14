@@ -20,7 +20,7 @@ We aim to respond within **72 hours**.
 
 ### 👤 Runs as a normal user
 
-The tool runs as a normal user and never requires running the app itself as administrator. Specific writes that Windows restricts (power plan switch, page file settings, storage cleanup of protected locations) use a same-binary elevated helper (`--laghunter-elevated`) with a whitelisted action id per operation and one UAC prompt per action. Refusing the prompt rolls back quietly with no change applied.
+The tool runs as a normal user and never requires running the app itself as administrator. Specific writes that Windows restricts (power plan switch, page file settings, storage cleanup of protected locations, Memory Integrity switch, startup admin unlock) use a same-binary elevated helper (`--laghunter-elevated`) with a whitelisted action id per operation and one UAC prompt per action. Refusing the prompt rolls back quietly with no change applied.
 
 ### 🪟 Whitelisted Windows panels
 
@@ -30,6 +30,7 @@ The tool opens only:
 powercfg.cpl (power plan)
 sysdm.cpl,,3 (system performance)
 ms-settings:gaming-gamedvr via explorer.exe (background recording)
+windowsdefender://devicesecurity/ via explorer.exe (Core isolation)
 ```
 
 ### 🗂️ Safe session deletion

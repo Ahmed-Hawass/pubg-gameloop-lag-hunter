@@ -10,7 +10,7 @@ They meet in exactly one place: a JSON state contract pushed over Tauri events.
 ```text
 ┌─ Interface (src/) ────────────────────────────────┐
 │                                                   │
-│  views/       seven pages, zero logic             │
+│  views/       nine pages, zero logic             │
 │  components/  the design system                   │
 │  locales/     every human string                   │
 │  bridge.ts    the ONLY file that talks             │
@@ -77,6 +77,12 @@ They meet in exactly one place: a JSON state contract pushed over Tauri events.
 │                                                   │
 │  elevate    same binary re-run with runas for   │
 │             privileged writes, no resident admin │
+│                                                   │
+│  startup    sign-in programs (Run keys, Startup  │
+│             folders), overlay-only toggle, icons  │
+│             ride along resolved                  │
+│                                                   │
+│  types      shared engine-side shapes            │
 │                                                   │
 │  icons      native program icons as data URLs,  │
 │             PIDs only, never paths               │
@@ -190,10 +196,11 @@ A crashed session can **never** be reported as `"clean"`.
 * Update-modal decision flow (the once-per-version rule)
 * Error-code to dialog mapping
 * Theme, zoom, and clock logic
-* Tools, sweep, pagefile, processes, checks, and reports behavior
+* Tools, startup, sweep, pagefile, processes, checks, and reports behavior
 * App shell dialogs and advice flows
 * Locale key parity between en and ar
 
-CI (`.github/workflows/ci.yml`) runs typecheck, lint, tests with coverage
-floor, build, engine tests with all targets, clippy (`-D warnings`), fmt
-check, both audits, and the version sync gate on every push and PR.
+GitHub Actions is disabled repo-wide (billing lock), so nothing runs
+there until it returns: verify locally before every push with `npm run
+lint`, `npm test`, `npm run build`, `cargo test --all-targets`,
+`cargo clippy -- -D warnings`, and `cargo fmt --check`.
