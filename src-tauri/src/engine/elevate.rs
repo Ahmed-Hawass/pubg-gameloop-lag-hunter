@@ -40,8 +40,14 @@ pub const EXIT_FAILED: i32 = 3;
 /// the page file editor joins (HKLM writes): reads stay unprivileged,
 /// the whole apply request goes through one UAC prompt. The storage
 /// sweep's admin categories join the same way (system temp + delivery
-/// cache need admin to delete).
-pub static ELEVATED_IDS: &[&str] = &["powerplan", "pagefile-settings", "storage-clean"];
+/// cache need admin to delete). Memory Integrity joins too (HKLM\SYSTEM
+/// needs admin; reads stay unprivileged).
+pub static ELEVATED_IDS: &[&str] = &[
+    "powerplan",
+    "pagefile-settings",
+    "storage-clean",
+    "memoryintegrity",
+];
 
 /// Headless reboot flag: `exe --laghunter-reboot`. NOT a tweak (it never
 /// enters is_known_id or the dispatch); handled first in the runner.
@@ -701,7 +707,12 @@ mod tests {
         // ONE id too (categories are data, never new commands). Everything
         // else (plus unknown ids) must never take the elevated path by
         // surprise.
-        for id in ["powerplan", "pagefile-settings", "storage-clean"] {
+        for id in [
+            "powerplan",
+            "pagefile-settings",
+            "storage-clean",
+            "memoryintegrity",
+        ] {
             assert!(is_elevated_id(id), "{id} must elevate");
         }
         for id in [

@@ -335,6 +335,9 @@ export const en = {
   checkDvr: "Background recording (DVR)",
   dvrOk: "Off",
   dvrWarn: "On: turn off Record what happened in Windows Gaming settings",
+  checkHvci: "Memory integrity (HVCI)",
+  checkHvciOn: "On",
+  checkHvciOff: "Off",
   checkOkBadge: "Good",
   checkWarnBadge: "Needs attention",
   /** (?) buttons: screen-reader name carries the "about" context so it is
@@ -420,6 +423,7 @@ export const en = {
   tweakFsoTitle: "Turn off fullscreen optimizations",
   tweakMouseTitle: "Turn off mouse acceleration",
   tweakWindowedTitle: "Turn on optimizations for windowed games",
+  tweakHvciTitle: "Turn off Memory integrity (HVCI)",
   /** per-row background notes behind the (?) button: at most 3 sentences,
       plain language (what it does, when it helps or hurts, effect
       timing), never invented numbers. No revert pattern: the switch
@@ -438,6 +442,8 @@ export const en = {
     "Pointer acceleration makes the cursor travel farther the faster you move your hand. Turning it off gives the same cursor distance for the same hand movement every time. It's purely about feel and doesn't change frame rate.",
   tweakWindowedHint:
     "Modern Windows can present windowed and borderless games with lower latency through a newer path. Microsoft documents smoother play in these modes when this switch is on. Turning it off restores the old path.",
+  tweakHvciHint:
+    "Memory integrity isolates the Windows kernel behind virtualization, which costs CPU time in games. Turning it off frees that overhead but weakens kernel protection, so only do this on a machine you trust. The change applies after a restart, and turning it back on restores protection.",
   tweakPfTitle: "Virtual memory (page file)",
   /** one-shot page card: the why (borrowed disk instead of a crash)
       and the honest default (automatic suits almost everyone) */
@@ -470,6 +476,9 @@ export const en = {
     `Sizes below 8 GB have caused stutters on real PCs. Set ${max} MB on ${drive} anyway?`,
   tweakPfPending: "Restart Windows to apply the page file change.",
   tweakPfPendingBadge: "Restart needed",
+  /** restart-wait badge for the Memory Integrity row (same words as the
+      page file badge: one vocabulary for one wait) */
+  tweakHvciPendingBadge: "Restart needed",
   rebootTitle: "Restart Windows?",
   rebootBody:
     "The page file change takes effect after a restart. Restarting now will reboot Windows immediately.",
@@ -481,6 +490,7 @@ export const en = {
   tweakEffectNow: "Takes effect immediately",
   tweakEffectReopen: "Close and reopen the game to apply",
   tweakEffectSignin: "Takes effect after you sign out of Windows and back in",
+  tweakEffectRestart: "Takes effect after restart",
   tweakPowerHint:
     "Runs the processor at full speed by switching to the High performance plan. If the plan is missing, it's restored first with Windows' own command, then switched on. Turning it off brings back the plan you had before; PCs locked to Balanced-only mode hide this row instead.",
   /** summary banner over the gaming rows (same pattern as the health
@@ -502,6 +512,9 @@ export const en = {
   tweakNeeds1803: "Requires Windows 10 version 1803 or later.",
   tweakHiddenS0: "Unavailable here: this device only supports Modern Standby (S0) power management.",
   tweakHiddenUltimate: "Unavailable here: the Ultimate Performance plan is already active.",
+  /** reason line under a greyed-out row owned by policy or UEFI lock
+      (shown, never hidden: the user must learn why it refuses) */
+  tweakHvciLockedReason: "Controlled by your administrator or UEFI lock and can't be changed from here.",
   showUnsupportedLink: "Show unavailable options",
   tweakFailed: "The change couldn't be verified, so it wasn't applied.",
   /** storage sweep: scan four safe places, delete only the ticked ones */

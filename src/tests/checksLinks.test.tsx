@@ -38,6 +38,9 @@ const checks: SystemChecks = {
   on_ac: true,
   vt_enabled: true,
   game_dvr_enabled: true,
+  memory_integrity_off: true,
+  memory_integrity_pending: false,
+  memory_integrity_supported: true,
   storage_sense: false,
 };
 
@@ -78,5 +81,34 @@ describe("ChecksView deep-link senders", () => {
     const archive = screen.getByText(en.healthAllSettings).closest("section");
     await user.click(within(archive as HTMLElement).getAllByText(en.openSettings)[0]);
     expect(apiMock.openWindowsPanel).toHaveBeenCalledWith("power");
+  });
+
+  it("the Memory Integrity card routes into its Tools row", async () => {
+    const user = userEvent.setup();
+    apiMock.systemChecks.mockResolvedValue({ ...checks, memory_integrity_off: false });
+    apiMock.getSettings.mockResolvedValue(settings());
+    const onOpen = vi.fn();
+    render(React.createElement(ChecksView, { active: true, onOpenTool: onOpen }));
+    await screen.findAllByText(en.checkHvci);
+    const archive = screen.getByText(en.healthAllSettings).closest("section");
+    const card = within(archive as HTMLElement)
+      .getAllByText(en.checkHvci)[0]
+      .closest(".check-row")! as HTMLElement;
+    await user.click(within(card).getByText(en.openInTools));
+    expect(onOpen).toHaveBeenCalledWith("memoryintegrity");
+  });
+
+  it("without the link the Memory Integrity card falls back to Device security", async () => {
+    const user = userEvent.setup();
+    apiMock.systemChecks.mockResolvedValue({ ...checks, memory_integrity_off: false });
+    apiMock.getSettings.mockResolvedValue(settings());
+    render(React.createElement(ChecksView, { active: true }));
+    await screen.findAllByText(en.checkHvci);
+    const archive = screen.getByText(en.healthAllSettings).closest("section");
+    const card = within(archive as HTMLElement)
+      .getAllByText(en.checkHvci)[0]
+      .closest(".check-row")! as HTMLElement;
+    await user.click(within(card).getByText(en.openSettings));
+    expect(apiMock.openWindowsPanel).toHaveBeenCalledWith("device-security");
   });
 });

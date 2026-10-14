@@ -1385,6 +1385,19 @@ pub struct SystemChecks {
     /// true when Game DVR / background recording is on (steals GPU + disk
     /// mid-match). Unknown reads as off (no false alarm on probe failure).
     pub game_dvr_enabled: bool,
+    /// true when Memory Integrity (HVCI) is requested off (configured
+    /// state, like the page file card: the row and the card paint the
+    /// request with a pending marker, never the pre-reboot live truth
+    /// that made flips look like they bounced back by themselves).
+    /// Game-optimal = off, so the card reads ok when this is true.
+    /// Unknown reads as off (no false alarm on probe failure).
+    pub memory_integrity_off: bool,
+    /// true while the configured state differs from the running state: a
+    /// verified flip waits for a reboot (same marker pattern as pagefile).
+    pub memory_integrity_pending: bool,
+    /// false on builds predating the feature (the health card hides with
+    /// the Tools row instead of reporting on something absent).
+    pub memory_integrity_supported: bool,
     /// true when Storage Sense is on. `None` = the policy key does not
     /// exist on this Windows build (feature unavailable): the row hides,
     /// never shows a dead switch. Documented on Windows 10 (1709+) and 11.
@@ -1420,6 +1433,12 @@ pub struct TweakStates {
     /// Ultimate active or S0-only firmware (forcing plans there fights
     /// the design)
     pub power_high_perf: RowState,
+    /// Memory Integrity row: On = protection actually off (recommended
+    /// for play); Off = running; LockedPolicy = UEFI/policy lock (greyed
+    /// with its reason, never flippable); HiddenOldBuild = pre-1803.
+    /// The restart wait lives on the health card only (the Tools row
+    /// names it unconditionally), so no pending rides this struct.
+    pub memory_integrity: RowState,
     /// one-time client-update notice: the GameLoop build changed since the
     /// last Tools read (path-keyed GPU/FSO prefs orphan on client updates,
     /// so the user re-flips). The engine persists the new version on the
@@ -1438,6 +1457,9 @@ pub struct TweakStates {
 ///   user can act on must explain itself, never vanish silently.
 /// - Hidden: can never work here, cause unknown to the UI — the row is
 ///   absent entirely (legacy shape; new hides name their cause below).
+/// - LockedPolicy: owned by policy or UEFI lock — the row SHOWS greyed
+///   with its translated reason (the user must learn why it refuses,
+///   unlike a hidden row). Never flippable, writes stay refused.
 /// - HiddenOldBuild: needs a newer Windows (windowed needs Win11, the
 ///   per-exe GPU preference needs 10 1803+).
 /// - HiddenS0: S0-only firmware (forcing plans there fights the design).
@@ -1453,6 +1475,7 @@ pub enum RowState {
     On,
     Off,
     DisabledGameloopNotFound,
+    LockedPolicy,
     Hidden,
     HiddenOldBuild,
     HiddenS0,
@@ -1473,6 +1496,7 @@ impl TweakStates {
             mouse_accel_off: false,
             windowed_game_opt: None,
             power_high_perf: RowState::Hidden,
+            memory_integrity: RowState::Hidden,
             emulator_updated: false,
             emulator_version: String::new(),
         }
@@ -1513,6 +1537,46 @@ pub(crate) const WGC_MIN_BUILD: u32 = 22000;
 
 pub(crate) fn windowed_opt_supported(build: Option<u32>) -> bool {
     build.map(|b| b >= WGC_MIN_BUILD).unwrap_or(true)
+}
+
+/// First build shipping Memory Integrity (HVCI): older builds have no
+/// such feature, so a row for it would be a dead switch there. Same
+/// fail-open contract as the gates above: only a positively-identified
+/// old build hides the row.
+pub(crate) const HVCI_MIN_BUILD: u32 = 17134;
+
+pub(crate) fn hvci_supported(build: Option<u32>) -> bool {
+    build.map(|b| b >= HVCI_MIN_BUILD).unwrap_or(true)
+}
+
+/// Memory Integrity (HVCI) state from three registry facts plus the
+/// build. Config (Enabled DWORD, missing = 0) is the REQUEST; the
+/// volatile CI\State value is what RUNS; Locked = 1 means UEFI or
+/// policy owns it (greyed, never flippable). Pending = request differs
+/// from reality (a verified flip waits for a reboot, like pagefile).
+/// The row and the card paint the REQUEST with the pending marker,
+/// never the pre-reboot live truth (painting live made flips look like
+/// they bounced back by themselves). Pure: every shape pinned by test
+/// without touching a real registry.
+pub(crate) fn hvci_state(
+    config: Option<u32>,
+    live: Option<u32>,
+    locked: bool,
+    build: Option<u32>,
+) -> (RowState, bool, bool) {
+    let live_on = live == Some(1);
+    let pending = config.unwrap_or(0) != u32::from(live_on);
+    let off = config.unwrap_or(0) == 0;
+    let row = if !hvci_supported(build) {
+        RowState::HiddenOldBuild
+    } else if locked {
+        RowState::LockedPolicy
+    } else if off {
+        RowState::On
+    } else {
+        RowState::Off
+    };
+    (row, off, pending)
 }
 
 /// Live DWORD read from a registry subkey under a given root, as bool-ish
@@ -1609,6 +1673,9 @@ $vt = (Get-CimInstance Win32_Processor | Select-Object -First 1).VirtualizationF
         on_ac: true,
         vt_enabled: true,
         game_dvr_enabled: false,
+        memory_integrity_off: true,
+        memory_integrity_pending: false,
+        memory_integrity_supported: true,
         storage_sense: None,
     };
     for line in text.lines().map(|l| l.trim()).filter(|l| !l.is_empty()) {
@@ -1672,6 +1739,34 @@ $vt = (Get-CimInstance Win32_Processor | Select-Object -First 1).VirtualizationF
         c.pagefile_ok = pagefile_ok(&c.pagefile_mode, c.pagefile_mb);
     }
     c.pagefile_pending = pagefile_pending();
+    // Memory Integrity (HVCI): live state vs config from the same
+    // registry facts the Tools row reads (one rule, two faces). Unknown
+    // reads as off/quiet (no false alarm); pre-1803 hides the card with
+    // the row instead of reporting on an absent feature.
+    {
+        let hvci_build = windows_build_number();
+        let hvci_lock = super::tweaks::hvci_locked();
+        let (_, hvci_off, hvci_pending) = hvci_state(
+            super::tweaks::hvci_config(),
+            super::tweaks::hvci_live(),
+            hvci_lock,
+            hvci_build,
+        );
+        c.memory_integrity_off = hvci_off;
+        c.memory_integrity_pending = hvci_pending;
+        c.memory_integrity_supported = hvci_supported(hvci_build);
+        // notable states log here (cached path, not the poll): locked,
+        // absent-on-old-builds, and pending. Plain on/off stays silent.
+        if !c.memory_integrity_supported {
+            super::logging::warn("feature memoryintegrity hidden: pre-1803 build");
+        } else if hvci_lock {
+            super::logging::warn("feature memoryintegrity locked: UEFI or policy owns it");
+        } else if hvci_pending {
+            super::logging::info(
+                "feature memoryintegrity pending: configured state waits for a reboot",
+            );
+        }
+    }
     Ok(c)
 }
 
@@ -2659,6 +2754,16 @@ pub fn query_tweak_states() -> TweakStates {
         super::tweaks::MOUSE_SUBKEY,
         super::tweaks::MOUSE_T2,
     );
+    // Memory Integrity (HVCI): config vs live vs lock from the tweak
+    // module's homes (one definition per path), row shaped by the
+    // shared pure rule below.
+    let hvci_build = windows_build_number();
+    let (memory_integrity, _, _) = hvci_state(
+        super::tweaks::hvci_config(),
+        super::tweaks::hvci_live(),
+        super::tweaks::hvci_locked(),
+        hvci_build,
+    );
     // per-exe states over the resolved GameLoop executables. No resolved
     // exes + supported build = DISABLED with an actionable reason (the
     // user can install/run GameLoop); unsupported build = HiddenOldBuild (can
@@ -2774,6 +2879,7 @@ pub fn query_tweak_states() -> TweakStates {
         mouse_accel_off: mouse_accel_off(mouse_speed, mouse_t1, mouse_t2),
         windowed_game_opt,
         power_high_perf,
+        memory_integrity,
         emulator_updated,
         emulator_version,
     }
@@ -2789,7 +2895,10 @@ pub fn open_windows_panel(panel: &str) -> Result<(), String> {
     // The whitelist lives OUTSIDE the cfg(windows) gate on purpose: a
     // non-Windows build must refuse every name just like Windows refuses
     // unknown ones (an Ok(()) for anything would lie to shared callers).
-    if !matches!(panel, "power" | "system" | "gaming-captures") {
+    if !matches!(
+        panel,
+        "power" | "system" | "gaming-captures" | "device-security"
+    ) {
         return Err("unknown panel".into());
     }
     #[cfg(windows)]
@@ -2819,6 +2928,14 @@ pub fn open_windows_panel(panel: &str) -> Result<(), String> {
             "gaming-captures" => {
                 let mut c = Command::new(explorer_exe());
                 c.arg("ms-settings:gaming-gamedvr");
+                c
+            }
+            // Windows Security home of Core isolation (no .cpl and no
+            // ms-settings page covers it: the Security app answers its
+            // own URI scheme, like Settings answers ms-settings: above).
+            "device-security" => {
+                let mut c = Command::new(explorer_exe());
+                c.arg("windowsdefender://devicesecurity/");
                 c
             }
             _ => return Err("unknown panel".into()),
@@ -3260,6 +3377,50 @@ mod tests {
         // non-English output with no marker: S0 may sit in the unavailable
         // section in another language — unknown means NOT S0 (show the row)
         assert!(!s0_available_in("Standby (S0 Low Power Idle)"));
+    }
+
+    #[test]
+    fn hvci_state_shapes() {
+        // the row and the card paint the REQUEST (second element = off
+        // requested), live feeds pending only. Off requested: recommended.
+        assert_eq!(
+            hvci_state(None, None, false, Some(26200)),
+            (RowState::On, true, false)
+        );
+        assert_eq!(
+            hvci_state(Some(0), Some(0), false, Some(22631)),
+            (RowState::On, true, false)
+        );
+        // on requested: game-costly, the card warns
+        assert_eq!(
+            hvci_state(Some(1), Some(1), false, Some(26200)),
+            (RowState::Off, false, false)
+        );
+        // flipped, reboot pending: request says on, live still off. The
+        // row holds the request (never bounces back by itself).
+        assert_eq!(
+            hvci_state(Some(1), Some(0), false, Some(26200)),
+            (RowState::Off, false, true)
+        );
+        // locked: greyed either way, truth still reported
+        assert_eq!(
+            hvci_state(Some(1), Some(1), true, Some(26200)),
+            (RowState::LockedPolicy, false, false)
+        );
+        assert_eq!(
+            hvci_state(Some(0), Some(0), true, Some(26200)),
+            (RowState::LockedPolicy, true, false)
+        );
+        // pre-1803: hidden, never a dead row
+        assert_eq!(
+            hvci_state(None, None, false, Some(15063)),
+            (RowState::HiddenOldBuild, true, false)
+        );
+        // unreadable build fails open (shows)
+        assert_eq!(
+            hvci_state(None, None, false, None),
+            (RowState::On, true, false)
+        );
     }
 
     #[test]

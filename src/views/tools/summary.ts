@@ -19,6 +19,7 @@ export function isHiddenRowState(s: RowState): boolean {
 export function summarizeTweaks(s: TweakStates): { shown: number; on: number } {
   const rows: { shown: boolean; on: boolean }[] = [
     { shown: !isHiddenRowState(s.power_high_perf), on: s.power_high_perf === "on" },
+    { shown: !isHiddenRowState(s.memory_integrity), on: s.memory_integrity === "on" },
     { shown: true, on: !s.game_dvr_enabled },
     { shown: true, on: s.game_mode },
     { shown: !isHiddenRowState(s.fso_disabled), on: s.fso_disabled === "on" },

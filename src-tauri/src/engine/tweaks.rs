@@ -29,6 +29,7 @@ use serde::Serialize;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 use winreg::enums::HKEY_CURRENT_USER;
+use winreg::enums::HKEY_LOCAL_MACHINE;
 use winreg::RegKey;
 
 /// Registry home of the background-recording toggle ("Record what
@@ -59,6 +60,11 @@ pub const POWERPLAN_ID: &str = "powerplan";
 /// Memory-style request (global automatic flag plus the selected drive's
 /// mode and sizes). No per-mode ids: a mode is data, never a new command.
 pub const PAGEFILE_SETTINGS_ID: &str = "pagefile-settings";
+/// Memory Integrity (HVCI) id: the gaming-optimal direction is OFF
+/// (less overhead), so the switch ON means protection is actually off.
+/// HKLM\SYSTEM needs admin: reads stay unprivileged, writes go elevated
+/// like the power plan (one UAC per flip, same silent-cancel contract).
+pub const MEMORY_INTEGRITY_ID: &str = "memoryintegrity";
 /// The dialog's own floor ("Minimum allowed: 16 MB" on real Windows —
 /// ReactOS sources say 2 MB, the shipping dialog says 16; trust the ship).
 pub const PAGEFILE_MIN_MB: u32 = 16;
@@ -88,6 +94,18 @@ pub(crate) const WGC_SETTINGS_NAME: &str = "DirectXUserGlobalSettings";
 pub(crate) const WGC_TOKEN: &str = "SwapEffectUpgradeEnable";
 /// the high-performance preference number (matches the Settings UI)
 pub(crate) const GPU_PREF_HIGH: u32 = 2;
+/// Memory Integrity registry homes, shared with the read side
+/// (system.rs): ONE definition per key path, like every home above.
+/// The scenario key is ABSENT on machines that never configured HVCI
+/// (missing = never requested = off), so the writer creates it.
+pub(crate) const HVCI_SUBKEY: &str =
+    r"SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity";
+pub(crate) const HVCI_ENABLED: &str = "Enabled";
+pub(crate) const HVCI_LOCKED: &str = "Locked";
+/// Volatile live state (what RUNS, not what was requested). Absent =
+/// the hypervisor never ran it = off.
+pub(crate) const HVCI_STATE_SUBKEY: &str = r"SYSTEM\CurrentControlSet\Control\CI\State";
+pub(crate) const HVCI_STATE_VALUE: &str = "HVCIEnabled";
 
 /// What the UI needs after a write: what was there, what was written, and
 /// whether a fresh re-read confirms it. `verified == false` must surface as
@@ -460,6 +478,83 @@ pub fn set_windowed_opt(value: u32) -> Result<TweakResult, String> {
     })
 }
 
+/// Unprivileged Memory Integrity reads (HKLM\SYSTEM reads need no
+/// elevation): the config request, the volatile live state, and the
+/// UEFI/policy lock. Shared by the read side (system.rs) and the
+/// parent-side verify after an elevated write.
+pub(crate) fn hvci_config() -> Option<u32> {
+    hklm_dword(HVCI_SUBKEY, HVCI_ENABLED)
+}
+
+pub(crate) fn hvci_live() -> Option<u32> {
+    hklm_dword(HVCI_STATE_SUBKEY, HVCI_STATE_VALUE)
+}
+
+pub(crate) fn hvci_locked() -> bool {
+    hklm_dword(HVCI_SUBKEY, HVCI_LOCKED) == Some(1)
+}
+
+fn hklm_dword(subkey: &str, name: &str) -> Option<u32> {
+    RegKey::predef(HKEY_LOCAL_MACHINE)
+        .open_subkey(subkey)
+        .ok()?
+        .get_value(name)
+        .ok()
+}
+
+/// Memory Integrity flip (elevated child only: HKLM\SYSTEM needs
+/// admin). Creates the scenario key when absent (a machine that never
+/// configured HVCI has no key at all), writes the explicit state, and
+/// verifies by re-reading the CONFIG (the live state only follows after
+/// a reboot — the UI names that wait instead of claiming success).
+fn set_memory_integrity(value: u32) -> Result<TweakResult, String> {
+    if value > 1 {
+        return Err("memoryintegrity value must be 0 or 1".into());
+    }
+    let previous = hvci_config();
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let (key, _) = hklm
+        .create_subkey(HVCI_SUBKEY)
+        .map_err(|e| format!("cannot open {HVCI_SUBKEY}: {e}"))?;
+    key.set_value(HVCI_ENABLED, &value)
+        .map_err(|e| format!("cannot write {HVCI_SUBKEY}\\{HVCI_ENABLED}: {e}"))?;
+    let verified = key
+        .get_value::<u32, _>(HVCI_ENABLED)
+        .map(|v| v == value)
+        .unwrap_or(false);
+    super::logging::info(&format!(
+        "tweak memoryintegrity set: value={value} verified={verified}"
+    ));
+    Ok(TweakResult {
+        id: MEMORY_INTEGRITY_ID.into(),
+        previous,
+        value,
+        verified,
+    })
+}
+
+/// Elevated Memory Integrity flip: UAC spawn, then the SAME verify the
+/// child ran (config re-read, unprivileged). Cancellation passes through
+/// verbatim for the UI's silent rollback, like the power plan.
+fn set_tweak_elevated_memory_integrity(value: u32) -> Result<TweakResult, String> {
+    if value > 1 {
+        return Err("memoryintegrity value must be 0 or 1".into());
+    }
+    let previous = hvci_config();
+    let code = super::elevate::elevate_self(MEMORY_INTEGRITY_ID, value)?;
+    super::elevate::map_exit_code(code)?;
+    let verified = hvci_config() == Some(value);
+    super::logging::info(&format!(
+        "tweak memoryintegrity set: value={value} verified={verified}"
+    ));
+    Ok(TweakResult {
+        id: MEMORY_INTEGRITY_ID.into(),
+        previous,
+        value,
+        verified,
+    })
+}
+
 /// Dispatch a set by id. Elevated ids run through the elevate module
 /// (same binary re-run elevated); everything else writes directly.
 /// Unknown ids (and out-of-range values) fail before anything runs.
@@ -484,6 +579,9 @@ fn set_tweak_elevated(id: &str, value: u32) -> Result<TweakResult, String> {
     }
     if id == POWERPLAN_ID {
         return set_tweak_elevated_powerplan(value);
+    }
+    if id == MEMORY_INTEGRITY_ID {
+        return set_tweak_elevated_memory_integrity(value);
     }
     Err(format!("no elevated setter for {id}"))
 }
@@ -1059,6 +1157,7 @@ pub fn set_tweak_direct(id: &str, value: u32) -> Result<TweakResult, String> {
         MOUSE_ID => set_mouse_accel(value),
         WGC_ID => set_windowed_opt(value),
         POWERPLAN_ID => set_power_plan(value),
+        MEMORY_INTEGRITY_ID => set_memory_integrity(value),
         _ => Err("unknown tweak".into()),
     }
 }
@@ -1070,7 +1169,15 @@ pub fn set_tweak_direct(id: &str, value: u32) -> Result<TweakResult, String> {
 pub fn is_known_id(id: &str) -> bool {
     matches!(
         id,
-        DVR_ID | SS_ID | GAMEMODE_ID | GPUPREF_ID | FSO_ID | MOUSE_ID | WGC_ID | POWERPLAN_ID
+        DVR_ID
+            | SS_ID
+            | GAMEMODE_ID
+            | GPUPREF_ID
+            | FSO_ID
+            | MOUSE_ID
+            | WGC_ID
+            | POWERPLAN_ID
+            | MEMORY_INTEGRITY_ID
     )
 }
 
@@ -1096,6 +1203,7 @@ mod tests {
         assert!(set_tweak("windowedopt", 2).is_err());
         // elevated ids refuse BEFORE any UAC spawn (no prompt in tests)
         assert!(set_tweak("powerplan", 2).is_err());
+        assert!(set_tweak("memoryintegrity", 2).is_err());
     }
 
     #[test]
@@ -1127,6 +1235,7 @@ mod tests {
             ("mouse", "mouse value must be 0 or 1"),
             ("windowedopt", "windowedopt value must be 0 or 1"),
             ("powerplan", "powerplan value must be 0 or 1"),
+            ("memoryintegrity", "memoryintegrity value must be 0 or 1"),
         ] {
             assert_eq!(
                 set_tweak(id, 2).unwrap_err(),

@@ -9,7 +9,9 @@ import {
   cleanupWhen,
   defaultCheckedIds,
   formatSweepBytes,
+  summarizeTweaks,
 } from "../views/tools/summary";
+import { tweakStates } from "./fixtures";
 
 describe("sweep memory formatting", () => {
   it("renders one-decimal MB and the short stamp", () => {
@@ -62,5 +64,21 @@ describe("sweep place display", () => {
       ]),
     ).toEqual(["user_temp"]);
     expect(defaultCheckedIds([])).toEqual([]);
+  });
+});
+
+describe("gaming summary counts", () => {
+  it("counts a shown Memory Integrity row like every other row", () => {
+    // hidden (the fixture default: dvr, gamemode, mouse shown): absent
+    // from both counts
+    expect(summarizeTweaks(tweakStates())).toEqual({ shown: 3, on: 0 });
+    // shown and recommended: counted shown and on
+    expect(
+      summarizeTweaks(tweakStates({ memory_integrity: "on" })),
+    ).toEqual({ shown: 4, on: 1 });
+    // locked but visible: shown, never silently dropped
+    expect(
+      summarizeTweaks(tweakStates({ memory_integrity: "locked_policy" })),
+    ).toEqual({ shown: 4, on: 0 });
   });
 });

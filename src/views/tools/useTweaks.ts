@@ -32,6 +32,11 @@ export function useTweaks(failNotice: (notice: Notice | null) => void) {
       restorable; HiddenUltimate/HiddenS0 = Ultimate active or S0-only
       firmware */
   const [powerState, setPowerState] = useState<RowState>("hidden");
+  /** Memory Integrity row: On = protection actually off (recommended
+      for play); Off = running; LockedPolicy = UEFI/policy lock
+      (greyed, never flippable). The restart wait rides alongside (the
+      running state only follows a reboot). */
+  const [hvciState, setHvciState] = useState<RowState>("hidden");
   const [wgcOn, setWgcOn] = useState<boolean | null>(null);
   const [mouseOn, setMouseOn] = useState<boolean | null>(null);
   const [tweakBusy, setTweakBusy] = useState(false);
@@ -96,6 +101,14 @@ export function useTweaks(failNotice: (notice: Notice | null) => void) {
       // back silently, a post-consent failure shows the notice.
       get: () => (powerState === "on" ? true : powerState === "off" ? false : null),
     },
+    memoryintegrity: {
+      goal: (on: boolean): 0 | 1 => (on ? 0 : 1), // ON = protection actually off
+      set: (v: boolean) => setHvciState(v ? "on" : "off"),
+      // only on/off are flippable — locked never reaches the button
+      // (greyed with its reason), hidden never reaches the render below.
+      // The flip runs elevated (one UAC per press) like the power plan.
+      get: () => (hvciState === "on" ? true : hvciState === "off" ? false : null),
+    },
     windowedopt: {
       goal: (on: boolean): 0 | 1 => (on ? 1 : 0), // ON = optimizations on
       set: setWgcOn,
@@ -129,6 +142,7 @@ export function useTweaks(failNotice: (notice: Notice | null) => void) {
       setWgcOn(s.windowed_game_opt);
       setGpuState(s.gpu_high_perf);
       setPowerState(s.power_high_perf);
+      setHvciState(s.memory_integrity);
       setMouseOn(s.mouse_accel_off);
       setLoadError(null);
       // one-time client-update notice (the engine persists on this very
@@ -208,6 +222,7 @@ export function useTweaks(failNotice: (notice: Notice | null) => void) {
     fsoState,
     gpuState,
     powerState,
+    hvciState,
     wgcOn,
     mouseOn,
     tweakBusy,
@@ -219,4 +234,4 @@ export function useTweaks(failNotice: (notice: Notice | null) => void) {
   };
 }
 
-export type TweakId = "dvr" | "storagesense" | "gamemode" | "fso" | "gpupref" | "powerplan" | "windowedopt" | "mouse";
+export type TweakId = "dvr" | "storagesense" | "gamemode" | "fso" | "gpupref" | "powerplan" | "windowedopt" | "mouse" | "memoryintegrity";

@@ -262,4 +262,122 @@ describe("ToolsView gaming switches", () => {
     expect(top?.querySelector(".intro-card")).toBeNull();
     expect(document.querySelector(".page-intro .intro-card")).toBeTruthy();
   });
+
+  it("memory integrity flips off through one elevated write", async () => {
+    const user = userEvent.setup();
+    apiMock.tweakStates.mockResolvedValue(
+      tweakStates({ memory_integrity: "off" }),
+    );
+    apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
+    apiMock.cleanupHistory.mockResolvedValue(cleanupHistory());
+    apiMock.clockHour12.mockResolvedValue(false);
+    apiMock.setTweak.mockClear();
+    apiMock.setTweak.mockResolvedValue({
+      id: "memoryintegrity",
+      previous: 1,
+      value: 0,
+      verified: true,
+    });
+    render(
+      React.createElement(ToolsView, {
+        active: true,
+        toolOpenId: null,
+        onToolOpened: vi.fn(),
+        showUnsupported: false,
+        onShowUnsupported: vi.fn(),
+      }),
+    );
+    await user.click(screen.getByText(en.toolGamingTweaks));
+    // off rows repeat (featured + archive, same row twice): flip the first
+    const rows = await screen.findAllByText(en.tweakHvciTitle);
+    const row = rows[0];
+    const sw = within(row.closest(".switch-row")!).getByRole("switch");
+    expect(sw).toHaveAttribute("aria-checked", "false"); // protection running
+    // the restart wait rides the row always (every flip needs a reboot:
+    // verified timing, never a guessed line)
+    expect(
+      row.closest(".switch-row")!.querySelector(".switch-state"),
+    ).toHaveTextContent(en.tweakEffectRestart);
+    await user.click(sw);
+    // ON means protection off: the write carries 0, like DVR's inverted goal
+    await waitFor(() => {
+      expect(apiMock.setTweak).toHaveBeenCalledWith("memoryintegrity", 0);
+    });
+  });
+
+  it("a locked Memory Integrity row greys with its reason and never fires", async () => {
+    const user = userEvent.setup();
+    apiMock.tweakStates.mockResolvedValue(
+      tweakStates({ memory_integrity: "locked_policy" }),
+    );
+    apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
+    apiMock.cleanupHistory.mockResolvedValue(cleanupHistory());
+    apiMock.clockHour12.mockResolvedValue(false);
+    apiMock.setTweak.mockClear();
+    render(
+      React.createElement(ToolsView, {
+        active: true,
+        toolOpenId: null,
+        onToolOpened: vi.fn(),
+        showUnsupported: false,
+        onShowUnsupported: vi.fn(),
+      }),
+    );
+    await user.click(screen.getByText(en.toolGamingTweaks));
+    const row = await screen.findByText(en.tweakHvciTitle);
+    expect(screen.getByText(en.tweakHvciLockedReason)).toBeTruthy();
+    // greyed and unflippable like every revealed-unsupported row
+    const sw = row.closest(".switch-row")!.querySelector(".switch")!;
+    expect(sw).toBeDisabled();
+    await user.click(sw);
+    expect(apiMock.setTweak).not.toHaveBeenCalled();
+  });
+
+  it("the row always names the restart wait", async () => {
+    const user = userEvent.setup();
+    apiMock.tweakStates.mockResolvedValue(
+      tweakStates({ memory_integrity: "on" }),
+    );
+    apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
+    apiMock.cleanupHistory.mockResolvedValue(cleanupHistory());
+    apiMock.clockHour12.mockResolvedValue(false);
+    render(
+      React.createElement(ToolsView, {
+        active: true,
+        toolOpenId: null,
+        onToolOpened: vi.fn(),
+        showUnsupported: false,
+        onShowUnsupported: vi.fn(),
+      }),
+    );
+    await user.click(screen.getByText(en.toolGamingTweaks));
+    const row = await screen.findByText(en.tweakHvciTitle);
+    // the verified effect timing rides the row (never a guessed line)
+    expect(
+      row.closest(".switch-row")!.querySelector(".switch-state"),
+    ).toHaveTextContent(en.tweakEffectRestart);
+  });
+
+  it("a pre-1803 build reveals the row greyed under the preference", async () => {
+    const user = userEvent.setup();
+    apiMock.tweakStates.mockResolvedValue(
+      tweakStates({ memory_integrity: "hidden_old_build" }),
+    );
+    apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());
+    apiMock.cleanupHistory.mockResolvedValue(cleanupHistory());
+    apiMock.clockHour12.mockResolvedValue(false);
+    render(
+      React.createElement(ToolsView, {
+        active: true,
+        toolOpenId: null,
+        onToolOpened: vi.fn(),
+        showUnsupported: true,
+        onShowUnsupported: vi.fn(),
+      }),
+    );
+    await user.click(screen.getByText(en.toolGamingTweaks));
+    const row = await screen.findByText(en.tweakHvciTitle);
+    expect(screen.getByText(en.tweakNeeds1803)).toBeTruthy();
+    expect(row.closest(".switch-row")!.querySelector(".switch")).toBeDisabled();
+  });
 });

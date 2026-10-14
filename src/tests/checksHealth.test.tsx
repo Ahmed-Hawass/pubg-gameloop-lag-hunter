@@ -38,6 +38,9 @@ const allGood: SystemChecks = {
   on_ac: true,
   vt_enabled: true,
   game_dvr_enabled: false,
+  memory_integrity_off: true,
+  memory_integrity_pending: false,
+  memory_integrity_supported: true,
   storage_sense: false,
 };
 
@@ -52,6 +55,9 @@ const threeWarns: SystemChecks = {
   on_ac: true,
   vt_enabled: true,
   game_dvr_enabled: true,
+  memory_integrity_off: true,
+  memory_integrity_pending: false,
+  memory_integrity_supported: true,
   storage_sense: false,
 };
 
@@ -117,8 +123,7 @@ describe("ChecksView health summary", () => {
     expect(screen.getByRole("button", { name: en.refresh })).toBeTruthy();
   });
 
-  it("a pending page file write names the reboot wait", async () => {
-    apiMock.systemChecks.mockResolvedValue({
+  it("a pending page file write names the reboot wait", async () => {    apiMock.systemChecks.mockResolvedValue({
       ...allGood,
       pagefile_mode: "manual",
       pagefile_mb: 16384,
@@ -155,5 +160,35 @@ describe("ChecksView health summary", () => {
     // standing scope line, both above the verdict banner
     expect(screen.getByText(en.systemHealth)).toBeTruthy();
     expect(screen.getByText(en.checksHint)).toBeTruthy();
+  });
+
+  it("a requested Memory Integrity warns with the restart wait when pending", async () => {
+    apiMock.systemChecks.mockResolvedValue({
+      ...allGood,
+      memory_integrity_off: false,
+      memory_integrity_pending: true,
+    });
+    apiMock.getSettings.mockResolvedValue(settings());
+    render(React.createElement(ChecksView, { active: false, onOpenTool: vi.fn() }));
+    // warn card (featured + archive) with the composed state line
+    expect(await screen.findAllByText(en.checkHvci)).toHaveLength(2);
+    const states = await screen.findAllByText(
+      (_, el) => el?.textContent === `${en.checkHvciOn} · ${en.tweakHvciPendingBadge}`,
+    );
+    expect(states).toHaveLength(2);
+    expect(states[0].getAttribute("class")).toContain("switch-state");
+  });
+
+  it("an unsupported build hides the Memory Integrity card entirely", async () => {
+    apiMock.systemChecks.mockResolvedValue({
+      ...allGood,
+      memory_integrity_supported: false,
+    });
+    apiMock.getSettings.mockResolvedValue(settings());
+    render(React.createElement(ChecksView, { active: false, onOpenTool: vi.fn() }));
+    await screen.findByText(en.healthAllGood);
+    // no card, no hint, no button: reporting on an absent feature
+    // would be fiction
+    expect(screen.queryByText(en.checkHvci)).toBeNull();
   });
 });

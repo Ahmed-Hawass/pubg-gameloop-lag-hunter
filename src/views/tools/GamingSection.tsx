@@ -1,4 +1,4 @@
-// GamingSection.tsx — the gaming details page: seven live-mirrored
+// GamingSection.tsx — the gaming details page: eight live-mirrored
 // switches. Owns its switch family (useTweaks), its reads, and its
 // deep-link landing; the parent only routes which page shows.
 
@@ -11,6 +11,7 @@ import {
   Monitor,
   Mouse,
   RotateCw,
+  ShieldOff,
   SlidersHorizontal,
   Video,
   Zap,
@@ -368,15 +369,60 @@ export function GamingSection(props: {
       ),
     });
   }
+  if (!isHiddenRowState(tweaks.hvciState)) {
+    rows.push({
+      id: "memoryintegrity",
+      off: tweaks.hvciState === "off",
+      el: (
+        <SwitchRow
+          tweakId="memoryintegrity"
+          linked={linkedId === "memoryintegrity"}
+          on={tweaks.hvciState === "on"}
+          func={<ShieldOff size={15} />}
+          name={t.tweakHvciTitle}
+          effect={t.tweakEffectRestart}
+          hintTitle={t.tweakHvciTitle}
+          hintBody={t.tweakHvciHint}
+          onHint={showHint}
+          busy={tweaks.tweakBusy}
+          disabled={tweaks.hvciState === "locked_policy"}
+          disabledHint={t.tweakHvciLockedReason}
+          onFlip={(next) => void tweaks.flipTweak("memoryintegrity", next)}
+        />
+      ),
+    });
+  } else if (showUnsupported && tweaks.hvciState === "hidden_old_build") {
+    // pre-1803 is the only gate the backend names here (same shape as
+    // the GPU row above)
+    unsupported.push({
+      id: "memoryintegrity",
+      el: (
+        <SwitchRow
+          tweakId="memoryintegrity"
+          linked={linkedId === "memoryintegrity"}
+          on={false}
+          func={<ShieldOff size={15} />}
+          name={t.tweakHvciTitle}
+          hintTitle={t.tweakHvciTitle}
+          hintBody={t.tweakHvciHint}
+          onHint={showHint}
+          busy={tweaks.tweakBusy}
+          disabled
+          disabledHint={t.tweakNeeds1803}
+        />
+      ),
+    });
+  }
   const offRows = rows.filter((r) => r.off);
   /** hidden rows the preference reveals: counted for the discover
       line below (a hidden row the user can never see needs an
       invitation), never for the banner or featured (attention stays
       actionable). fso never hides (its worst case is a fixable
-      disabled), so only the three hiding rows count. */
+      disabled), so only the four hiding rows count. */
   const hiddenCount =
     (isHiddenRowState(tweaks.powerState) ? 1 : 0) +
     (isHiddenRowState(tweaks.gpuState) ? 1 : 0) +
+    (isHiddenRowState(tweaks.hvciState) ? 1 : 0) +
     (tweaks.wgcOn === null ? 1 : 0);
 
   return (

@@ -561,6 +561,16 @@ export interface SystemChecks {
   vt_enabled: boolean;
   /** true when Game DVR / background recording is on */
   game_dvr_enabled: boolean;
+  /** true when Memory Integrity (HVCI) is requested off (configured
+      state, like the page file card: request painted with a pending
+      marker, never the pre-reboot live truth) */
+  memory_integrity_off: boolean;
+  /** true while the configured state differs from the running state
+      (a verified flip waits for a reboot) */
+  memory_integrity_pending: boolean;
+  /** false on builds predating the feature (the health card hides with
+      the Tools row instead of reporting on something absent) */
+  memory_integrity_supported: boolean;
   /** Storage Sense on/off; null = feature unavailable on this Windows
       build (the row hides, never a dead switch) */
   storage_sense: boolean | null;
@@ -569,13 +579,16 @@ export interface SystemChecks {
 /** Visibility of a Tools row whose availability depends on the machine —
     mirrors RowState in engine/system.rs. `disabled_gameloop_not_found`
     renders greyed with a translated reason (fixable by the user);
-    `hidden` renders nothing (legacy shape, cause unknown); the Hidden*
-    shapes render nothing by default and greyed with their reason under
-    the show-unsupported preference. */
+    `locked_policy` renders greyed with a translated reason (owned by
+    policy or UEFI lock, never flippable); `hidden` renders nothing
+    (legacy shape, cause unknown); the Hidden* shapes render nothing by
+    default and greyed with their reason under the show-unsupported
+    preference. */
 export type RowState =
   | "on"
   | "off"
   | "disabled_gameloop_not_found"
+  | "locked_policy"
   | "hidden"
   | "hidden_old_build"
   | "hidden_s0"
@@ -599,6 +612,10 @@ export interface TweakStates {
   /** High Performance row state: on/off/disabled-with-reason/hidden,
       same contract as the per-exe rows */
   power_high_perf: RowState;
+  /** Memory Integrity row: on = protection actually off (recommended
+      for play); off = running; locked_policy = UEFI/policy lock
+      (greyed, never flippable); hidden_old_build = pre-1803 */
+  memory_integrity: RowState;
   /** one-time client-update notice: the GameLoop build changed since the
       last Tools read (path-keyed GPU/FSO prefs orphan on client updates).
       The engine persists on the notifying read — later reads stay quiet. */

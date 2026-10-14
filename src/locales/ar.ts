@@ -354,6 +354,9 @@ export const ar: Locale = {
   checkDvr: "التسجيل في الخلفية (DVR)",
   dvrOk: "متوقف",
   dvrWarn: "يعمل: أوقف «تسجيل ما حدث» من إعدادات الألعاب",
+  checkHvci: "سلامة الذاكرة (HVCI)",
+  checkHvciOn: "مفعّلة",
+  checkHvciOff: "موقوفة",
   checkOkBadge: "جيد",
   checkWarnBadge: "يحتاج إلى انتباه",
   /** (?) buttons: screen-reader name carries the "about" context so it is
@@ -445,6 +448,7 @@ export const ar: Locale = {
   tweakFsoTitle: "إيقاف تحسينات ملء الشاشة",
   tweakMouseTitle: "إيقاف تسريع الماوس",
   tweakWindowedTitle: "تشغيل تحسينات الألعاب في وضع النافذة",
+  tweakHvciTitle: "إيقاف سلامة الذاكرة (HVCI)",
   /** per-row background notes behind the (?) button: at most 3 sentences,
       plain language (what it does, when it helps or hurts, effect
       timing), never invented numbers. No revert pattern: the switch
@@ -463,6 +467,8 @@ export const ar: Locale = {
     "تسريع المؤشر يجعله يقطع مسافة أبعد كلما أسرعت بحركة يدك. وإيقافه يجعل الحركة نفسها تعطي المسافة نفسها دائمًا. الأمر متعلق بإحساس التحكم فقط، ولا يغيّر عدد الإطارات.",
   tweakWindowedHint:
     "تستطيع إصدارات ويندوز الحديثة عرض الألعاب في وضع النافذة والنافذة بلا حدود بزمن استجابة أقل عبر مسار عرض أحدث. وتوثّق مايكروسوفت تجربة لعب أكثر سلاسة في هذين الوضعين عند تشغيل هذا الخيار. إيقافه يعيد المسار القديم.",
+  tweakHvciHint:
+    "تعزل سلامة الذاكرة (HVCI) نواة ويندوز خلف المحاكاة الافتراضية، وهذا يكلف وقت المعالج في الألعاب. إيقافها يحرر هذا العبء لكنه يُضعف حماية النواة، فافعل ذلك فقط على جهاز تثق به. يسري التغيير بعد إعادة التشغيل، وإعادة تفعيلها تعيد الحماية.",
   tweakPfTitle: "الذاكرة الظاهرية (ملف الترحيل)",
   /** one-shot page card: the why (borrowed disk instead of a crash)
       and the honest default (automatic suits almost everyone) */
@@ -495,6 +501,9 @@ export const ar: Locale = {
     `الأحجام الأقل من 8 GB سببت تقطيعًا على أجهزة حقيقية. هل تريد تعيين ${max} MB على ${drive} على أي حال؟`,
   tweakPfPending: "أعد تشغيل ويندوز لتطبيق تغيير ملف الترحيل.",
   tweakPfPendingBadge: "يلزم إعادة التشغيل",
+  /** restart-wait badge for the Memory Integrity row (same words as the
+      page file badge: one vocabulary for one wait) */
+  tweakHvciPendingBadge: "يلزم إعادة التشغيل",
   rebootTitle: "إعادة تشغيل ويندوز؟",
   rebootBody:
     "يسري تغيير ملف الترحيل بعد إعادة التشغيل. وإذا أعدت التشغيل الآن، فسيُعاد تشغيل ويندوز فورًا.",
@@ -506,6 +515,7 @@ export const ar: Locale = {
   tweakEffectNow: "يسري فورًا",
   tweakEffectReopen: "أغلق اللعبة وأعد فتحها لتطبيق التغيير",
   tweakEffectSignin: "يسري بعد تسجيل الخروج من ويندوز والدخول مجددًا",
+  tweakEffectRestart: "يسري بعد إعادة التشغيل",
   tweakPowerHint:
     "يشغّل المعالج بكامل سرعته عبر التبديل إلى خطة الأداء العالي. وإذا كانت الخطة غير موجودة، تُستعاد أولًا بأمر ويندوز الرسمي ثم تُفعَّل. إيقافه يعيد الخطة التي كنت تستخدمها، وتخفي الأجهزة المقفلة على وضع «متوازن» فقط هذا الصف.",
   /** summary banner over the gaming rows (same pattern as the health
@@ -533,6 +543,9 @@ export const ar: Locale = {
   tweakNeeds1803: "يتطلب ويندوز 10 الإصدار 1803 أو أحدث.",
   tweakHiddenS0: "غير متاح هنا: هذا الجهاز يدعم وضع الاستعداد الحديث (S0) فقط لإدارة الطاقة.",
   tweakHiddenUltimate: "غير متاح هنا: خطة الأداء المطلق (Ultimate Performance) مفعّلة بالفعل.",
+  /** reason line under a greyed-out row owned by policy or UEFI lock
+      (shown, never hidden: the user must learn why it refuses) */
+  tweakHvciLockedReason: "تخضع لإدارة المسؤول أو قفل UEFI، ولا يمكن تغييرها من هنا.",
   showUnsupportedLink: "إظهار الخيارات غير المتاحة",
   tweakFailed: "تعذّر التحقق من التغيير، لذا لم يُطبَّق.",
   /** storage sweep: scan four safe places, delete only the ticked ones */

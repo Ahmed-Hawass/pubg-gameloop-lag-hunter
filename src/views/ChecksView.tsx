@@ -11,6 +11,7 @@ import {
   RefreshCw,
   RotateCw,
   ShieldAlert,
+  ShieldOff,
   Video,
   Zap,
 } from "lucide-react";
@@ -237,6 +238,26 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
       hint: { title: t.checkPagefile, body: t.checkPagefileHint },
       onOpen: openInAppOr("pagefile", "system"),
     },
+    // Memory Integrity lives in the Tools gaming rows like DVR: the
+    // card reads the same live truth (ok = protection off, the
+    // game-optimal state) and the button lands on the row.
+    ...(checks.memory_integrity_supported
+      ? [
+          {
+            id: "memoryintegrity",
+            ok: checks.memory_integrity_off,
+            funcIcon: <ShieldOff size={15} />,
+            name: t.checkHvci,
+            state: checks.memory_integrity_pending
+              ? `${checks.memory_integrity_off ? t.checkHvciOff : t.checkHvciOn} · ${t.tweakHvciPendingBadge}`
+              : checks.memory_integrity_off
+                ? t.checkHvciOff
+                : t.checkHvciOn,
+            hint: { title: t.checkHvci, body: t.tweakHvciHint },
+            onOpen: openInAppOr("memoryintegrity", "device-security"),
+          } satisfies CheckItem,
+        ]
+      : []),
     // charger lives on laptops only — hidden on desktops, never a
     // placeholder row
     ...(checks.laptop
