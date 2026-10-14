@@ -11,6 +11,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - High Performance power row: one switch for the built-in plan, with your previous plan restored when you flip back.
 - Storage tools: a cleanup sweep (temporary files, Recycle Bin, update leftovers, old logs and dumps) that measures before and after and deletes only what you tick, plus a Virtual Memory editor mirroring the Windows dialog (automatic, system-managed, custom, or off per drive) with confirm-before-risk and a restart offer.
 - Top Processes: one row per program with its live size, an End button with confirm, real icons, and translated names for Windows processes.
+- Startup apps tab: every program that launches at sign-in with its real icon, friendly name, and one state button (the button itself reads Enabled or Disabled). Turning off is direct and only stops the automatic launch (nothing is uninstalled or deleted); turning on asks first by name because it adds to your startup time. Locked entries name their reason and offer a shield button that asks Windows once for administrator approval instead of refusing.
 - Reports in plain language: an honest outcome per session, key moments, and findings with fixes, in English and Arabic.
 - Monitor in three calm states: a session plan when idle, a centered progress view while scanning, and one verdict card that stays until you dismiss it.
 - System tab as a spec sheet (CPU, RAM, display, GPU driver, model, OS) with a copy-all button, and System health cards with plain-language notes and direct links to the right Windows pages.

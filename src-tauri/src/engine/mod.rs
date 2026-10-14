@@ -11,6 +11,7 @@ pub mod prockill;
 pub mod sampler;
 pub mod session;
 pub mod settings;
+pub mod startup;
 pub mod storage;
 pub mod system;
 pub mod tweaks;

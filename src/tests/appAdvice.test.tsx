@@ -38,6 +38,8 @@ const apiMock = vi.hoisted(() => ({
   clockHour12: vi.fn(),
   dismissIntroCard: vi.fn(),
   setUiZoom: vi.fn(),
+  startupEntries: vi.fn().mockResolvedValue([]),
+  setStartupEnabled: vi.fn(),
 }));
 
 const setWebviewZoomMock = vi.hoisted(() => vi.fn());

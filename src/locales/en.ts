@@ -94,6 +94,9 @@ export const en = {
     PROCESS_ACCESS_DENIED: "Windows denied the request to end that app. Administrator rights are required.",
     PROCESS_KILL_FAILED: "Couldn't end that app. Try again.",
     PROCESS_REFUSED: "That process is protected and can't be ended from here.",
+    STARTUP_UNKNOWN_ID: "That startup entry is no longer listed. The list was re-read.",
+    STARTUP_LOCKED: "That startup entry is locked by Windows and can't be changed from here.",
+    STARTUP_WRITE_FAILED: "The change couldn't be verified, so it wasn't applied.",
   } as Record<string, string>,
 
   // ---- report highlights (composed in the UI from event kinds) ----
@@ -246,6 +249,36 @@ export const en = {
       page header, not here */
   procsAbout: "Close apps you aren't using to free up memory for your game.",
   topProcessesEmpty: "Nothing significant is running",
+  // ---- startup tab (own sidebar entry, Tools-section shape for a later move) ----
+  /** tab label + standing header (the header sub leads with the benefit
+      and states the scope in plain words: scheduled tasks and services
+      are not listed, and the page says so) */
+  startup: "Startup apps",
+  startupScope:
+    "Choose what opens when you sign in: fewer auto-starts, faster startup. Scheduled tasks and services are not listed here.",
+  introStartupTitle: "Speed up your startup",
+  introStartupBody:
+    "Turn off what you don't need right away. Everything stays installed and opens normally whenever you need it.",
+  startupEmpty: "No startup programs found",
+  /** locked rows name their reason and offer the shield button: one
+      system prompt clears the machine stamp, then the normal flip runs
+      (a dismissed prompt rolls back silently, never dialogs) */
+  startupLockedReason: "Locked by Windows: changing it needs administrator approval.",
+  /** shield-button action on locked rows (the button text itself stays
+      the state word: the action lives in the accessible name only) */
+  startupChangeAsAdmin: "Change as administrator",
+  /** enable confirm names the program and its cost: turning on is the
+      additive direction (slower startup), turning off stays direct */
+  startupEnableConfirmTitle: "Start automatically at sign-in?",
+  startupEnableConfirmBody: (name: string) =>
+    `${name} will open every time you sign in, which adds to your startup time.`,
+  /** row action + status words (Task Manager language, merged into one
+      control: the button text names the state, its accessible name the
+      action — no switch implies no preferred direction) */
+  startupEnable: "Enable",
+  startupDisable: "Disable",
+  startupStateOn: "Enabled",
+  startupStateOff: "Disabled",
   refresh: "Refresh",
   endTask: "End",
   endingTask: "Ending...",

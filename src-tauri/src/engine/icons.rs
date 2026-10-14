@@ -45,26 +45,55 @@ pub fn process_icons(pids: &[u32]) -> Vec<ProcessIcon> {
     out
 }
 
-/// Data URL for one PID: path resolve (cached) then extract (cached).
+/// Icons for exe paths (startup entries): the same cache + extractor as
+/// PIDs, keyed by path. Misses simply absent (the UI keeps the glyph).
+/// Bounded like the PID path: each miss pays an extraction.
+pub fn icons_for_paths(paths: &[String]) -> HashMap<String, String> {
+    let mut out = HashMap::new();
+    let mut seen = std::collections::HashSet::new();
+    for path in paths.iter().take(100) {
+        if path.is_empty() || !seen.insert(path.clone()) {
+            continue;
+        }
+        if let Some(url) = icon_for_path_cached(path) {
+            out.insert(path.clone(), url);
+        }
+    }
+    out
+}
+
+/// Data URL for one path: cache first, then extract. Shared by the PID
+/// path above and the startup list below (one cache, one extractor).
 #[cfg(windows)]
-fn icon_for_pid(pid: u32) -> Option<String> {
-    let path = process_path_of(pid)?;
+fn icon_for_path_cached(path: &str) -> Option<String> {
     {
         let cache = ICON_CACHE.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(map) = cache.as_ref() {
-            if let Some(url) = map.get(&path) {
+            if let Some(url) = map.get(path) {
                 return Some(url.clone());
             }
         }
     }
-    let url = icon_for_path(&path)?;
+    let url = icon_for_path(path)?;
     let mut cache = ICON_CACHE.lock().unwrap_or_else(|p| p.into_inner());
     let map = cache.get_or_insert_with(HashMap::new);
     if map.len() > CACHE_CEILING {
         map.clear();
     }
-    map.insert(path, url.clone());
+    map.insert(path.to_string(), url.clone());
     Some(url)
+}
+
+#[cfg(not(windows))]
+fn icon_for_path_cached(_path: &str) -> Option<String> {
+    None
+}
+
+/// Data URL for one PID: path resolve, then the shared cached extractor.
+#[cfg(windows)]
+fn icon_for_pid(pid: u32) -> Option<String> {
+    let path = process_path_of(pid)?;
+    icon_for_path_cached(&path)
 }
 
 #[cfg(not(windows))]

@@ -119,6 +119,9 @@ export const ar: Locale = {
     PROCESS_ACCESS_DENIED: "رفض ويندوز إنهاء هذا التطبيق. يتطلب ذلك صلاحيات المسؤول.",
     PROCESS_KILL_FAILED: "تعذّر إنهاء هذا التطبيق. حاول مرة أخرى.",
     PROCESS_REFUSED: "هذه العملية محمية ولا يمكن إنهاؤها من هنا أبدًا.",
+    STARTUP_UNKNOWN_ID: "هذا العنصر لم يعد مدرجًا. أُعيدت قراءة القائمة.",
+    STARTUP_LOCKED: "هذا العنصر مقفل من ويندوز ولا يمكن تغييره من هنا.",
+    STARTUP_WRITE_FAILED: "تعذّر التحقق من التغيير، فلم يُطبَّق.",
   } as Record<string, string>,
 
   // ---- report highlights (composed in the UI from event kinds) ----
@@ -267,6 +270,34 @@ export const ar: Locale = {
       page header, not here */
   procsAbout: "أغلق التطبيقات التي لا تستخدمها لتحرير ذاكرة للعبتك.",
   topProcessesEmpty: "لا يوجد ما يستحق الذكر قيد التشغيل",
+  // ---- startup tab (own sidebar entry, Tools-section shape for a later move) ----
+  /** tab label + standing header (the header sub leads with the benefit
+      and states the scope in plain words: scheduled tasks and services
+      are not listed, and the page says so) */
+  startup: "برامج بدء التشغيل",
+  startupScope:
+    "اختر ما يُفتح عند تسجيل الدخول: برامج أقل تعني بدء تشغيل أسرع. المهام المجدولة والخدمات غير مدرجة هنا.",
+  introStartupTitle: "سرّع بدء التشغيل",
+  introStartupBody:
+    "أوقف ما لا تحتاجه فورا. يبقى كل شيء مثبتا ويُفتح عاديا متى احتجته.",
+  startupEmpty: "لا توجد برامج بدء تشغيل",
+  /** admin-locked rows show greyed with this reason (never flippable) */
+  startupLockedReason: "مقفل من ويندوز: تغييره يتطلب موافقة المسؤول.",
+  /** shield-button action on locked rows (the button text itself stays
+      the state word: the action lives in the accessible name only) */
+  startupChangeAsAdmin: "تغيير كمسؤول",
+  /** enable confirm names the program and its cost: turning on is the
+      additive direction (slower startup), turning off stays direct */
+  startupEnableConfirmTitle: "فتح تلقائي عند تسجيل الدخول؟",
+  startupEnableConfirmBody: (name: string) =>
+    `سيُفتح ${name} عند كل تسجيل دخول، مما يزيد زمن بدء التشغيل.`,
+  /** row action + status words (Task Manager language, merged into one
+      control: the button text names the state, its accessible name the
+      action — no switch implies no preferred direction) */
+  startupEnable: "تمكين",
+  startupDisable: "تعطيل",
+  startupStateOn: "مفعّل",
+  startupStateOff: "موقوف",
   refresh: "تحديث",
   endTask: "إنهاء",
   endingTask: "جارٍ الإنهاء...",

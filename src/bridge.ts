@@ -350,6 +350,19 @@ export const api = {
   /** real program icons for new PIDs only (cached by the UI across
       polls, misses keep the glyph): paths never cross, PIDs only */
   processIcons: (pids: number[]) => invoke<ProcessIcon[]>("process_icons", { pids }),
+  /** startup programs, live with icons resolved (exe paths never cross
+      bare): the UI paints rows straight from this answer */
+  startupEntries: () => invoke<StartupEntry[]>("startup_entries"),
+  /** flip one startup entry by id (overlay only, never deleted): returns
+      the re-read list, so the UI paints the verified truth */
+  setStartupEnabled: (id: string, enabled: boolean) =>
+    invoke<StartupEntry[]>("set_startup_enabled", { id, enabled }),
+  /** flip a locked startup entry: one system prompt clears the machine
+      stamp, then the normal flip runs. A dismissed prompt rejects with
+      exact "cancelled" (silent rollback, like the tweaks); only failures
+      after consent surface as errors */
+  setStartupEnabledAdmin: (id: string, enabled: boolean) =>
+    invoke<StartupEntry[]>("set_startup_enabled_admin", { id, enabled }),
   systemChecks: (force?: boolean) =>
     invoke<SystemChecks>("system_checks", { force: force ?? false }),
   /** the Tools tab's switches only (microseconds, in-process) — the
@@ -517,6 +530,16 @@ export interface TopProcess {
 export interface ProcessIcon {
   pid: number;
   url: string;
+}
+
+/** one startup program: stable machine id, display name, live
+    state, and its resolved icon URL (None on the wire = glyph fallback) */
+export interface StartupEntry {
+  id: string;
+  name: string;
+  enabled: boolean;
+  locked: boolean;
+  icon_url: string | null;
 }
 
 /** ranked rows, one measure (memory) and one order (biggest first) */

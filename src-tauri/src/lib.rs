@@ -142,6 +142,88 @@ async fn process_icons(pids: Vec<u32>) -> Vec<engine::icons::ProcessIcon> {
         .unwrap_or_default()
 }
 
+/// Startup programs, live from the registry + both Startup folders
+/// (in-process reads, milliseconds — no PowerShell spawn). Icons ride
+/// along resolved so exe paths never cross bare; the UI paints rows
+/// straight from this answer.
+#[tauri::command]
+async fn startup_entries() -> Vec<engine::startup::StartupEntry> {
+    let _t = engine::logging::timed("ipc: startup_entries");
+    let entries = tauri::async_runtime::spawn_blocking(engine::startup::startup_list)
+        .await
+        .unwrap_or_default();
+    with_startup_icons(entries)
+}
+
+/// Flip one startup entry by id (enable/disable via the StartupApproved
+/// overlay only — values are never deleted, so every change reverses).
+/// The id must match a freshly enumerated entry; anything else refuses
+/// before touching the registry. Returns the re-read list: the UI paints
+/// the verified truth, never its own guess.
+#[tauri::command]
+async fn set_startup_enabled(
+    id: String,
+    enabled: bool,
+) -> Result<Vec<engine::startup::StartupEntry>, String> {
+    let _t = engine::logging::timed("ipc: set_startup_enabled");
+    let res = tauri::async_runtime::spawn_blocking(move || {
+        Ok(with_startup_icons(engine::startup::set_startup_enabled(
+            &id, enabled,
+        )?))
+    })
+    .await
+    .map_err(|e| format!("startup flip task failed: {e}"))?;
+    log_err("set_startup_enabled", &res);
+    res
+}
+
+/// Flip a locked (machine-stamped) startup entry: one UAC prompt clears
+/// the machine overlay stamp through the same-binary elevated child
+/// (like the tweaks), then the normal unprivileged flip runs. Returns
+/// the re-read list: the UI paints the verified truth, never its guess.
+/// An unlocked id takes the normal path (same outcome, no prompt); a
+/// denied prompt travels back as exact "cancelled" so the UI rolls back
+/// silently, and only failures after consent surface as errors.
+#[tauri::command]
+async fn set_startup_enabled_admin(
+    id: String,
+    enabled: bool,
+) -> Result<Vec<engine::startup::StartupEntry>, String> {
+    let _t = engine::logging::timed("ipc: set_startup_enabled_admin");
+    let res = tauri::async_runtime::spawn_blocking(move || {
+        let (source, name) =
+            engine::startup::parse_entry_id(&id).ok_or_else(|| "STARTUP_UNKNOWN_ID".to_string())?;
+        let fresh = engine::startup::startup_list();
+        let entry = fresh
+            .iter()
+            .find(|e| e.id == id)
+            .ok_or_else(|| "STARTUP_UNKNOWN_ID".to_string())?;
+        if entry.locked {
+            let code = engine::elevate::elevate_startup_unlock(source.as_str(), &name)?;
+            engine::elevate::map_exit_code(code)?;
+        }
+        Ok(with_startup_icons(engine::startup::set_startup_enabled(
+            &id, enabled,
+        )?))
+    })
+    .await
+    .map_err(|e| format!("startup admin flip task failed: {e}"))?;
+    log_err("set_startup_enabled_admin", &res);
+    res
+}
+
+/// Attach resolved icons to a startup list (shared by all startup
+/// commands above: one helper, never one loop per command). The attach
+/// itself plus its miss log live in the engine (tested there); this
+/// only fetches the URLs.
+fn with_startup_icons(
+    entries: Vec<engine::startup::StartupEntry>,
+) -> Vec<engine::startup::StartupEntry> {
+    let paths: Vec<String> = entries.iter().filter_map(|e| e.exe_path.clone()).collect();
+    let icons = engine::icons::icons_for_paths(&paths);
+    engine::startup::attach_icons(entries, &icons)
+}
+
 /// The Tools tab's switches, live from the registry + three native powercfg
 /// reads (tens of ms each, up to 5s timeouts on hung boxes). ASYNC on the
 /// blocking pool by the codebase's own rule: anything slower than a few
@@ -1012,6 +1094,9 @@ pub fn run() {
             top_processes,
             end_processes,
             process_icons,
+            startup_entries,
+            set_startup_enabled,
+            set_startup_enabled_admin,
             system_checks,
             tweak_states,
             set_tweak,

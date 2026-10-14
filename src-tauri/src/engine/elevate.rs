@@ -47,6 +47,12 @@ pub static ELEVATED_IDS: &[&str] = &["powerplan", "pagefile-settings", "storage-
 /// enters is_known_id or the dispatch); handled first in the runner.
 pub const REBOOT_FLAG: &str = "--laghunter-reboot";
 
+/// Startup shield-button scope: `exe --laghunter-elevated startup-unlock
+/// <scope> <name>`. NOT a tweak id (it never enters is_known_id or
+/// ELEVATED_IDS): the child clears one machine overlay stamp, then the
+/// parent runs the normal unprivileged flip.
+pub const STARTUP_UNLOCK_ID: &str = "startup-unlock";
+
 /// True when this id must run elevated. Pure: safe to ask from anywhere,
 /// including the UI thread (no registry, no spawn).
 pub fn is_elevated_id(id: &str) -> bool {
@@ -140,6 +146,27 @@ pub fn run_elevated_action(args: &[String]) -> i32 {
             Err(e) => {
                 super::logging::warn(&format!("elevated pagefile settings failed: {e}"));
                 EXIT_FAILED
+            }
+        };
+    }
+    if !args.is_empty() && args[0] == STARTUP_UNLOCK_ID {
+        // [startup-unlock, scope, name]: clear the machine overlay stamp
+        // so the row returns to user control (the parent then runs the
+        // normal unprivileged flip). Scope and name re-validated here:
+        // the child never trusts the parent.
+        if args.len() != 3 {
+            super::logging::warn("elevated run refused: bad startup-unlock arity");
+            return EXIT_USAGE;
+        }
+        return match super::startup::clear_machine_overlay(&args[1], &args[2]) {
+            Ok(()) => EXIT_OK,
+            Err(e) => {
+                super::logging::warn(&format!("elevated startup unlock: {e}"));
+                if e.starts_with("startup unlock refused") {
+                    EXIT_USAGE
+                } else {
+                    EXIT_FAILED
+                }
             }
         };
     }
@@ -268,8 +295,57 @@ pub fn elevate_storage_clean(cats: &[String]) -> Result<u32, String> {
     wait_for_elevated_child(process)
 }
 
-/// Reboot request (parent side): spawn ourselves elevated with the
-/// reboot flag and return immediately WITHOUT waiting (the machine is
+/// Quote one arg for the params line (CommandLineToArgvW rules): wrap
+/// in quotes, escape inner quotes, double backslashes before a quote
+/// or the end. Pure and pinned: a value name holding `"` or ending in
+/// `\` once broke the child-side parse (or refused before UAC) instead
+/// of arriving intact.
+fn quote_cmd_arg(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    let mut backslashes = 0usize;
+    for c in s.chars() {
+        if c == '\\' {
+            backslashes += 1;
+            continue;
+        }
+        if c == '"' {
+            out.push_str(&"\\".repeat(backslashes * 2 + 1));
+            out.push('"');
+        } else {
+            out.push_str(&"\\".repeat(backslashes));
+            out.push(c);
+        }
+        backslashes = 0;
+    }
+    out.push_str(&"\\".repeat(backslashes * 2));
+    out.push('"');
+    out
+}
+
+/// Startup shield-button variant (parent side): one UAC prompt clears
+/// the machine-wide overlay stamp, then the caller runs the normal
+/// unprivileged flip. Shapes validated before UAC (known scope, sane
+/// name); the name always rides quoted so quotes and trailing
+/// backslashes survive the trip. A denied prompt maps to exact
+/// "cancelled" like every other refusal.
+#[cfg(windows)]
+pub fn elevate_startup_unlock(scope: &str, name: &str) -> Result<u32, String> {
+    if super::startup::StartupSource::from_str(scope).is_none()
+        || name.is_empty()
+        || name.len() > 256
+    {
+        return Err("elevated request refused before UAC: startup-unlock".into());
+    }
+    let params = format!(
+        "{ELEVATED_ACTION_FLAG} {STARTUP_UNLOCK_ID} {scope} {}",
+        quote_cmd_arg(name)
+    );
+    let process = spawn_elevated_raw(&params)?;
+    wait_for_elevated_child(process)
+}
+
+/// Reboot request (parent side): spawn ourselves elevated with the/// reboot flag and return immediately WITHOUT waiting (the machine is
 /// going down; waiting on it would wedge the IPC thread). The child
 /// runs an immediate shutdown and exits. Cancel maps to exact
 /// "cancelled" like every other refusal.
@@ -399,6 +475,12 @@ pub fn request_reboot() -> Result<(), String> {
 /// Non-Windows stub for the storage sweep variant.
 #[cfg(not(windows))]
 pub fn elevate_storage_clean(_cats: &[String]) -> Result<u32, String> {
+    Err("elevation needs Windows".into())
+}
+
+/// Non-Windows stub for the startup shield-button variant.
+#[cfg(not(windows))]
+pub fn elevate_startup_unlock(_scope: &str, _name: &str) -> Result<u32, String> {
     Err("elevation needs Windows".into())
 }
 
@@ -588,8 +670,15 @@ mod tests {
         assert_eq!(ed(&["storage-clean", "recycle_bin"]), EXIT_USAGE);
         assert_eq!(ed(&["storage-clean", "nope"]), EXIT_USAGE);
         assert_eq!(ed(&["storage-clean", "C:\\Windows\\Temp"]), EXIT_USAGE);
-        // arity cap: the six admin categories at most (a seventh word
-        // is usage even when every word is a valid category)
+        // startup unlock: arity and scope gates refuse before any
+        // registry access (a bogus-but-shaped name is idempotent: no
+        // such stamp exists, so nothing is ever written by the test)
+        assert_eq!(ed(&["startup-unlock"]), EXIT_USAGE);
+        assert_eq!(ed(&["startup-unlock", "machine"]), EXIT_USAGE);
+        assert_eq!(ed(&["startup-unlock", "machine", "X", "extra"]), EXIT_USAGE);
+        assert_eq!(ed(&["startup-unlock", "nope", "X"]), EXIT_USAGE);
+        assert_eq!(ed(&["startup-unlock", "machine", ""]), EXIT_USAGE); // arity cap: the six admin categories at most (a seventh word
+                                                                        // is usage even when every word is a valid category)
         assert_eq!(
             ed(&[
                 "storage-clean",
@@ -627,11 +716,33 @@ mod tests {
             "pagefile-custom",
             "pagefile-off",
             "reboot",
+            "startup-unlock",
             "nope",
             "",
         ] {
             assert!(!is_elevated_id(id), "{id} must not elevate yet");
         }
+    }
+
+    #[test]
+    fn startup_unlock_parent_refuses_before_uac() {
+        // refused before any prompt: no UAC can pop from these on any
+        // platform (valid shapes would spawn and are never tested here;
+        // the non-Windows stub refuses too, so this holds everywhere).
+        // Quoted names are NOT refused anymore: they ride quoted (pinned
+        // below) instead of locking their row forever.
+        assert!(elevate_startup_unlock("nope", "X").is_err());
+        assert!(elevate_startup_unlock("", "X").is_err());
+        assert!(elevate_startup_unlock("machine", "").is_err());
+        assert!(elevate_startup_unlock("machine", &"x".repeat(300)).is_err());
+    }
+
+    #[test]
+    fn cmd_arg_quoting_survives_quotes_and_backslashes() {
+        assert_eq!(quote_cmd_arg("Discord"), "\"Discord\"");
+        assert_eq!(quote_cmd_arg("say \"hi\""), "\"say \\\"hi\\\"\"");
+        assert_eq!(quote_cmd_arg("tail\\"), "\"tail\\\\\"");
+        assert_eq!(quote_cmd_arg(""), "\"\"");
     }
 
     #[test]

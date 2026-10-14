@@ -14,6 +14,7 @@ export type SidebarView =
   | "processes"
   | "checks"
   | "tools"
+  | "startup"
   | "reports"
   | "settings"
   | "about";

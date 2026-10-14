@@ -270,6 +270,26 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* startup rows lay the name out as a truncating text plus a fixed mark:
+   the shield rides beside the name without ever entering the ellipsis
+   itself (shared .proc-name above stays untouched for every other row) */
+.proc-name-flex {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: visible;
+  text-overflow: clip;
+}
+.proc-name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.proc-lock {
+  flex: none;
+  color: var(--text-3);
+}
 /* RAM line under the name (same slot as the health state line, same
    muted tone): the row shows how much, the order shows how heavy */
 .proc-text {
@@ -305,6 +325,40 @@
    as the trash action, and the danger itself still lives in the confirm
    dialog, not on the row */
 .proc-end:hover:not(:disabled) {
+  color: var(--danger);
+}
+/* startup enable action: same footprint as the end-task button above
+   (one metrics source for both would couple two tabs: duplicated on
+   purpose, three lines), but the hover stays neutral like every quiet
+   control — enabling is not destructive, so it never borrows the red */
+.startup-act {
+  flex: none;
+  padding: 8px 16px;
+  border-radius: 5px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-3);
+}
+.startup-act:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+/* startup state buttons share one width: shrink-wrap made "Enabled" and
+   "Disabled" (and their wider Arabic words) paint ragged columns, so
+   every state button reserves the same inline footprint and the short
+   label centers inside it. Scoped here (never on shared .proc-end) so
+   the Processes End buttons keep their own size. */
+.startup-state {
+  min-inline-size: 96px;
+}
+/* startup hover follows the ACTION's cost, not the state: enabling
+   adds boot cost (red), disabling is safe (neutral). Shared .proc-end
+   keeps its red for the Processes End buttons; startup neutralizes it
+   on its own state buttons only. */
+.startup-state.proc-end:hover:not(:disabled) {
+  color: var(--hover-text);
+}
+.startup-act:hover:not(:disabled) {
   color: var(--danger);
 }
 /* real program artwork: bare, no tile (the tile stays for glyphs
