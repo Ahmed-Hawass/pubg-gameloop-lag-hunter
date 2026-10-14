@@ -527,6 +527,19 @@ impl Engine {
             None => None,
         };
         st.status = SessionStatus::Finished;
+        // verdict rewrite: the finished card must agree with the saved
+        // report it links to. The last live tick is windowed, sustained,
+        // and subordinated (a narrow, momentary view); the report is
+        // history-preserving. Rebuild the headline from the same finalized
+        // evidence the report keeps, so a session with findings can never
+        // read "Nothing unusual / 0 seconds" again.
+        {
+            let (cards, secs) = super::diagnoser::final_verdict(&st.events, &sampler::iso_now());
+            if let Some(ui) = st.last_ui.as_mut() {
+                ui.diagnoses = cards;
+                ui.lag_count = secs;
+            }
+        }
         Ok(report)
     }
 

@@ -366,6 +366,99 @@ fn diagnoses_from(events: &[EngineEvent], now_iso: &str) -> Vec<Diagnosis> {
     out
 }
 
+/// Final-session verdict from the FULL event history: the finished card
+/// must agree with the saved report it links to. The report maps every
+/// distinct warn/crit kind to a finding (no thresholds, no subordination,
+/// no live windows), so this mirrors exactly that rule — and the headline
+/// seconds are the sustained durations behind those same findings (End
+/// durations authoritative, instants ~1s, Starts paired by their End).
+/// Unknown engine kinds are skipped (no card, no seconds): the report keeps
+/// them as forensic rows, but a headline must never hinge on a kind no
+/// dictionary knows (only hand-planted files can contain one — our own
+/// detector emits a closed kind set). Live cards keep their own stricter
+/// rules; this runs once, at finalize.
+pub fn final_verdict(events: &[EngineEvent], now_iso: &str) -> (Vec<Diagnosis>, u32) {
+    use std::collections::BTreeMap;
+    // per-kind sustained ms + worst severity, in first-seen order
+    let mut sustained_ms: BTreeMap<&str, i64> = BTreeMap::new();
+    let mut worst_sev: BTreeMap<&str, &str> = BTreeMap::new();
+    let mut open_starts: BTreeMap<&str, i64> = BTreeMap::new();
+    let mut seen_order: Vec<&str> = Vec::new();
+    for ev in events {
+        let key = key_for(ev);
+        if key.is_empty() {
+            continue;
+        }
+        if ev.severity == Severity::Ok && ev.phase != Phase::End {
+            continue;
+        }
+        let ev_ms = iso_ms(&ev.t).unwrap_or(0);
+        if !sustained_ms.contains_key(key) {
+            sustained_ms.insert(key, 0);
+            worst_sev.insert(key, "");
+            seen_order.push(key);
+        }
+        if ev.phase != Phase::End
+            && (worst_sev[key].is_empty()
+                || (ev.severity == Severity::Crit && worst_sev[key] != "crit"))
+        {
+            worst_sev.insert(key, ev.severity.as_str());
+        }
+        match ev.phase {
+            Phase::Start => {
+                open_starts.insert(key, ev_ms);
+            }
+            Phase::End => {
+                let dur_ms = ev
+                    .duration_sec
+                    .map(|d| (d * 1000.0) as i64)
+                    .unwrap_or_else(|| {
+                        let start = open_starts.get(key).copied().unwrap_or(ev_ms);
+                        (ev_ms - start).max(0)
+                    });
+                // the key is always inserted above: a missing entry here
+                // would be an internal contradiction, fail loud in tests
+                *sustained_ms.get_mut(key).expect("bucket inserted above") += dur_ms;
+                open_starts.remove(key);
+            }
+            Phase::Instant => {
+                *sustained_ms.get_mut(key).expect("bucket inserted above") += 1000;
+            }
+        }
+    }
+    let order = |s: &str| match s {
+        "high" => 0,
+        "medium" => 1,
+        _ => 2,
+    };
+    let mut keys = seen_order;
+    keys.sort_by_key(|k| order(worst_sev.get(k).copied().unwrap_or("")));
+    let total_ms: i64 = keys
+        .iter()
+        .map(|k| sustained_ms.get(k).copied().unwrap_or(0))
+        .sum();
+    let mut out = Vec::new();
+    for key in keys {
+        if let Some((title, simple, cause, fix, sev_default)) = diagnosis_copy(key) {
+            let sev = if worst_sev.get(key).copied().unwrap_or("") == "crit" {
+                "high"
+            } else {
+                sev_default
+            };
+            out.push(Diagnosis {
+                key: key.to_string(),
+                title: title.to_string(),
+                simple: simple.to_string(),
+                cause: cause.to_string(),
+                fix: fix.to_string(),
+                severity: sev.to_string(),
+                at: now_iso.to_string(),
+            });
+        }
+    }
+    (out, (total_ms.max(0) / 1000) as u32)
+}
+
 /// Everything `build_ui_state` needs, bundled — keeps the call site readable
 /// and clippy happy (too_many_arguments on the old 11-param form).
 pub struct UiStateInput<'a> {
@@ -602,6 +695,110 @@ mod tests {
         assert_eq!(d.len(), 1, "one storm must produce exactly one card");
         assert_eq!(d[0].key, "disk_wait");
         assert_eq!(d[0].severity, "high");
+    }
+
+    #[test]
+    fn final_verdict_agrees_with_the_report_on_cpu_and_disk() {
+        // the real contradictory session: cpu + disk evidence, zero spikes,
+        // zero cliffs — the live headline read 0 seconds over it while the
+        // report carried two findings. The finished card must mirror the
+        // report: both cards present, seconds from their sustained evidence.
+        let events = vec![
+            ev(
+                "cpu_saturation",
+                Phase::Start,
+                Severity::Warn,
+                "2026-10-14T06:32:59.000Z",
+                None,
+            ),
+            ev(
+                "cpu_saturation",
+                Phase::End,
+                Severity::Ok,
+                "2026-10-14T06:33:01.000Z",
+                Some(2.0),
+            ),
+            ev(
+                "hard_faults",
+                Phase::Instant,
+                Severity::Warn,
+                "2026-10-14T06:33:09.000Z",
+                None,
+            ),
+            ev(
+                "disk_queue",
+                Phase::Start,
+                Severity::Warn,
+                "2026-10-14T06:33:10.000Z",
+                None,
+            ),
+            ev(
+                "disk_queue",
+                Phase::Instant,
+                Severity::Crit,
+                "2026-10-14T06:33:11.000Z",
+                None,
+            ),
+            ev(
+                "disk_queue",
+                Phase::End,
+                Severity::Ok,
+                "2026-10-14T06:33:13.000Z",
+                Some(3.0),
+            ),
+            ev(
+                "hard_faults",
+                Phase::Instant,
+                Severity::Warn,
+                "2026-10-14T06:35:28.000Z",
+                None,
+            ),
+            ev(
+                "hard_faults",
+                Phase::Instant,
+                Severity::Warn,
+                "2026-10-14T06:36:58.000Z",
+                None,
+            ),
+            ev(
+                "cpu_saturation",
+                Phase::Start,
+                Severity::Warn,
+                "2026-10-14T06:37:35.000Z",
+                None,
+            ),
+            ev(
+                "cpu_saturation",
+                Phase::End,
+                Severity::Ok,
+                "2026-10-14T06:37:36.000Z",
+                Some(1.0),
+            ),
+        ];
+        let (cards, secs) = final_verdict(&events, "2026-10-14T06:37:49.000Z");
+        assert_eq!(cards.len(), 2, "cpu and disk findings both survive");
+        assert_eq!(cards[0].key, "cpu_busy");
+        assert_eq!(cards[1].key, "disk_wait");
+        // cpu 2+1s, disk 3s + 1 crit instant + 3 fault instants
+        assert_eq!(secs, 10, "headline seconds from the same evidence");
+    }
+
+    #[test]
+    fn final_verdict_stays_clean_and_quiet_on_nothing() {
+        let (cards, secs) = final_verdict(&[], "2026-10-14T06:37:49.000Z");
+        assert!(cards.is_empty());
+        assert_eq!(secs, 0);
+        // unknown kinds stay forensic-only: no card, no seconds
+        let events = vec![ev(
+            "mystery_kind",
+            Phase::Instant,
+            Severity::Warn,
+            "2026-10-14T06:37:00.000Z",
+            None,
+        )];
+        let (cards, secs) = final_verdict(&events, "2026-10-14T06:37:49.000Z");
+        assert!(cards.is_empty());
+        assert_eq!(secs, 0);
     }
 
     #[test]
