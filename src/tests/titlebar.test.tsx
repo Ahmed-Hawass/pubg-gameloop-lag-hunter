@@ -1,7 +1,7 @@
 // tests/titlebar.test.tsx — the window chrome contract: version text,
 // never an update dot (the sidebar About dot and the heading dot own
 // the signal), double-click toggles maximize, restore glyph differs
-// from maximize.
+// from maximize, and X hides to the tray (never quits).
 
 import { describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -12,6 +12,7 @@ import { TitleBar } from "../components/TitleBar";
 const apiMock = vi.hoisted(() => ({
   isWindowMaximized: vi.fn(),
   minimizeWindow: vi.fn(),
+  hideWindow: vi.fn(),
   onWindowResized: vi.fn(),
   toggleMaximizeWindow: vi.fn(),
   syncSnapOverlay: vi.fn(),
@@ -31,10 +32,10 @@ function open(props: Partial<React.ComponentProps<typeof TitleBar>> = {}) {
   apiMock.onWindowResized.mockResolvedValue(() => {});
   apiMock.syncSnapOverlay.mockResolvedValue(undefined);
   apiMock.onSnapOverlay.mockResolvedValue(() => {});
+  apiMock.hideWindow.mockResolvedValue(undefined);
   render(
     React.createElement(TitleBar, {
       version: "1.6.0",
-      onRequestExit: vi.fn(),
       ...props,
     }),
   );
@@ -74,7 +75,6 @@ describe("TitleBar", () => {
     render(
       React.createElement(TitleBar, {
         version: "1.6.0",
-        onRequestExit: vi.fn(),
       }),
     );
     await screen.findByText("v1.6.0");
@@ -98,6 +98,16 @@ describe("TitleBar", () => {
     );
     await waitFor(() => {
       expect(apiMock.toggleMaximizeWindow).toHaveBeenCalledOnce();
+    });
+  });
+
+  it("X hides the window to the tray instead of quitting", async () => {
+    open();
+    await screen.findByText("v1.6.0");
+    apiMock.hideWindow.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: en.hideToTray }));
+    await waitFor(() => {
+      expect(apiMock.hideWindow).toHaveBeenCalledOnce();
     });
   });
 });

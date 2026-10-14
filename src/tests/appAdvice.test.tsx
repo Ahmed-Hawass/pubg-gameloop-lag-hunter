@@ -50,7 +50,11 @@ let enginePush!: (ev: { payload: StatusPayload }) => void;
 vi.mock("../bridge", () => ({
   api: apiMock,
   setWebviewZoom: setWebviewZoomMock,
-  closeWindow: vi.fn(),
+  quitApp: vi.fn(),
+  hideWindow: vi.fn().mockResolvedValue(undefined),
+  revealWindow: vi.fn().mockResolvedValue(undefined),
+  setTrayActive: vi.fn().mockResolvedValue(undefined),
+  logFrontendInfo: vi.fn().mockResolvedValue(undefined),
   onEngineState: vi.fn((cb: (ev: { payload: StatusPayload }) => void) => {
     enginePush = cb;
     return Promise.resolve(() => {});
@@ -61,6 +65,12 @@ vi.mock("../bridge", () => ({
   onWindowResized: vi.fn().mockResolvedValue(() => {}),
   syncSnapOverlay: vi.fn().mockResolvedValue(undefined),
   onSnapOverlay: vi.fn().mockResolvedValue(() => {}),
+  syncTrayLabels: vi.fn().mockResolvedValue(undefined),
+  setTrayTooltip: vi.fn().mockResolvedValue(undefined),
+  onTrayQuickScan: vi.fn().mockResolvedValue(() => {}),
+  onTrayExit: vi.fn().mockResolvedValue(() => {}),
+  isWindowVisible: vi.fn().mockResolvedValue(true),
+  showMainWindow: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("../i18n", () => ({
