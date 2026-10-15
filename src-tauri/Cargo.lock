@@ -2750,7 +2750,7 @@ dependencies = [
  "tauri-plugin-single-instance",
  "ureq",
  "url",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
  "winreg",
 ]
 
