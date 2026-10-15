@@ -2,6 +2,23 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
+    // Elevated single-action mode (see engine::elevate): the same binary
+    // re-run by ourselves through a UAC prompt, or by hand for testing.
+    // Checked FIRST: the run is headless (no window, no session, no
+    // single-instance focus steal) and exits with a machine code.
+    let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(|s| s.as_str())
+        == Some(lag_hunter_lib::engine::elevate::ELEVATED_ACTION_FLAG)
+    {
+        std::process::exit(lag_hunter_lib::engine::elevate::run_elevated_action(
+            &args[2..],
+        ));
+    }
+    // Reboot countdown mode (see request_reboot): headless like above.
+    if args.get(1).map(|s| s.as_str()) == Some(lag_hunter_lib::engine::elevate::REBOOT_FLAG) {
+        std::process::exit(lag_hunter_lib::engine::elevate::run_reboot_action());
+    }
+
     // Win10 guarantee: if the WebView2 runtime is missing (machines cut off
     // from Windows Update), the app would show a blank window. Detect it up
     // front with a plain filesystem probe (the runtime's install location,
@@ -25,16 +42,13 @@ fn main() {
                 )
             };
             if action == IDOK {
-                use std::os::windows::process::CommandExt;
-                let _ = std::process::Command::new("cmd")
-                    .args([
-                        "/C",
-                        "start",
-                        "",
-                        "https://developer.microsoft.com/microsoft-edge/webview2/",
-                    ])
-                    .creation_flags(0x0800_0000)
-                    .spawn();
+                // Exception (documented): this fixed Microsoft WebView2 URL is
+                // opened via the native shell handler (ShellExecuteW), not via
+                // the open_url command, so the opener allowlist in lib.rs
+                // (github/api.github/paypal hosts) deliberately does not cover
+                // it. The URL is a hardcoded Microsoft download page, never
+                // user input, shown only when the runtime probe above fails.
+                open_url_native("https://developer.microsoft.com/microsoft-edge/webview2/");
             }
             std::process::exit(0);
         }
@@ -44,16 +58,23 @@ fn main() {
 }
 
 /// Is the WebView2 runtime installed? Filesystem probe: the Evergreen runtime
-/// always installs under "Microsoft\EdgeWebView\Application" (both Program
-/// Files views), with a versioned subfolder. No registry, no Win32 linking.
+/// installs under "Microsoft\EdgeWebView\Application" — both Program Files
+/// views for machine-wide installs, and the user's LOCALAPPDATA for
+/// per-user installs (common on non-admin accounts; the runtime setup
+/// falls back to per-user when elevation is unavailable). Each carries a
+/// versioned subfolder. No registry, no Win32 linking.
 #[cfg(windows)]
 fn webview2_installed() -> bool {
-    const BASES: [&str; 2] = [
-        r"C:\Program Files (x86)\Microsoft\EdgeWebView\Application",
-        r"C:\Program Files\Microsoft\EdgeWebView\Application",
+    let mut bases: Vec<std::path::PathBuf> = vec![
+        r"C:\Program Files (x86)\Microsoft\EdgeWebView\Application".into(),
+        r"C:\Program Files\Microsoft\EdgeWebView\Application".into(),
     ];
-    for base in BASES {
-        let dir = std::path::Path::new(base);
+    // per-user install: %LOCALAPPDATA%\Microsoft\EdgeWebView\Application
+    if let Some(local) = std::env::var_os("LOCALAPPDATA") {
+        bases.push(std::path::Path::new(&local).join(r"Microsoft\EdgeWebView\Application"));
+    }
+    for base in bases {
+        let dir = std::path::Path::new(&base);
         if let Ok(entries) = std::fs::read_dir(dir) {
             // any versioned subfolder (e.g. "151.0.4129.107") = runtime present
             for entry in entries.flatten() {
@@ -83,7 +104,7 @@ fn encode_utf16(s: &str) -> Vec<u16> {
         .collect()
 }
 
-// ---- only ONE binding: MessageBoxW from user32 (standard, safe) ----
+// ---- only TWO bindings: MessageBoxW + ShellExecuteW from system DLLs ----
 #[cfg(windows)]
 #[link(name = "user32")]
 extern "system" {
@@ -93,6 +114,44 @@ extern "system" {
         caption: *const u16,
         utype: u32,
     ) -> i32;
+}
+
+#[cfg(windows)]
+#[link(name = "shell32")]
+extern "system" {
+    fn ShellExecuteW(
+        hwnd: *mut core::ffi::c_void,
+        verb: *const u16,
+        file: *const u16,
+        params: *const u16,
+        dir: *const u16,
+        show: i32,
+    ) -> isize;
+}
+
+/// Open a fixed HTTPS URL with the shell default handler: no cmd /C,
+/// no shell string, no injection surface (same rule as lib.rs open_path).
+#[cfg(windows)]
+fn open_url_native(url: &str) {
+    use std::os::windows::ffi::OsStrExt;
+    let to_wide = |s: &str| {
+        std::ffi::OsStr::new(s)
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect::<Vec<u16>>()
+    };
+    let verb = to_wide("open");
+    let file = to_wide(url);
+    unsafe {
+        ShellExecuteW(
+            std::ptr::null_mut(),
+            verb.as_ptr(),
+            file.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            1,
+        );
+    }
 }
 
 #[cfg(windows)]

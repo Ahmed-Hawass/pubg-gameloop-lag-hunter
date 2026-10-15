@@ -4,6 +4,88 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0] - 2026-10-15
+
+### Added
+- Tools tab: game performance switches (Game Mode, high-performance GPU per GameLoop app, fullscreen-optimizations opt-out, pointer precision, windowed-games optimizations). Every switch mirrors the live Windows state, verifies after each flip, and rolls back silently if you dismiss the system prompt. Rows your machine cannot run show greyed with the reason instead of hiding (optional show-unsupported preference in Settings).
+- High Performance power row: one switch for the built-in plan, with your previous plan restored when you flip back.
+- Game performance gains a Memory Integrity off-switch with a matching System health card and deep link: turning protection off trades kernel hardening for frames, needs one administrator approval and a restart, and locked machines show greyed with the reason.
+- Storage tools: a cleanup sweep (temporary files, Recycle Bin, update leftovers, old logs and dumps) that measures before and after and deletes only what you tick, plus a Virtual Memory editor mirroring the Windows dialog (automatic, system-managed, custom, or off per drive) with confirm-before-risk and a restart offer.
+- Top Processes: one row per program with its live size, an End button with confirm, real icons, and translated names for Windows processes.
+- Startup apps tab: every program that launches at sign-in with its real icon, friendly name, and one state button (the button itself reads Enabled or Disabled). Turning off is direct and only stops the automatic launch (nothing is uninstalled or deleted); turning on asks first by name because it adds to your startup time. Locked entries name their reason and offer a shield button that asks Windows once for administrator approval instead of refusing.
+- Reports in plain language: an honest outcome per session, key moments, and findings with fixes, in English and Arabic.
+- Monitor in three calm states: a session plan when idle, a centered progress view while scanning with a live moment count for every problem the report will keep, and one verdict card that stays until you dismiss it.
+- System tab as a spec sheet (CPU, RAM, display, GPU driver, model, OS) with a copy-all button, and System health cards with plain-language notes and direct links to the right Windows pages.
+- Headless companion (`laghunter-cli.exe`): scan, list sessions, and open reports from a terminal, sharing sessions with the app.
+- Interface zoom (80 to 125 percent) with Ctrl+=/-/0 shortcuts, one-shot intro cards per page, and a two-slide welcome.
+- GameLoop v7 support alongside v6, including a one-time notice when the client updates (saved preferences may need one re-flip).
+- Named page headers everywhere: System, health, Tools, and the gaming and storage sections each open with a one-shot intro plus a standing title, so no page starts cold.
+- Every page header stands on its own now: the title plus a short scope line show on the first paint (loading, error, and empty states included) with the one-shot card below them, instead of the card standing in for the header until dismissed. The gaming and storage cards take their own friendly titles, so the header and the card never read the same words twice.
+- Reports shows its sessions hint as a standing line instead of hiding it behind a (?) button, and the Storage section describes the page instead of narrating its single switch.
+- The Tools back button rides each section header row (opposite the title) instead of a lonely row above.
+- The page file editor dropped its status strip and (?) note: the intro now carries the single-drive and restart warnings.
+- The page file Apply button rides below the manual-controls block instead of inside it, so switching to automatic management no longer paints Apply with the block's dimmed look while it is the live control.
+- The window now goes down to 500 by 400 (from 960 by 620), so it fits a snapped half side by side with the game on ordinary screens. The layout was eyeballed at the new floor page by page.
+- Hovering the maximize button now opens the Windows snap-layouts picker, like any native app. The buttons stay drawn by us; only the invisible hit target underneath is native.
+- The cleanup idle hero trades its repeated title and text for spot art.
+- Empty and loading states are flat panels with the tile corner language, one medallion size, a calmer single-arrow spinner, and the update download rides the wider progress bar.
+- The window now hides to the notification area instead of quitting (the X button and the taskbar button hide; Alt+F4 exits). The tray icon offers Open, a scan item, and Exit: Exit quits at once when idle and asks first when a scan, download, or cleanup is running, the scan item starts directly while hidden (even over an unread verdict) and turns into Stop scan with the live percent while a scan runs, the icon stays gray while idle and turns green while measuring, Alt+F4 exits through the same gate instead of hiding, and the tooltip shows the live scan percent while running and names a finished verdict until you open it.
+
+### Fixed
+- A finished scan with CPU or disk findings no longer reads "Nothing unusual / 0 seconds" on its verdict card while its report carries findings: the finished headline now mirrors the finalized report (laggy seconds from the same evidence).
+- Stopping a scan mid-startup is quiet success instead of an "unexpected error" dialog naming SESSION_STOPPED_DURING_START (the stop already won, nothing failed).
+- Windows 11 boxes upgraded from 10 no longer report as Windows 10: the display name follows the build number (11-only builds read Windows 11) and keeps the edition.
+- Starting a scan with no install evidence says GameLoop is not installed instead of telling the user to start the game; an unrecognized build alongside install evidence also says to start the game (a boot or update transient) instead of demanding an app update.
+- Tool section intro cards span the full width below the header row instead of squeezing beside the back button.
+- The Virtual Memory editor opens even when Windows has lost its automatic-management flag: it follows the Windows default instead of refusing, and names the failing registry step in the log when it truly cannot read.
+- The Storage scan measures the Recycle Bin again (it always read empty before).
+- Starting a session no longer freezes the Stop button while the app prepares.
+- Sidebar tooltips no longer stick on screen or appear as empty bubbles after expanding.
+- A failed update download explains itself in the app language instead of raw English.
+- Stopping twice is quiet success; only a real save failure reports an error.
+- The Processes End button names its app to screen readers, and help (?) buttons announce their topic.
+- The terminal sessions list is newest-first, matching Reports.
+- Memory readings work on Arabic Windows (Arabic-Indic digits are
+  recognized instead of reading as missing).
+- An elevated action that hangs now fails after 60 seconds instead of
+  freezing the app forever.
+- Report rows are keyboard accessible, durations use your language units, and Arabic counts and units read naturally.
+- Error dialogs follow one rule: failed actions explain in a dialog, failed page loads show a retry state.
+- Keyboard focus rings now sit inside their control instead of outside it, so they are never clipped by a page or window edge (About footer links, the System copy button, titlebar controls, tool cards).
+- Tool cards no longer keep a stuck faint highlight after a touch tap (hover treatments apply on hover-capable pointers only, with no press lift).
+- Tool details re-read within a minute while open: an outside change (GameLoop update, another tool) surfaces without leaving and re-entering.
+- Processes pauses its live poll while the window is hidden instead of waking every 2s unseen.
+- The health banner and loading state carry no manual refresh (the silent poll plus focus re-reads own freshness); the error state keeps the only retry.
+- The System copy button sizes to its label again (the fixed width guessed wrong for Arabic; the press-motion fix above already owns the scrollbar flicker).
+- Keyboard focus is one explicit red tone everywhere (green already dresses resting states like switch ON, so a green ring vanished where it matters most): one shared utility turns the border of bordered controls and paints a single inset ring on the rest.
+- Collapsed sidebar tabs announce their names to screen readers (they were icon-only with a visual-only tooltip).
+- Long reports lists always scroll: scroll pages carry an explicit shrink floor instead of relying on it.
+- Help notes behind (?) buttons lost their repeated one-tap tails: every hint now ends on its substance, in both languages.
+- System health cards share the Tools row shape (tinted icon tile, name over muted state line, same row height), so the two pages read as one.
+- The health page file card reads the same registry the editor writes (the old WMI flag disagreed across reboots), and names a pending reboot with the editor's own badge instead of showing the old state as current.
+- The page icon keeps its size when the one-time intro card is dismissed (the card and the plain header drew the same tile at two different scales).
+- Buttons and window controls draw every icon at one size (four different glyph sizes had crept into neighbouring buttons, and the three caption buttons had three of their own).
+- The Play triangles point forward in Arabic, like the rest of the interface reads.
+- A new version is harder to miss: the sidebar About entry and the Updates heading carry a larger dot with a slow halo pulse (the pulse holds still under reduced-motion settings), and the title bar stays quiet so one release is never announced twice.
+- The main window now remembers its size, position, and maximized state across launches instead of reopening at the default size every time.
+- Updating from inside the app works again: the download follows the file host to the real file instead of failing with a checksum error, and an empty checksum response says so plainly instead of blaming the file.
+
+### Changed
+- Sweep rows Windows could only partly read show an approximate `~` number with one shared explanation line, and stay cleanable, instead of a dead `--`.
+- Top Processes is a plain list now: a standing one-liner says what it holds, and each row shows the app, its memory use, and End. Memory alone decides the order, so the page answers what to close with the number that justifies it. It lists 15 apps instead of 12.
+- The System tab headlines one number per card (processor speed, VRAM, refresh) with model names below, and storage rows show free space with a usage meter that turns red past 90%. The CPU frequency was mislabeled as base; the number is the max boost clock.
+- Tools and health pages share one look: a summary banner, featured warnings, and the full list below.
+- The System spec cards, storage rows, and About cost rows now lead with the same icon tile as the health and Tools rows. The tile stays neutral grey there, because a page that only reports an inventory has nothing to pass or fail.
+- One typeface everywhere, severity colors from a shared theme, and wall-clock times follow your Windows 12/24 setting.
+- Exiting asks first only when work is in flight (scan, download, or cleanup). Closing the window hides it to the notification area instead of quitting.
+- Buttons are flat now: the fill alone marks a control, no border appears on hover, and corners are tighter across the app. Tool cards read slightly smaller.
+- Every screen's copy was rewritten in English and Arabic: shorter sentences, plainer words, and the same numbers, names, and units.
+
+### Removed
+- The Processes manual Refresh button (the silent 2s poll covers it).
+- The System health disk-space card (measurement only, no in-app fix).
+- The old Monitor instrument panel (replaced by the three calm states).
+
 ## [1.6.0] - 2026-09-11
 
 ### Added

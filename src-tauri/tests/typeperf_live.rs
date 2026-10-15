@@ -7,6 +7,15 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+use lag_hunter_lib::engine::sampler::parse_counter_value;
+
+/// The production parser, used directly by the live test so the live
+/// check tests what actually runs. Unit tests in sampler.rs pin the
+/// comma-decimal and grouping edge cases.
+fn parse_value(raw: &str) -> Option<f64> {
+    parse_counter_value(raw)
+}
+
 #[test]
 fn typeperf_produces_samples_live() {
     let args: Vec<String> = vec![
@@ -90,7 +99,11 @@ $c = Get-Counter -Counter $paths -SampleInterval 1 -MaxSamples 1 -ErrorAction St
     let line = String::from_utf8_lossy(&out.stdout);
     let line = line.trim();
     assert!(!line.is_empty(), "emitter produced no output");
-    let pairs: Vec<&str> = line.split(',').collect();
+    // the emitter joins pairs with ',' — but a comma-DECIMAL culture puts
+    // a bare ',' inside values too, so pair boundaries are ",\" (every
+    // pair starts with a backslash path), the same split production uses.
+    // A bare ',' split counted 12 pairs on de-DE and passed vacuously.
+    let pairs: Vec<&str> = line.split(",\\").collect();
     assert!(
         pairs.len() >= 6,
         "expected 6 metrics, got {}: {line}",
@@ -100,8 +113,8 @@ $c = Get-Counter -Counter $paths -SampleInterval 1 -MaxSamples 1 -ErrorAction St
         assert!(pair.contains('='), "malformed pair: {pair}");
         let v = pair.split('=').nth(1).unwrap_or("");
         assert!(
-            v.parse::<f64>().is_ok(),
-            "non-numeric value in pair: {pair}"
+            parse_value(v).is_some(),
+            "unparseable value in pair: {pair} (both dot- and comma-decimal accepted)"
         );
     }
     println!("EMITTER: {line}");

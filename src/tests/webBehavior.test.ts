@@ -19,6 +19,8 @@ describe("isBrowserShortcut", () => {
     expect(isBrowserShortcut(ev("F12"))).toBe(true);
     expect(isBrowserShortcut(ev("R", { ctrl: true }))).toBe(true);
     expect(isBrowserShortcut(ev("I", { ctrl: true, shift: true }))).toBe(true);
+    // Ctrl+Shift+J is the devtools console — same class as Ctrl+Shift+I
+    expect(isBrowserShortcut(ev("J", { ctrl: true, shift: true }))).toBe(true);
   });
 
   it("blocks the leak-through Ctrl combos: find, print, save, view-source", () => {
@@ -46,5 +48,11 @@ describe("isBrowserShortcut", () => {
   it("Ctrl+Shift+I is devtools, but Ctrl+I alone is not", () => {
     expect(isBrowserShortcut(ev("i", { ctrl: true }))).toBe(false);
     expect(isBrowserShortcut(ev("i", { shift: true }))).toBe(false);
+  });
+
+  it("Ctrl+Shift+J is the console, but plain J / Ctrl+J are not", () => {
+    expect(isBrowserShortcut(ev("j"))).toBe(false);
+    expect(isBrowserShortcut(ev("j", { ctrl: true }))).toBe(false);
+    expect(isBrowserShortcut(ev("j", { shift: true }))).toBe(false);
   });
 });

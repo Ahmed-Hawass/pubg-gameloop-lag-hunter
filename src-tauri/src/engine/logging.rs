@@ -7,16 +7,25 @@
 //   * panics           — the hook fires even with panic=abort (last chance)
 //   * sampler health   — every streaming source logs spawn + first sample
 //   * session lifecycle — start gate, timings, stop reason, sample counts
-//   * slow IPC         — any command > 500ms is logged by name + duration
+//   * slow IPC         — commands slower than their threshold (2s default)
+//                        log one WARN line; fast ones stay silent
 //   * rig profile      — one line at boot: RAM/disks/GPU counters/PS state
 //
-// Writer rule: every public fn is lock-free-ish and NEVER blocks callers —
-// a logging failure is swallowed, never propagated (fail-soft, like the
-// rest of the engine).
+// Volume contract (silence is normal, records are exceptions): routine
+// fast operations write NOTHING, so a tab left open all day cannot bury
+// the useful lines under tens of thousands of fast ones. A per-day size
+// cap backs this up; WARN/ERROR/PANIC always get through.
+//
+// Writer rule: normal writes serialize under LOG_LOCK (a slow-path file
+// append — fast callers never do I/O inline beyond the mutex handoff),
+// and a logging failure is swallowed, never propagated (fail-soft, like
+// the rest of the engine). Only the panic hook is truly lock-free: it
+// bypasses LOG_LOCK with a direct write because the panic may originate
+// while another thread holds the mutex (see init_panic_hook).
 
 use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Instant;
 
@@ -28,25 +37,52 @@ fn logs_dir() -> PathBuf {
     super::storage::app_dir().join("logs")
 }
 
-fn log_path() -> PathBuf {
+fn log_path_in(dir: &Path) -> PathBuf {
     // one file per day: laghunter-2026-08-31.log
     let iso = sampler::iso_now(); // 2026-08-31T...
-    let date = &iso[0..10];
-    logs_dir().join(format!("laghunter-{date}.log"))
+                                  // never slice blindly: a malformed clock must not panic the logger itself
+    let date = iso.get(0..10).unwrap_or("unknown");
+    dir.join(format!("laghunter-{date}.log"))
 }
 
-fn write_line(level: &str, msg: &str) {
+fn log_path() -> PathBuf {
+    log_path_in(&logs_dir())
+}
+
+/// Backstop against any chatty future source: one day's file never
+/// grows past this. Routine lines stop at the cap; WARN/ERROR/PANIC
+/// always get through (a cap that eats the panic line would defeat the
+/// flight recorder).
+const MAX_LOG_FILE_BYTES: u64 = 5 * 1024 * 1024;
+
+fn write_line_to(dir: &Path, level: &str, msg: &str) {
     let _guard = LOG_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-    let _ = fs::create_dir_all(logs_dir());
+    let _ = fs::create_dir_all(dir);
+    if level != "WARN" && level != "ERROR" && file_too_big(dir) {
+        return;
+    }
     let iso = sampler::iso_now();
-    let clock = &iso[11..23];
+    let clock = iso.get(11..23).unwrap_or(&iso);
     if let Ok(mut f) = fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(log_path())
+        .open(log_path_in(dir))
     {
         let _ = writeln!(f, "{clock} [{level}] {msg}");
     }
+}
+
+/// True when today's file already hit the size cap. Missing/unreadable
+/// reads as room left (fail-open: logging must never silence itself on
+/// a metadata error).
+fn file_too_big(dir: &Path) -> bool {
+    fs::metadata(log_path_in(dir))
+        .map(|m| m.len() >= MAX_LOG_FILE_BYTES)
+        .unwrap_or(false)
+}
+
+fn write_line(level: &str, msg: &str) {
+    write_line_to(&logs_dir(), level, msg);
 }
 
 pub fn info(msg: &str) {
@@ -92,14 +128,18 @@ impl TimerGuard {
     }
 }
 
+fn log_op_duration_to(dir: &Path, op: &str, elapsed_ms: u128, warn_above_ms: u128) {
+    if elapsed_ms >= warn_above_ms {
+        write_line_to(dir, "WARN", &format!("{op}: {elapsed_ms}ms (slow)"));
+    }
+    // fast operations stay silent by design (see the volume contract
+    // above): a 2s poll beat would otherwise write ~43k lines a day.
+}
+
 impl Drop for TimerGuard {
     fn drop(&mut self) {
         let ms = self.started.elapsed().as_millis();
-        if ms >= self.warn_above_ms {
-            warn(&format!("{}: {ms}ms (slow)", self.op));
-        } else {
-            perf(self.op, ms);
-        }
+        log_op_duration_to(&logs_dir(), self.op, ms, self.warn_above_ms);
     }
 }
 
@@ -139,15 +179,25 @@ pub fn init_panic_hook() {
             .open(log_path())
         {
             let iso = sampler::iso_now();
-            let _ = writeln!(f, "{} [PANIC] {}", &iso[11..23], msg);
+            let clock = iso.get(11..23).unwrap_or(&iso);
+            let _ = writeln!(f, "{clock} [PANIC] {msg}");
         }
     }));
 }
 
 /// Delete log files older than 7 days — called once at app start.
 pub fn cleanup_old_logs() {
-    let _ = fs::create_dir_all(logs_dir());
-    let Ok(rd) = fs::read_dir(logs_dir()) else {
+    cleanup_old_logs_in(&logs_dir());
+}
+
+fn cleanup_old_logs_in(dir: &Path) {
+    // a planted symlink as the logs dir would redirect the sweep into
+    // another folder: refuse the whole run like the cleanup roots do
+    if dir_is_link(dir) {
+        return;
+    }
+    let _ = fs::create_dir_all(dir);
+    let Ok(rd) = fs::read_dir(dir) else {
         return;
     };
     let cutoff = std::time::SystemTime::now()
@@ -155,6 +205,19 @@ pub fn cleanup_old_logs() {
         .map(|d| d.as_secs() as i64 - 7 * 86_400)
         .unwrap_or(0);
     for entry in rd.flatten() {
+        // only our own log files are ever removed: anything else in the
+        // folder (and any symlink entry itself) is left alone
+        let path = entry.path();
+        let name = entry.file_name().to_str().unwrap_or("").to_string();
+        if !is_managed_log_file(&name) {
+            continue;
+        }
+        let Ok(meta) = std::fs::symlink_metadata(&path) else {
+            continue;
+        };
+        if meta.is_symlink() || !meta.is_file() {
+            continue;
+        }
         let Ok(meta) = entry.metadata() else { continue };
         let Ok(modified) = meta.modified() else {
             continue;
@@ -163,43 +226,140 @@ pub fn cleanup_old_logs() {
             continue;
         };
         if (age.as_secs() as i64) < cutoff {
-            let _ = fs::remove_file(entry.path());
+            let _ = fs::remove_file(&path);
         }
     }
+}
+
+/// Our own log file shape only: laghunter-*.log. Pure.
+fn is_managed_log_file(name: &str) -> bool {
+    name.starts_with("laghunter-")
+        && name.ends_with(".log")
+        && !name.contains("..")
+        && !name.contains(['\\', '/'])
+}
+
+/// True when a dir is itself a link (symlink or junction): sweeping
+/// "inside" it would really sweep inside its target. Pure.
+fn dir_is_link(dir: &Path) -> bool {
+    let Ok(meta) = std::fs::symlink_metadata(dir) else {
+        return false;
+    };
+    if meta.is_symlink() {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+        if meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return true;
+        }
+    }
+    false
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// Unit tests must never touch the production logs directory: the
+    /// production helpers write into `%LOCALAPPDATA%\LagHunter\logs`, and
+    /// the retention cleanup deletes files there. Every test below aims
+    /// the same code at a throwaway temp dir instead.
+    fn temp_logs_dir(name: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("laghunter-log-test-{}-{name}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let _ = fs::create_dir_all(&dir);
+        dir
+    }
+
+    fn only_log_file(dir: &Path) -> PathBuf {
+        let mut logs: Vec<PathBuf> = fs::read_dir(dir)
+            .expect("temp logs dir must be readable")
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("log"))
+            .collect();
+        assert_eq!(logs.len(), 1, "expected exactly one test log file");
+        logs.pop().expect("test log file must exist")
+    }
+
     #[test]
     fn log_line_format() {
-        // the path under test writes to the real logs dir (app dir), which is
-        // fine — cleanup keeps it bounded. We only assert no panic here.
-        info("test message");
-        error("test error");
-        warn("test warn");
+        let dir = temp_logs_dir("lines");
+        write_line_to(&dir, "INFO", "test message");
+        write_line_to(&dir, "ERROR", "test error");
+        write_line_to(&dir, "WARN", "test warn");
+        let body = fs::read_to_string(only_log_file(&dir)).expect("test log must be readable");
+        assert!(body.contains("[INFO] test message"));
+        assert!(body.contains("[ERROR] test error"));
+        assert!(body.contains("[WARN] test warn"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn log_cleanup_keeps_only_managed_files() {
+        // the retention sweep must never touch foreign files, even when
+        // they are old: only laghunter-*.log entries are managed
+        assert!(is_managed_log_file("laghunter-2026-10-07.log"));
+        assert!(!is_managed_log_file("notes.txt"));
+        assert!(!is_managed_log_file("laghunter-2026-10-07.txt"));
+        assert!(!is_managed_log_file("laghunter-../evil.log"));
+        assert!(!is_managed_log_file("other.log"));
+        // a plain dir is no link (negative control for the predicate)
+        let dir = temp_logs_dir("linkcheck");
+        assert!(!dir_is_link(&dir));
+        assert!(!dir_is_link(&dir.join("no-such-entry")));
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn timed_guard_logs_on_drop() {
-        {
-            let _t = timed("unit test op");
-            std::thread::sleep(std::time::Duration::from_millis(1));
-        } // drop → line written; assert only that it never panics
-        perf("unit perf op", 42);
+        let dir = temp_logs_dir("timed");
+        // fast operations stay silent (the volume contract)
+        log_op_duration_to(&dir, "unit test op", 1, 2_000);
+        // slow ones warn
+        log_op_duration_to(&dir, "unit slow op", 2_500, 100);
+        let body = fs::read_to_string(only_log_file(&dir)).expect("test log must be readable");
+        assert!(!body.contains("unit test op"));
+        assert!(body.contains("unit slow op: 2500ms (slow)"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn size_cap_silences_routine_but_never_warns() {
+        let dir = temp_logs_dir("cap");
+        // fill today's file past the cap with routine lines
+        let filler = "x".repeat(1024);
+        for _ in 0..(6 * 1024) {
+            write_line_to(&dir, "INFO", &filler);
+        }
+        assert!(file_too_big(&dir), "test must actually fill past the cap");
+        write_line_to(&dir, "INFO", "routine after cap");
+        write_line_to(&dir, "WARN", "warning after cap");
+        let body = fs::read_to_string(only_log_file(&dir)).expect("test log must be readable");
+        assert!(!body.contains("routine after cap"));
+        assert!(body.contains("warning after cap"));
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn timed_guard_is_must_use() {
-        // compiling this test at all proves the type is usable; the must_use
-        // attribute is enforced at the call sites (warnings, not errors)
+        // Compiling proves the guard type is usable from a binding. Forget
+        // (rather than drop) so this test never writes to production logs.
         let _t = timed_with("unit custom op", 100);
-        drop(_t);
+        std::mem::forget(_t);
     }
 
     #[test]
     fn cleanup_never_panics() {
-        cleanup_old_logs();
+        let dir = temp_logs_dir("cleanup");
+        fs::write(dir.join("laghunter-2099-01-01.log"), "recent")
+            .expect("temp log must be writable");
+        cleanup_old_logs_in(&dir);
+        assert!(dir.join("laghunter-2099-01-01.log").is_file());
+        let _ = fs::remove_dir_all(&dir);
     }
 }

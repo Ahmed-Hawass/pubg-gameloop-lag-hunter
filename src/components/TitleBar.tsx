@@ -3,38 +3,44 @@
 // data-tauri-drag-region. Resizable window: maximize toggles and tracks
 // the maximized state for its tooltip and icon.
 // ALL tooltips are the app's own (Tip component) — never the OS one.
+// The X button HIDES to the tray (never quits): Exit lives in the tray menu
+// and runs the exit gate there, so a running scan survives dismissing the window.
 
-import { useEffect, useState } from "react";
-import { Copy, Minus, Square, X } from "lucide-react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useEffect, useRef, useState } from "react";
+import { Minus, PictureInPicture2, Square, X } from "lucide-react";
+import {
+  hideWindow,
+  isWindowMaximized,
+  logFrontendError,
+  minimizeWindow,
+  onSnapOverlay,
+  onWindowResized,
+  syncSnapOverlay,
+  toggleMaximizeWindow,
+} from "../bridge";
 import { Tip } from "./components";
-import { api } from "../bridge";
 import { useLang } from "../i18n";
 import appIcon from "../assets/app-icon.png";
 
-export function TitleBar() {
-  const { t } = useLang();
-  const [version, setVersion] = useState<string>("");
+export function TitleBar(props: {
+  version: string;
+}) {
+  const { t, lang } = useLang();
+  const { version } = props;
   const [maximized, setMaximized] = useState(false);
-
-  // the version comes from the backend (tauri.conf.json) — one source of truth
-  useEffect(() => {
-    api
-      .getVersion()
-      .then(setVersion)
-      .catch(() => setVersion(""));
-  }, []);
+  /** hover mirror for the maximize button: the native snap overlay owns
+      the mouse over it, so :hover cannot fire — enter/leave drive the
+      same fill instead. Keyboard focus keeps the real :focus path. */
+  const [snapHover, setSnapHover] = useState(false);
+  const maxBtnRef = useRef<HTMLButtonElement | null>(null);
 
   // track the maximized state for the toggle's tooltip and icon
   useEffect(() => {
-    const win = getCurrentWindow();
-    win
-      .isMaximized()
+    isWindowMaximized()
       .then(setMaximized)
       .catch(() => {});
-    const unlisten = win.onResized(() => {
-      win
-        .isMaximized()
+    const unlisten = onWindowResized(() => {
+      isWindowMaximized()
         .then(setMaximized)
         .catch(() => {});
     });
@@ -43,9 +49,71 @@ export function TitleBar() {
     };
   }, []);
 
+  // overlay mouse reports: hover mirrors the highlight, a click runs the
+  // same toggle as the button itself (the overlay owns mouse only —
+  // keyboard Enter/Space still reach the real button).
+  useEffect(() => {
+    const unlisten = onSnapOverlay((kind) => {
+      if (kind === "enter") setSnapHover(true);
+      else if (kind === "leave") setSnapHover(false);
+      else void toggleMaximizeWindow();
+    });
+    return () => {
+      unlisten.then((f) => f()).catch(() => {});
+    };
+  }, []);
+
+  // overlay geometry: the hit target tracks the real button rect
+  // (debounced — resize fires per tick while dragging, and an invoke per
+  // tick would spam the main thread with moves). Re-runs when the
+  // language flips: RTL mirrors the button to the other corner.
+  useEffect(() => {
+    let timer = 0;
+    let unlistenResize: (() => void) | undefined;
+    let observer: ResizeObserver | undefined;
+    const sync = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const el = maxBtnRef.current;
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        void syncSnapOverlay({
+          x: r.left,
+          y: r.top,
+          width: r.width,
+          height: r.height,
+          scale: window.devicePixelRatio || 1,
+        }).catch(() => {});
+      }, 120);
+    };
+    sync();
+    if (typeof ResizeObserver !== "undefined" && maxBtnRef.current) {
+      observer = new ResizeObserver(() => sync());
+      observer.observe(maxBtnRef.current);
+    }
+    void onWindowResized(() => sync()).then((u) => {
+      unlistenResize = u;
+    });
+    return () => {
+      window.clearTimeout(timer);
+      observer?.disconnect();
+      unlistenResize?.();
+      // no stale hit area: a torn-down shell leaves nothing clickable
+      void syncSnapOverlay(null).catch(() => {});
+    };
+  }, [lang]);
+
   return (
     <div className="titlebar">
-      <div className="titlebar-left" data-tauri-drag-region>
+      {/* double-click the drag region toggles maximize (OS convention);
+          the controls are a separate block, never inside the region */}
+      <div
+        className="titlebar-left"
+        data-tauri-drag-region
+        onDoubleClick={() => {
+          void toggleMaximizeWindow();
+        }}
+      >
         <img
           className="titlebar-icon"
           src={appIcon}
@@ -64,10 +132,15 @@ export function TitleBar() {
         ) : null}
       </div>
       <div className="win-controls">
+        {/* icon-only buttons carry their accessible name: the tooltip
+            paints on hover only, so without aria-labels the window
+            controls are unnamed for screen readers and keyboard users */}
         <Tip text={t.minimize}>
           <button
+            className="focus-ring-inset"
+            aria-label={t.minimize}
             onClick={() => {
-              void getCurrentWindow().minimize();
+              void minimizeWindow();
             }}
           >
             <Minus size={13} />
@@ -75,21 +148,27 @@ export function TitleBar() {
         </Tip>
         <Tip text={maximized ? t.restore : t.maximize}>
           <button
+            ref={maxBtnRef}
+            className={`focus-ring-inset${snapHover ? " snap-hover" : ""}`}
+            aria-label={maximized ? t.restore : t.maximize}
             onClick={() => {
-              void getCurrentWindow().toggleMaximize();
+              void toggleMaximizeWindow();
             }}
           >
-            {maximized ? <Copy size={11} /> : <Square size={11} />}
+            {maximized ? <PictureInPicture2 size={13} /> : <Square size={13} />}
           </button>
         </Tip>
-        <Tip text={t.close}>
+        <Tip text={t.hideToTray}>
           <button
-            className="close"
+            className="focus-ring-inset close"
+            aria-label={t.hideToTray}
             onClick={() => {
-              void getCurrentWindow().close();
+              void hideWindow().catch((e) => {
+                void logFrontendError(`hide window failed: ${String(e)}`).catch(() => {});
+              });
             }}
           >
-            <X size={14} />
+            <X size={13} />
           </button>
         </Tip>
       </div>

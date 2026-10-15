@@ -10,10 +10,10 @@ export function isBrowserShortcut(e: {
   shiftKey: boolean;
 }): boolean {
   const key = e.key.toLowerCase();
-  // F5 / Ctrl+R reload, F12 / Ctrl+Shift+I devtools
+  // F5 / Ctrl+R reload, F12 / Ctrl+Shift+I devtools, Ctrl+Shift+J console
   if (key === "f5" || key === "f12") return true;
   if (key === "r" && e.ctrlKey) return true;
-  if (key === "i" && e.ctrlKey && e.shiftKey) return true;
+  if ((key === "i" || key === "j") && e.ctrlKey && e.shiftKey) return true;
   // browser shortcuts that leak through: Ctrl+F find, Ctrl+P print, Ctrl+S save
   if (e.ctrlKey && ["f", "p", "s", "u"].includes(key)) return true;
   return false;

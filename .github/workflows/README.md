@@ -8,7 +8,7 @@ project honest:
 
 | Check | What it protects |
 | --- | --- |
-| `npm test` | Vitest unit tests, version comparison (the update check), error-to-dialog mapping, locale key parity, theme resolution |
+| `npm test` | Vitest unit tests with coverage floor, version comparison (the update check), error-to-dialog mapping, locale key parity, theme resolution |
 | `npm run build` | TypeScript compiles (incl. the locale type bond: `ar.ts` must match `en.ts` key-for-key) and the frontend bundles |
 | `npm audit` | Frontend dependency advisories (high+ fails the build) |
 | `cargo test` | All engine tests (unit + live integration), detector fingerprints, settings migration, path traversal, honest reporting, plus the **live** typeperf/PowerShell pipeline tests, session race guards, update path hardening |

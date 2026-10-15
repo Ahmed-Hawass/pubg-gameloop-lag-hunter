@@ -1,46 +1,70 @@
 // App.tsx — shell: custom title bar + collapsible sidebar + all views.
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
-  ChevronsLeft,
-  ChevronsRight,
   Cpu,
   Crosshair,
   FolderOpen,
-  Info,
+  CircleGauge,
   Settings,
   ShieldCheck,
+  Wrench,
 } from "lucide-react";
 import { TitleBar } from "./components/TitleBar";
-import { Dialog, MODAL_OPEN_EVENT, Tip } from "./components/components";
+import { Dialog, dispatchAppDialogOpen, dispatchModalOpen } from "./components/components";
+import { AppSidebar, type SidebarTab } from "./components/AppSidebar";
 import { MonitorView } from "./views/MonitorView";
 import { ReportsView } from "./views/ReportsView";
+import { StartupSection } from "./views/StartupSection";
 import { SystemView } from "./views/SystemView";
 import { ProcessesView } from "./views/ProcessesView";
 import { ChecksView } from "./views/ChecksView";
+import { ToolsView } from "./views/ToolsView";
 import { AboutView } from "./views/AboutView";
 import { SettingsView } from "./views/SettingsView";
 import { WelcomeView } from "./views/WelcomeView";
-import { api, onEngineState, type StatusPayload, type UpdateInfo } from "./bridge";
+import { api, isWindowVisible, logFrontendInfo, onEngineState, onTrayExit, onTrayQuickScan, quitApp, revealWindow, setTrayActive, setTrayTooltip, showMainWindow, syncTrayLabels, type StatusPayload, type UpdateInfo } from "./bridge";
+import {
+  hasLiveResult,
+  quickScanIntent,
+  scanPercent,
+  trayPercentToPush,
+  TOOLTIP_STEP_PCT,
+} from "./tray";
 import { useLang } from "./i18n";
 import { errorDialog } from "./errors";
 import { shouldShowUpdateModal } from "./updateFlow";
 import { resolveTheme, type ThemeSetting } from "./theme";
+import { useUiZoom } from "./useUiZoom";
+import { useExitGate } from "./useExitGate";
 import { UpdateModal } from "./components/UpdateModal";
 
-type View = "monitor" | "system" | "processes" | "checks" | "reports" | "settings" | "about";
+type View =
+  | "monitor"
+  | "system"
+  | "processes"
+  | "checks"
+  | "tools"
+  | "startup"
+  | "reports"
+  | "settings"
+  | "about";
 
 export default function App() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const [status, setStatus] = useState<StatusPayload>({ status: "idle", ui: null });
   const [busy, setBusy] = useState(false);
   const [durationSecs, setDurationSecs] = useState<number>(300);
-  const [toast, setToast] = useState<string | null>(null);
-  const [toastTitle, setToastTitle] = useState<string | null>(null);
-  const [toastBody, setToastBody] = useState<string | null>(null);
+  const [dialogKey, setDialogKey] = useState<string | null>(null);
+  const [dialogTitle, setDialogTitle] = useState<string | null>(null);
+  const [dialogBody, setDialogBody] = useState<string | null>(null);
   const [view, setView] = useState<View>("monitor");
   const [reportOpenId, setReportOpenId] = useState<string | null>(null);
+  /** Tools deep-link target row id (the health DVR card jumps to its row):
+      one-shot, cleared by ToolsView once the landing finishes — the same
+      contract as reportOpenId above */
+  const [toolOpenId, setToolOpenId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<boolean | null>(null); // null = loading saved pref
   /** first-run welcome: null = still loading the setting */
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
@@ -57,7 +81,7 @@ export default function App() {
   const [backgroundAdviceUp, setBackgroundAdviceUp] = useState(false);
   /** the first-run advice dialog: shows ONCE, only right after the user
       finishes the welcome flow (loaded-true users never see it) */
-  const [adviceShown, setAdviceShown] = useState(false);
+  const [firstRunAdviceShown, setFirstRunAdviceShown] = useState(false);
   /** the GameLoop-closed notice: once per session, never on manual/auto stops */
   const [closedNoticeShown, setClosedNoticeShown] = useState(false);
   /** whether onboarding was ALREADY done when the app loaded (distinguishes
@@ -74,18 +98,77 @@ export default function App() {
   /** a newer version is available on GitHub (checked at startup, quietly;
       replaced by the About tab's manual check when that finds one first) */
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  /** the running version, ASKED ONCE from the engine (tauri.conf.json's
+      single source of truth) and handed to both consumers — the old
+      shape paid the IPC twice (TitleBar + AboutView each asked) */
+  const [appVersion, setAppVersion] = useState<string>("");
   /** the update modal: shown at startup (once per version) or via manual check */
   const [updateModal, setUpdateModal] = useState(false);
-  /** first-run advice is up RIGHT NOW — derived from the live toast state,
+  /** exit confirm: owned by the gate hook (X names in-flight work) */
+  const { exitConfirm, setExitConfirm, onDownloadActivity, onCleaningActivity, requestExit } =
+    useExitGate(status);
+  /** first-run advice is up RIGHT NOW — derived from the live dialog state,
       never a sticky flag: the update modal and the one-shot advices defer
       while this dialog is on screen, and stop deferring the moment it is
       dismissed (a sticky boolean once deferred them for the whole launch) */
-  const adviceUp = toast === "first_run_advice";
+  const firstRunAdviceUp = dialogKey === "first_run_advice";
   /** theme setting ("auto" follows the OS — also the default for a fresh
       install); the resolved value drives
       document.documentElement.dataset.theme — single source of truth,
       SettingsView only sends changes through onThemeChange below */
   const [themeSetting, setThemeSetting] = useState<ThemeSetting>("auto");
+  /** interface zoom percent (fixed ladder in useUiZoom): owned here like
+      the theme, so pills and shortcuts share one state; SettingsView
+      only sends changes through onZoomChange below */
+  const { zoom, setZoomPct, zoomIn, zoomOut, resetZoom } = useUiZoom();
+  /** reveal Tools rows the machine cannot run (owned here like the
+      theme: Settings pills, the gaming-page link, and the page share
+      one state, persisted per machine) */
+  const [showUnsupported, setShowUnsupported] = useState(false);
+
+  // zoom shortcuts (browser convention, VS Code included): Ctrl+= in,
+  // Ctrl+- out, Ctrl+0 reset. Arabic layouts remap these keys — the
+  // pills in Settings stay the layout-free path, like every control.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || e.shiftKey || e.altKey || e.metaKey) return;
+      if (e.key === "=" || e.key === "+") {
+        e.preventDefault();
+        zoomIn();
+      } else if (e.key === "-") {
+        e.preventDefault();
+        zoomOut();
+      } else if (e.key === "0") {
+        e.preventDefault();
+        resetZoom();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [zoomIn, zoomOut, resetZoom]);
+
+  // Alt+F4 exits through the gate (quiet work quits, in-flight work
+  // confirms): the backend cannot tell Alt+F4 apart from the taskbar close
+  // button, so the split lives here where the keystroke is visible. X and
+  // the taskbar button keep hiding. If the WebView ever swallows this
+  // keystroke, the close falls back to a plain hide — never a quit.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.altKey && e.key === "F4") {
+        e.preventDefault();
+        requestExit();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [requestExit]);
+
+  const showSettingsError = (error: unknown) => {
+    const raw = typeof error === "string" ? error : String(error);
+    setDialogTitle(t.dialog.somethingWrong);
+    setDialogBody(t.dialog.unknownErrorBody(raw));
+    setDialogKey("settings-write-failed");
+  };
 
   // apply the resolved theme to <html> and follow OS changes while "auto"
   useEffect(() => {
@@ -99,8 +182,21 @@ export default function App() {
   }, [themeSetting]);
 
   const onThemeChange = (v: ThemeSetting) => {
+    const previous = themeSetting;
     setThemeSetting(v);
-    void api.setTheme(v).catch(() => {});
+    void api.setTheme(v).catch((error) => {
+      setThemeSetting(previous);
+      showSettingsError(error);
+    });
+  };
+
+  const onShowUnsupportedChange = (v: boolean) => {
+    const previous = showUnsupported;
+    setShowUnsupported(v);
+    void api.setShowUnsupported(v).catch((error) => {
+      setShowUnsupported(previous);
+      showSettingsError(error);
+    });
   };
   /** PowerShell probe result — true = limited mode banner on the monitor */
   const [psLimited, setPsLimited] = useState(false);
@@ -121,6 +217,18 @@ export default function App() {
     };
   }, []);
 
+  // the update modal reveals a hidden window instead of announcing itself
+  // to nobody: a scan can run hidden to the tray while the startup check
+  // lands, and the manual About check can fire from a hidden window too.
+  const openUpdateModal = useCallback(() => {
+    void isWindowVisible()
+      .then((visible) => {
+        if (!visible) void showMainWindow().catch(() => {});
+      })
+      .catch(() => {})
+      .finally(() => setUpdateModal(true));
+  }, []);
+
   // the once-per-version rule (pure logic in updateFlow.ts). Gated by
   // onboardingDone: a FIRST-RUN user must never meet the update modal —
   // not over the welcome screen, not over the advice dialog that follows
@@ -133,16 +241,16 @@ export default function App() {
         if (
           shouldShowUpdateModal(
             updateInfo,
-            adviceUp || gameAdviceUp || backgroundAdviceUp,
+            firstRunAdviceUp || gameAdviceUp || backgroundAdviceUp,
             announced ? updateInfo.version : null,
           )
         ) {
-          setUpdateModal(true);
+          openUpdateModal();
           void api.announceUpdate(updateInfo.version).catch(() => {});
         }
       })
       .catch(() => {});
-  }, [updateInfo, adviceUp, gameAdviceUp, backgroundAdviceUp, onboardingDone]);
+  }, [updateInfo, firstRunAdviceUp, gameAdviceUp, backgroundAdviceUp, onboardingDone, openUpdateModal]);
 
   // state pushes land here (live + final): a finished session caused by
   // GameLoop dying gets its explanation dialog — once per session, never
@@ -158,9 +266,9 @@ export default function App() {
       payload.stop_reason === "gameloop_closed" &&
       !closedNoticeShown
     ) {
-      setToastTitle(t.dialog.gameloopClosed);
-      setToastBody(t.dialog.gameloopClosedBody);
-      setToast("gameloop_closed");
+      setDialogTitle(t.dialog.gameloopClosed);
+      setDialogBody(t.dialog.gameloopClosedBody);
+      setDialogKey("gameloop_closed");
       setClosedNoticeShown(true);
     }
   };
@@ -170,15 +278,29 @@ export default function App() {
 
   // initial state + live pushes + saved preferences + gameloop watcher
   useEffect(() => {
+    // subscribe first, snapshot second: the subscriber stays attached for
+    // the whole flight, so the last write wins and the snapshot only fills
+    // whatever arrived before it.
+    const un = onEngineState((ev) => {
+      handleStateRef.current(ev.payload);
+    }).catch(() => null);
     api
       .getState()
       .then(setStatus)
-      .catch((e) => setToast(String(e)));
+      .catch((e) => {
+        // a novel failure gets the localized unknown-error dialog, never
+        // a raw English string inside an Arabic UI
+        const raw = typeof e === "string" ? e : String(e);
+        setDialogTitle(t.dialog.somethingWrong);
+        setDialogBody(t.dialog.unknownErrorBody(raw));
+        setDialogKey(`state:${raw}`);
+      });
     api
       .getSettings()
       .then((s) => {
         setDurationSecs(s.auto_stop_minutes * 60);
         setCollapsed(s.sidebar_collapsed);
+        setShowUnsupported(s.show_unsupported ?? false);
         setOnboardingDone(s.onboarding_done);
         setGameAdviceDone(s.game_advice_done);
         setBackgroundAdviceDone(s.background_advice_done);
@@ -190,42 +312,62 @@ export default function App() {
         if (s.onboarding_done) wasOnboardedRef.current = true;
       })
       .catch(() => {
+        // IPC dead: keep the loading shell (onboarding NOT marked done) so
+        // a first-run user still sees Welcome once the backend answers,
+        // instead of skipping it due to a transient failure.
         setCollapsed(false);
-        setOnboardingDone(true);
-        setGameAdviceDone(true);
-        setBackgroundAdviceDone(true);
-        wasOnboardedRef.current = true;
+        setOnboardingDone(false);
+        setGameAdviceDone(false);
+        setBackgroundAdviceDone(false);
+        wasOnboardedRef.current = false;
       });
     api
       .psAvailable()
       .then((ok) => setPsLimited(!ok))
       .catch(() => setPsLimited(false)); // probe failure ≠ limited claim
+    // the one version ask for the whole app (titlebar + about share it)
+    api
+      .getVersion()
+      .then(setAppVersion)
+      .catch(() => setAppVersion(""));
     // start the engine's idle GameLoop watcher. Its `engine://gameloop`
     // events have no UI consumer yet (the Start button stays pressable and
     // the engine gate answers on press) — but the WATCHER itself must run:
     // it keeps the session-start gate's emulator snapshot warm.
     void api.watchGameloop();
-    const un = onEngineState((ev) => {
-      handleStateRef.current(ev.payload);
-    }).catch(() => null);
     return () => {
       un.then((f) => f?.());
     };
+    // mount-once bootstrap: re-running on a language switch would re-fire
+    // every startup query (the getState failure copy reads the boot locale
+    // through the closure, which is fine).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const chooseDuration = (secs: number) => {
+    const previous = durationSecs;
     setDurationSecs(secs);
-    void api.setAutoStop(Math.round(secs / 60)).catch(() => {});
+    void api.setAutoStop(Math.round(secs / 60)).catch((error) => {
+      setDurationSecs(previous);
+      showSettingsError(error);
+    });
   };
 
   const toggleSidebar = () => {
     if (collapsed == null) return; // settings still loading — nothing to flip
+    const previous = collapsed;
     const next = !collapsed;
     setCollapsed(next);
-    void api.setSidebarCollapsed(next).catch(() => {});
+    void api.setSidebarCollapsed(next).catch((error) => {
+      setCollapsed(previous);
+      showSettingsError(error);
+    });
   };
 
-  const toggle = async () => {
+  // true when the toggle landed (started or stopped), false when it raised
+  // a dialog instead (the tray's silent start uses this to decide whether
+  // the window needs to come back; the Monitor button ignores the answer).
+  const toggle = async (): Promise<boolean> => {
     setBusy(true);
     try {
       if (status.status === "running") {
@@ -233,16 +375,29 @@ export default function App() {
       } else {
         setStatus(await api.sessionStart(durationSecs));
       }
+      return true;
     } catch (e) {
       const raw = typeof e === "string" ? e : String(e);
+      if (raw.includes("SESSION_STOPPED_DURING_START")) {
+        // the user stopped mid-startup: the stop already won and the start
+        // correctly aborted, so there is nothing to report — refresh the
+        // snapshot quietly instead of crying wolf with an error dialog
+        await api
+          .getState()
+          .then(setStatus)
+          .catch(() => {});
+        return true;
+      }
       const d = errorDialog(raw, t.errors, {
         somethingWrong: t.dialog.somethingWrong,
         scanNeedsGame: t.dialog.scanNeedsGame,
         scanNeedsGameBody: t.dialog.scanNeedsGameBody,
+        unknownErrorBody: t.dialog.unknownErrorBody,
       });
-      setToastTitle(d.title);
-      setToastBody(d.body);
-      setToast(d.key);
+      setDialogTitle(d.title);
+      setDialogBody(d.body);
+      setDialogKey(d.key);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -253,31 +408,30 @@ export default function App() {
     setView("reports");
   };
 
-  const dismissSummary = (session: string) => {
+  // stable identity: a new callback per render would re-trigger every
+  // MonitorView effect that depends on it.
+  const dismissSummary = useCallback((session: string) => {
     setDismissedSession(session);
-  };
+  }, []);
 
-  // the FIRST-RUN advice: appears exactly once — in the same launch where
-  // the user completed the welcome flow. Users who onboarded in a previous
-  // launch never see it. (adviceUp is derived from the live toast above, so
-  // no reset logic is needed here — dismissing the dialog unblocks the rest.)
+  // FIRST-RUN advice: once, in the launch where the welcome flow completes
+  // (previous launches never see it; dismissing unblocks the rest).
   useEffect(() => {
-    if (onboardingDone && !adviceShown && !wasOnboardedRef.current) {
-      setAdviceShown(true);
-      setToastTitle(t.dialog.firstRunAdvice);
-      setToastBody(t.dialog.firstRunAdviceBody);
-      setToast("first_run_advice");
+    if (onboardingDone && !firstRunAdviceShown && !wasOnboardedRef.current) {
+      setFirstRunAdviceShown(true);
+      setDialogTitle(t.dialog.firstRunAdvice);
+      setDialogBody(t.dialog.firstRunAdviceBody);
+      setDialogKey("first_run_advice");
     }
+    // deliberate fire-once: firstRunAdviceShown guards the second run in state,
+    // wasOnboardedRef guards it within the same render cycle; adding the
+    // copy deps would re-arm the dialog on a mid-session language switch
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onboardingDone]);
 
-  // the PRE-SCAN advice: the first time EVER a session actually STARTS
-  // (status flips idle -> running = the user pressed Start and the engine
-  // gate confirmed the game), show the close-background-apps tip once.
-  // Never blocks Start: the session is already running while the dialog
-  // waits for a click. One-modal rule: not over the welcome, not over the
-  // first-run advice (then it defers to the NEXT session start, not lost).
-  // Persisted AT SHOW, not at close: closing the app with the dialog open
-  // must not resurrect it next launch.
+  // PRE-SCAN advice: once ever, on the first real session start. Never
+  // blocks Start; defers behind other one-shot dialogs; persisted at show
+  // (closing mid-dialog must not resurrect it) rather than at close.
   const wasRunningRef = useRef(false);
   /** the window was seen VISIBLE at least once in the current session —
       the background advice only fires on a visible→background TRANSITION,
@@ -292,7 +446,7 @@ export default function App() {
       !justStarted ||
       onboardingDone !== true ||
       gameAdviceDone !== false ||
-      adviceUp ||
+      firstRunAdviceUp ||
       backgroundAdviceUp
     ) {
       return;
@@ -300,17 +454,17 @@ export default function App() {
     setGameAdviceDone(true); // never again
     void api.finishGameAdvice().catch(() => {});
     setGameAdviceUp(true);
-    setToastTitle(t.dialog.gameAdviceTitle);
-    setToastBody(t.dialog.gameAdviceBody);
-    setToast("game_advice");
-  }, [status, onboardingDone, gameAdviceDone, adviceUp, backgroundAdviceUp]);
+    setDialogTitle(t.dialog.gameAdviceTitle);
+    setDialogBody(t.dialog.gameAdviceBody);
+    setDialogKey("game_advice");
+    // deliberate: the transition flags live in refs, and the copy deps
+    // would re-fire the (already persisted) advice on language switches
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, onboardingDone, gameAdviceDone, firstRunAdviceUp, backgroundAdviceUp]);
 
-  // the STAY-IN-GAME advice: the first time EVER a RUNNING session measures
-  // the game window in the background, show the "stay inside the game" tip.
-  // Fires only on a MEASURED false (never on null = probe not back yet) and
-  // only mid-session. Waits for its turn behind the other one-shot dialogs —
-  // if another advice is up when the moment arrives, this one skips: all of
-  // these are one-forever, and the pre-scan advice already covers the topic.
+  // STAY-IN-GAME advice: once ever, on a measured visible-to-background
+  // transition mid-session (never on the starting state). Skips if another
+  // one-shot dialog owns the moment instead of queueing behind it.
   useEffect(() => {
     // track the transition, not the state: reset on session end so a new
     // session starts clean and can never inherit an old session's sighting
@@ -326,7 +480,7 @@ export default function App() {
       status.ui?.game_visible !== false ||
       onboardingDone !== true ||
       backgroundAdviceDone !== false ||
-      adviceUp ||
+      firstRunAdviceUp ||
       gameAdviceUp ||
       !sawVisibleRef.current
     ) {
@@ -335,40 +489,219 @@ export default function App() {
     setBackgroundAdviceDone(true); // never again
     void api.finishBackgroundAdvice().catch(() => {});
     setBackgroundAdviceUp(true);
-    setToastTitle(t.dialog.backgroundAdviceTitle);
-    setToastBody(t.dialog.backgroundAdviceBody);
-    setToast("background_advice");
-  }, [status, onboardingDone, backgroundAdviceDone, adviceUp, gameAdviceUp]);
+    setDialogTitle(t.dialog.backgroundAdviceTitle);
+    setDialogBody(t.dialog.backgroundAdviceBody);
+    setDialogKey("background_advice");
+    // deliberate: same fire-once discipline as the game-advice effect
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, onboardingDone, backgroundAdviceDone, firstRunAdviceUp, gameAdviceUp]);
 
   // a session deleted from Reports must not linger as a "finished" state
-  const effectiveStatus: StatusPayload =
-    status.ui?.session != null && deletedSessions.includes(status.ui.session)
-      ? { status: "idle", ui: null }
-      : status;
+  // (memoized: tray effects depend on it, and a fresh object per render
+  // would re-fire them with no state change).
+  const effectiveStatus: StatusPayload = useMemo(
+    () =>
+      status.ui?.session != null && deletedSessions.includes(status.ui.session)
+        ? { status: "idle", ui: null }
+        : status,
+    [status, deletedSessions],
+  );
 
-  // tell every tooltip to hide the moment the modal surface opens: a dialog
-  // mounting under a parked cursor never fires mouseleave, which used to
-  // leave its bubble stuck above the modal (and after it closed) until the
-  // user hovered the trigger again. Click-opened dialogs need no signal —
-  // the hook already hides on pointerdown.
+  // ---- tray wiring (the notification-area icon) ----
+  // Labels live in the locales like every other string: push them on mount,
+  // on every language switch, and whenever the scan item wording moves
+  // (idle words, then Stop with the live percent in 5% steps). Percent
+  // steps are the only frequent push, and the effect fires only when the
+  // composed text actually changes, so the native menu is never rebuilt
+  // mid-click over nothing. Failures are silent on purpose (the window path
+  // still works when the icon is unavailable).
+  // the label percent moves in the same 5% steps as the tooltip (one
+  // number, two surfaces), so a scan pushes about twenty label updates,
+  // never one per second.
+  const trayScanLabel = (() => {
+    const pct = scanPercent(effectiveStatus);
+    if (pct === null) return t.trayQuickScan;
+    const step = pct === 100 ? 100 : Math.floor(pct / TOOLTIP_STEP_PCT) * TOOLTIP_STEP_PCT;
+    return t.trayStopScan(step);
+  })();
   useEffect(() => {
-    if (toast || (updateModal && updateInfo)) {
-      window.dispatchEvent(new Event(MODAL_OPEN_EVENT));
-    }
-  }, [toast, updateModal, updateInfo]);
+    void syncTrayLabels({
+      open: t.trayOpen,
+      scan: trayScanLabel,
+      exit: t.trayExit,
+    }).catch(() => {});
+  }, [t, lang, trayScanLabel]);
 
-  const tabs: { id: View; icon: React.ReactNode; label: string }[] = [
-    { id: "monitor", icon: <Crosshair size={17} />, label: t.monitor },
-    { id: "system", icon: <Cpu size={17} />, label: t.system },
-    { id: "processes", icon: <Activity size={17} />, label: t.topProcesses },
-    { id: "checks", icon: <ShieldCheck size={17} />, label: t.systemHealth },
-    { id: "reports", icon: <FolderOpen size={17} />, label: t.reports },
-    { id: "settings", icon: <Settings size={17} />, label: t.settings },
-  ];
+  // Tray icon color follows the same transition: green while measuring,
+  // gray otherwise. One push per transition, never per tick.
+  const trayBusy =
+    effectiveStatus.status === "running" || effectiveStatus.status === "stopping";
+  useEffect(() => {
+    void setTrayActive(trayBusy).catch(() => {});
+  }, [trayBusy]);
+
+  // Live tooltip: the scan percent while running, a done line while a
+  // verdict waits unread, the app name otherwise. Throttled by
+  // trayPercentToPush (a push per state tick is an IPC flood), and the exact
+  // text is never pushed twice in a row (idle, done, and each percent step
+  // are distinct strings, so comparing text covers language switches and
+  // idle-to-done turns with no extra bookkeeping).
+  const trayLastSentRef = useRef<number | null>(null);
+  const trayLastTextRef = useRef<string | null>(null);
+  useEffect(() => {
+    const next = trayPercentToPush(effectiveStatus, trayLastSentRef.current);
+    if (next === null) return;
+    const text =
+      next === 0
+        ? hasLiveResult(effectiveStatus, dismissedSession)
+          ? t.trayTooltipDone
+          : t.trayTooltipIdle
+        : t.trayTooltipScanning(next);
+    if (text === trayLastTextRef.current) return;
+    trayLastSentRef.current = next;
+    trayLastTextRef.current = text;
+    void setTrayTooltip(text).catch(() => {});
+  }, [effectiveStatus, dismissedSession, t]);
+
+  // Tray menu events. An explicit Quick scan press always means a new
+  // scan, even over an unread verdict (its report stays saved in Reports).
+  // Silent while hidden: the window comes back only when it needs eyes (a
+  // start failure that raises a dialog, or a scan already winding down).
+  // Exit runs the gate (quiet work quits silently, in-flight work reveals
+  // first and then confirms). Refs keep the subscription mount-once.
+  const trayStatusRef = useRef(effectiveStatus);
+  useEffect(() => {
+    trayStatusRef.current = effectiveStatus;
+  }, [effectiveStatus]);
+  const trayToggleRef = useRef(toggle);
+  useEffect(() => {
+    trayToggleRef.current = toggle;
+  });
+  const trayOnboardingRef = useRef(onboardingDone);
+  useEffect(() => {
+    trayOnboardingRef.current = onboardingDone;
+  }, [onboardingDone]);
+  // A tray scan request already in flight (double-click on the menu):
+  // the second press is dropped so it can never double a start or a stop.
+  const trayOpRef = useRef(false);
+  useEffect(() => {
+    let cancelled = false;
+    let unQuick: (() => void) | undefined;
+    let unExit: (() => void) | undefined;
+    void onTrayQuickScan(() => {
+      if (cancelled || trayOpRef.current) return;
+      const intent = quickScanIntent(trayStatusRef.current);
+      if (intent === "stop") {
+        // a scan is measuring: stop it silently while hidden (the done
+        // tooltip later tells the user a verdict is waiting)
+        trayOpRef.current = true;
+        void logFrontendInfo("tray quick scan: stop").catch(() => {});
+        void trayToggleRef.current().then((landed) => {
+          trayOpRef.current = false;
+          if (cancelled) return;
+          void logFrontendInfo(`tray quick scan: stop done (landed=${landed})`).catch(() => {});
+          if (!landed) {
+            void revealWindow().catch(() => {});
+            setView("monitor");
+          }
+        });
+        return;
+      }
+      if (intent === "show") {
+        // a scan winding down: the user pressed to see, so land on the
+        // monitor in a visible window
+        void logFrontendInfo("tray quick scan: show").catch(() => {});
+        void revealWindow().catch(() => {});
+        setView("monitor");
+        return;
+      }
+      if (trayOnboardingRef.current !== true) {
+        // welcome not finished: there is no session plan to run from, so
+        // show the welcome flow instead of starting behind its back
+        void logFrontendInfo("tray quick scan: show welcome").catch(() => {});
+        void revealWindow().catch(() => {});
+        return;
+      }
+      // silent start: stay hidden unless the toggle raises a dialog in
+      // the hidden window, then reveal it and land on the monitor so the
+      // failure is actually seen.
+      trayOpRef.current = true;
+      void logFrontendInfo(`tray quick scan: ${intent}`).catch(() => {});
+      void trayToggleRef.current().then((landed) => {
+        trayOpRef.current = false;
+        if (cancelled) return;
+        void logFrontendInfo(`tray quick scan: done (landed=${landed})`).catch(() => {});
+        if (!landed) {
+          void revealWindow().catch(() => {});
+          setView("monitor");
+        }
+      });
+    })
+      .then((u) => {
+        if (!cancelled) unQuick = u;
+        else u();
+      })
+      .catch(() => {});
+    void onTrayExit(() => {
+      if (!cancelled) requestExit();
+    })
+      .then((u) => {
+        if (!cancelled) unExit = u;
+        else u();
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      unQuick?.();
+      unExit?.();
+    };
+  }, [requestExit]);
+
+  // hide every tooltip the moment the modal surface opens (a dialog
+  // mounting under a parked cursor never fires mouseleave, leaving its
+  // bubble stuck). APP_DIALOG additionally yields view-level dialogs.
+  useEffect(() => {
+    if (dialogKey || (updateModal && updateInfo) || exitConfirm) {
+      dispatchModalOpen();
+    }
+    if (dialogKey || exitConfirm) {
+      dispatchAppDialogOpen();
+    }
+  }, [dialogKey, updateModal, updateInfo, exitConfirm]);
+
+  // No dialog may ever sit in a hidden window: a modal the user cannot see
+  // is a dead app from their side (a stuck scan, a confirm nobody answers).
+  // The dedicated paths above already reveal first, so this backstop only
+  // fires for dialogs raised by state pushes (a game that died mid hidden
+  // scan, a one-shot advice firing on a tray-started session). Rare by
+  // construction: it runs only when a dialog surface appears.
+  const modalUp = dialogKey !== null || exitConfirm !== null || (updateModal && updateInfo !== null);
+  useEffect(() => {
+    if (!modalUp) return;
+    void isWindowVisible()
+      .then((visible) => {
+        if (!visible) void revealWindow().catch(() => {});
+      })
+      .catch(() => {});
+  }, [modalUp]);
+
+  const tabs: SidebarTab[] = useMemo(
+    () => [
+      { id: "monitor", icon: <Crosshair size={17} />, label: t.monitor },
+      { id: "system", icon: <Cpu size={17} />, label: t.system },
+      { id: "processes", icon: <Activity size={17} />, label: t.topProcesses },
+      { id: "checks", icon: <ShieldCheck size={17} />, label: t.systemHealth },
+      { id: "tools", icon: <Wrench size={17} />, label: t.tools },
+      { id: "startup", icon: <CircleGauge size={17} />, label: t.startup },
+      { id: "reports", icon: <FolderOpen size={17} />, label: t.reports },
+      { id: "settings", icon: <Settings size={17} />, label: t.settings },
+    ],
+    [t],
+  );
 
   return (
     <div className="shell">
-      <TitleBar />
+      <TitleBar version={appVersion} />
       <div className="shell-body">
         {/* null = settings still loading (IPC round-trip): show NOTHING
             decisive. The old bug rendered the main UI immediately, then
@@ -390,49 +723,26 @@ export default function App() {
                 collapsed sidebar never flashes expanded on launch and vice
                 versa. The frames are too short to read as a layout jump. */}
             {collapsed == null ? null : (
-              <nav className={`sidebar ${collapsed ? "is-collapsed" : ""}`}>
-                <div className="sb-label">{t.menu}</div>
-                {tabs.map((tab) => (
-                  <Tip key={tab.id} text={collapsed ? tab.label : ""}>
-                    <button
-                      className={`sb-item ${view === tab.id ? "is-active" : ""}`}
-                      onClick={() => {
-                        setReportOpenId(null);
-                        setView(tab.id);
-                      }}
-                    >
-                      {tab.icon}
-                      {!collapsed ? <span>{tab.label}</span> : null}
-                    </button>
-                  </Tip>
-                ))}
-
-                <Tip text={collapsed ? t.about : ""}>
-                  <button
-                    className={`sb-item ${view === "about" ? "is-active" : ""}`}
-                    onClick={() => setView("about")}
-                  >
-                    <Info size={17} />
-                    {!collapsed ? <span>{t.about}</span> : null}
-                    {/* the update dot: not dismissible, present for the whole
-                        life of the newer version — the silent signal behind
-                        the once-per-version modal */}
-                    {updateInfo ? <span className="sb-dot" aria-label={t.updateAvailableTitle} /> : null}
-                  </button>
-                </Tip>
-
-                {/* spacer pushes the collapse control to the sidebar's floor */}
-                <div className="sb-spacer" />
-
-                {/* collapse control — pinned at the very bottom of the sidebar:
-                    flips direction when collapsed */}
-                <Tip text={collapsed ? t.expandMenu : t.collapseMenu}>
-                  <button className="sb-collapse" onClick={toggleSidebar}>
-                    {collapsed ? <ChevronsRight size={15} /> : <ChevronsLeft size={15} />}
-                    {!collapsed ? <span>{t.collapseMenu}</span> : null}
-                  </button>
-                </Tip>
-              </nav>
+              <AppSidebar
+                t={t}
+                tabs={tabs}
+                view={view}
+                collapsed={collapsed}
+                updateInfo={updateInfo}
+                onSelect={(id) => {
+                  setReportOpenId(null);
+                  setToolOpenId(null);
+                  setView(id);
+                }}
+                onAbout={() => {
+                  // like every tab: a pending deep-link must not
+                  // survive a detour and fire on the way back
+                  setReportOpenId(null);
+                  setToolOpenId(null);
+                  setView("about");
+                }}
+                onToggleSidebar={toggleSidebar}
+              />
             )}
             <main className="content">
               {/* every view mounts ONCE and stays alive; switching only flips
@@ -459,15 +769,35 @@ export default function App() {
                 <ProcessesView active={view === "processes"} />
               </div>
               <div className={view === "checks" ? "" : "is-hidden-view"}>
-                <ChecksView active={view === "checks"} />
+                <ChecksView
+                  active={view === "checks"}
+                  onOpenTool={(id) => {
+                    setToolOpenId(id);
+                    setView("tools");
+                  }}
+                />
+              </div>
+              <div className={view === "tools" ? "" : "is-hidden-view"}>
+                <ToolsView
+                  active={view === "tools"}
+                  toolOpenId={toolOpenId}
+                  onToolOpened={() => setToolOpenId(null)}
+                  onCleaningChange={onCleaningActivity}
+                  showUnsupported={showUnsupported}
+                  onShowUnsupported={() => onShowUnsupportedChange(true)}
+                />
+              </div>
+              <div className={view === "startup" ? "" : "is-hidden-view"}>
+                <StartupSection active={view === "startup"} />
               </div>
               <div className={view === "settings" ? "" : "is-hidden-view"}>
-                <SettingsView theme={themeSetting} onThemeChange={onThemeChange} />
+                <SettingsView theme={themeSetting} onThemeChange={onThemeChange} active={view === "settings"} zoom={zoom} onZoomChange={setZoomPct} showUnsupported={showUnsupported} onShowUnsupportedChange={onShowUnsupportedChange} />
               </div>
               <div className={view === "about" ? "" : "is-hidden-view"}>
                 <AboutView
                   updateInfo={updateInfo}
-                  onOpenUpdateModal={() => setUpdateModal(true)}
+                  version={appVersion}
+                  onOpenUpdateModal={openUpdateModal}
                   onUpdateFound={(info) => setUpdateInfo(info)}
                 />
               </div>
@@ -490,28 +820,61 @@ export default function App() {
         )}
       </div>
 
-      {/* the ONE modal surface — no toasts anywhere in the app.
-          Order matters: the advice/error dialog wins over the update modal;
-          the update modal (with its live download) wins over nothing else. */}
-      {toast ? (
+      {/* the ONE modal surface — no toast system anywhere in the app.
+          Order matters: the exit confirm wins while up (the advice/error
+          dialog is stateless, so hiding it is safe and it returns on
+          Stay); the update modal stays mounted but suspended so a live
+          download survives a Stay or an advice/error dialog instead of
+          being cancelled by unmount. */}
+      {exitConfirm ? (
         <Dialog
-          title={toastTitle ?? t.dialog.somethingWrong}
-          body={toastBody ?? toast}
+          title={t.dialog.exitTitle}
+          body={[
+            exitConfirm.scan ? t.dialog.exitBodyScan : "",
+            exitConfirm.download ? t.dialog.exitBodyDownload : "",
+            exitConfirm.cleaning ? t.dialog.exitBodyCleaning : "",
+          ]
+            .filter((s) => s !== "")
+            .join(" ")}
+          kind="confirm"
+          danger
+          confirmLabel={t.dialog.exitConfirm}
+          cancelLabel={t.dialog.cancel}
+          onConfirm={() => {
+            void quitApp();
+          }}
+          onClose={() => setExitConfirm(null)}
+        />
+      ) : dialogKey ? (
+        <Dialog
+          title={dialogTitle ?? t.dialog.somethingWrong}
+          body={dialogBody ?? dialogKey}
           kind="notice"
           okLabel={t.dialog.ok}
           onClose={() => {
             // the one-forever advice dialogs were already persisted AT SHOW
             // (closing the app with the dialog open must not resurrect them
-            // next launch) — closing only clears the modal surface here
-            if (toast === "game_advice") setGameAdviceUp(false);
-            if (toast === "background_advice") setBackgroundAdviceUp(false);
-            setToast(null);
-            setToastTitle(null);
-            setToastBody(null);
+            // next launch) — closing only clears the modal surface here.
+            // Reset by the FLAG, not by the current dialog value: a
+            // gameloop_closed push can overwrite the dialog key while an advice
+            // dialog is up, and a value-matched reset would leave the flag
+            // stuck high for the whole launch, silently suppressing the
+            // update modal (the deferral feeds on these flags).
+            if (gameAdviceUp) setGameAdviceUp(false);
+            if (backgroundAdviceUp) setBackgroundAdviceUp(false);
+            setDialogKey(null);
+            setDialogTitle(null);
+            setDialogBody(null);
           }}
         />
-      ) : updateModal && updateInfo ? (
-        <UpdateModal info={updateInfo} onClose={() => setUpdateModal(false)} />
+      ) : null}
+      {updateModal && updateInfo ? (
+        <UpdateModal
+          info={updateInfo}
+          onClose={() => setUpdateModal(false)}
+          onDownloadingChange={onDownloadActivity}
+          suspended={exitConfirm !== null || dialogKey !== null}
+        />
       ) : null}
     </div>
   );

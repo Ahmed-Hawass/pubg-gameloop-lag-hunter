@@ -1,6 +1,6 @@
 [package]
 name = "pubg-gameloop-lag-hunter"
-version = "1.6.0"
+version = "2.0.0"
 description = "Real-time lag diagnosis for PUBG Mobile on GameLoop"
 authors = ["Ahmed Hawass"]
 license = "MIT"
@@ -13,11 +13,23 @@ default-run = "pubg-gameloop-lag-hunter"
 name = "lag_hunter_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+# user-facing console companion to the GUI exe (same release, same engine,
+# own console subsystem so its output reaches the parent terminal — the GUI
+# binary is windows-subsystem and cannot print there in release builds)
+[[bin]]
+name = "laghunter-cli"
+path = "src/bin/laghunter-cli.rs"
+
 [build-dependencies]
 tauri-build = { version = "2.6.3", features = [] }
 
 [dependencies]
-tauri = { version = "2.11.3", features = [] }
+# tray-icon: the notification-area icon (module tray.rs). Not a default
+# feature of tauri, and the app is built without it today only because the
+# window WAS the app — the tray is what makes hiding to the icon honest.
+# image-png: decode the two baked tray variants (gray idle, green busy)
+# from PNG bytes — same pure-Rust codec family as the icons module.
+tauri = { version = "2.11.3", features = ["tray-icon", "image-png"] }
 tauri-plugin-opener = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-dialog = "2"
@@ -29,6 +41,17 @@ ureq = { version = "2.12", default-features = false, features = ["tls"] }
 sha2 = "0.10"
 url = "2.5"
 winreg = "0.55"
+# program icons: PNG encoding of native 32-bit pixels (pure Rust, no
+# system codecs — BMP cannot carry the alpha the icons need, and its
+# transparent pixels painted black behind every badge)
+png = "0.18"
+# user CLI signal handling: Ctrl+C stops the scan and finalizes the
+# partial report instead of abandoning it (single-purpose micro-dep)
+ctrlc = "3"
+# snap-layouts overlay geometry: raw window handles for the hit-target
+# parent (generated bindings, same as Tauri itself — never hand externs)
+raw-window-handle = "0.6"
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_LibraryLoader", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }
 
 [profile.release]
 codegen-units = 1
