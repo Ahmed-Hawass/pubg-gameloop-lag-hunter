@@ -1,7 +1,6 @@
 // tests/appSidebar.test.tsx — the shell rail contract: tabs report
 // clicks back (the shell clears deep-links), the active tab announces
-// itself, the beta pill shows expanded only, and the collapse control
-// flips.
+// itself, and the collapse control flips.
 
 import { describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
@@ -13,7 +12,7 @@ import { AppSidebar } from "../components/AppSidebar";
 
 const tabs = [
   { id: "monitor" as const, icon: <Cpu size={17} />, label: en.monitor },
-  { id: "tools" as const, icon: <Cpu size={17} />, label: en.tools, beta: true },
+  { id: "tools" as const, icon: <Cpu size={17} />, label: en.tools },
 ];
 
 function open(over: Partial<React.ComponentProps<typeof AppSidebar>> = {}) {
@@ -45,14 +44,6 @@ describe("AppSidebar", () => {
     expect(screen.getByText(en.monitor).closest("button")!.getAttribute("aria-current")).toBe(
       "page",
     );
-  });
-
-  it("shows the beta pill expanded only", () => {
-    open();
-    expect(screen.getByText(en.toolsBeta)).toBeTruthy();
-    cleanup();
-    open({ collapsed: true });
-    expect(screen.queryByText(en.toolsBeta)).toBeNull();
   });
 
   it("opens About and flips the collapse control", async () => {

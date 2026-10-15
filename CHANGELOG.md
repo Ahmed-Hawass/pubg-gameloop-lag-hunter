@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.0.0] - 2026-10-15
 
 ### Added
 - Tools tab (Beta): game performance switches (Game Mode, high-performance GPU per GameLoop app, fullscreen-optimizations opt-out, pointer precision, windowed-games optimizations). Every switch mirrors the live Windows state, verifies after each flip, and rolls back silently if you dismiss the system prompt. Rows your machine cannot run show greyed with the reason instead of hiding (optional show-unsupported preference in Settings).

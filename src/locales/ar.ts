@@ -404,10 +404,6 @@ export const ar: Locale = {
 
   // ---- tools tab ----
   tools: "الأدوات",
-  /** beta pill next to the Tools entry in the sidebar: the tab writes to
-      Windows and ships before the v2 release, so it stays labelled until
-      v2 goes stable */
-  toolsBeta: "تجريبية",
   toolsBack: "الأدوات",
   /** scope line under the Tools landing title: what the tab holds at a
       glance (per-card descriptions below own the details, this never

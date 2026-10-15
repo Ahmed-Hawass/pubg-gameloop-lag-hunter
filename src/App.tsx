@@ -691,7 +691,7 @@ export default function App() {
       { id: "system", icon: <Cpu size={17} />, label: t.system },
       { id: "processes", icon: <Activity size={17} />, label: t.topProcesses },
       { id: "checks", icon: <ShieldCheck size={17} />, label: t.systemHealth },
-      { id: "tools", icon: <Wrench size={17} />, label: t.tools, beta: true },
+      { id: "tools", icon: <Wrench size={17} />, label: t.tools },
       { id: "startup", icon: <CircleGauge size={17} />, label: t.startup },
       { id: "reports", icon: <FolderOpen size={17} />, label: t.reports },
       { id: "settings", icon: <Settings size={17} />, label: t.settings },

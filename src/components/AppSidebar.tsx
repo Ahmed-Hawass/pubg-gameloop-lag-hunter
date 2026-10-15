@@ -23,7 +23,6 @@ export interface SidebarTab {
   id: Exclude<SidebarView, "about">;
   icon: React.ReactNode;
   label: string;
-  beta?: boolean;
 }
 
 export function AppSidebar(props: {
@@ -41,12 +40,7 @@ export function AppSidebar(props: {
     <nav className={`sidebar ${collapsed ? "is-collapsed" : ""}`}>
       <div className="sb-label">{t.menu}</div>
       {tabs.map((tab) => (
-        <Tip
-          key={tab.id}
-          // collapsed rail hides the beta pill: the tooltip
-          // carries the signal instead (expanded labels show it)
-          text={collapsed ? (tab.beta ? `${tab.label} (${t.toolsBeta})` : tab.label) : ""}
-        >
+        <Tip key={tab.id} text={collapsed ? tab.label : ""}>
           <button
             className={`focus-ring sb-item ${view === tab.id ? "is-active" : ""}`}
             // collapsed rail shows icons only: the tooltip is visual, so
@@ -59,12 +53,6 @@ export function AppSidebar(props: {
           >
             {tab.icon}
             {!collapsed ? <span>{tab.label}</span> : null}
-            {/* beta pill: in-flow label (not the corner update
-                dot), hidden with the labels on the collapsed
-                rail; remove with the key when v2 goes stable */}
-            {!collapsed && tab.beta ? (
-              <span className="sb-beta">{t.toolsBeta}</span>
-            ) : null}
           </button>
         </Tip>
       ))}
