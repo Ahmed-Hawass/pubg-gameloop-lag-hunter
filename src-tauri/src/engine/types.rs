@@ -198,6 +198,11 @@ pub struct UiState {
     pub game_visible: Option<bool>,
     pub overall: Overall,
     pub lag_count: u32,
+    /// Distinct problem kinds recorded this session — the same unit the
+    /// report keeps and the reports list counts as "issues". Cumulative:
+    /// trimming windows never un-counts one. The live moments badge and the
+    /// finished verdict both read this, so running and result always agree.
+    pub issue_kinds: u32,
     /// 0-100 bars for the main tab
     pub bars: Bars,
     /// sparkline history (last ~60 ticks)

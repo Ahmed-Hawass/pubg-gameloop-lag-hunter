@@ -68,7 +68,7 @@ export function MonitorView(props: {
         <ResultState
           lagCount={ui!.lag_count}
           samplesCount={ui!.samples_count}
-          momentCount={ui!.diagnoses.length || ui!.spikes.length}
+          momentCount={ui!.issue_kinds}
           topSignal={ui!.diagnoses[0]?.key ?? null}
           minutes={Math.round((ui!.elapsed_sec || durationSecs) / 60)}
           onOpenReport={onOpenReport}
@@ -79,7 +79,7 @@ export function MonitorView(props: {
           elapsedSec={ui?.elapsed_sec ?? 0}
           autoStopSec={ui?.auto_stop_sec ?? durationSecs}
           samplesCount={ui?.samples_count ?? 0}
-          momentCount={ui?.diagnoses.length || ui?.spikes.length || 0}
+          momentCount={ui?.issue_kinds ?? 0}
           onStop={onToggle}
         />
       ) : (

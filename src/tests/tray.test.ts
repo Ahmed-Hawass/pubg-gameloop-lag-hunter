@@ -22,6 +22,7 @@ function ui(over: Partial<UiState> = {}): UiState {
     game_visible: true,
     overall: "ok",
     lag_count: 0,
+    issue_kinds: 0,
     bars: { cpu: 0, ram: 0, gpu: null, disk: 0 },
     history: { cpu: [], ram: [], gpu: [], disk: [] },
     spikes: [],

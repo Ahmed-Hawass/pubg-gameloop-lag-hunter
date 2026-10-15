@@ -72,6 +72,9 @@ export interface UiState {
   game_visible: boolean | null;
   overall: Overall;
   lag_count: number;
+  /** distinct problem kinds recorded so far: the live badge, the finished
+      verdict, and the reports list all count the same unit */
+  issue_kinds: number;
   bars: Bars;
   history: History;
   spikes: SpikeMark[];

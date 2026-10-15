@@ -10,7 +10,8 @@ use super::diagnoser::build_ui_state;
 use super::sampler;
 use super::storage::SessionWriter;
 use super::types::{
-    iso_ms, EngineEvent, GpuSample, Sample, SessionStatus, StopReason, Thresholds, UiState,
+    iso_ms, EngineEvent, GpuSample, Phase, Sample, SessionStatus, Severity, StopReason, Thresholds,
+    UiState,
 };
 
 /// Shared session state owned by the engine, locked by commands.
@@ -53,6 +54,9 @@ struct SessionInner {
     ticks_total: u64,
     storage_write_failed: bool,
     events: Vec<EngineEvent>,
+    /// distinct problem kinds seen this session (the "moments" unit shared
+    /// by the live badge, the finished verdict, and the report)
+    issue_kinds: std::collections::BTreeSet<String>,
     detector: Detector,
     started_at: Option<String>,
     session_id: Option<String>,
@@ -75,6 +79,8 @@ struct UiSnapshot {
     // so the per-second clone stays bounded even when the full history grows
     events: Vec<EngineEvent>,
     active_count: usize,
+    /// cumulative distinct issue kinds (never trimmed with the window)
+    issue_kinds: usize,
     game_running: bool,
     emulator: Option<String>,
     auto_stop_at: Option<Instant>,
@@ -104,6 +110,7 @@ impl Engine {
                 ticks_total: 0,
                 storage_write_failed: false,
                 events: Vec::new(),
+                issue_kinds: std::collections::BTreeSet::new(),
                 detector: Detector::new(settings.thresholds.clone()),
                 started_at: None,
                 session_id: None,
@@ -314,6 +321,7 @@ impl Engine {
         st.ticks_total = 0;
         st.storage_write_failed = false;
         st.events.clear();
+        st.issue_kinds.clear();
         st.stop_reason = None;
         st.thresholds = thresholds.clone();
         st.detector = Detector::new(thresholds);
@@ -493,6 +501,7 @@ impl Engine {
         // close open conditions
         let now = sampler::iso_now();
         let close_evs = st.detector.finish(&now);
+        note_issue_kinds(&close_evs, &mut st.issue_kinds);
         st.events.extend(close_evs);
 
         let report = match st.writer.take() {
@@ -535,9 +544,11 @@ impl Engine {
         // read "Nothing unusual / 0 seconds" again.
         {
             let (cards, secs) = super::diagnoser::final_verdict(&st.events, &sampler::iso_now());
+            let kinds = st.issue_kinds.len() as u32;
             if let Some(ui) = st.last_ui.as_mut() {
                 ui.diagnoses = cards;
                 ui.lag_count = secs;
+                ui.issue_kinds = kinds;
             }
         }
         Ok(report)
@@ -629,6 +640,7 @@ impl Engine {
             }
 
             let evs = st.detector.feed(&s);
+            note_issue_kinds(&evs, &mut st.issue_kinds);
             st.events.extend(evs);
 
             // autosave every ~50 ticks (crash safety for the events file)
@@ -655,6 +667,7 @@ impl Engine {
                 // bounded clone: the UI only ever sees the diagnosis window
                 events: diagnosis_window(&st.events),
                 active_count: active_conditions(&st.events),
+                issue_kinds: st.issue_kinds.len(),
                 game_running: st.game_running,
                 emulator: st.emulator.clone(),
                 auto_stop_at: st.auto_stop_at,
@@ -699,6 +712,7 @@ impl Engine {
             samples_total: inputs.samples_total,
             events: &inputs.events,
             active_count: inputs.active_count,
+            issue_kinds: inputs.issue_kinds,
             game_running: inputs.game_running,
             emulator: inputs.emulator.as_deref(),
             total_mem_mb: inputs.total_mem_mb,
@@ -791,6 +805,20 @@ impl Engine {
             return false;
         }
         true
+    }
+}
+
+/// Record the session's distinct problem kinds — one definition with the
+/// report's classify_events: any non-ok event whose phase is not End. The
+/// live moments badge, the finished verdict, and the reports list read this,
+/// so a sub-three-second blip that the report will keep still ticks the
+/// live counter even though it earns no confirmed card.
+fn note_issue_kinds(events: &[EngineEvent], kinds: &mut std::collections::BTreeSet<String>) {
+    for e in events {
+        if e.kind.is_empty() || e.severity == Severity::Ok || e.phase == Phase::End {
+            continue;
+        }
+        kinds.insert(e.kind.clone());
     }
 }
 
@@ -1192,6 +1220,40 @@ mod tests {
             !view.iter().any(|e| e.kind == "disk_queue"),
             "quiet, closed, out-of-window history is dropped"
         );
+    }
+
+    /// The moments counter is the report's unit, cumulative and distinct:
+    /// a sub-three-second blip the report keeps must count even though no
+    /// live card confirms it (the exact running-screen bug), duplicated
+    /// kinds count once, and ok/End events never count. The window trim
+    /// cannot un-count: the set holds kinds, not events from the window.
+    #[test]
+    fn issue_kinds_mirror_the_report_rule() {
+        use super::super::types::{Phase, Severity};
+        let mk = |kind: &str, phase: Phase, sev: Severity| EngineEvent {
+            kind: kind.into(),
+            phase,
+            severity: sev,
+            t: "t".into(),
+            duration_sec: None,
+            detail: String::new(),
+        };
+        let mut kinds = std::collections::BTreeSet::new();
+        let first_batch = vec![
+            mk("hard_faults", Phase::Instant, Severity::Warn),
+            mk("paging_churn", Phase::Start, Severity::Warn),
+        ];
+        note_issue_kinds(&first_batch, &mut kinds);
+        assert_eq!(kinds.len(), 2, "the blip and the churn both count");
+        // later batches add only NEW kinds: a closing End never counts,
+        // an ok event never counts, and a repeated kind stays one moment
+        let later_batch = vec![
+            mk("paging_churn", Phase::End, Severity::Ok),
+            mk("hard_faults", Phase::Instant, Severity::Warn),
+            mk("gpu_mem_idle", Phase::Start, Severity::Ok),
+        ];
+        note_issue_kinds(&later_batch, &mut kinds);
+        assert_eq!(kinds.len(), 2, "repeats, Ends, and ok events add nothing");
     }
 
     /// The double-start race (H2): a first start() must serialize against a

@@ -36,6 +36,7 @@ const ui: UiState = {
   game_visible: true,
   overall: "lag",
   lag_count: 2,
+  issue_kinds: 0,
   bars: { cpu: 90, ram: 70, gpu: 40, disk: 30 },
   history: { cpu: [10, 90], ram: [10, 70], gpu: [10, 40], disk: [10, 30] },
   spikes: [],
@@ -141,25 +142,16 @@ describe("MonitorView — running state", () => {
     expect(screen.getByText(en.scanRemaining(4))).toBeTruthy();
   });
 
-  it("shows the moment count only once something was captured", () => {
+  it("a sub-three-second blip still ticks the badge: the count is the report's unit", () => {
     open({ status: "running", ui });
     expect(screen.queryByText(en.scanMoments(0))).toBeNull();
-    const withMoments: UiState = {
-      ...ui,
-      diagnoses: [
-        {
-          key: "cpu_busy",
-          title: "backend title",
-          simple: "backend simple",
-          cause: "backend cause",
-          fix: "backend fix",
-          severity: "high",
-          at: "00:01",
-        },
-      ],
-    };
-    open({ status: "running", ui: withMoments });
-    expect(screen.getByText(en.scanMoments(1))).toBeTruthy();
+    // the real session that exposed this: two ~2s blips that earn no
+    // confirmed live card (diagnoses stays empty) but ARE kept by the
+    // report. The badge must count them while the user is away, so the
+    // running screen can never disagree with the result it leads to.
+    const withBlips: UiState = { ...ui, diagnoses: [], issue_kinds: 2 };
+    open({ status: "running", ui: withBlips });
+    expect(screen.getByText(en.scanMoments(2))).toBeTruthy();
   });
 
   it("has no live instrument panel: no tiles, no timeline, no feed", () => {
@@ -192,6 +184,18 @@ describe("MonitorView — result state", () => {
     expect(screen.getByText(en.scanResultCleanTitle)).toBeTruthy();
     // the verdict number, not the moment count (both read 0 when clean)
     expect(document.querySelector(".verdict-num .num")?.textContent).toBe("0");
+  });
+
+  it("counts the same moments the running badge counted", () => {
+    // the agreement the fix is about: a blip session (no confirmed cards)
+    // reads the same number in the result strip as it did on the radar
+    const finished: UiState = { ...ui, diagnoses: [], issue_kinds: 2 };
+    open({ status: "finished", ui: finished });
+    const cells = Array.from(document.querySelectorAll(".result-cell"));
+    const momentsCell = cells.find(
+      (c) => c.querySelector(".result-k")?.textContent === en.scanResultMoments,
+    );
+    expect(momentsCell?.querySelector(".result-v")?.textContent).toBe("2");
   });
 
   it("never auto-dismisses: a user returning from a long scan still finds it", () => {
