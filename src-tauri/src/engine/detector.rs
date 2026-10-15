@@ -171,6 +171,11 @@ impl Detector {
             } else {
                 self.spike_acc = 0;
             }
+        } else {
+            // missing readings break continuity: bad ticks around a blind
+            // tick must never sum across the gap into a fake sustained
+            // cliff (same reset discipline as the idle tick above)
+            self.spike_acc = 0;
         }
     }
 
@@ -859,6 +864,30 @@ mod tests {
         assert!(!e.iter().any(|e| e.kind == "spike"));
         let e = d.feed(&sample(80.0, 80.0, 20000.0, 0.1, None));
         assert!(e.iter().any(|e| e.kind == "spike")); // 3 loaded ticks again
+    }
+
+    #[test]
+    fn spike_resets_across_a_data_gap() {
+        // bad ticks, one blind tick (no perf reading), then bad ticks:
+        // the gap restarts the count, so the run after it is fresh and
+        // must complete a FULL sustained run to fire, never inherit the
+        // ticks from before the gap
+        let mut d = Detector::new(Thresholds::default());
+        for _ in 0..(d.th.spike_sustained_sec - 1) {
+            let e = d.feed(&sample(80.0, 80.0, 20000.0, 0.1, None));
+            assert!(!e.iter().any(|e| e.kind == "spike"));
+        }
+        let mut blind = sample(80.0, 80.0, 20000.0, 0.1, None);
+        blind.proc_perf = None;
+        let e = d.feed(&blind);
+        assert!(!e.iter().any(|e| e.kind == "spike"));
+        for _ in 0..(d.th.spike_sustained_sec - 1) {
+            let e = d.feed(&sample(80.0, 80.0, 20000.0, 0.1, None));
+            assert!(!e.iter().any(|e| e.kind == "spike"));
+        }
+        // ... and the tick that completes the FRESH run fires honestly
+        let e = d.feed(&sample(80.0, 80.0, 20000.0, 0.1, None));
+        assert!(e.iter().any(|e| e.kind == "spike"));
     }
 
     // ---- paging churn: the healthy-RAM background paging fingerprint -------

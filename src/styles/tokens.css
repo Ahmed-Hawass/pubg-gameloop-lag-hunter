@@ -14,12 +14,10 @@
      and on-switches (dark text on it); dims tint tracks, tiles, rings */
   --primary: #53fc18;
   --primary-dim: rgba(83, 252, 24, 0.1);
-  --primary-dim-2: rgba(83, 252, 24, 0.2);
   --on-primary: #06210a;
   --warn: #f5c518;
   --warn-dim: rgba(245, 197, 24, 0.12);
   --danger: #ff5a52;
-  --danger-dim: rgba(255, 90, 82, 0.12);
   /* focus reds live literally with the shared focus utilities in
      components.css (explicit #ff5a52 / #d92d20 per review: values
      track --danger, but the utility is the single place that names
@@ -99,12 +97,10 @@
   --border-2: #c4cbc2;
   --primary: #1b8737;
   --primary-dim: rgba(27, 135, 55, 0.12);
-  --primary-dim-2: rgba(27, 135, 55, 0.22);
   --on-primary: #ffffff;
   --warn: #8a5f00;
   --warn-dim: rgba(138, 95, 0, 0.14);
   --danger: #d92d20;
-  --danger-dim: rgba(217, 45, 32, 0.12);
   /* state quads — light pairs: pale solid bg + dark ink (the finding
      card as rendered). Fills stay vivid for dots and bars. */
   --bg-success: #b9e3b4;
