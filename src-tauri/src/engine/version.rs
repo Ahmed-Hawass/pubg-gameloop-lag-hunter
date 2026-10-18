@@ -1,6 +1,6 @@
-// version.rs — release comparison on the engine side (mirrors src/version.ts):
-// plain x.y.z numeric comparison. Text comparison was the old bug — an older
-// longer tag read as "update available".
+// version.rs — release comparison on the engine side: plain x.y.z numeric
+// comparison. Text comparison was the old bug — an older longer tag read as
+// "update available".
 
 /// Parse "1.2.3" into numeric components; missing parts count as 0.
 fn parts(v: &str) -> Vec<u64> {

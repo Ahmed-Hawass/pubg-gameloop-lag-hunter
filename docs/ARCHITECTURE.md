@@ -130,7 +130,7 @@ A setting changes only from an explicit user action through a whitelisted comman
 * Sessions cap at **1 h**
 * RAM window at **300 ticks**
 * Logs rotate at **7 days**
-* Process lists truncate at **12**
+* Process lists truncate at **15**
 
 ### ⚡ Nothing slow on the UI's threads
 
