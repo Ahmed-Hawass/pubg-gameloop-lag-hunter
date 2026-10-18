@@ -982,25 +982,39 @@ fn record_window_geometry(window: &tauri::Window, force: bool) {
 /// window closed that way. True when anything was applied (the caller
 /// centers the config default otherwise). A fallback for every failure:
 /// geometry must never strand the window off-screen or crash boot.
+///
+/// The fit is against each monitor's work area, not its full rect, so a
+/// window can never reopen under the taskbar; when the fit moved or
+/// shrank the rect, that fitted rect is written back, which is what stops
+/// a taskbar-covering rect from replaying on every later launch.
 fn restore_window_geometry(app: &tauri::App, win: &tauri::WebviewWindow) -> bool {
     let s = engine::settings::load();
     if !s.win_maximized && s.win_rect.is_none() {
         return false;
     }
-    let mons: Vec<(i32, i32, u32, u32)> = app
+    let screens: Vec<engine::window_state::Screen> = app
         .available_monitors()
         .unwrap_or_default()
         .iter()
-        .map(|m| {
-            let size = m.size();
-            let pos = m.position();
-            (pos.x, pos.y, size.width, size.height)
+        .map(|m| engine::window_state::Screen {
+            full: engine::window_state::WinRect {
+                x: m.position().x,
+                y: m.position().y,
+                w: m.size().width,
+                h: m.size().height,
+            },
+            work: engine::window_state::WinRect {
+                x: m.work_area().position.x,
+                y: m.work_area().position.y,
+                w: m.work_area().size.width,
+                h: m.work_area().size.height,
+            },
         })
         .collect();
     let mut applied = false;
     if let Some(rect) = s
         .win_rect
-        .and_then(|r| engine::window_state::fit_rect(r, &mons))
+        .and_then(|r| engine::window_state::fit_rect(r, &screens))
     {
         let _ = win.set_size(tauri::Size::Physical(tauri::PhysicalSize {
             width: rect.w,
@@ -1011,6 +1025,9 @@ fn restore_window_geometry(app: &tauri::App, win: &tauri::WebviewWindow) -> bool
             y: rect.y,
         }));
         applied = true;
+        if let Some(rect) = engine::window_state::resave_after_fit(s.win_rect, rect) {
+            let _ = engine::settings::update(|st| st.win_rect = Some(rect));
+        }
     }
     if s.win_maximized {
         let _ = win.maximize();

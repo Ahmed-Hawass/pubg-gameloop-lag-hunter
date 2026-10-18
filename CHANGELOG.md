@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- The window now opens inside the screen space left free by the taskbar, on every monitor size and display scaling, instead of starting behind the taskbar or past the edge of the screen.
+- A window left partly off-screen or behind the taskbar now comes back fully visible the next time the app opens, and stays there on later launches.
+
 ## [2.0.1] - 2026-10-18
 
 ### Fixed
