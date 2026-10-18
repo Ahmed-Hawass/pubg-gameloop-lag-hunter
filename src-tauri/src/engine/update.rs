@@ -191,8 +191,12 @@ fn sha_from_sums(sums: &str, file_name: &str) -> Option<String> {
         if line.is_empty() {
             continue;
         }
-        // format: digest then whitespace then the file name (may be *name in GNU mode)
-        let (digest, name) = line.split_once(char::is_whitespace)?;
+        // format: digest then whitespace then the file name (may be *name in GNU mode).
+        // A malformed line (no whitespace at all) is skipped, never fatal: one
+        // junk line must not abort the scan for the asset listed further down.
+        let Some((digest, name)) = line.split_once(char::is_whitespace) else {
+            continue;
+        };
         let name = name.trim().trim_start_matches('*');
         if name.eq_ignore_ascii_case(file_name) {
             let d = digest.to_ascii_lowercase();
@@ -680,6 +684,18 @@ mod tests {
         // a 63-char digest is not a SHA-256 — must be rejected
         let bad = "abc  file.exe";
         assert_eq!(sha_from_sums(bad, "file.exe"), None);
+    }
+
+    #[test]
+    fn sums_skips_malformed_lines() {
+        // one junk line (no whitespace separator) above the real entry must
+        // not abort the scan: the asset lower down is still found
+        let d = "a".repeat(64);
+        let sums = format!("garbage-line-with-no-separator\n{d}  file.exe\n");
+        assert_eq!(sha_from_sums(&sums, "file.exe"), Some(d.clone()));
+        // a trailing junk line after the real entry changes nothing either
+        let sums = format!("{d}  file.exe\ntrailing-junk");
+        assert_eq!(sha_from_sums(&sums, "file.exe"), Some(d));
     }
 
     #[test]
