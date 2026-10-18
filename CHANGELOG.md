@@ -17,19 +17,28 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - Monitor in three calm states: a session plan when idle, a centered progress view while scanning with a live moment count for every problem the report will keep, and one verdict card that stays until you dismiss it.
 - System tab as a spec sheet (CPU, RAM, display, GPU driver, model, OS) with a copy-all button, and System health cards with plain-language notes and direct links to the right Windows pages.
 - Headless companion (`laghunter-cli.exe`): scan, list sessions, and open reports from a terminal, sharing sessions with the app.
-- Interface zoom (80 to 125 percent) with Ctrl+=/-/0 shortcuts, one-shot intro cards per page, and a two-slide welcome.
+- Interface zoom (80 / 100 / 125 percent) with Ctrl+=/-/0 shortcuts, one-shot intro cards per page, and a two-slide welcome.
 - GameLoop v7 support alongside v6, including a one-time notice when the client updates (saved preferences may need one re-flip).
-- Named page headers everywhere: System, health, Tools, and the gaming and storage sections each open with a one-shot intro plus a standing title, so no page starts cold.
-- Every page header stands on its own now: the title plus a short scope line show on the first paint (loading, error, and empty states included) with the one-shot card below them, instead of the card standing in for the header until dismissed. The gaming and storage cards take their own friendly titles, so the header and the card never read the same words twice.
+- Named page headers everywhere: System, health, Tools, and the gaming and storage sections each open with a one-shot intro plus a standing title, so no page starts cold. The title plus a short scope line show on the first paint (loading, error, and empty states included) with the one-shot card below them, instead of the card standing in for the header until dismissed.
 - Reports shows its sessions hint as a standing line instead of hiding it behind a (?) button, and the Storage section describes the page instead of narrating its single switch.
 - The Tools back button rides each section header row (opposite the title) instead of a lonely row above.
-- The page file editor dropped its status strip and (?) note: the intro now carries the single-drive and restart warnings.
-- The page file Apply button rides below the manual-controls block instead of inside it, so switching to automatic management no longer paints Apply with the block's dimmed look while it is the live control.
+- The page file editor dropped its status strip and (?) note: the intro now carries the single-drive and restart warnings. Its Apply button rides below the manual-controls block instead of inside it, so switching to automatic management no longer paints Apply with the block's dimmed look while it is the live control.
 - The window now goes down to 500 by 400 (from 960 by 620), so it fits a snapped half side by side with the game on ordinary screens. The layout was eyeballed at the new floor page by page.
 - Hovering the maximize button now opens the Windows snap-layouts picker, like any native app. The buttons stay drawn by us; only the invisible hit target underneath is native.
 - The cleanup idle hero trades its repeated title and text for spot art.
 - Empty and loading states are flat panels with the tile corner language, one medallion size, a calmer single-arrow spinner, and the update download rides the wider progress bar.
 - The window now hides to the notification area instead of quitting (the X button and the taskbar button hide; Alt+F4 exits). The tray icon offers Open, a scan item, and Exit: Exit quits at once when idle and asks first when a scan, download, or cleanup is running, the scan item starts directly while hidden (even over an unread verdict) and turns into Stop scan with the live percent while a scan runs, the icon stays gray while idle and turns green while measuring, Alt+F4 exits through the same gate instead of hiding, and the tooltip shows the live scan percent while running and names a finished verdict until you open it.
+
+### Changed
+- Sweep rows Windows could only partly read show an approximate `~` number with one shared explanation line, and stay cleanable, instead of a dead `--`.
+- Top Processes is a plain list now: a standing one-liner says what it holds, and each row shows the app, its memory use, and End. Memory alone decides the order, so the page answers what to close with the number that justifies it. It lists 15 apps instead of 12.
+- The System tab headlines one number per card (processor speed, VRAM, refresh) with model names below, and storage rows show free space with a usage meter that turns red past 90%. The CPU frequency was mislabeled as base; the number is the max boost clock.
+- Tools and health pages share one look: a summary banner, featured warnings, and the full list below.
+- The System spec cards, storage rows, and About cost rows now lead with the same icon tile as the health and Tools rows. The tile stays neutral grey there, because a page that only reports an inventory has nothing to pass or fail.
+- One typeface everywhere, severity colors from a shared theme, and wall-clock times follow your Windows 12/24 setting.
+- Exiting asks first only when work is in flight (scan, download, or cleanup). Closing the window hides it to the notification area instead of quitting.
+- Buttons are flat now: the fill alone marks a control, no border appears on hover, and corners are tighter across the app. Tool cards read slightly smaller.
+- Every screen's copy was rewritten in English and Arabic: shorter sentences, plainer words, and the same numbers, names, and units.
 
 ### Fixed
 - A finished scan with CPU or disk findings no longer reads "Nothing unusual / 0 seconds" on its verdict card while its report carries findings: the finished headline now mirrors the finalized report (laggy seconds from the same evidence).
@@ -45,10 +54,8 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - Stopping twice is quiet success; only a real save failure reports an error.
 - The Processes End button names its app to screen readers, and help (?) buttons announce their topic.
 - The terminal sessions list is newest-first, matching Reports.
-- Memory readings work on Arabic Windows (Arabic-Indic digits are
-  recognized instead of reading as missing).
-- An elevated action that hangs now fails after 60 seconds instead of
-  freezing the app forever.
+- Memory readings work on Arabic Windows (Arabic-Indic digits are recognized instead of reading as missing).
+- An elevated action that hangs now fails after 60 seconds instead of freezing the app forever.
 - Report rows are keyboard accessible, durations use your language units, and Arabic counts and units read naturally.
 - Error dialogs follow one rule: failed actions explain in a dialog, failed page loads show a retry state.
 - Keyboard focus rings now sit inside their control instead of outside it, so they are never clipped by a page or window edge (About footer links, the System copy button, titlebar controls, tool cards).
@@ -56,7 +63,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - Tool details re-read within a minute while open: an outside change (GameLoop update, another tool) surfaces without leaving and re-entering.
 - Processes pauses its live poll while the window is hidden instead of waking every 2s unseen.
 - The health banner and loading state carry no manual refresh (the silent poll plus focus re-reads own freshness); the error state keeps the only retry.
-- The System copy button sizes to its label again (the fixed width guessed wrong for Arabic; the press-motion fix above already owns the scrollbar flicker).
+- The System copy button sizes to its label again (the fixed width guessed wrong for Arabic).
 - Keyboard focus is one explicit red tone everywhere (green already dresses resting states like switch ON, so a green ring vanished where it matters most): one shared utility turns the border of bordered controls and paints a single inset ring on the rest.
 - Collapsed sidebar tabs announce their names to screen readers (they were icon-only with a visual-only tooltip).
 - Long reports lists always scroll: scroll pages carry an explicit shrink floor instead of relying on it.
@@ -70,17 +77,6 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - The main window now remembers its size, position, and maximized state across launches instead of reopening at the default size every time.
 - Updating from inside the app works again: the download follows the file host to the real file instead of failing with a checksum error, and an empty checksum response says so plainly instead of blaming the file.
 
-### Changed
-- Sweep rows Windows could only partly read show an approximate `~` number with one shared explanation line, and stay cleanable, instead of a dead `--`.
-- Top Processes is a plain list now: a standing one-liner says what it holds, and each row shows the app, its memory use, and End. Memory alone decides the order, so the page answers what to close with the number that justifies it. It lists 15 apps instead of 12.
-- The System tab headlines one number per card (processor speed, VRAM, refresh) with model names below, and storage rows show free space with a usage meter that turns red past 90%. The CPU frequency was mislabeled as base; the number is the max boost clock.
-- Tools and health pages share one look: a summary banner, featured warnings, and the full list below.
-- The System spec cards, storage rows, and About cost rows now lead with the same icon tile as the health and Tools rows. The tile stays neutral grey there, because a page that only reports an inventory has nothing to pass or fail.
-- One typeface everywhere, severity colors from a shared theme, and wall-clock times follow your Windows 12/24 setting.
-- Exiting asks first only when work is in flight (scan, download, or cleanup). Closing the window hides it to the notification area instead of quitting.
-- Buttons are flat now: the fill alone marks a control, no border appears on hover, and corners are tighter across the app. Tool cards read slightly smaller.
-- Every screen's copy was rewritten in English and Arabic: shorter sentences, plainer words, and the same numbers, names, and units.
-
 ### Removed
 - The Processes manual Refresh button (the silent 2s poll covers it).
 - The System health disk-space card (measurement only, no in-app fix).
@@ -89,505 +85,202 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 ## [1.6.0] - 2026-09-11
 
 ### Added
-- System health checks: CPU virtualization (VT firmware flag), background
-  recording (warns only on the real background toggle,
-  HistoricalCaptureEnabled, verified against a false positive on factory
-  defaults), and system-drive free space with ok/low/critical levels.
-  Each card carries a description, its live measurement, and a deep link to
-  the relevant Windows page. The tab is renamed from System checks to
-  System health.
-- Manual refresh button on System health (same ghost button with spinner as
-  Top processes, queued so one press always lands) plus an automatic refresh
-  when the window regains focus. The silent 30s poll is unchanged.
+- System health checks: CPU virtualization (VT firmware flag), background recording (warns only on the real background toggle, HistoricalCaptureEnabled, verified against a false positive on factory defaults), and system-drive free space with ok/low/critical levels. Each card carries a description, its live measurement, and a deep link to the relevant Windows page. The tab is renamed from System checks to System health.
+- Manual refresh button on System health (same ghost button with spinner as Top processes, queued so one press always lands) plus an automatic refresh when the window regains focus. The silent 30s poll is unchanged.
 
 ### Changed
-- The window is resizable (1024x680 minimum, opens at the familiar size)
-  with a working maximize/restore control in the custom title bar.
-  Content pages use centered containers and the health list reflows to two
-  columns on wide screens.
-- Health cards use the filled design-system language (filled status chips
-  and badges, function icon per card) with no outlines.
+- The window is resizable (1024x680 minimum, opens at the familiar size) with a working maximize/restore control in the custom title bar. Content pages use centered containers and the health list reflows to two columns on wide screens.
+- Health cards use the filled design-system language (filled status chips and badges, function icon per card) with no outlines.
 
 ## [1.5.0] - 2026-09-10
 
-### Fixed
-- The Pagefile row's "Open setting" button did nothing since v1.2.0 (it
-  tried to open a requireAdministrator exe, which an unprivileged app can
-  never spawn). It now runs `control sysdm.cpl,,3`: the same Advanced tab,
-  verified working with no elevation.
-- Sidebar (and every other) tooltips no longer stick open: hiding used to
-  rely on `mouseleave` alone, so a dialog mounting under a parked cursor,
-  an Alt+Tab away, or a wheel-scroll detach left the bubble painted until
-  the user hovered the trigger again. The shared tooltip hook now also
-  hides on window blur, captured scroll, captured pointer press, and an
-  `app:modal-open` signal the shell broadcasts whenever its modal surface
-  opens.
-- No more dark empty window on launch: the window stays hidden until the
-  UI reveals it on first paint (static branded splash in `index.html`
-  paints during parse, ahead of the JS bundle and IPC gates), with an 8s
-  Rust safety net so a broken frontend can never leave the app invisible.
-  Requires the new `core:window:allow-show` capability.
-- The app icon (titlebar, welcome, about) no longer pops in a second or
-  two after everything else: the source was a 1024px / 543KB PNG shown at
-  20-64px, now a pre-scaled 128px / ~9KB file (visually identical at
-  display sizes, exact at 200% DPI), preloaded before first paint so its
-  fetch and decode overlap the settings IPC gate instead of waiting
-  behind it.
-- Diagnosis wording can no longer drift between the live cards and saved
-  reports: the report reader now uses the diagnoser's own dictionary
-  (single source), and unknown engine kinds map to "" on both sides
-  instead of being mislabeled as GPU strain in reports.
-- A GPU collapse under RAM pressure could be recorded as `loaded` yet
-  displayed as a harmless scene hitch: the detector and the diagnoser now
-  share one `others_ok()` gate (disk, CPU, and RAM).
-- Report header badges and session-list icons for the middle tone
-  (`issues` / `partial`) were unstyled (missing `.badge-mid` /
-  `.sl-icon-mid`); they now render in warn like the list badge already did.
-- Loading lines no longer borrow the Top Processes copy: System and
-  Checks show a generic "Loading...", and the About update button shows
-  "Checking for updates..." while a check is in flight.
-- A deep link to a deleted session no longer silently opens the first
-  session in the list; it says the session is gone.
-- A failed update download whose message merely contains the word
-  "cancelled" no longer closes the modal as if the user had cancelled;
-  only the exact backend `"cancelled"` reason does.
-- Timeline spike markers and metric bars are clamped to their tracks.
-- A stored scan duration outside the four presets now renders localized
-  (`t.minutesShort`) instead of a bare English "Nm".
-- `session_start` without an explicit duration falls back to the user's
-  own auto-stop default from settings instead of a second hardcoded
-  30 minutes.
-
-### Changed
-- The default theme is now `auto` (follow the OS) instead of `dark`:
-  fresh installs open light on a light system and dark on a dark one from
-  the first frame. Unknown stored values also resolve to `auto` on both
-  sides (backend `normalize_theme` and frontend `resolveTheme` finally
-  agree). Explicit `dark`/`light` choices are untouched.
-- Dead code removed: `storage::settings_path`, `Engine::thresholds`,
-  the `gameloop_status` IPC command with its bridge wrapper and event
-  listener (the watcher thread itself still runs), the unused
-  `GpuSample`/`ProcInfo` bridge types, the `Button.style` and
-  `Hint.children` props, the `--ok` token, and an unreachable scrollbar
-  selector block.
-- The ISO-timestamp parser and the diagnosis-copy dictionary each exist
-  once now (`types::iso_ms`, `diagnoser::diagnosis_copy`) instead of
-  three and two copies respectively.
-
-### Fixed
-- Security: the update download path is now validated before anything is
-  written (absolute paths only, parent folder must exist, destination must
-  not be a directory), and a cancelled/failed download only ever removes
-  its own `.part` file: a file the user already had at the chosen path can
-  no longer be deleted by a cancelled update. `open_download_folder` also
-  refuses paths containing characters Explorer cannot select safely.
-- Race: a double-click on Start could slip two sessions past the engine's
-  start gate (the slow emulator/PowerShell gates ran unlocked), double-
-  spawning samplers and orphaning a writer. The status is now re-checked
-  under the second lock, so a second start is refused.
-- Race: a fast stop→start leaked the previous session's typeperf/dmon
-  readers (the shared running flag could be flipped back to true before
-  the old 1Hz reader ever saw false), doubling the sample rate for the
-  rest of the app's life. Each session's readers now own a per-session
-  stop flag that can never be resurrected.
-- Crash: a single "NaN" value from typeperf could panic the report builder
-  (`partial_cmp().unwrap()` with `panic="abort"` kills the whole app and
-  the session with it). Sorting is now NaN-safe.
-- The manual "Check for updates" in About could succeed silently and show
-  nothing when the startup check had failed (e.g. app booted offline,
-  network came back after), the fresh result is now handed to the shell
-  before the modal opens.
-- Timeline spike tooltips showed raw machine keys (`disk_queue`, `spike`)
-  to Arabic users; they now go through the same translation table as the
-  activity feed. The timeline head labels ("Auto-stop" / "Session
-  duration") and the diagnosis cards' "Fix" label are localized too.
-- CSS: the sidebar update dot lost its ring and the update modal lost its
-  inset panel backgrounds (`--bg-1`/`--bg-2` were referenced but never
-  defined). Both tokens are now defined for dark and light themes.
-- The process bars in Top Processes filled from the left in RTL, against
-  the reading direction, they now grow from the reading side.
-- The sidebar no longer flashes expanded-then-collapsed (or the reverse)
-  on launch: it renders only after the saved preference arrives, the same
-  defer-to-IPC pattern the welcome screen already used.
-- The stay-in-game / pre-scan advice dialogs were persisted twice (at
-  show and again at close), the close-time call was removed; the show-
-  time call is the contract.
-- UpdateModal could call `onClose` twice (Escape during download, then the
-  cancelled promise rejecting after unmount), closes are now idempotent.
-- ChecksView could stack system-check queries (30s interval vs a slow
-  PowerShell batch), it now has the same busy-guard as Top Processes.
-- The pre-scan advice copy was Egyptian colloquial while the rest of the
-  Arabic locale is Modern Standard, unified to MSA.
-
-### Changed
-- `delete_all_sessions` now excludes the LIVE session from the engine side:
-  the frontend's exclude-id is honored as a bonus, but the running
-  session's directory can never be bulk-deleted even if the UI passes
-  nothing or the wrong id.
-- Tooltip positioning logic (Tip / MetricHint / Hint) unified into one
-  `useAnchoredTooltip` hook: a positioning fix now lands everywhere at
-  once. Dialog gained a proper focus trap (Tab cycles inside the modal).
-- Dead code removed: `system_info_cached` (engine), the `gameloopUp`
-  prop/state chain with no consumer (the watcher thread itself still
-  runs), and the unused `dialog.confirm` locale key.
-- The mm:ss duration formatter is exported once from the design system
-  instead of being copy-pasted per view.
-- Scrollbar styling collapsed from three 15-selector blocks into one
-  `:is()` list.
-
 ### Added
-- CI: dependency audits on both sides (`npm audit --audit-level=high`,
-  `cargo audit`), a version-sync gate (package.json, tauri.conf.json
-  version + mainBinaryName, Cargo.toml, and CHANGELOG.md must all agree),
-  least-privilege workflow permissions, and the release-build job now
-  generates SHA256SUMS.txt and uploads the exe + checksums as artifacts.
+- CI: dependency audits on both sides (`npm audit --audit-level=high`, `cargo audit`), a version-sync gate (package.json, tauri.conf.json version + mainBinaryName, Cargo.toml, and CHANGELOG.md must all agree), least-privilege workflow permissions, and the release-build job now generates SHA256SUMS.txt and uploads the exe + checksums as artifacts.
 - Dependabot watches npm, cargo, and GitHub Actions weekly.
-- Engine tests: start-gate double-start refusal, per-session running-flag
-  isolation, update destination validation, and cleanup-removes-only-the-
-  `.part`-sibling (a pre-existing destination file survives a cancelled
-  download).
-- `tsconfig.node.json`: `vite.config.ts` is now type-checked by the build
-  (it previously escaped `tsc` entirely).
+- Engine tests: start-gate double-start refusal, per-session running-flag isolation, update destination validation, and cleanup-removes-only-the-`.part`-sibling (a pre-existing destination file survives a cancelled download).
+- `tsconfig.node.json`: `vite.config.ts` is now type-checked by the build (it previously escaped `tsc` entirely).
+
+### Changed
+- The default theme is now `auto` (follow the OS) instead of `dark`: fresh installs open light on a light system and dark on a dark one from the first frame. Unknown stored values also resolve to `auto` on both sides (backend `normalize_theme` and frontend `resolveTheme` finally agree). Explicit `dark`/`light` choices are untouched.
+- Dead code removed: `storage::settings_path`, `Engine::thresholds`, the `gameloop_status` IPC command with its bridge wrapper and event listener (the watcher thread itself still runs), the unused `GpuSample`/`ProcInfo` bridge types, the `Button.style` and `Hint.children` props, the `--ok` token, and an unreachable scrollbar selector block.
+- The ISO-timestamp parser and the diagnosis-copy dictionary each exist once now (`types::iso_ms`, `diagnoser::diagnosis_copy`) instead of three and two copies respectively.
+
+### Fixed
+- Security: the update download path is now validated before anything is written (absolute paths only, parent folder must exist, destination must not be a directory), and a cancelled/failed download only ever removes its own `.part` file: a file the user already had at the chosen path can no longer be deleted by a cancelled update. `open_download_folder` also refuses paths containing characters Explorer cannot select safely.
+- Race: a double-click on Start could slip two sessions past the engine's start gate (the slow emulator/PowerShell gates ran unlocked), double-spawning samplers and orphaning a writer. The status is now re-checked under the second lock, so a second start is refused.
+- Race: a fast stop to start leaked the previous session's typeperf/dmon readers (the shared running flag could be flipped back to true before the old 1Hz reader ever saw false), doubling the sample rate for the rest of the app's life. Each session's readers now own a per-session stop flag that can never be resurrected.
+- Crash: a single "NaN" value from typeperf could panic the report builder (`partial_cmp().unwrap()` with `panic="abort"` kills the whole app and the session with it). Sorting is now NaN-safe.
+- The manual "Check for updates" in About could succeed silently and show nothing when the startup check had failed (e.g. app booted offline, network came back after), the fresh result is now handed to the shell before the modal opens.
+- Timeline spike tooltips showed raw machine keys (`disk_queue`, `spike`) to Arabic users; they now go through the same translation table as the activity feed. The timeline head labels ("Auto-stop" / "Session duration") and the diagnosis cards' "Fix" label are localized too.
+- CSS: the sidebar update dot lost its ring and the update modal lost its inset panel backgrounds (`--bg-1`/`--bg-2` were referenced but never defined). Both tokens are now defined for dark and light themes.
+- The process bars in Top Processes filled from the left in RTL, against the reading direction; they now grow from the reading side.
+- The sidebar no longer flashes expanded-then-collapsed (or the reverse) on launch: it renders only after the saved preference arrives, the same defer-to-IPC pattern the welcome screen already used.
+- The stay-in-game / pre-scan advice dialogs were persisted twice (at show and again at close), the close-time call was removed; the show-time call is the contract.
+- UpdateModal could call `onClose` twice (Escape during download, then the cancelled promise rejecting after unmount), closes are now idempotent.
+- ChecksView could stack system-check queries (30s interval vs a slow PowerShell batch), it now has the same busy-guard as Top Processes.
+- The pre-scan advice copy was Egyptian colloquial while the rest of the Arabic locale is Modern Standard, unified to MSA.
+- The Pagefile row's "Open setting" button did nothing since v1.2.0 (it tried to open a requireAdministrator exe, which an unprivileged app can never spawn). It now runs `control sysdm.cpl,,3`: the same Advanced tab, verified working with no elevation.
+- Sidebar (and every other) tooltips no longer stick open: hiding used to rely on `mouseleave` alone, so a dialog mounting under a parked cursor, an Alt+Tab away, or a wheel-scroll detach left the bubble painted until the user hovered the trigger again. The shared tooltip hook now also hides on window blur, captured scroll, captured pointer press, and an `app:modal-open` signal the shell broadcasts whenever its modal surface opens.
+- No more dark empty window on launch: the window stays hidden until the UI reveals it on first paint (static branded splash in `index.html` paints during parse, ahead of the JS bundle and IPC gates), with an 8s Rust safety net so a broken frontend can never leave the app invisible. Requires the new `core:window:allow-show` capability.
+- The app icon (titlebar, welcome, about) no longer pops in a second or two after everything else: the source was a 1024px / 543KB PNG shown at 20-64px, now a pre-scaled 128px / ~9KB file (visually identical at display sizes, exact at 200% DPI), preloaded before first paint so its fetch and decode overlap the settings IPC gate instead of waiting behind it.
+- Diagnosis wording can no longer drift between the live cards and saved reports: the report reader now uses the diagnoser's own dictionary (single source), and unknown engine kinds map to "" on both sides instead of being mislabeled as GPU strain in reports.
+- A GPU collapse under RAM pressure could be recorded as `loaded` yet displayed as a harmless scene hitch: the detector and the diagnoser now share one `others_ok()` gate (disk, CPU, and RAM).
+- Report header badges and session-list icons for the middle tone (`issues` / `partial`) were unstyled (missing `.badge-mid` / `.sl-icon-mid`); they now render in warn like the list badge already did.
+- Loading lines no longer borrow the Top Processes copy: System and Checks show a generic "Loading...", and the About update button shows "Checking for updates..." while a check is in flight.
+- A deep link to a deleted session no longer silently opens the first session in the list; it says the session is gone.
+- A failed update download whose message merely contains the word "cancelled" no longer closes the modal as if the user had cancelled; only the exact backend `"cancelled"` reason does.
+- Timeline spike markers and metric bars are clamped to their tracks.
+- A stored scan duration outside the four presets now renders localized (`t.minutesShort`) instead of a bare English "Nm".
+- `session_start` without an explicit duration falls back to the user's own auto-stop default from settings instead of a second hardcoded 30 minutes.
+
+### Removed
+- Dead code removed: `system_info_cached` (engine), the `gameloopUp` prop/state chain with no consumer (the watcher thread itself still runs), and the unused `dialog.confirm` locale key.
+- `delete_all_sessions` now excludes the LIVE session from the engine side: the frontend's exclude-id is honored as a bonus, but the running session's directory can never be bulk-deleted even if the UI passes nothing or the wrong id.
+- Tooltip positioning logic (Tip / MetricHint / Hint) unified into one `useAnchoredTooltip` hook: a positioning fix now lands everywhere at once. Dialog gained a proper focus trap (Tab cycles inside the modal).
+- The mm:ss duration formatter is exported once from the design system instead of being copy-pasted per view.
+- Scrollbar styling collapsed from three 15-selector blocks into one `:is()` list.
 
 ## [1.4.0] - 2026-09-08
 
 ### Added
-- Light theme, plus a softer dark theme. Settings now has a Theme picker
-  (Automatic / Dark / Light, mirroring the language picker): Automatic
-  follows the OS theme live, explicit choices win, and anything unknown
-  falls back to dark, never to a third state. Stored in `settings.json`
-  (default `dark`, so existing installs keep the exact look they have).
-  The dark surfaces were lifted off pure black at the same time
-  (`#060706` → `#141613` family) with matching hover and border steps.
-- "Background file shuffling" diagnosis. Two real 12+ minute sessions
-  showed the same unclassified shape: sustained pagefile reads
-  (300–1900/s, peaking at 6211/s in one 29-minute match) with a FLAT
-  disk queue (~0) and ~20 GB of free RAM. That is not memory pressure
-  (nothing is starved) and not a disk storm (nothing is queued): it is
-  Windows trimming game working sets to standby and the game faulting
-  them back in. The engine now names it honestly (`paging_churn`: opens
-  after 3+ consecutive sustained ticks, stays silent under real memory
-  pressure or a loaded disk so those stories keep their owners) and the
-  card only appears when a measured GPU activity collapse falls INSIDE
-  the churn window, churn without a correlated stutter stays a feed
-  observation, never a card.
-- Delete-all-sessions on the Reports tab (confirm dialog with the live
-  count, `danger` styling, disabled while a session runs). The backend
-  only touches `session-*` directories, skips the live writer's folder
-  even if asked directly, and returns the deleted ids; the Monitor
-  forgets every deleted session so no dead summary card can linger.
-- One-time advice modals for new players. The first session start ever
-  shows a "close background apps" tip; the first measured background
-  window mid-session shows a "stay inside the game" tip. Each shows
-  exactly once (persisted flags, recorded at show time so closing the
-  app can't resurrect them), neither ever blocks Start, and a click
-  anywhere dismisses them like every other notice.
-- Language switcher on the welcome screen: a quiet globe icon in the
-  window corner (bottom, mirrored with direction): one click toggles
-  en/ar with instant direction flip; the full picker stays in Settings.
+- Light theme, plus a softer dark theme. Settings now has a Theme picker (Automatic / Dark / Light, mirroring the language picker): Automatic follows the OS theme live, explicit choices win, and anything unknown falls back to dark, never to a third state. Stored in `settings.json` (default `dark`, so existing installs keep the exact look they have). The dark surfaces were lifted off pure black at the same time (`#060706` to `#141613` family) with matching hover and border steps.
+- "Background file shuffling" diagnosis. Two real 12+ minute sessions showed the same unclassified shape: sustained pagefile reads (300-1900/s, peaking at 6211/s in one 29-minute match) with a FLAT disk queue (~0) and ~20 GB of free RAM. That is not memory pressure (nothing is starved) and not a disk storm (nothing is queued): it is Windows trimming game working sets to standby and the game faulting them back in. The engine now names it honestly (`paging_churn`: opens after 3+ consecutive sustained ticks, stays silent under real memory pressure or a loaded disk so those stories keep their owners) and the card only appears when a measured GPU activity collapse falls INSIDE the churn window, churn without a correlated stutter stays a feed observation, never a card.
+- Delete-all-sessions on the Reports tab (confirm dialog with the live count, `danger` styling, disabled while a session runs). The backend only touches `session-*` directories, skips the live writer's folder even if asked directly, and returns the deleted ids; the Monitor forgets every deleted session so no dead summary card can linger.
+- One-time advice modals for new players. The first session start ever shows a "close background apps" tip; the first measured background window mid-session shows a "stay inside the game" tip. Each shows exactly once (persisted flags, recorded at show time so closing the app can't resurrect them), neither ever blocks Start, and a click anywhere dismisses them like every other notice.
+- Language switcher on the welcome screen: a quiet globe icon in the window corner (bottom, mirrored with direction): one click toggles en/ar with instant direction flip; the full picker stays in Settings.
 - New app icon (regenerated icon set across all 51 platform files).
 
 ### Changed
-- GPU stutter detection now learns the machine instead of using fixed
-  numbers. The detector keeps a rolling baseline of the machine's own
-  quiet rendering level (lower quartile over the visible history, never
-  below the static floor) and a cliff is a DEEP crater on two axes at
-  once, under 40% of the quiet level AND under 10% SM absolute.
-  - Why: a 29-minute real match is bimodal on the same machine
-    (roaming at 13–16%, combat at 40–50%). The old median baseline
-    rode between the two modes and misread 16 mode transitions as
-    collapses; the old fixed `prev > 40 → sm < 15` rule fired on
-    burst endings (a 47% burst returning to a 14% baseline) while the
-    real 4–5-second stalls at 3–5% SM passed silently.
-  - `render_stall` is renamed `gpu_activity_cliff` everywhere (engine,
-    reports, both locales): the event names the measurement (an
-    activity cliff at 1 Hz), not a frame-time claim we never measured.
-- Evidence freshness is per-source now, matched to each source's own
-  cadence (GPU 2 s, emulator probe 12 s, visibility probe 30 s), and
-  every snapshot is cleared at session start. The previous flat 2 s TTL
-  against a ~10 s visibility cadence starved 85% of ticks of visibility
-  evidence and silently muted the cliff rule for 8 of 9 real stutters
-  in one session; the new TTLs restored 100% coverage with zero stale
-  attribution (a snapshot older than its source's interval is dropped).
-- `gpu_mem_idle` compares against the highest memory clock OBSERVED
-  this session, not the theoretical max. On cards whose driver never
-  approaches the queried max (a Quadro M2000M sitting at ~849 of a
-  nominal 2505 MHz) the old comparison fired a dozen phantom "wake"
-  cards per match; the observed reference silenced them while keeping
-  the rule armed for a genuine idle-clock-while-rendering drop.
-- Diagnosis correlation is temporal now: a collapse only confirms a
-  wake card when it falls at or after the wake's start (a stall from
-  minutes earlier no longer "confirms" a later wake), under named
-  `LIVE_WINDOW_MS` / `CORRELATION_WINDOW_MS` constants.
-- Session baseline warms up in ~10 visible ticks instead of 20, so early
-  match play is judged on the machine's level sooner.
-- The activity gate accepts a healthy share (60%) of the learned
-  baseline instead of strict equality, mid-stutter the rolling average
-  sags, and the old gate muted cliff detection halfway through the
-  very stutter it existed to catch.
-- Fonts: Inter (async webfont, first-paint swap) is replaced by subset,
-  base64-inlined Google Sans (latin, OFL) + Cairo (arabic, OFL) split
-  by unicode-range inside one stack, zero network fetch, zero
-  first-paint text shift. IBM Plex Mono stays for numerals.
-- Buttons and hint glyphs unified: About links, the sessions-folder
-  button and the row delete action all ride the standard ghost Button;
-  the MetricCard hint dot uses the same Info glyph as every other Hint.
-- The Processes refresh button now forces a fresh read. It existed
-  before but returned the same 10-second-cached numbers the silent
-  5-second poll already showed, so presses visibly did nothing; the
-  manual press now bypasses the cache (and warms it) while the silent
-  poll keeps the cheap path.
-- The background-window note is gone from the Monitor (it described a
-  live state with a static sentence); its job moved to the one-time
-  stay-in-game advice above.
-- Session timeline is pinned left-to-right by design (it plots clock
-  time; numerals read LTR even in Arabic) so spike markers track the
-  reading direction; report bullets use logical insets and the Reports
-  back-chevron mirrors in RTL like the sidebar chevrons.
+- GPU stutter detection now learns the machine instead of using fixed numbers. The detector keeps a rolling baseline of the machine's own quiet rendering level (lower quartile over the visible history, never below the static floor) and a cliff is a DEEP crater on two axes at once, under 40% of the quiet level AND under 10% SM absolute.
+  - Why: a 29-minute real match is bimodal on the same machine (roaming at 13-16%, combat at 40-50%). The old median baseline rode between the two modes and misread 16 mode transitions as collapses; the old fixed `prev > 40 -> sm < 15` rule fired on burst endings (a 47% burst returning to a 14% baseline) while the real 4-5-second stalls at 3-5% SM passed silently.
+  - `render_stall` is renamed `gpu_activity_cliff` everywhere (engine, reports, both locales): the event names the measurement (an activity cliff at 1 Hz), not a frame-time claim we never measured.
+- Evidence freshness is per-source now, matched to each source's own cadence (GPU 2 s, emulator probe 12 s, visibility probe 30 s), and every snapshot is cleared at session start. The previous flat 2 s TTL against a ~10 s visibility cadence starved 85% of ticks of visibility evidence and silently muted the cliff rule for 8 of 9 real stutters in one session; the new TTLs restored 100% coverage with zero stale attribution (a snapshot older than its source's interval is dropped).
+- `gpu_mem_idle` compares against the highest memory clock OBSERVED this session, not the theoretical max. On cards whose driver never approaches the queried max (a Quadro M2000M sitting at ~849 of a nominal 2505 MHz) the old comparison fired a dozen phantom "wake" cards per match; the observed reference silenced them while keeping the rule armed for a genuine idle-clock-while-rendering drop.
+- Diagnosis correlation is temporal now: a collapse only confirms a wake card when it falls at or after the wake's start (a stall from minutes earlier no longer "confirms" a later wake), under named `LIVE_WINDOW_MS` / `CORRELATION_WINDOW_MS` constants.
+- Session baseline warms up in ~10 visible ticks instead of 20, so early match play is judged on the machine's level sooner.
+- The activity gate accepts a healthy share (60%) of the learned baseline instead of strict equality; mid-stutter the rolling average sags, and the old gate muted cliff detection halfway through the very stutter it existed to catch.
+- Fonts: Inter (async webfont, first-paint swap) is replaced by subset, base64-inlined Google Sans (latin, OFL) + Cairo (arabic, OFL) split by unicode-range inside one stack, zero network fetch, zero first-paint text shift. IBM Plex Mono stays for numerals.
+- Buttons and hint glyphs unified: About links, the sessions-folder button and the row delete action all ride the standard ghost Button; the MetricCard hint dot uses the same Info glyph as every other Hint.
+- The Processes refresh button now forces a fresh read. It existed before but returned the same 10-second-cached numbers the silent 5-second poll already showed, so presses visibly did nothing; the manual press now bypasses the cache (and warms it) while the silent poll keeps the cheap path.
+- The background-window note is gone from the Monitor (it described a live state with a static sentence); its job moved to the one-time stay-in-game advice above.
+- Session timeline is pinned left-to-right by design (it plots clock time; numerals read LTR even in Arabic) so spike markers track the reading direction; report bullets use logical insets and the Reports back-chevron mirrors in RTL like the sidebar chevrons.
 
 ### Fixed
-- Phantom `cpu_throttle` crit events from a `-1` proc-perf sentinel:
-  typeperf occasionally emits `-1` on transient PDH glitches, and the
-  detector trusted it ("CPU frequency at -1% of nominal"). Negative
-  readings are now rejected at parse time on both sampler paths
-  (typeperf native + PowerShell PDH fallback): a negative ratio is
-  no reading, not a throttle.
-- `FIRST_SAMPLE_AT` lied after the first session in a process (a
-  `OnceLock` set once ever, so session #2 logged "first sample:
-  860383ms"). It is per-session now; TPM logs show honest ~4 s values.
-- The pre-scan advice modal could appear a full launch late: it gated
-  on game-detection while the first-run advice flag stayed sticky for
-  the whole launch, deferring everything past it. It now fires on the
-  first real session start, and "is the other dialog up" is derived
-  from live toast state instead of a sticky boolean.
-- Stale `game_visible=None` handling: samples with no probe result yet
-  are treated conservatively (GPU rules muted) instead of joining the
-  activity history as if visible.
+- Phantom `cpu_throttle` crit events from a `-1` proc-perf sentinel: typeperf occasionally emits `-1` on transient PDH glitches, and the detector trusted it ("CPU frequency at -1% of nominal"). Negative readings are now rejected at parse time on both sampler paths (typeperf native + PowerShell PDH fallback): a negative ratio is no reading, not a throttle.
+- `FIRST_SAMPLE_AT` lied after the first session in a process (a `OnceLock` set once ever, so session #2 logged "first sample: 860383ms"). It is per-session now; TPM logs show honest ~4 s values.
+- The pre-scan advice modal could appear a full launch late: it gated on game-detection while the first-run advice flag stayed sticky for the whole launch, deferring everything past it. It now fires on the first real session start, and "is the other dialog up" is derived from live toast state instead of a sticky boolean.
+- Stale `game_visible=None` handling: samples with no probe result yet are treated conservatively (GPU rules muted) instead of joining the activity history as if visible.
 
 ### Tests
-- Engine: 74 lib tests (fingerprints for every fixed false pattern,
-  burst endings, shallow light-scene dips, mode transitions, and every
-  real session stutter shape, plus churn open/close/guards and the new
-  TTL + theme settings tests) + 2 live integration tests.
-- Frontend: 22 Vitest tests across 5 files (theme resolution, version
-  comparison, error mapping, locale parity, update flow).
+- Engine: 74 lib tests (fingerprints for every fixed false pattern, burst endings, shallow light-scene dips, mode transitions, and every real session stutter shape, plus churn open/close/guards and the new TTL + theme settings tests) + 2 live integration tests.
+- Frontend: 22 Vitest tests across 5 files (theme resolution, version comparison, error mapping, locale parity, update flow).
 - `cargo clippy --all-targets -- -D warnings` clean, `tsc` clean.
 
 ## [1.3.0] - 2026-09-06
 
 ### Added
-- In-app update flow. When a newer release exists, a modal appears once on
-  the Monitor screen (and the same modal opens from About, both via the
-  manual check and the "download it" link). The update check moved from the
-  webview into the engine (Rust, allowlisted GitHub hosts, blocking pool),
-  the webview makes no network requests anymore and the CSP
-  `connect-src` entry is gone. The flow is deliberately honest for a
-  portable tool: no self-replace, no auto-restart:
-  - "Update" opens the native save dialog (official dialog plugin) with the
-    official versioned file name pre-filled, then downloads with a live
-    progress bar and a cancel that leaves no partial file behind.
-  - The downloaded exe is verified against the published SHA256SUMS.txt
-    before it is ever written to the chosen path, files fetched by an HTTP
-    client carry no Mark-of-the-Web (SmartScreen will not warn), so the
-    hash check is the real protection here.
-  - On success: "Open folder" opens Explorer with the file selected, plus
-    one line of guidance ("close the app and run the new file"). Release
-    notes render as plain text, never HTML.
-  - Once-per-version: closing the modal records the announced version; the
-    modal never nags again for that version, but a warn-yellow dot on the
-    About entries (sidebar + Updates heading) carries the signal for the
-    whole life of the release. The next version announces fresh. Manual
-    checks from About always open the modal, announced or not.
-  - First-run priority: the modal never appears for a user who has not
-    completed the welcome screen, welcome first, updates later.
-  - A GitHub 403/429 (rate-limited shared IPs, common behind Cloudflare
-    WARP) is logged with the API's own reason line, not a bare "http 403".
-  - The Windows system proxy (registry, the same setting browsers use) is
-    honored for users whose VPN/proxy tools don't set env vars.
-
-### Fixed
-- Startup freeze ("Not Responding" for up to a minute, every launch on machines with an
-  HDD): the rig-info query runs `Get-PhysicalDisk`, a live hardware inventory (SMART
-  probes over every spindle) that costs 20+ seconds on such machines, and it ran on the
-  IPC dispatcher thread, freezing the whole window until it finished. The rig profile is
-  now cached on disk (`system-cache.json`): the first run pays the inventory once in the
-  background, every later launch reads the cache in microseconds (measured: 28 s → 2.3 s
-  ready on the dev machine's HDD+NVMe setup). All potentially slow commands became async
-  on the blocking pool in the same pass, no IPC command can freeze the window anymore.
-- Update check compared versions as strings: any different tag, including an OLDER
-  one, showed "new version available", and "1.10.0" would lose to "1.2.0". Versions
-  are now compared numerically (major/minor/patch) in one shared helper used by both
-  the startup check and the About tab.
-- About's manual update check claimed "up to date" when it actually couldn't know (no
-  release tag or no local version): those cases now honestly report a check failure.
-- The Checks tab's "Open setting" buttons never actually sent the panel argument over
-  IPC (the webview-side binding dropped it): the power/pagefile buttons did nothing.
-  Found while wiring the update flow's dialog permission; both are fixed.
-
-### Added
-- Flight-recorder technical log, the log was near-useless for diagnosing user reports
-  (13 lines on a busy day, zero durations, panics invisible). It now covers:
+- In-app update flow. When a newer release exists, a modal appears once on the Monitor screen (and the same modal opens from About, both via the manual check and the "download it" link). The update check moved from the webview into the engine (Rust, allowlisted GitHub hosts, blocking pool), the webview makes no network requests anymore and the CSP `connect-src` entry is gone. The flow is deliberately honest for a portable tool: no self-replace, no auto-restart:
+  - "Update" opens the native save dialog (official dialog plugin) with the official versioned file name pre-filled, then downloads with a live progress bar and a cancel that leaves no partial file behind.
+  - The downloaded exe is verified against the published SHA256SUMS.txt before it is ever written to the chosen path, files fetched by an HTTP client carry no Mark-of-the-Web (SmartScreen will not warn), so the hash check is the real protection here.
+  - On success: "Open folder" opens Explorer with the file selected, plus one line of guidance ("close the app and run the new file"). Release notes render as plain text, never HTML.
+  - Once-per-version: closing the modal records the announced version; the modal never nags again for that version, but a warn-yellow dot on the About entries (sidebar + Updates heading) carries the signal for the whole life of the release. The next version announces fresh. Manual checks from About always open the modal, announced or not.
+  - First-run priority: the modal never appears for a user who has not completed the welcome screen, welcome first, updates later.
+  - A GitHub 403/429 (rate-limited shared IPs, common behind Cloudflare WARP) is logged with the API's own reason line, not a bare "http 403".
+  - The Windows system proxy (registry, the same setting browsers use) is honored for users whose VPN/proxy tools don't set env vars.
+- Flight-recorder technical log, the log was near-useless for diagnosing user reports (13 lines on a busy day, zero durations, panics invisible). It now covers:
   - Boot timing: `window shown: Xms`, `app ready in Xms`, slow launches visible at a glance
-  - Every panic recorded via a panic hook that works even with `panic = "abort"`
-    (installed before any thread spawns, lock-free writer for the dying moment)
+  - Every panic recorded via a panic hook that works even with `panic = "abort"` (installed before any thread spawns, lock-free writer for the dying moment)
   - Timings for every IPC command (`ipc: system_info: 21s (slow)`, WARN above 2 s)
-  - Session lifecycle: stop reason, sampler spawn results, first-sample latency, GPU
-    max clocks, window visibility at start
-  - A one-line rig profile at boot (`rig: ram=…MB disks=… gpu_counters=… powershell=…`)
-  - The sampler's 9 debug lines moved from `eprintln` (which is wiped in release builds,
-    where the app has no console) into the real log
-- Limited mode: a conservative one-shot probe detects whether PowerShell is usable at
-  all (missing binary, execution-policy block, or a 5 s hang all read as unavailable).
-  Sessions keep working (typeperf/tasklist/nvidia-smi are native), but the UI honestly
-  shows what degrades, adaptive thresholds fall back to defaults, timestamps may read
-  UTC, GPU window checks stay muted, instead of failing silently.
-- CI (GitHub Actions, `windows-latest`): vitest + frontend build, engine tests including
-  the live typeperf pipeline, and clippy with `-D warnings`. A full release build job is
-  available on manual dispatch until it proves stable.
-- Frontend unit tests (Vitest, 13 tests): version comparison, error-code-to-dialog
-  mapping (extracted from App.tsx into a pure, testable function), and locale key parity
-  between en and ar.
+  - Session lifecycle: stop reason, sampler spawn results, first-sample latency, GPU max clocks, window visibility at start
+  - A one-line rig profile at boot (`rig: ram=...MB disks=... gpu_counters=... powershell=...`)
+  - The sampler's 9 debug lines moved from `eprintln` (which is wiped in release builds, where the app has no console) into the real log
+- Limited mode: a conservative one-shot probe detects whether PowerShell is usable at all (missing binary, execution-policy block, or a 5 s hang all read as unavailable). Sessions keep working (typeperf/tasklist/nvidia-smi are native), but the UI honestly shows what degrades, adaptive thresholds fall back to defaults, timestamps may read UTC, GPU window checks stay muted, instead of failing silently.
+- CI (GitHub Actions, `windows-latest`): vitest + frontend build, engine tests including the live typeperf pipeline, and clippy with `-D warnings`. A full release build job is available on manual dispatch until it proves stable.
+- Frontend unit tests (Vitest, 13 tests): version comparison, error-code-to-dialog mapping (extracted from App.tsx into a pure, testable function), and locale key parity between en and ar.
+- Slow engine work (system queries, session start/stop, report loading, deletion) runs via `spawn_blocking`, the async runtime and the UI thread never stall on it.
+- The update flow's security surfaces are unit-tested: SHA256SUMS line parsing (including the GNU `*name` marker), the download-host allowlist (https + GitHub hosts only, redirect-aware), and the numeric version comparison on the engine side (mirroring the frontend's). The once-per-version decision logic is a pure function with its own Vitest suite.
 
 ### Changed
-- The Arabic locale is now type-checked against the English one (`ar: Locale`): a
-  missing or extra key is a build error instead of a silent runtime gap. The previous
-  `as unknown as Locale` cast is gone.
-- Session start reads RAM/disk facts from the rig cache instead of its own PowerShell
-  round-trips; a cache miss (first machine run) falls back to the documented defaults
-  rather than blocking the scan.
-- README: the version badge reads from package.json (was a hardcoded "1.1.0" that
-  drifted); the manual exe-renaming instructions removed (the binary has been
-  version-named by the build since 1.2.0).
+- The Arabic locale is now type-checked against the English one (`ar: Locale`): a missing or extra key is a build error instead of a silent runtime gap. The previous `as unknown as Locale` cast is gone.
+- Session start reads RAM/disk facts from the rig cache instead of its own PowerShell round-trips; a cache miss (first machine run) falls back to the documented defaults rather than blocking the scan.
+- README: the version badge reads from package.json (was a hardcoded "1.1.0" that drifted); the manual exe-renaming instructions removed (the binary has been version-named by the build since 1.2.0).
+- Rust test suite grew from 46 to 54; frontend grew from zero to 19 Vitest tests (version comparison, error-to-dialog mapping, locale parity, and the update-modal decision rules).
 
-### Engineering
-- Slow engine work (system queries, session start/stop, report loading, deletion) runs
-  via `spawn_blocking`, the async runtime and the UI thread never stall on it.
-- The update flow's security surfaces are unit-tested: SHA256SUMS line parsing
-  (including the GNU `*name` marker), the download-host allowlist (https +
-  GitHub hosts only, redirect-aware), and the numeric version comparison on
-  the engine side (mirroring the frontend's). The once-per-version decision
-  logic is a pure function with its own Vitest suite.
-- Rust test suite grew from 46 to 54; frontend grew from zero to 19 Vitest
-  tests (version comparison, error-to-dialog mapping, locale parity, and the
-  update-modal decision rules).
+### Fixed
+- Startup freeze ("Not Responding" for up to a minute, every launch on machines with an HDD): the rig-info query runs `Get-PhysicalDisk`, a live hardware inventory (SMART probes over every spindle) that costs 20+ seconds on such machines, and it ran on the IPC dispatcher thread, freezing the whole window until it finished. The rig profile is now cached on disk (`system-cache.json`): the first run pays the inventory once in the background, every later launch reads the cache in microseconds (measured: 28 s to 2.3 s ready on the dev machine's HDD+NVMe setup). All potentially slow commands became async on the blocking pool in the same pass, no IPC command can freeze the window anymore.
+- Update check compared versions as strings: any different tag, including an OLDER one, showed "new version available", and "1.10.0" would lose to "1.2.0". Versions are now compared numerically (major/minor/patch) in one shared helper used by both the startup check and the About tab.
+- About's manual update check claimed "up to date" when it actually couldn't know (no release tag or no local version): those cases now honestly report a check failure.
+- The Checks tab's "Open setting" buttons never actually sent the panel argument over IPC (the webview-side binding dropped it): the power/pagefile buttons did nothing. Found while wiring the update flow's dialog permission; both are fixed.
 
 ## [1.2.0] - 2026-09-04
 
-### Fixed
-- Clock and session times showed UTC instead of the user's local time, on Egypt (UTC+3) a
-  session run at 03:19 was named and reported as 00:19. All timestamps (session names, the
-  report clock column, technical logs) now show real wall-clock time, DST-aware, with the
-  time-zone offset re-read every ~10 minutes so a session crossing a DST boundary stays honest.
-- Power-plan check failed on Arabic Windows: the plan name comes back localized ("أقصى أداء")
-  and the English-only match marked a perfectly good plan as "not good". The check now matches
-  the scheme GUID (language-independent) first, with localized names (English + Arabic) as
-  fallback for OEM/custom schemes.
-- Monitoring on localized (Arabic) Windows could run CPU/RAM/disk-blind: typeperf sometimes
-  rejects the English counter paths on translated Windows builds, and the session would show
-  GPU-only numbers with no error. A one-shot probe at session start detects this and switches
-  to a locale-proof sampling path (PowerShell `Get-Counter`, verified live on real machines).
-- Arabic-Indic thousands separators (٬) in process memory numbers now parse correctly.
-- The reports list did not refresh after a session finished, a finished scan only appeared
-  after restarting the app. The list now re-reads every time the Reports tab is opened.
-- First-run flash: on a fresh install the main UI appeared for a few seconds, then flipped to
-  the welcome screen. The welcome decision now resolves before anything decisive renders.
-- The "GameLoop closed" notice could appear in a stale language if the user switched language
-  mid-session, dialog text now always follows the current language.
-- Duplicate guard threads: rapidly starting a new session could leave the previous session's
-  liveness guard and auto-stop timer running in parallel (doubling the probe cadence). Each
-  session now carries a generation number; old guards retire the moment a new session starts.
-- Child-process leak on hard crashes: with `panic = "abort"`, a force-killed app left
-  typeperf (up to ~9 h) and `nvidia-smi dmon` (forever, it had no cap) running behind. All
-  spawned sources are now assigned to a Windows Job Object with kill-on-close, if the app
-  dies, the kernel reaps the children with it.
-- The pagefile "Open setting" button opened the System Properties **General** tab, not the
-  page where virtual memory lives. It now opens the Advanced System Properties page (the
-  Performance/Virtual memory dialog is one click away), and the promise in the checks tab
-  copy was softened to match reality.
-- Build warnings: 6 clippy warnings (an 11-argument function, missing `Default`, clamp-like
-  patterns, and more) and a Vite `INEFFECTIVE_DYNAMIC_IMPORT` warning, all gone.
-
-### Security
-- `open_url` now enforces its own allowlist in Rust (https + github.com/api.github.com/paypal.me
-  only). The comment previously claimed the opener plugin's capabilities scoped this command,
-  they do not: plugin capabilities only guard the JS-side command path, and a Rust-side opener
-  call was unconstrained. Practical risk was low (the UI passes fixed URLs), but the claimed
-  protection now actually exists.
+### Added
+- The release binary now carries its version in the filename straight from the build (`pubg-gameloop-lag-hunter-<version>.exe`, via Tauri's `mainBinaryName`): no manual renaming.
+- Removed the unused `log = "0.4"` dependency (the engine has its own logger).
+- Docs: the "capped at 2 h" comment corrected (the cap is 1 h), the reference to a nonexistent release workflow removed, and the headless `engine_probe`'s unbounded sessions documented as intentional.
+- Test suite grew from 44 to 46 (time-zone truth test against the OS clock, live Get-Counter emitter check, GUID and Arabic-name power-plan matching).
 
 ### Changed
-- The release binary now carries its version in the filename straight from the build
-  (`pubg-gameloop-lag-hunter-<version>.exe`, via Tauri's `mainBinaryName`): no manual renaming.
-- Removed the unused `log = "0.4"` dependency (the engine has its own logger).
-- Docs: the "capped at 2 h" comment corrected (the cap is 1 h), the reference to a
-  nonexistent release workflow removed, and the headless `engine_probe`'s unbounded sessions
-  documented as intentional.
-- Test suite grew from 44 to 46 (time-zone truth test against the OS clock, live Get-Counter
-  emitter check, GUID and Arabic-name power-plan matching).
+- The pagefile "Open setting" button opened the System Properties General tab, not the page where virtual memory lives. It now opens the Advanced System Properties page (the Performance/Virtual memory dialog is one click away), and the promise in the checks tab copy was softened to match reality.
+- Build warnings: 6 clippy warnings (an 11-argument function, missing `Default`, clamp-like patterns, and more) and a Vite `INEFFECTIVE_DYNAMIC_IMPORT` warning, all gone.
+
+### Fixed
+- Clock and session times showed UTC instead of the user's local time; on Egypt (UTC+3) a session run at 03:19 was named and reported as 00:19. All timestamps (session names, the report clock column, technical logs) now show real wall-clock time, DST-aware, with the time-zone offset re-read every ~10 minutes so a session crossing a DST boundary stays honest.
+- Power-plan check failed on Arabic Windows: the plan name comes back localized ("أقصى أداء") and the English-only match marked a perfectly good plan as "not good". The check now matches the scheme GUID (language-independent) first, with localized names (English + Arabic) as fallback for OEM/custom schemes.
+- Monitoring on localized (Arabic) Windows could run CPU/RAM/disk-blind: typeperf sometimes rejects the English counter paths on translated Windows builds, and the session would show GPU-only numbers with no error. A one-shot probe at session start detects this and switches to a locale-proof sampling path (PowerShell `Get-Counter`, verified live on real machines).
+- Arabic-Indic thousands separators (٬) in process memory numbers now parse correctly.
+- The reports list did not refresh after a session finished; a finished scan only appeared after restarting the app. The list now re-reads every time the Reports tab is opened.
+- First-run flash: on a fresh install the main UI appeared for a few seconds, then flipped to the welcome screen. The welcome decision now resolves before anything decisive renders.
+- The "GameLoop closed" notice could appear in a stale language if the user switched language mid-session; dialog text now always follows the current language.
+- Duplicate guard threads: rapidly starting a new session could leave the previous session's liveness guard and auto-stop timer running in parallel (doubling the probe cadence). Each session now carries a generation number; old guards retire the moment a new session starts.
+- Child-process leak on hard crashes: with `panic = "abort"`, a force-killed app left typeperf (up to ~9 h) and `nvidia-smi dmon` (forever, it had no cap) running behind. All spawned sources are now assigned to a Windows Job Object with kill-on-close; if the app dies, the kernel reaps the children with it.
+
+### Security
+- `open_url` now enforces its own allowlist in Rust (https + github.com/api.github.com/paypal.me only). The comment previously claimed the opener plugin's capabilities scoped this command; they do not: plugin capabilities only guard the JS-side command path, and a Rust-side opener call was unconstrained. Practical risk was low (the UI passes fixed URLs), but the claimed protection now actually exists.
 
 ## [1.1.0] - 2026-09-02
 
-### Fixed
-- Phantom GPU cards: GPU rules (power-state wake, low clock, temp) no longer fire while the
-  game window is minimized or on a static screen (lobby/result): desktop activity was being
-  reported as in-game GPU problems.
-- `gpu_wake` cards now require a measured frame freeze (render stall) within the live window,
-  a wake story with no recorded hitch stays in the activity feed only.
-- Returning to the game after minimizing no longer registers as a render stall.
-- Missing dialog buttons (Cancel/Delete) rendered empty in Arabic.
-- External links in the About tab did nothing (`open_url` was never registered).
-- GPU utilization columns were never read (dmon needed the `u` selector): GPU metrics showed
-  `--` on all NVIDIA machines.
-- Honest WebView2 disk footprint (~2 MB is the downloader only; the runtime needs a few
-  hundred MB) in README and the missing-runtime dialog.
-- Start-button behavior described accurately (always pressable; pressing without the game
-  shows an explaining dialog): it never "lit up".
-- Versioned release naming (`pubg-gameloop-lag-hunter-<version>.exe`) no longer makes the
-  tool appear in its own top-processes list.
-- GPU VRAM above 4 GB reported correctly (nvidia-smi instead of the 32-bit CIM field).
-- Session loading and report opening validate session IDs the same way deletion does.
-- Start/Stop toggle no longer jitters (stable width + matched icon sizes).
-- Tab switching no longer unmounts and rebuilds every view, all tabs stay alive and switching
-  is instant (a CSS-visibility bug briefly stacked all views on top of each other; fixed the
-  same day).
-
 ### Added
-- Playing-state gating: the engine knows whether the game window is visible and whether real
-  rendering is happening, "is the user actually playing?" gates every GPU rule.
-- GameLoop-closed notice: when the game closes mid-session, a dialog explains why the scan
-  stopped (once per session; manual stops stay silent).
+- Playing-state gating: the engine knows whether the game window is visible and whether real rendering is happening, "is the user actually playing?" gates every GPU rule.
+- GameLoop-closed notice: when the game closes mid-session, a dialog explains why the scan stopped (once per session; manual stops stay silent).
 - First-run advice dialog after the welcome: start the game first, stay in it while scanning.
 - Background note in Monitor while the game window is minimized.
-- Reports flag sessions spent mostly outside the game ("Most of this session was not actual
-  gameplay") with a background-percentage statistic.
-- Honest `gpu_wake` advice: what to do if "Prefer maximum performance" is already set and it
-  still appears (driver memory-clock trimming on hybrid-graphics laptops).
+- Reports flag sessions spent mostly outside the game ("Most of this session was not actual gameplay") with a background-percentage statistic.
+- Honest `gpu_wake` advice: what to do if "Prefer maximum performance" is already set and it still appears (driver memory-clock trimming on hybrid-graphics laptops).
 - Stop reason (`manual` / `auto_stop` / `gameloop_closed`) travels with every state push.
-- A small "?" tooltip on each metric card (CPU/RAM/GPU/Disk) explains what it measures,
-  per-metric text in English and Arabic, replacing the single generic hint row.
-- Live refresh in Top processes (every 5 s) and System checks (every 30 s) while their tab is
-  the active one, silent, never disables the manual refresh button.
-- Background prefetch at launch: system info, checks, and top processes are warmed before
-  the user opens those tabs, the first open is as instant as every later one.
-- TTL caches with stale-while-revalidate for top processes (10 s) and system checks (30 s),
-  tab revisits never re-pay a PowerShell spawn.
+- A small "?" tooltip on each metric card (CPU/RAM/GPU/Disk) explains what it measures, per-metric text in English and Arabic, replacing the single generic hint row.
+- Live refresh in Top processes (every 5 s) and System checks (every 30 s) while their tab is the active one, silent, never disables the manual refresh button.
+- Background prefetch at launch: system info, checks, and top processes are warmed before the user opens those tabs, the first open is as instant as every later one.
+- TTL caches with stale-while-revalidate for top processes (10 s) and system checks (30 s), tab revisits never re-pay a PowerShell spawn.
 
 ### Changed
-- Default scan duration for new users: 30 min → 5 min.
+- Default scan duration for new users: 30 min to 5 min.
 - Longest scan duration removed: the 2-hour option is gone; the hard cap is now 1 hour.
 - Stop button is now filled red (was an outline): matches the app's filled-active language.
 - Sidebar and title bar have visible borders again (separate planes).
 - Sidebar collapse control moved to the bottom of the sidebar.
-- Unified product description everywhere (README, About, welcome): "Analyze your PUBG Mobile
-  performance on GameLoop, detect stutters, and uncover exactly what's causing them."
-- App version now comes from one source (tauri.conf.json): TitleBar, About, and the update
-  check ask the backend instead of hardcoding.
+- Unified product description everywhere (README, About, welcome): "Analyze your PUBG Mobile performance on GameLoop, detect stutters, and uncover exactly what's causing them."
+- App version now comes from one source (tauri.conf.json): TitleBar, About, and the update check ask the backend instead of hardcoding.
 - Arabic copy upgraded to formal register (فصحى) across the new strings.
-- README restructured (screenshots first, tables, step-by-step usage); CONTRIBUTING,
-  ARCHITECTURE, SPEC, and SECURITY reformatted to match.
-- Test suite grew from 33 to 42 (playing-gate coverage, wake correlation, background stats,
-  versioned self-detection).
+- README restructured (screenshots first, tables, step-by-step usage); CONTRIBUTING, ARCHITECTURE, SPEC, and SECURITY reformatted to match.
+- Test suite grew from 33 to 42 (playing-gate coverage, wake correlation, background stats, versioned self-detection).
 
-## [1.0.0] - 2026-09-01
+### Fixed
+- Phantom GPU cards: GPU rules (power-state wake, low clock, temp) no longer fire while the game window is minimized or on a static screen (lobby/result): desktop activity was being reported as in-game GPU problems.
+- `gpu_wake` cards now require a measured frame freeze (render stall) within the live window; a wake story with no recorded hitch stays in the activity feed only.
+- Returning to the game after minimizing no longer registers as a render stall.
+- Missing dialog buttons (Cancel/Delete) rendered empty in Arabic.
+- External links in the About tab did nothing (`open_url` was never registered).
+- GPU utilization columns were never read (dmon needed the `u` selector): GPU metrics showed `--` on all NVIDIA machines.
+- Honest WebView2 disk footprint (~2 MB is the downloader only; the runtime needs a few hundred MB) in README and the missing-runtime dialog.
+- Start-button behavior described accurately (always pressable; pressing without the game shows an explaining dialog): it never "lit up".
+- Versioned release naming (`pubg-gameloop-lag-hunter-<version>.exe`) no longer makes the tool appear in its own top-processes list.
+- GPU VRAM above 4 GB reported correctly (nvidia-smi instead of the 32-bit CIM field).
+- Session loading and report opening validate session IDs the same way deletion does.
+- Start/Stop toggle no longer jitters (stable width + matched icon sizes).
+- Tab switching no longer unmounts and rebuilds every view, all tabs stay alive and switching is instant (a CSS-visibility bug briefly stacked all views on top of each other; fixed the same day).
+
+## [1.0.0] - 2026-09-02
 
 First public release.
 
@@ -608,7 +301,7 @@ First public release.
 
 ### Engineering
 - Single binary, no installer required, download and run.
-- Fixed-size window (940×600) with a custom title bar; one visual plane.
+- Fixed-size window (940x600) with a custom title bar; one visual plane.
 - Single-instance: a second launch focuses the first window.
-- Atomic settings writes with schema migration (v1 → v3 preserved across upgrades).
+- Atomic settings writes with schema migration (v1 to v3 preserved across upgrades).
 - 33 automated tests covering detection fingerprints, settings migration, and security (path traversal, corrupted files, crash classification).
