@@ -937,9 +937,10 @@ static LAST_GEOM_SAVE: std::sync::Mutex<Option<std::time::Instant>> = std::sync:
 const GEOM_SAVE_EVERY: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// Record the main window's live geometry into settings: maximized keeps
-/// the stored rect and raises the flag, anything else stores the rect.
-/// `force` bypasses the drag throttle (quit path). Failures are ignored:
-/// geometry is a nicety, never worth an error surface.
+/// the stored rect and raises the flag, anything else stores the rect. A
+/// minimized window stores nothing. `force` bypasses the drag throttle
+/// (quit path). Failures are ignored: geometry is a nicety, never worth
+/// an error surface.
 fn record_window_geometry(window: &tauri::Window, force: bool) {
     if !force {
         let mut last = LAST_GEOM_SAVE.lock().unwrap_or_else(|p| p.into_inner());
@@ -952,6 +953,9 @@ fn record_window_geometry(window: &tauri::Window, force: bool) {
         *last = Some(now);
     }
     let maximized = window.is_maximized().unwrap_or(false);
+    // a minimized window reports the iconic rect (-32000, -32000 and a
+    // few dozen pixels), which is not a place the user ever put it
+    let minimized = window.is_minimized().unwrap_or(true);
     let live = (|| {
         let size = window.outer_size().ok()?;
         let pos = window.outer_position().ok()?;
@@ -962,7 +966,9 @@ fn record_window_geometry(window: &tauri::Window, force: bool) {
             h: size.height,
         })
     })();
-    let Some(live) = live else { return };
+    let Some(live) = live.and_then(|r| engine::window_state::storable_rect(minimized, r)) else {
+        return;
+    };
     let _ = engine::settings::update(|s| {
         let next = engine::window_state::next_stored(
             engine::window_state::StoredGeom {

@@ -40,11 +40,22 @@ pub const MIN_H: u32 = 400;
 /// absurd saved dims (hand-edited file, corrupt JSON): larger than any
 /// real display — treated as "no geometry", never applied.
 const MAX_DIM: u32 = 7680;
+/// where Windows parks a minimized window, with an iconic size beside it
+/// (199 by 34 at 125% scaling on the machine this was found on).
+const ICONIC_ORIGIN: i32 = -32000;
 
-/// Reject garbage before it ever reaches a monitor: zero dims, or dims no
-/// display on earth has. Pure.
+/// Reject anything we could never show: zero or absurd dims, the iconic
+/// rect of a minimized window (stored by mistake, it reopened a
+/// minimum-size window in the corner), and anything below the window
+/// minimums. Pure.
 pub fn sane_rect(r: WinRect) -> bool {
-    r.w > 0 && r.h > 0 && r.w <= MAX_DIM && r.h <= MAX_DIM
+    r.w > 0
+        && r.h > 0
+        && r.w <= MAX_DIM
+        && r.h <= MAX_DIM
+        && r.w >= MIN_W
+        && r.h >= MIN_H
+        && !(r.x == ICONIC_ORIGIN && r.y == ICONIC_ORIGIN)
 }
 
 /// What to persist after a move/resize event: a maximized window keeps
@@ -56,6 +67,20 @@ pub fn sane_rect(r: WinRect) -> bool {
 pub struct StoredGeom {
     pub rect: Option<WinRect>,
     pub maximized: bool,
+}
+
+/// The live rect to persist, or None when the window is minimized: it has
+/// no real geometry then (Windows reports the iconic rect), and storing
+/// that is what put a minimum-size window in the corner on the next
+/// launch. The caller maps a failed `is_minimized` to minimized: losing
+/// a remembered size costs nothing, a stranded window costs the window.
+/// Pure.
+pub fn storable_rect(minimized: bool, live: WinRect) -> Option<WinRect> {
+    if minimized {
+        None
+    } else {
+        Some(live)
+    }
 }
 
 pub fn next_stored(old: StoredGeom, maximized_now: bool, live: WinRect) -> StoredGeom {
@@ -171,6 +196,50 @@ mod tests {
             y: 0,
             w: 1180,
             h: 99999
+        }));
+    }
+
+    #[test]
+    fn sane_rejects_the_iconic_rect_of_a_minimized_window() {
+        // what settings.json held after a minimize-then-quit session:
+        // stored as the remembered geometry, it opened a minimum-size
+        // window in the corner on every launch after
+        assert!(!sane_rect(WinRect {
+            x: -32000,
+            y: -32000,
+            w: 199,
+            h: 34
+        }));
+        // an off-screen window the user dragged there is still geometry
+        assert!(sane_rect(WinRect {
+            x: -2000,
+            y: -500,
+            w: 500,
+            h: 400
+        }));
+    }
+
+    #[test]
+    fn sane_rejects_rects_below_the_window_minimums() {
+        // the window cannot be this small, so this was never geometry
+        assert!(!sane_rect(WinRect {
+            x: 100,
+            y: 100,
+            w: MIN_W - 1,
+            h: 400
+        }));
+        assert!(!sane_rect(WinRect {
+            x: 100,
+            y: 100,
+            w: 500,
+            h: MIN_H - 1
+        }));
+        // exactly the minimum is a real window the user can have
+        assert!(sane_rect(WinRect {
+            x: 100,
+            y: 100,
+            w: MIN_W,
+            h: MIN_H
         }));
     }
 
@@ -403,6 +472,62 @@ mod tests {
         .unwrap();
         assert_eq!((back.w, back.h), (100, 100));
         assert_eq!((back.x, back.y), (0, 0));
+    }
+
+    #[test]
+    fn fit_refuses_a_rect_it_could_never_show() {
+        // a minimized window's iconic rect: nothing to restore, so the
+        // caller centers the config default instead of opening a
+        // minimum-size window in the corner
+        assert_eq!(
+            fit_rect(
+                WinRect {
+                    x: -32000,
+                    y: -32000,
+                    w: 199,
+                    h: 34
+                },
+                &one_mon()
+            ),
+            None
+        );
+        assert_eq!(
+            fit_rect(
+                WinRect {
+                    x: 100,
+                    y: 100,
+                    w: 480,
+                    h: 760
+                },
+                &one_mon()
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn storable_rect_drops_the_geometry_of_a_minimized_window() {
+        let live = WinRect {
+            x: 100,
+            y: 100,
+            w: 1180,
+            h: 760,
+        };
+        assert_eq!(storable_rect(false, live), Some(live));
+        // what Windows reports while minimized: the iconic rect, which
+        // must never become the remembered geometry
+        assert_eq!(
+            storable_rect(
+                true,
+                WinRect {
+                    x: -32000,
+                    y: -32000,
+                    w: 199,
+                    h: 34
+                }
+            ),
+            None
+        );
     }
 
     #[test]
