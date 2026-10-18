@@ -1,7 +1,8 @@
 // tests/titlebar.test.tsx — the window chrome contract: version text,
 // never an update dot (the sidebar About dot and the heading dot own
-// the signal), double-click toggles maximize, restore glyph differs
-// from maximize, and X hides to the tray (never quits).
+// the signal), one deep drag region over the caption with the double
+// click left to Tauri's own drag script, restore glyph differs from
+// maximize, and X hides to the tray (never quits).
 
 import { describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -90,15 +91,26 @@ describe("TitleBar", () => {
     expect(apiMock.toggleMaximizeWindow).toHaveBeenCalled();
   });
 
-  it("double-clicking the drag region toggles maximize", async () => {
+  it("the whole caption is one drag region, so a drag starts anywhere on it", async () => {
     open();
     await screen.findByText("v1.6.0");
-    fireEvent.doubleClick(
-      screen.getByText(en.aboutTitle).closest("[data-tauri-drag-region]")!,
-    );
-    await waitFor(() => {
-      expect(apiMock.toggleMaximizeWindow).toHaveBeenCalledOnce();
-    });
+    // one home for the caption: a deep region on the bar itself, and no
+    // second region nested inside it (a bare region only fires on its own
+    // element, which is what left the icon and the gap outside the drag)
+    const bar = document.querySelector(".titlebar")!;
+    expect(bar.getAttribute("data-tauri-drag-region")).toBe("deep");
+    expect(bar.querySelectorAll("[data-tauri-drag-region]")).toHaveLength(0);
+  });
+
+  it("a double click is Tauri's to handle, so the app never toggles twice", async () => {
+    open();
+    await screen.findByText("v1.6.0");
+    // Tauri's injected drag script maximizes on the second mousedown
+    // inside a drag region; a React handler of our own would send a
+    // second toggle and the pair would cancel out (window unchanged)
+    apiMock.toggleMaximizeWindow.mockClear();
+    fireEvent.doubleClick(document.querySelector(".titlebar")!);
+    expect(apiMock.toggleMaximizeWindow).not.toHaveBeenCalled();
   });
 
   it("X hides the window to the tray instead of quitting", async () => {

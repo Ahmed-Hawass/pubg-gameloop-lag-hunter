@@ -12,6 +12,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 - The window now opens inside the screen space left free by the taskbar, on every monitor size and display scaling, instead of starting behind the taskbar or past the edge of the screen.
 - A window left partly off-screen or behind the taskbar now comes back fully visible the next time the app opens, and stays there on later launches.
+- Double-clicking the title bar now always maximizes or restores the window, instead of sometimes doing nothing at all.
 
 ## [2.0.1] - 2026-10-18
 

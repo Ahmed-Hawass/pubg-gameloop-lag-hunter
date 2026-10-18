@@ -103,17 +103,17 @@ export function TitleBar(props: {
     };
   }, [lang]);
 
+  // ONE deep drag region over the whole caption, and no double-click
+  // handler of our own: Tauri injects a drag script that maximizes or
+  // restores on the second mousedown inside a drag region, so a second
+  // handler here sends a second toggle and the pair cancels out (the
+  // window appears to ignore the double click). Deep, not bare, because a
+  // bare region only fires on its own element: that left the icon and the
+  // gap around the title outside the drag. The controls sit inside the bar
+  // yet never drag: a BUTTON in the path blocks the region.
   return (
-    <div className="titlebar">
-      {/* double-click the drag region toggles maximize (OS convention);
-          the controls are a separate block, never inside the region */}
-      <div
-        className="titlebar-left"
-        data-tauri-drag-region
-        onDoubleClick={() => {
-          void toggleMaximizeWindow();
-        }}
-      >
+    <div className="titlebar" data-tauri-drag-region="deep">
+      <div className="titlebar-left">
         <img
           className="titlebar-icon"
           src={appIcon}
@@ -122,13 +122,9 @@ export function TitleBar(props: {
           height={20}
           draggable={false}
         />
-        <span className="titlebar-title" data-tauri-drag-region>
-          {t.aboutTitle}
-        </span>
+        <span className="titlebar-title">{t.aboutTitle}</span>
         {version ? (
-          <span className="titlebar-version num" data-tauri-drag-region>
-            v{version}
-          </span>
+          <span className="titlebar-version num">v{version}</span>
         ) : null}
       </div>
       <div className="win-controls">
