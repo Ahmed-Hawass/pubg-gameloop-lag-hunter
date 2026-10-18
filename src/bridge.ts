@@ -152,7 +152,6 @@ export async function isWindowMaximized(): Promise<boolean> {
     user-facing): without this, a React render failure on a user machine
     leaves zero traces. The backend truncates. */
 export async function logFrontendError(message: string): Promise<void> {
-  const { invoke } = await import("@tauri-apps/api/core");
   await invoke("log_frontend_error", { message });
 }
 
@@ -161,7 +160,6 @@ export async function logFrontendError(message: string): Promise<void> {
     see on its own (tray menu choices and their outcome). Never call this on
     a hot path: tooltip pushes and state ticks stay unlogged by design. */
 export async function logFrontendInfo(message: string): Promise<void> {
-  const { invoke } = await import("@tauri-apps/api/core");
   await invoke("log_frontend_info", { message });
 }
 
@@ -204,7 +202,6 @@ export interface SnapOverlayRect {
 /** Move (or hide, on null) the snap-layouts hit target. The backend
     degrades to no-flyout instead of failing, so this never rejects. */
 export async function syncSnapOverlay(rect: SnapOverlayRect | null): Promise<void> {
-  const { invoke } = await import("@tauri-apps/api/core");
   await invoke("sync_snap_overlay", { rect });
 }
 
@@ -231,7 +228,6 @@ export async function onSnapOverlay(
     so every quit in the app goes through here: the tray's quiet Exit path
     and the exit confirm alike. */
 export async function quitApp(): Promise<void> {
-  const { invoke } = await import("@tauri-apps/api/core");
   await invoke("quit_app");
 }
 
@@ -254,14 +250,12 @@ export async function syncTrayLabels(labels: {
   scan: string;
   exit: string;
 }): Promise<void> {
-  const { invoke } = await import("@tauri-apps/api/core");
   await invoke("tray_set_labels", labels);
 }
 
 /** The tray tooltip: the live scan percent while a scan runs, the exit rule
     otherwise. The caller throttles (a push per state tick is an IPC flood). */
 export async function setTrayTooltip(text: string): Promise<void> {
-  const { invoke } = await import("@tauri-apps/api/core");
   await invoke("tray_set_tooltip", { text });
 }
 
@@ -270,7 +264,6 @@ export async function setTrayTooltip(text: string): Promise<void> {
     quick-scan failure, or a state already waiting to be read. Silent paths
     never call it, so a quiet quit or a clean quick start never flashes. */
 export async function revealWindow(): Promise<void> {
-  const { invoke } = await import("@tauri-apps/api/core");
   await invoke("tray_reveal");
 }
 
@@ -278,7 +271,6 @@ export async function revealWindow(): Promise<void> {
     transitions only (the icon carries no percent, so per-tick pushes would
     be pure noise next to the throttled tooltip). */
 export async function setTrayActive(active: boolean): Promise<void> {
-  const { invoke } = await import("@tauri-apps/api/core");
   await invoke("tray_set_active", { active });
 }
 
