@@ -1,0 +1,6 @@
+# Line-ending policy: LF is the canonical form in the repo, git converts
+# on checkout per platform. Without this, tools that write LF on Windows
+# leave tracked files flagged modified with an empty diff (the Cargo.toml
+# stat noise after 2.0.0). text=auto normalizes text files only, binary
+# assets (icons, png) are detected and left byte-identical.
+* text=auto
