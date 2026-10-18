@@ -10,7 +10,9 @@
 //   * the downloaded exe MUST match the SHA-256 published in SHA256SUMS.txt
 //     (this is the real protection: files fetched by an HTTP client get no
 //     Mark-of-the-Web, so SmartScreen will NOT warn when the user runs it)
-//   * release notes are plain text in the UI — never rendered as HTML
+//   * the update window shows short bullets from the release's notes.json
+//     asset (engine-bounded, plain text, never HTML); the full notes live
+//     on the project site, opened in the browser
 //
 // Everything runs on the blocking pool (spawn_blocking from lib.rs) and
 // logs every step: check → found → download start/pct/verified/failed —
@@ -30,10 +32,11 @@ use super::logging;
 // Allowlist — the same philosophy as OPEN_URL_ALLOWED_HOSTS in lib.rs.
 // Downloads redirect across these hosts; anything else is refused.
 //
-// NOTE (4 vs 3): this list has 4 hosts on purpose: the 2 GitHub hosts
+// NOTE (4 vs 4): this list has 4 hosts on purpose: the 2 GitHub hosts
 // shared with lib.rs plus the 2 release-asset CDN hosts below, because
 // asset downloads redirect onto the CDN. The browser-open path in lib.rs
-// never targets the CDN directly, so it stays at 3. Keep both https-only.
+// has its own 4 (the GitHub hosts, the support link, and the project
+// site) and never targets the CDN directly. Keep both lists https-only.
 // ---------------------------------------------------------------------------
 
 pub const ALLOWED_HOSTS: [&str; 4] = [
@@ -51,13 +54,30 @@ const MAX_DOWNLOAD_BYTES: u64 = 60 * 1024 * 1024; // 60 MB: release exe is ~5-8 
 const MAX_METADATA_BYTES: u64 = 2 * 1024 * 1024; // release JSON + checksum list
 const STALL_TIMEOUT: Duration = Duration::from_secs(30); // no bytes for 30s = cancel
 
+/// The update window's short-bullet bounds (notes.json): the release
+/// notes ask writers to stay inside the same limits, enforced here
+/// because the file is remote data.
+const NOTES_MAX_BULLETS: usize = 4;
+const NOTES_MAX_CHARS: usize = 140;
+
+/// The project site's changelog page: the full, player-facing notes. A
+/// version's anchor is its number with dots as dashes (the site's own
+/// anchorOf format), so "2.0.2" links to "#v-2-0-2".
+const NOTES_PAGE_BASE: &str = "https://laghunter.vercel.app/changelog";
+
 /// What the UI needs to know about a newer release.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateInfo {
     /// e.g. "1.3.0" (tag stripped of the v prefix)
     pub version: String,
-    /// release notes, plain text — the UI renders pre-wrap, never HTML
-    pub notes: String,
+    /// short update-window highlights from the release's notes.json
+    /// asset, per language, plain text never HTML. Bounded here (at most
+    /// NOTES_MAX_BULLETS lines of at most NOTES_MAX_CHARS chars each);
+    /// empty means the UI shows the notes link alone.
+    pub notes_en: Vec<String>,
+    pub notes_ar: Vec<String>,
+    /// the project site's changelog entry for this version (full notes)
+    pub notes_url: String,
     /// direct asset URL of the versioned exe
     pub asset_url: String,
     /// asset file name, e.g. "pubg-gameloop-lag-hunter-1.3.0.exe"
@@ -73,14 +93,29 @@ struct GithubAsset {
     browser_download_url: String,
 }
 
+/// The fields of releases/latest we need. The release body is
+/// deliberately NOT read: the update window shows the short notes.json
+/// bullets, the body stays on GitHub as the full technical record.
 #[derive(Deserialize)]
 struct GithubRelease {
     #[serde(default)]
     tag_name: String,
     #[serde(default)]
-    body: String,
-    #[serde(default)]
     assets: Vec<GithubAsset>,
+}
+
+/// The notes.json release asset: short bilingual highlights written in
+/// the release session. `version` guards against a stale upload: a
+/// mismatch means the file describes another release and is ignored
+/// wholesale.
+#[derive(Deserialize)]
+struct GithubNotesFile {
+    #[serde(default)]
+    version: String,
+    #[serde(default)]
+    en: Vec<String>,
+    #[serde(default)]
+    ar: Vec<String>,
 }
 
 /// Ask GitHub for the latest release. Ok(None) = no newer version / no
@@ -120,9 +155,22 @@ pub fn check_latest(local_version: &str) -> Option<UpdateInfo> {
         ));
         return None;
     };
+    // short notes are presentation data: any failure (missing asset,
+    // network, malformed file, stale version) degrades to the link-only
+    // body and must never fail the update itself
+    let notes_asset = release
+        .assets
+        .iter()
+        .find(|a| a.name.eq_ignore_ascii_case("notes.json"));
+    let (notes_en, notes_ar) = notes_asset
+        .and_then(|a| fetch_notes(&a.browser_download_url, &version))
+        .unwrap_or_default();
+    let notes_url = notes_page_url(&version);
     let info = UpdateInfo {
         version,
-        notes: release.body,
+        notes_en,
+        notes_ar,
+        notes_url,
         asset_url: asset.browser_download_url.clone(),
         asset_name: asset.name.clone(),
         sums_url: sums.browser_download_url.clone(),
@@ -132,6 +180,63 @@ pub fn check_latest(local_version: &str) -> Option<UpdateInfo> {
         info.version, info.asset_name
     ));
     Some(info)
+}
+
+/// Bound one language's bullet list: trim, drop empties, cap the count,
+/// truncate overlong lines by chars (never bytes: Arabic is multi-byte).
+fn sanitize_notes(lines: Vec<String>) -> Vec<String> {
+    lines
+        .into_iter()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .take(NOTES_MAX_BULLETS)
+        .map(|l| {
+            if l.chars().count() > NOTES_MAX_CHARS {
+                let cut: String = l.chars().take(NOTES_MAX_CHARS - 1).collect();
+                format!("{cut}…")
+            } else {
+                l
+            }
+        })
+        .collect()
+}
+
+/// Parse a notes.json body against the release it must describe. Pure,
+/// so the guards (stale version, malformed, empty) are unit-tested.
+/// None = unusable: the UI falls back to the notes link alone.
+fn parse_notes(text: &str, version: &str) -> Option<(Vec<String>, Vec<String>)> {
+    let raw: GithubNotesFile = serde_json::from_str(text).ok()?;
+    if raw.version.trim().trim_start_matches('v') != version {
+        return None;
+    }
+    let (en, ar) = (sanitize_notes(raw.en), sanitize_notes(raw.ar));
+    if en.is_empty() && ar.is_empty() {
+        return None;
+    }
+    Some((en, ar))
+}
+
+/// Fetch one release's notes.json. Failures are logged and degrade to
+/// None (link-only body): notes are never worth failing an update over.
+fn fetch_notes(url: &str, version: &str) -> Option<(Vec<String>, Vec<String>)> {
+    let text = match http_get_text(url) {
+        Ok(t) => t,
+        Err(e) => {
+            logging::info(&format!("update notes unavailable: {e}"));
+            return None;
+        }
+    };
+    let notes = parse_notes(&text, version);
+    if notes.is_none() {
+        logging::info("update notes ignored (malformed, stale version, or empty)");
+    }
+    notes
+}
+
+/// The site changelog URL for a version, following the site's own anchor
+/// format (dots become dashes).
+fn notes_page_url(version: &str) -> String {
+    format!("{NOTES_PAGE_BASE}#v-{}", version.replace('.', "-"))
 }
 
 // ---------------------------------------------------------------------------
@@ -756,6 +861,68 @@ mod tests {
     }
 
     #[test]
+    fn notes_parsed_and_bounded() {
+        let body = r#"{
+            "version": "2.0.2",
+            "en": ["  first  ", "", "second", "third", "fourth", "fifth"],
+            "ar": ["الأول"]
+        }"#;
+        let (en, ar) = parse_notes(body, "2.0.2").unwrap();
+        // trimmed, empties dropped, capped at NOTES_MAX_BULLETS
+        assert_eq!(en, vec!["first", "second", "third", "fourth"]);
+        assert_eq!(ar, vec!["الأول"]);
+    }
+
+    #[test]
+    fn notes_stale_version_ignored() {
+        // the stale-upload guard: a file describing another release is
+        // ignored wholesale, whatever it contains
+        let stale = r#"{ "version": "2.0.1", "en": ["old"], "ar": [] }"#;
+        assert_eq!(parse_notes(stale, "2.0.2"), None);
+        // the v prefix is tolerated on either side of the comparison
+        let v = r#"{ "version": "v2.0.2", "en": ["ok"], "ar": [] }"#;
+        assert!(parse_notes(v, "2.0.2").is_some());
+        // a missing version field can never match
+        let missing = r#"{ "en": ["no version"], "ar": [] }"#;
+        assert_eq!(parse_notes(missing, "2.0.2"), None);
+    }
+
+    #[test]
+    fn notes_malformed_or_empty_degrade_to_none() {
+        assert_eq!(parse_notes("not json", "2.0.2"), None);
+        assert_eq!(
+            parse_notes(r#"{ "version": "2.0.2", "en": [], "ar": [] }"#, "2.0.2"),
+            None
+        );
+        assert_eq!(
+            parse_notes(
+                r#"{ "version": "2.0.2", "en": ["   "], "ar": [] }"#,
+                "2.0.2"
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn notes_truncate_by_chars_not_bytes() {
+        // 250 Arabic chars: the cut lands at NOTES_MAX_CHARS chars total
+        // (139 + the ellipsis), never a byte split mid-character
+        let long = "علامة".repeat(50);
+        let body = format!(r#"{{ "version": "2.0.2", "en": [], "ar": ["{long}"] }}"#);
+        let (_, ar) = parse_notes(&body, "2.0.2").unwrap();
+        assert_eq!(ar[0].chars().count(), NOTES_MAX_CHARS);
+        assert!(ar[0].ends_with('…'));
+    }
+
+    #[test]
+    fn notes_page_url_uses_the_site_anchor() {
+        assert_eq!(
+            notes_page_url("2.0.2"),
+            "https://laghunter.vercel.app/changelog#v-2-0-2"
+        );
+    }
+
+    #[test]
     fn dest_validation_refuses_bad_paths() {
         let asset = "laghunter-dest-test.exe";
         // relative path → refused (would land in the CWD)
@@ -818,7 +985,9 @@ mod tests {
         register_cancel(cancel.clone()).unwrap();
         let info = UpdateInfo {
             version: "0.0.0-test".into(),
-            notes: String::new(),
+            notes_en: Vec::new(),
+            notes_ar: Vec::new(),
+            notes_url: notes_page_url("0.0.0-test"),
             asset_url: "https://github.com/x/y.exe".into(),
             asset_name: "laghunter-retry-test.exe".into(),
             sums_url: "https://github.com/x/sums.txt".into(),

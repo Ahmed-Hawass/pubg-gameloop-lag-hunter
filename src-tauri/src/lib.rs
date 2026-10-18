@@ -1080,13 +1080,20 @@ fn log_frontend_info(message: String) -> Result<(), String> {
 /// command is invoked from our own frontend anyway. Anything outside
 /// these hosts is refused, end of story.
 ///
-/// NOTE (3 vs 4): this list has 3 hosts on purpose. The updater's
-/// ALLOWED_HOSTS in engine/update.rs has 4 (these 2 GitHub hosts plus the
-/// 2 release-asset CDN hosts objects.githubusercontent.com and
-/// release-assets.githubusercontent.com) because downloads redirect onto
-/// the CDN. The browser-open path never targets the CDN directly, so it
-/// stays at 3. Keep both lists https-only.
-const OPEN_URL_ALLOWED_HOSTS: [&str; 3] = ["github.com", "api.github.com", "paypal.me"];
+/// NOTE (4 vs 4): this list has 4 hosts on purpose: the 2 GitHub hosts,
+/// the support link, and the project site (the update window's full-notes
+/// link opens the site's changelog there). The updater's ALLOWED_HOSTS in
+/// engine/update.rs is a different 4: the same 2 GitHub hosts plus the 2
+/// release-asset CDN hosts objects.githubusercontent.com and
+/// release-assets.githubusercontent.com, because downloads redirect onto
+/// the CDN. The browser-open path never targets the CDN directly. Keep
+/// both lists https-only.
+const OPEN_URL_ALLOWED_HOSTS: [&str; 4] = [
+    "github.com",
+    "api.github.com",
+    "paypal.me",
+    "laghunter.vercel.app",
+];
 
 #[tauri::command]
 fn open_url(url: &str, app: tauri::AppHandle) -> Result<(), String> {

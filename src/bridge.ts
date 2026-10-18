@@ -764,8 +764,14 @@ export interface FriendlyReport {
 
 export interface UpdateInfo {
   version: string;
-  /** release notes, plain text — rendered pre-wrap, never HTML */
-  notes: string;
+  /** short update-window highlights from the release's notes.json asset,
+      per language, plain text never HTML (engine-bounded: at most 4
+      lines of at most 140 chars each). Empty = the UI shows the notes
+      link alone. */
+  notes_en: string[];
+  notes_ar: string[];
+  /** the project site's changelog entry for this version (full notes) */
+  notes_url: string;
   asset_url: string;
   asset_name: string;
   sums_url: string;

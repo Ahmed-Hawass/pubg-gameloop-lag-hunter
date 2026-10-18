@@ -8,7 +8,7 @@
 // this modal does is put a VERIFIED file next to the user and open its folder.
 
 import { useEffect, useId, useRef, useState } from "react";
-import { FolderOpen, ShieldCheck, TriangleAlert } from "lucide-react";
+import { ArrowUpRight, FolderOpen, ShieldCheck, TriangleAlert } from "lucide-react";
 import { api, saveDialog, type UpdateInfo } from "../bridge";
 import { useLang } from "../i18n";
 import { errorDialog } from "../errors";
@@ -34,7 +34,7 @@ export function UpdateModal(props: {
   suspended?: boolean;
 }) {
   const { info, onClose, onDownloadingChange, suspended } = props;
-  const { t } = useLang();
+  const { t, lang } = useLang();
   // true while the offer's Download action is in flight (the OS save
   // dialog does not block the WebView — without the gate a second click
   // opened a second dialog and raced two downloads)
@@ -198,14 +198,34 @@ export function UpdateModal(props: {
   let body: React.ReactNode;
 
   if (phase.kind === "offer") {
+    // the highlights in the UI's language; a missing translation falls
+    // back to the other language, then to the link-only line (older
+    // releases and offline fetches carry no bullets)
+    const ui = lang === "ar" ? info.notes_ar : info.notes_en;
+    const notes = ui.length > 0 ? ui : lang === "ar" ? info.notes_en : info.notes_ar;
     body = (
       <div className="um-body">
         <div className="um-version num">
           v{info.version}
         </div>
         <div className="um-notes-label">{t.updateNotesLabel}</div>
-        {/* release notes are PLAIN TEXT from the GitHub API — never HTML */}
-        <p className="um-notes">{info.notes || "—"}</p>
+        {/* bullets are engine-bounded plain text from notes.json — never HTML */}
+        {notes.length > 0 ? (
+          <ul className="um-notes">
+            {notes.map((line, i) => (
+              <li key={i}>{line}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="um-notes um-notes-empty">{t.updateNotesEmpty}</p>
+        )}
+        <button
+          className="focus-ring-inset um-notes-link"
+          onClick={() => void api.openUrl(info.notes_url)}
+        >
+          {t.updateNotesLink}
+          <ArrowUpRight size={12} />
+        </button>
       </div>
     );
     actions = (

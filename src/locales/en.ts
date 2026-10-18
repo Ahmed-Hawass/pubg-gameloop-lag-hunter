@@ -615,7 +615,10 @@ export const en = {
   updateOpenFolder: "Open folder",
   updateOk: "Done",
   updateFailedTitle: "Download failed",
-  updateNotesLabel: "Release notes",
+  updateNotesLabel: "What's new",
+  updateNotesLink: "See full details",
+  /** shown when the release carries no short notes (older releases) */
+  updateNotesEmpty: "The full notes are on our website.",
   updateExeFilter: "Application",
 
   // ---- monitor: controls ----

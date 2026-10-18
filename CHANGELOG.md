@@ -6,6 +6,9 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- The update window now shows a few short highlights in your language with a link to the full release notes, instead of the full English release text.
+
 ### Fixed
 - The window now opens inside the screen space left free by the taskbar, on every monitor size and display scaling, instead of starting behind the taskbar or past the edge of the screen.
 - A window left partly off-screen or behind the taskbar now comes back fully visible the next time the app opens, and stays there on later launches.

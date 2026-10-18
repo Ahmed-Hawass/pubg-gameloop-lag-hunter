@@ -645,7 +645,10 @@ export const ar: Locale = {
   updateOpenFolder: "فتح المجلد",
   updateOk: "تم",
   updateFailedTitle: "فشل التنزيل",
-  updateNotesLabel: "ملاحظات الإصدار",
+  updateNotesLabel: "الجديد في هذا الإصدار",
+  updateNotesLink: "عرض كل التفاصيل",
+  /** shown when the release carries no short notes (older releases) */
+  updateNotesEmpty: "ملاحظات الإصدار الكاملة على موقعنا.",
   updateExeFilter: "تطبيق",
 
   // ---- monitor: controls ----

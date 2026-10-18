@@ -25,7 +25,9 @@ vi.mock("../i18n", () => ({
 
 const release: UpdateInfo = {
   version: "9.9.9",
-  notes: "notes",
+  notes_en: [],
+  notes_ar: [],
+  notes_url: "https://laghunter.vercel.app/changelog#v-9-9-9",
   asset_url: "https://example.com/app.exe",
   asset_name: "app-9.9.9.exe",
   sums_url: "https://example.com/sums",

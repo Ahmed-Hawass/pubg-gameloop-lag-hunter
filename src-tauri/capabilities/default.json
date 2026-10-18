@@ -20,7 +20,8 @@
       "allow": [
         { "url": "https://github.com/*" },
         { "url": "https://api.github.com/*" },
-        { "url": "https://paypal.me/*" }
+        { "url": "https://paypal.me/*" },
+        { "url": "https://laghunter.vercel.app/*" }
       ]
     }
   ]

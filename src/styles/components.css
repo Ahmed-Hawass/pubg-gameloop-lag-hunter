@@ -623,12 +623,12 @@ html[dir="rtl"] .btn:hover:not(.is-disabled) .flip-rtl {
   color: var(--text-3);
 }
 
-/* release notes: PLAIN TEXT from the GitHub API — pre-wrap, never HTML */
+/* update highlights: engine-bounded plain-text bullets from the
+   release's notes.json asset (hollow state = the link-only line) */
 .um-notes {
   font-size: 12.5px;
   color: var(--text-2);
   line-height: 1.6;
-  white-space: pre-wrap;
   word-break: break-word;
   max-height: 170px;
   overflow-y: auto;
@@ -637,6 +637,51 @@ html[dir="rtl"] .btn:hover:not(.is-disabled) .flip-rtl {
   border-radius: var(--radius-sm);
   padding: 10px 12px;
   margin: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.um-notes li {
+  position: relative;
+  padding-inline-start: 14px;
+}
+
+.um-notes li::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 2px;
+  inset-block-start: 7px;
+  inline-size: 5px;
+  block-size: 5px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+
+.um-notes-empty {
+  color: var(--text-3);
+}
+
+/* the full-notes link: a quiet text action under the highlights */
+.um-notes-link {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+}
+
+.um-notes-link:hover {
+  text-decoration: underline;
 }
 
 /* Progress — the single bar language (update download, storage sweep).

@@ -8,7 +8,9 @@ import type { UpdateInfo } from "../bridge";
 
 const info: UpdateInfo = {
   version: "1.3.0",
-  notes: "fixed the startup freeze",
+  notes_en: ["fixed the startup freeze"],
+  notes_ar: ["إصلاح التجمّد عند بدء التشغيل"],
+  notes_url: "https://laghunter.vercel.app/changelog#v-1-3-0",
   asset_url: "https://github.com/x/y/releases/download/v1.3.0/pubg-gameloop-lag-hunter-1.3.0.exe",
   asset_name: "pubg-gameloop-lag-hunter-1.3.0.exe",
   sums_url: "https://github.com/x/y/releases/download/v1.3.0/SHA256SUMS.txt",

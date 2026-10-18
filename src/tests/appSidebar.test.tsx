@@ -56,7 +56,15 @@ describe("AppSidebar", () => {
   });
 
   it("shows the update dot everywhere except About itself", () => {
-    const info = { version: "9.9.9", notes: "", asset_url: "", asset_name: "", sums_url: "" };
+    const info = {
+      version: "9.9.9",
+      notes_en: [],
+      notes_ar: [],
+      notes_url: "",
+      asset_url: "",
+      asset_name: "",
+      sums_url: "",
+    };
     open({ updateInfo: info });
     expect(document.querySelector(".sb-dot")).toBeTruthy();
     cleanup();
