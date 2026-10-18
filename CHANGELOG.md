@@ -17,7 +17,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - Monitor in three calm states: a session plan when idle, a centered progress view while scanning with a live moment count for every problem the report will keep, and one verdict card that stays until you dismiss it.
 - System tab as a spec sheet (CPU, RAM, display, GPU driver, model, OS) with a copy-all button, and System health cards with plain-language notes and direct links to the right Windows pages.
 - Headless companion (`laghunter-cli.exe`): scan, list sessions, and open reports from a terminal, sharing sessions with the app.
-- Interface zoom (80 / 100 / 125 percent) with Ctrl+=/-/0 shortcuts, one-shot intro cards per page, and a two-slide welcome.
+- Interface size buttons (Small / Default / Large) with Ctrl+=/-/0 shortcuts, one-shot intro cards per page, and a two-slide welcome.
 - GameLoop v7 support alongside v6, including a one-time notice when the client updates (saved preferences may need one re-flip).
 - Named page headers everywhere: System, health, Tools, and the gaming and storage sections each open with a one-shot intro plus a standing title, so no page starts cold. The title plus a short scope line show on the first paint (loading, error, and empty states included) with the one-shot card below them, instead of the card standing in for the header until dismissed.
 - Reports shows its sessions hint as a standing line instead of hiding it behind a (?) button, and the Storage section describes the page instead of narrating its single switch.
