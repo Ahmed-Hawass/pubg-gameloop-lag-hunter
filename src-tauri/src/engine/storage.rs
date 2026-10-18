@@ -146,6 +146,17 @@ impl SessionWriter {
         &self.dir
     }
 
+    /// Test-only writer rooted at an explicit directory: the real create()
+    /// always claims a fresh dir under %LOCALAPPDATA%, and unit tests must
+    /// never write into the user's sessions folder.
+    #[cfg(test)]
+    pub(crate) fn create_in(dir: PathBuf) -> Result<Self, String> {
+        fs::create_dir_all(&dir).map_err(|e| format!("cannot create test dir: {e}"))?;
+        let samples = fs::File::create(dir.join("samples.jsonl"))
+            .map_err(|e| format!("cannot create samples file: {e}"))?;
+        Ok(Self { samples, dir })
+    }
+
     pub fn append_sample(&mut self, s: &Sample) -> Result<(), String> {
         let line = serde_json::to_string(s).map_err(|e| format!("serialize sample: {e}"))?;
         writeln!(self.samples, "{line}").map_err(|e| format!("write sample: {e}"))

@@ -2,7 +2,7 @@
 // The single source of truth. The UI only sends commands: start/stop; everything else is pushed.
 
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use super::detector::Detector;
@@ -17,6 +17,9 @@ use super::types::{
 /// Shared session state owned by the engine, locked by commands.
 pub struct Engine {
     state: Mutex<SessionInner>,
+    /// Signaled when a finalize resolves (report path or error): concurrent
+    /// stop callers wait here for the writer's own outcome, never race it.
+    state_cv: Condvar,
     /// the CURRENT session's running flag. Readers spawned by start() hold
     /// their OWN Arc — this slot only tells stop() WHICH flag to flip (the
     /// current session's), never mutated in place (a `&self` method can't),
@@ -44,6 +47,9 @@ struct SessionInner {
     status: SessionStatus,
     /// why the last session ended (cleared on the next start)
     stop_reason: Option<StopReason>,
+    /// The writer's own stop outcome, replayed to every caller that joined
+    /// the same finish (report path or finalize error). Cleared on start.
+    finalize_result: Option<Result<Option<String>, String>>,
     writer: Option<SessionWriter>,
     /// rolling window: last ~300 ticks for detector + UI (RAM-bounded)
     samples: Vec<Sample>,
@@ -104,6 +110,7 @@ impl Engine {
             state: Mutex::new(SessionInner {
                 status: SessionStatus::Idle,
                 stop_reason: None,
+                finalize_result: None,
                 writer: None,
                 samples: Vec::new(),
                 samples_total: 0,
@@ -120,6 +127,7 @@ impl Engine {
                 auto_stop_at: None,
                 thresholds: settings.thresholds,
             }),
+            state_cv: Condvar::new(),
             running_flag: std::sync::RwLock::new(Arc::new(AtomicBool::new(false))),
             total_mem_mb: std::sync::RwLock::new(8_192.0), // refreshed at session start
             fs_guard: std::sync::Mutex::new(()),
@@ -323,6 +331,7 @@ impl Engine {
         st.events.clear();
         st.issue_kinds.clear();
         st.stop_reason = None;
+        st.finalize_result = None;
         st.thresholds = thresholds.clone();
         st.detector = Detector::new(thresholds);
         st.game_running = true; // gate confirmed it
@@ -470,16 +479,36 @@ impl Engine {
 
     /// Stop with the reason the session ended — the UI explains it instead
     /// of staying silent when GameLoop dies mid-session.
+    ///
+    /// SINGLE-FLIGHT: the first caller from Running becomes the writer; every
+    /// other caller waits for and receives the SAME finalize outcome (report
+    /// path, or the finalize error). An early `Ok(None)` for a concurrent
+    /// caller is how the CLI used to exit mid-finalize and kill the report
+    /// with it — auto-stop and GameLoop-close both lost theirs.
     pub fn stop_with_reason(&self, reason: StopReason) -> Result<Option<String>, String> {
         let _t = super::logging::timed_with("session stop", 3_000);
         super::logging::info(&format!("session stop: reason={reason:?}"));
         {
             let mut st = self.state.lock().unwrap_or_else(|p| p.into_inner());
-            if st.status != SessionStatus::Running {
-                return Ok(None);
+            match st.status {
+                SessionStatus::Running => {
+                    st.status = SessionStatus::Stopping;
+                    st.stop_reason = Some(reason);
+                }
+                SessionStatus::Stopping => {
+                    // another caller is already finalizing: wait for ITS
+                    // stored result instead of racing it
+                    while st.status == SessionStatus::Stopping {
+                        st = self.state_cv.wait(st).unwrap_or_else(|p| p.into_inner());
+                    }
+                    return st.finalize_result.clone().unwrap_or(Ok(None));
+                }
+                // Idle, or Finished with the writer long gone: replay the
+                // stored outcome. A late second stop (the CLI tick landing
+                // after a guard already wrote the report) must not read
+                // "no report file" while that report exists.
+                _ => return st.finalize_result.clone().unwrap_or(Ok(None)),
             }
-            st.status = SessionStatus::Stopping;
-            st.stop_reason = Some(reason);
         }
 
         // flip the CURRENT session's flag (read under the lock — never the
@@ -496,6 +525,8 @@ impl Engine {
         // (status flipped back to Running), our writer is NOT theirs — bail out
         // without touching anything rather than corrupt the new session.
         if st.status != SessionStatus::Stopping {
+            drop(st);
+            self.state_cv.notify_all(); // never strand waiters if it happens
             return Ok(None);
         }
         // close open conditions
@@ -527,7 +558,12 @@ impl Engine {
                 match path {
                     Ok(p) => Some(p.to_string_lossy().to_string()),
                     Err(e) => {
+                        // the SAME outcome reaches every waiter: an error
+                        // must not vanish for callers that joined the stop
                         st.status = SessionStatus::Finished;
+                        st.finalize_result = Some(Err(e.clone()));
+                        drop(st);
+                        self.state_cv.notify_all();
                         return Err(e);
                     }
                 }
@@ -535,7 +571,6 @@ impl Engine {
             // no writer: already stopped/finished — benign, not a save failure
             None => None,
         };
-        st.status = SessionStatus::Finished;
         // verdict rewrite: the finished card must agree with the saved
         // report it links to. The last live tick is windowed, sustained,
         // and subordinated (a narrow, momentary view); the report is
@@ -551,6 +586,12 @@ impl Engine {
                 ui.issue_kinds = kinds;
             }
         }
+        // the commit: status, stored outcome, and wake-up land together —
+        // Finished never reads before the outcome exists
+        st.status = SessionStatus::Finished;
+        st.finalize_result = Some(Ok(report.clone()));
+        drop(st);
+        self.state_cv.notify_all();
         Ok(report)
     }
 
@@ -1309,5 +1350,125 @@ mod tests {
             "old session's flag must stay false"
         );
         assert!(second.load(Ordering::SeqCst), "new session's flag is true");
+    }
+
+    /// The CLI finalize race: a second stop arriving while a finalize is in
+    /// flight must WAIT and receive the writer's own result. The old code
+    /// returned Ok(None) instantly, the CLI printed "no report file" and
+    /// exited, killing the writer thread with it (found on real runs: both
+    /// auto-stop and GameLoop-close lost their reports).
+    #[test]
+    fn concurrent_stop_joins_the_in_flight_finalize() {
+        let dir = std::env::temp_dir().join(format!(
+            "laghunter-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let eng = Arc::new(Engine::new());
+        {
+            let mut st = eng.state.lock().unwrap_or_else(|p| p.into_inner());
+            st.status = SessionStatus::Running;
+            st.started_at = Some(sampler::iso_now());
+            st.writer = Some(SessionWriter::create_in(dir.clone()).expect("test writer"));
+        }
+        let writer = {
+            let eng = Arc::clone(&eng);
+            std::thread::spawn(move || eng.stop_with_reason(StopReason::Manual))
+        };
+        // the writer flips to Stopping before its 600ms drain sleep: catch
+        // it there so the second call below really joins a live finalize
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while eng.status() != SessionStatus::Stopping {
+            assert!(Instant::now() < deadline, "writer never entered Stopping");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        let second = eng
+            .stop_with_reason(StopReason::Manual)
+            .expect("waiter stop is Ok");
+        let first = writer
+            .join()
+            .expect("writer thread lives")
+            .expect("writer stop is Ok");
+        assert_eq!(second, first, "both callers get the SAME report path");
+        let report = first.expect("a report path came back");
+        assert!(
+            std::path::Path::new(&report).exists(),
+            "the report must exist before stop returns: {report}"
+        );
+        assert!(
+            dir.join("summary.json").exists(),
+            "summary.json is the commit point and must exist with the report"
+        );
+        assert_eq!(eng.status(), SessionStatus::Finished);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A failed finalize is the SAME outcome for every caller: the waiter
+    /// must receive the writer's error, and status must land Finished
+    /// (never stuck Stopping).
+    #[test]
+    fn concurrent_stop_receives_the_writers_error() {
+        let eng = Arc::new(Engine::new());
+        {
+            let mut st = eng.state.lock().unwrap_or_else(|p| p.into_inner());
+            st.status = SessionStatus::Stopping; // a writer is in flight
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        let waiter = {
+            let eng = Arc::clone(&eng);
+            std::thread::spawn(move || {
+                let _ = tx.send(eng.stop_with_reason(StopReason::Manual));
+            })
+        };
+        // the waiter must BLOCK while the writer is live: a result before
+        // the writer resolves would be the old early-return bug
+        assert!(
+            rx.recv_timeout(Duration::from_millis(200)).is_err(),
+            "waiter returned before the finalize resolved"
+        );
+        // the writer side (simulated): finalize fails
+        {
+            let mut st = eng.state.lock().unwrap_or_else(|p| p.into_inner());
+            st.status = SessionStatus::Finished;
+            st.finalize_result = Some(Err("write summary: denied".into()));
+        }
+        eng.state_cv.notify_all();
+        let got = rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("waiter got a result");
+        assert_eq!(got, Err("write summary: denied".to_string()));
+        assert_eq!(eng.status(), SessionStatus::Finished);
+        waiter.join().expect("waiter thread lives");
+    }
+
+    /// Late callers: a Finished session replays its stored outcome (the CLI
+    /// tick can land after the guard already wrote the report), and a fresh
+    /// engine is the benign None it always was.
+    #[test]
+    fn late_stop_replays_the_stored_outcome() {
+        let eng = Engine::new();
+        assert_eq!(eng.stop(), Ok(None), "nothing to stop on a fresh engine");
+        {
+            let mut st = eng.state.lock().unwrap_or_else(|p| p.into_inner());
+            st.status = SessionStatus::Finished;
+            st.finalize_result = Some(Ok(Some("/tmp/report.md".into())));
+        }
+        assert_eq!(
+            eng.stop(),
+            Ok(Some("/tmp/report.md".into())),
+            "a finished session answers a late stop with its own report path"
+        );
+        {
+            let mut st = eng.state.lock().unwrap_or_else(|p| p.into_inner());
+            st.finalize_result = Some(Err("write summary: denied".into()));
+        }
+        assert_eq!(
+            eng.stop(),
+            Err("write summary: denied".into()),
+            "a failed finalize replays its error, never a silent Ok"
+        );
     }
 }

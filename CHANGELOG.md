@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- A scan that ended by auto-stop or by GameLoop closing could finish without its report. A finished scan now always saves its report, and repeated stop requests receive the same result.
+- The update check skips junk lines in SHA256SUMS.txt instead of refusing a download that is otherwise listed correctly.
+
 ## [2.0.0] - 2026-10-15
 
 ### Added
