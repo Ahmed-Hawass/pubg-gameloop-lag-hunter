@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.0.1] - 2026-10-18
 
 ### Fixed
 - A scan that ended by auto-stop or by GameLoop closing could finish without its report. A finished scan now always saves its report, and repeated stop requests receive the same result.
