@@ -14,6 +14,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - A window left partly off-screen or behind the taskbar now comes back fully visible the next time the app opens, and stays there on later launches.
 - Double-clicking the title bar now always maximizes or restores the window, instead of sometimes doing nothing at all.
 - The window no longer opens shrunk into the top-left corner when it was left minimized before closing.
+- Text in dialogs, release notes, reports, and hints can now be selected and copied instead of being blocked everywhere outside input fields, and clicking empty space clears the highlight.
 
 ## [2.0.1] - 2026-10-18
 

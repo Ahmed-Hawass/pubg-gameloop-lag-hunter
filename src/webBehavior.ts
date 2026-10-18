@@ -19,6 +19,24 @@ export function isBrowserShortcut(e: {
   return false;
 }
 
+/** Pure decision, exposed for tests: does this selectstart target's
+ *  resolved style forbid selection? Inputs, textareas and editable hosts
+ *  stay selectable whatever CSS says; everything else follows its computed
+ *  `user-select`, which inherits from `body { user-select: none }` and
+ *  flips to `text` inside the copyable whitelist in base.css. An
+ *  unresolved value stays blocked, exactly like the old blanket guard, so
+ *  the fallback can only ever over-block, never leak selection. */
+export function selectionBlocked(target: Element | null): boolean {
+  if (!target) return false;
+  const el = target as HTMLElement;
+  if (el.isContentEditable) return false;
+  const tag = el.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA") return false;
+  const style = getComputedStyle(el) as CSSStyleDeclaration & { webkitUserSelect?: string };
+  const select = style.userSelect || style.webkitUserSelect || "";
+  return select.toLowerCase() !== "text";
+}
+
 export function installNativeBehavior() {
   // 1) no right-click context menu
   document.addEventListener("contextmenu", (e) => e.preventDefault());
@@ -35,11 +53,24 @@ export function installNativeBehavior() {
     document.addEventListener(ev, (e) => e.preventDefault()),
   );
 
-  // 4) no accidental text selection outside inputs — native app feel
+  // 4) no accidental text selection outside the copyable surfaces — native
+  // app feel. The stylesheet is the single source of truth: base.css sets
+  // user-select: none on the body and text on a whitelist, and this guard
+  // enforces exactly what CSS declares (reading the computed value), so a
+  // surface added to the whitelist starts working without touching JS.
   document.addEventListener("selectstart", (e) => {
-    const t = e.target as HTMLElement;
-    if (!t.isContentEditable && t.tagName !== "INPUT" && t.tagName !== "TEXTAREA") {
-      e.preventDefault();
-    }
+    if (selectionBlocked(e.target as Element | null)) e.preventDefault();
+  });
+
+  // 5) clicking empty space clears the selection. The same decision that
+  // blocks a new one owns this: any spot outside every copyable surface
+  // also drops the highlight already there, so a selection made inside a
+  // dialog or report never lingers until the user clicks the text again
+  // (a caret on user-select: none does not clear it in WebView2). Runs on
+  // mousedown, the way a native window clears on the button press, and
+  // never touches a control that owns its own selection.
+  document.addEventListener("mousedown", (e) => {
+    if (!selectionBlocked(e.target as Element | null)) return;
+    window.getSelection()?.removeAllRanges();
   });
 }

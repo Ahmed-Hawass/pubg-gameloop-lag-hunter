@@ -41,16 +41,25 @@ body {
   }
 }
 /* selectable text: the app disables selection globally (kiosk-like
-   shell), but error lines, report content, notes, paths, and inputs
-   must copy — these re-enable it, nothing else does */
+   shell), but error lines, report content, notes, hints, and inputs must
+   copy — these re-enable it, and webBehavior's selectstart guard enforces
+   exactly this list (it reads the computed value), so a surface added
+   here starts working without a JS change. Nothing else re-enables it. */
 input,
 textarea,
 .dialog-box,
+.um-notes,
+.note-title,
 .note-body,
 .note-fix-box,
 .report-moments,
 .report-metrics,
-.um-notes {
+.intro-card,
+.empty-title,
+.empty-hint,
+.page-head-sub,
+.checks-hint,
+.tool-note {
   user-select: text;
 }
 
