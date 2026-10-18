@@ -611,13 +611,6 @@ fn log_err<T>(cmd: &str, res: &Result<T, String>) {
     }
 }
 
-#[tauri::command]
-fn session_folder(id: &str) -> Result<String, String> {
-    let res = engine::storage::session_dir(id);
-    log_err("session_folder", &res);
-    res
-}
-
 /// The sessions root itself (the Reports tab's "Open sessions folder").
 /// The ENGINE owns the path — the UI never derives it by string surgery
 /// on a session path (which assumed a flat layout and would silently
@@ -1166,7 +1159,6 @@ pub fn run() {
             load_report,
             delete_session,
             delete_all_sessions,
-            session_folder,
             sessions_root,
             get_settings,
             set_language,
