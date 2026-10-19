@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.0.2] - 2026-10-19
 
 ### Changed
 - The update window now shows a few short highlights in your language with a link to the full release notes, instead of the full English release text.

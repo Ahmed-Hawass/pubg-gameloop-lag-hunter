@@ -1,0 +1,15 @@
+{
+  "version": "2.0.2",
+  "en": [
+    "Update notes now appear in your language, with a link to the full details.",
+    "The window always opens fully visible, never behind the taskbar or off the screen.",
+    "Double-clicking the title bar now always maximizes or restores the window.",
+    "Text in dialogs, reports, and release notes can now be selected and copied."
+  ],
+  "ar": [
+    "ملاحظات التحديث تظهر الآن بلغتك، مع رابط إلى التفاصيل الكاملة.",
+    "تفتح النافذة الآن كاملة على الشاشة، بعيداً عن شريط المهام وحدود الشاشة.",
+    "النقر المزدوج على شريط العنوان يكبّر النافذة أو يعيدها الآن في كل مرة.",
+    "يمكنك الآن تحديد النصوص ونسخها في النوافذ والتقارير وملاحظات الإصدار."
+  ]
+}
