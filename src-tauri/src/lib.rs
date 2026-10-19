@@ -764,18 +764,28 @@ async fn check_update() -> Result<Option<engine::update::UpdateInfo>, String> {
 /// Was this version's modal already announced once? (once-per-version rule)
 #[tauri::command]
 fn update_already_announced(version: String) -> bool {
+    // the SAME normalization as announce_update: both sides must compare
+    // the same shape, or "v2.0.2" and "2.0.2" would never match
+    let wanted = match engine::update::clean_version(&version) {
+        Some(v) => v,
+        None => return false,
+    };
     engine::settings::load()
         .announced_update_version
         .as_deref()
-        .map(|v| v.eq_ignore_ascii_case(&version))
+        .map(|v| v.eq_ignore_ascii_case(&wanted))
         .unwrap_or(false)
 }
 
 /// Mark a version as announced (called when the modal is SHOWN).
 #[tauri::command]
 fn announce_update(version: String) -> Result<(), String> {
+    // the value is clamped HERE, not only on the next load: the settings
+    // writer sanitizes BEFORE the mutation, so an unbounded string would
+    // have grown the file for as long as the app ran
+    let clean = engine::update::clean_version(&version).ok_or("update version is not valid")?;
     engine::settings::update(|s| {
-        s.announced_update_version = Some(version);
+        s.announced_update_version = Some(clean);
     })
 }
 
@@ -783,9 +793,14 @@ fn announce_update(version: String) -> Result<(), String> {
 /// The channel carries Progress events; the final result arrives as the
 /// command's own return (Ok(path) / Err(reason)) — the UI updates its
 /// modal from both.
+///
+/// `version` is a REQUEST, not a source of truth: the engine resolves the
+/// release itself and takes the asset URLs and the expected file name from
+/// GitHub. The frontend's copy of those URLs is never used, so a buggy or
+/// compromised UI cannot point the download at its own file.
 #[tauri::command]
 async fn download_update(
-    info: engine::update::UpdateInfo,
+    version: String,
     dest: String,
     on_event: tauri::ipc::Channel<engine::update::DownloadEvent>,
 ) -> Result<String, String> {
@@ -794,9 +809,12 @@ async fn download_update(
     // register the global cancel handle so app-exit / user-cancel can kill
     // it — refused while another download is live (engine-side single-flight)
     engine::update::register_cancel(cancel.clone())?;
-    let info = std::sync::Arc::new(info);
     let res = tauri::async_runtime::spawn_blocking(move || {
-        engine::update::download_and_verify(&info, std::path::PathBuf::from(dest), &cancel, {
+        // the ENGINE resolves the release itself (inside its own
+        // single-flight guard, so the cancel slot is released on every
+        // exit path): the frontend says WHICH version, never WHERE the
+        // file comes from
+        engine::update::download_and_verify(&version, std::path::PathBuf::from(dest), &cancel, {
             let on_event = on_event.clone();
             move |ev| {
                 let _ = on_event.send(ev);
@@ -1062,9 +1080,12 @@ fn quit_app(app: tauri::AppHandle) -> Result<(), String> {
 /// failure on a user machine leaves zero traces (the window just stays
 /// hidden). Truncated: a render loop must not log-bomb. ERROR level so
 /// it always gets through the size cap.
+///
+/// The text is flattened first: a raw newline would let the frontend
+/// FORGE a log line (the writer appends one line per message).
 #[tauri::command]
 fn log_frontend_error(message: String) -> Result<(), String> {
-    let short: String = message.chars().take(500).collect();
+    let short: String = engine::logging::flatten(&message, 500);
     engine::logging::error(&format!("frontend: {short}"));
     Ok(())
 }
@@ -1075,7 +1096,7 @@ fn log_frontend_error(message: String) -> Result<(), String> {
 /// log-bomb just like a render loop would.
 #[tauri::command]
 fn log_frontend_info(message: String) -> Result<(), String> {
-    let short: String = message.chars().take(500).collect();
+    let short: String = engine::logging::flatten(&message, 500);
     engine::logging::info(&format!("frontend: {short}"));
     Ok(())
 }

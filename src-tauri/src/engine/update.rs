@@ -137,6 +137,85 @@ pub fn check_latest(local_version: &str) -> Option<UpdateInfo> {
     if !super::version::is_newer(&version, local_version) {
         return None;
     }
+    match build_info(&release, &version) {
+        Ok(info) => {
+            // the engine keeps what it resolved: the download path reuses
+            // it instead of asking GitHub a second time (a rate-limited
+            // shared IP must not fail a download the check just proved
+            // reachable)
+            *RESOLVED.lock().unwrap_or_else(|p| p.into_inner()) = Some(info.clone());
+            logging::info(&format!(
+                "update available: {} (asset {})",
+                info.version, info.asset_name
+            ));
+            Some(info)
+        }
+        Err(e) => {
+            logging::warn(&format!("update {version} refused: {e}"));
+            None
+        }
+    }
+}
+
+/// Clean a version string into the shape the updater and the settings
+/// file expect: digits and dots only, at most 32 characters, no "v"
+/// prefix. Returns None when nothing usable is left.
+///
+/// The clamp lives HERE (not only in the settings loader) so an unbounded
+/// string can never reach the settings file in the first place.
+pub fn clean_version(raw: &str) -> Option<String> {
+    let clean: String = raw
+        .trim()
+        .trim_start_matches('v')
+        .chars()
+        .filter(|c| c.is_ascii_digit() || *c == '.')
+        .take(32)
+        .collect();
+    if clean.is_empty() {
+        None
+    } else {
+        Some(clean)
+    }
+}
+
+/// The release the engine resolved last, from its OWN GitHub fetch. The
+/// download path reuses it, so the common flow costs ONE api call and not
+/// two: a rate-limited shared IP (GitHub answers 403/429 to many users
+/// behind the same NAT) must not fail a download the check just proved
+/// reachable. The cache is engine-side and engine-filled: the frontend's
+/// copy of the URLs is never used, whatever it says.
+static RESOLVED: Mutex<Option<UpdateInfo>> = Mutex::new(None);
+
+/// Resolve ONE release BY VERSION, straight from GitHub. The download path
+/// uses this instead of trusting the caller's copy of the URLs: the caller
+/// says WHICH version it wants, the engine says WHERE the file comes from.
+/// A buggy or compromised UI can therefore never point the download at its
+/// own asset with its own checksum file beside it.
+pub fn resolve_release(version: &str) -> Result<UpdateInfo, String> {
+    let _t = logging::timed("update: resolve release");
+    let clean = clean_version(version).ok_or("update version is not valid")?;
+    // the release this engine already resolved for that exact version
+    let cached = RESOLVED
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .clone()
+        .filter(|i| i.version == clean);
+    if let Some(info) = cached {
+        logging::info(&format!(
+            "update release resolved from the engine cache: {clean}"
+        ));
+        return Ok(info);
+    }
+    let url = format!(
+        "https://api.github.com/repos/Ahmed-Hawass/pubg-gameloop-lag-hunter/releases/tags/v{clean}"
+    );
+    let release: GithubRelease = http_get_json(&url)?;
+    build_info(&release, &clean)
+}
+
+/// Build the update info from a release the engine fetched itself. Every
+/// URL in the result comes from that release — never from the caller.
+fn build_info(release: &GithubRelease, version: &str) -> Result<UpdateInfo, String> {
     // the versioned exe asset + the SHA256SUMS asset must both exist
     let asset = release
         .assets
@@ -147,13 +226,11 @@ pub fn check_latest(local_version: &str) -> Option<UpdateInfo> {
         .iter()
         .find(|a| a.name.eq_ignore_ascii_case("SHA256SUMS.txt"));
     let (Some(asset), Some(sums)) = (asset, sums) else {
-        logging::warn(&format!(
-            "update {} found but assets incomplete (exe: {}, sums: {}) — refusing",
-            version,
+        return Err(format!(
+            "assets incomplete (exe: {}, sums: {})",
             asset.is_some(),
             sums.is_some()
         ));
-        return None;
     };
     // short notes are presentation data: any failure (missing asset,
     // network, malformed file, stale version) degrades to the link-only
@@ -163,23 +240,17 @@ pub fn check_latest(local_version: &str) -> Option<UpdateInfo> {
         .iter()
         .find(|a| a.name.eq_ignore_ascii_case("notes.json"));
     let (notes_en, notes_ar) = notes_asset
-        .and_then(|a| fetch_notes(&a.browser_download_url, &version))
+        .and_then(|a| fetch_notes(&a.browser_download_url, version))
         .unwrap_or_default();
-    let notes_url = notes_page_url(&version);
-    let info = UpdateInfo {
-        version,
+    Ok(UpdateInfo {
+        version: version.to_string(),
         notes_en,
         notes_ar,
-        notes_url,
+        notes_url: notes_page_url(version),
         asset_url: asset.browser_download_url.clone(),
         asset_name: asset.name.clone(),
         sums_url: sums.browser_download_url.clone(),
-    };
-    logging::info(&format!(
-        "update available: {} (asset {})",
-        info.version, info.asset_name
-    ));
-    Some(info)
+    })
 }
 
 /// Bound one language's bullet list: trim, drop empties, cap the count,
@@ -250,6 +321,12 @@ static DOWNLOAD_RUNNING: AtomicBool = AtomicBool::new(false);
 static ACTIVE_DOWNLOAD: Mutex<Option<std::path::PathBuf>> = Mutex::new(None);
 /// The current download's cancel handle (set at download start, taken on end).
 static ACTIVE_CANCEL: Mutex<Option<std::sync::Arc<AtomicBool>>> = Mutex::new(None);
+/// The path of the last file this module VERIFIED and wrote, exactly as
+/// the caller received it. It is the ONLY path the "open its folder"
+/// action may open: the command used to accept any existing absolute path
+/// over IPC. The STRING is stored (not the PathBuf) so the comparison is
+/// byte-exact with what the UI holds.
+static LAST_VERIFIED: Mutex<Option<String>> = Mutex::new(None);
 
 /// Wire the cancel handle of a starting download (called by the command).
 /// Refused while a download is already running: registering over a live
@@ -379,8 +456,18 @@ fn validate_dest(dest: &std::path::Path, expected_name: &str) -> Result<(), Stri
 /// (the cap keeps it bounded), hashed, compared to SHA256SUMS, and only
 /// then written to disk — a partial/failed file never touches the path
 /// the user chose.
+///
+/// `version` is a REQUEST: the release is resolved HERE, from GitHub, so
+/// the asset URLs and the expected file name come from the engine's own
+/// answer and never from the caller.
+///
+/// The resolve lives INSIDE this function on purpose: the cancel slot the
+/// command registered before the call must be released on EVERY exit path,
+/// and a failed resolve (offline, a rate limit) is one of them. Resolving
+/// outside left the slot occupied, and every later attempt was refused
+/// with "already registered" until the app was restarted.
 pub fn download_and_verify(
-    info: &UpdateInfo,
+    version: &str,
     dest: std::path::PathBuf,
     cancel: &AtomicBool,
     on_event: impl Fn(DownloadEvent) + Send + 'static,
@@ -388,17 +475,25 @@ pub fn download_and_verify(
     if DOWNLOAD_RUNNING.swap(true, Ordering::SeqCst) {
         return Err("a download is already running".into());
     }
-    // validate the destination while DOWNLOAD_RUNNING is held: a bad path
-    // can never even register a cleanup entry (validate_dest never writes).
-    // Clearing ACTIVE_CANCEL here is required: register_cancel ran before
-    // this call (lib.rs), so an early return without clearing would leave
-    // the slot occupied and every retry would fail with "already registered".
-    if let Err(e) = validate_dest(&dest, &info.asset_name) {
-        DOWNLOAD_RUNNING.store(false, Ordering::SeqCst);
-        *ACTIVE_CANCEL.lock().unwrap_or_else(|p| p.into_inner()) = None;
-        return Err(e);
-    }
-    let result = download_inner(info, dest, cancel, &on_event);
+    let result = match resolve_release(version) {
+        Ok(info) => {
+            // validate the destination while DOWNLOAD_RUNNING is held: a bad
+            // path can never even register a cleanup entry (validate_dest
+            // never writes).
+            match validate_dest(&dest, &info.asset_name) {
+                Ok(()) => download_inner(&info, dest, cancel, &on_event),
+                Err(e) => Err(e),
+            }
+        }
+        Err(e) => {
+            logging::info(&format!("update release not resolved: {e}"));
+            Err(e)
+        }
+    };
+    // the cancel slot is cleared on every exit path: register_cancel ran
+    // before this call (lib.rs), so an early return without clearing would
+    // leave the slot occupied and every retry would fail with "already
+    // registered".
     DOWNLOAD_RUNNING.store(false, Ordering::SeqCst);
     *ACTIVE_DOWNLOAD.lock().unwrap_or_else(|p| p.into_inner()) = None;
     *ACTIVE_CANCEL.lock().unwrap_or_else(|p| p.into_inner()) = None;
@@ -499,6 +594,7 @@ fn download_inner(
     })?;
 
     let path_str = dest.to_string_lossy().to_string();
+    *LAST_VERIFIED.lock().unwrap_or_else(|p| p.into_inner()) = Some(path_str.clone());
     logging::info(&format!(
         "update {} downloaded + verified → {}",
         info.version, path_str
@@ -537,17 +633,15 @@ fn part_sibling(dest: &std::path::Path) -> std::path::PathBuf {
 /// Open Explorer with the downloaded file selected — the standard
 /// "/select," pattern every browser and installer uses. Read-only.
 ///
-/// Honest scope: this accepts ANY existing absolute file (it only checks
-/// presence, absoluteness, and quote-safety), not just a file this module
-/// verified and wrote. Callers pass the freshly verified download, but the
-/// function itself performs no provenance check — it is a read-only
-/// reveal, never a trust assertion.
-/// Callers pass the file just verified and written (validate_dest ran
-/// before the download); the existence check below establishes presence
-/// only, not provenance. Quote-unsafe characters are refused outright:
-/// explorer re-parses its raw command line, so an embedded quote could
-/// break out of the /select argument. `raw_arg` with a validated,
-/// quote-free path keeps the argument boundary intact.
+/// Scope: ONLY the file this module verified and wrote. The path is
+/// compared against the last verified download, so the command cannot be
+/// used to reveal an arbitrary file on the machine (it used to accept any
+/// existing absolute path over IPC).
+///
+/// Quote-unsafe characters are refused outright: explorer re-parses its raw
+/// command line, so an embedded quote could break out of the /select
+/// argument. `raw_arg` with a validated, quote-free path keeps the
+/// argument boundary intact.
 pub fn open_folder_selected(path: &str) -> Result<(), String> {
     let p = std::path::Path::new(path);
     if !p.is_file() {
@@ -555,6 +649,16 @@ pub fn open_folder_selected(path: &str) -> Result<(), String> {
     }
     if !p.is_absolute() {
         return Err("path must be absolute".into());
+    }
+    let verified = LAST_VERIFIED
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .clone();
+    match verified {
+        Some(v) if v == path => {}
+        _ => {
+            return Err("path is not the verified download".into());
+        }
     }
     // one quote check: the old second condition (any backslash segment
     // containing a quote) was subsumed by the first and never added anything
@@ -922,6 +1026,139 @@ mod tests {
         );
     }
 
+    /// The version that reaches the settings file must be a short, sane
+    /// string: an unbounded one grew the file for as long as the app ran.
+    #[test]
+    fn version_is_cleaned_before_it_is_stored() {
+        assert_eq!(clean_version("2.0.2").as_deref(), Some("2.0.2"));
+        assert_eq!(clean_version("v2.0.2").as_deref(), Some("2.0.2"));
+        assert_eq!(clean_version("  2.0.2  ").as_deref(), Some("2.0.2"));
+        // anything that is not a version shape is dropped
+        assert_eq!(clean_version(""), None);
+        assert_eq!(clean_version("   "), None);
+        assert_eq!(clean_version("v"), None);
+        // the length is capped
+        let long = "9".repeat(200);
+        assert_eq!(clean_version(&long).unwrap().len(), 32);
+        // stray characters are filtered, not carried into the file
+        let cleaned = clean_version("2.0.2/../../evil").unwrap();
+        assert!(
+            cleaned.chars().all(|c| c.is_ascii_digit() || c == '.'),
+            "no letters or separators may survive: {cleaned}"
+        );
+        assert!(cleaned.starts_with("2.0.2"));
+    }
+
+    /// The engine keeps what it resolved, and the download path reuses it:
+    /// one api call for the common flow, not two (a rate-limited shared IP
+    /// must not fail a download the check just proved reachable).
+    #[test]
+    fn the_resolved_release_is_reused_without_a_second_call() {
+        let info = UpdateInfo {
+            version: "9.9.9".into(),
+            notes_en: Vec::new(),
+            notes_ar: Vec::new(),
+            notes_url: notes_page_url("9.9.9"),
+            asset_url: "https://github.com/owner/repo/app.exe".into(),
+            asset_name: "app-9.9.9.exe".into(),
+            sums_url: "https://github.com/owner/repo/SHA256SUMS.txt".into(),
+        };
+        *RESOLVED.lock().unwrap_or_else(|p| p.into_inner()) = Some(info.clone());
+        // the cached release answers without touching the network (an
+        // offline machine still gets the right URLs)
+        let resolved = resolve_release("9.9.9").expect("the cached release answers");
+        assert_eq!(resolved.asset_url, info.asset_url);
+        assert_eq!(resolved.asset_name, info.asset_name);
+        assert_eq!(resolved.sums_url, info.sums_url);
+        // another version is NOT answered from the cache
+        assert!(
+            resolve_release("1.2.3").is_err(),
+            "a different version must be resolved from GitHub, not the cache"
+        );
+        *RESOLVED.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    }
+
+    /// The engine builds the release's own URLs: a caller cannot hand it a
+    /// file of its own. The release it builds from is the one GitHub
+    /// returned, and the asset must be the versioned exe plus the sums.
+    #[test]
+    fn build_info_takes_every_url_from_the_release() {
+        let release = GithubRelease {
+            tag_name: "v2.0.2".into(),
+            assets: vec![
+                GithubAsset {
+                    name: "pubg-gameloop-lag-hunter-2.0.2.exe".into(),
+                    browser_download_url: "https://github.com/owner/repo/releases/download/v2.0.2/pubg-gameloop-lag-hunter-2.0.2.exe".into(),
+                },
+                GithubAsset {
+                    name: "SHA256SUMS.txt".into(),
+                    browser_download_url: "https://github.com/owner/repo/releases/download/v2.0.2/SHA256SUMS.txt".into(),
+                },
+            ],
+        };
+        let info = build_info(&release, "2.0.2").expect("a complete release");
+        assert_eq!(info.version, "2.0.2");
+        assert_eq!(info.asset_name, "pubg-gameloop-lag-hunter-2.0.2.exe");
+        assert!(info
+            .asset_url
+            .contains("pubg-gameloop-lag-hunter-2.0.2.exe"));
+        assert!(info.sums_url.ends_with("SHA256SUMS.txt"));
+        assert!(info.notes_url.contains("v-2-0-2"));
+    }
+
+    /// A release without the exe or without the sums is refused: a
+    /// half-present release is not an update.
+    #[test]
+    fn build_info_refuses_an_incomplete_release() {
+        let no_sums = GithubRelease {
+            tag_name: "v2.0.2".into(),
+            assets: vec![GithubAsset {
+                name: "pubg-gameloop-lag-hunter-2.0.2.exe".into(),
+                browser_download_url: "https://github.com/owner/repo/x.exe".into(),
+            }],
+        };
+        assert!(build_info(&no_sums, "2.0.2").is_err());
+        let no_exe = GithubRelease {
+            tag_name: "v2.0.2".into(),
+            assets: vec![GithubAsset {
+                name: "SHA256SUMS.txt".into(),
+                browser_download_url: "https://github.com/owner/repo/SHA256SUMS.txt".into(),
+            }],
+        };
+        assert!(build_info(&no_exe, "2.0.2").is_err());
+    }
+
+    /// "Open its folder" opens ONLY the file this module verified. It used
+    /// to accept any existing absolute path over IPC.
+    #[test]
+    fn open_folder_refuses_a_path_we_never_verified() {
+        let dir = std::env::temp_dir().join(format!(
+            "laghunter-open-folder-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let verified = dir.join("verified.exe");
+        let other = dir.join("other.exe");
+        std::fs::write(&verified, b"x").expect("write");
+        std::fs::write(&other, b"x").expect("write");
+        *LAST_VERIFIED.lock().unwrap_or_else(|p| p.into_inner()) =
+            Some(verified.to_string_lossy().to_string());
+        // the file we verified opens
+        assert!(open_folder_selected(&verified.to_string_lossy()).is_ok());
+        // any other existing file is refused
+        let err = open_folder_selected(&other.to_string_lossy()).unwrap_err();
+        assert!(
+            err.contains("not the verified download"),
+            "an unverified path must be refused (got {err})"
+        );
+        *LAST_VERIFIED.lock().unwrap_or_else(|p| p.into_inner()) = None;
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn dest_validation_refuses_bad_paths() {
         let asset = "laghunter-dest-test.exe";
@@ -983,24 +1220,18 @@ mod tests {
         DOWNLOAD_RUNNING.store(false, Ordering::SeqCst);
         let cancel = Arc::new(AtomicBool::new(false));
         register_cancel(cancel.clone()).unwrap();
-        let info = UpdateInfo {
-            version: "0.0.0-test".into(),
-            notes_en: Vec::new(),
-            notes_ar: Vec::new(),
-            notes_url: notes_page_url("0.0.0-test"),
-            asset_url: "https://github.com/x/y.exe".into(),
-            asset_name: "laghunter-retry-test.exe".into(),
-            sums_url: "https://github.com/x/sums.txt".into(),
-        };
-        // relative path always fails validation without touching the net
+        // the version cannot resolve (it is not a version shape at all, so
+        // the refusal happens locally, with no network call): the call
+        // fails BEFORE any path is touched, and the cancel slot must still
+        // be released — otherwise every later attempt is refused
         let bad = std::path::PathBuf::from("relative.exe");
-        assert!(download_and_verify(&info, bad, &cancel, |_| {}).is_err());
+        assert!(download_and_verify("not-a-version", bad, &cancel, |_| {}).is_err());
         assert!(
             ACTIVE_CANCEL
                 .lock()
                 .unwrap_or_else(|p| p.into_inner())
                 .is_none(),
-            "cancel slot must be cleared on validate failure"
+            "cancel slot must be cleared on a failed resolve"
         );
         assert!(!DOWNLOAD_RUNNING.load(Ordering::SeqCst));
         // retry must be able to register again

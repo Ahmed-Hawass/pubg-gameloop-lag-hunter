@@ -85,6 +85,18 @@ fn write_line(level: &str, msg: &str) {
     write_line_to(&logs_dir(), level, msg);
 }
 
+/// One log line, one message: every control character that could end or
+/// reshape the line becomes a space, then the text is cut to `max` chars.
+/// The frontend owns this text, so a raw newline would let it FORGE a log
+/// line (the writer appends one line per message).
+pub fn flatten(text: &str, max: usize) -> String {
+    let flat: String = text
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
+    flat.chars().take(max).collect()
+}
+
 pub fn info(msg: &str) {
     write_line("INFO", msg);
 }
@@ -297,6 +309,22 @@ mod tests {
         assert!(body.contains("[ERROR] test error"));
         assert!(body.contains("[WARN] test warn"));
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// One message, one line: the frontend owns this text, and a raw
+    /// newline would let it FORGE a log line.
+    #[test]
+    fn frontend_text_cannot_forge_a_log_line() {
+        let flat = flatten("first\n[ERROR] forged line\r\nsecond", 500);
+        assert!(
+            !flat.contains('\n') && !flat.contains('\r'),
+            "control characters must not survive: {flat:?}"
+        );
+        assert!(flat.contains("first"));
+        assert!(flat.contains("forged line"));
+        // the length is capped
+        let long = "x".repeat(900);
+        assert_eq!(flatten(&long, 500).chars().count(), 500);
     }
 
     #[test]

@@ -40,10 +40,18 @@ export function UpdateModal(props: {
   // opened a second dialog and raced two downloads)
   const [phase, setPhase] = useState<Phase>({ kind: "offer" });
   const [offerBusy, setOfferBusy] = useState(false);
+  // a failed SIDE action (open the notes link, open the download folder)
+  // explains itself ON this modal: a second dialog would be two modal
+  // surfaces at once, and a silent no-op looks like a broken button.
+  const [actionError, setActionError] = useState<string | null>(null);
   // closes exactly once: Escape-during-download closes the modal, then the
   // cancelled download's promise rejects LATER and would call onClose again
   // (on an unmounted component) — the ref keeps the second call a no-op
   const closedRef = useRef(false);
+  // "a download is in flight" lives in a REF, not in the phase: the unmount
+  // cleanup must cancel only a download that is still running, and a phase
+  // change (downloading → done) must never cancel a finished download.
+  const downloadingRef = useRef(false);
   const boxRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const bodyId = useId();
@@ -52,6 +60,24 @@ export function UpdateModal(props: {
     closedRef.current = true;
     onClose();
   };
+
+  // focus restore: the modal autofocuses a button, and the element that
+  // opened it must get the focus back when the modal goes away (the
+  // WAI-ARIA dialog pattern) — otherwise the next Tab restarts from the
+  // top of the document.
+  //
+  // The opener is captured in a lazy state initializer, NOT in an effect:
+  // an effect runs after the commit, and by then the modal's own autoFocus
+  // has already taken the focus (the effect would capture the modal's own
+  // button and restore focus to a node that is gone).
+  const [opener] = useState<HTMLElement | null>(
+    () => (typeof document === "undefined" ? null : (document.activeElement as HTMLElement | null)),
+  );
+  useEffect(() => {
+    return () => {
+      if (opener && opener.isConnected) opener.focus();
+    };
+  }, [opener]);
 
   // Escape closes the offer; while downloading it CANCELS (closing the modal
   // mid-download must never leave an orphaned stream — cancel kills it).
@@ -62,7 +88,8 @@ export function UpdateModal(props: {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         if (phase.kind === "downloading") {
-          void api.cancelUpdateDownload();
+          downloadingRef.current = false;
+          void api.cancelUpdateDownload().catch(() => {});
         }
         close();
       }
@@ -111,19 +138,22 @@ export function UpdateModal(props: {
   // stream runs (gameloop_closed push, a one-shot advice). The component
   // dies, but the engine-side download keeps streaming — cancel it here,
   // exactly like Escape does. App-level re-mounts start a fresh offer.
+  //
+  // The flag is the REF, not the phase: this cleanup also runs on a phase
+  // change, and the old phase-based check cancelled a download that had
+  // just finished successfully.
   useEffect(() => {
     return () => {
       if (closedRef.current) return; // an explicit close already cancelled
       // a download in flight when the modal vanished without a click:
       // the engine's cancel is idempotent, so calling it whenever a
-      // downloading phase was live is safe (no download = no-op)
-      if (phase.kind === "downloading") {
-        void api.cancelUpdateDownload();
+      // download was still running is safe (no download = no-op)
+      if (downloadingRef.current) {
+        downloadingRef.current = false;
+        void api.cancelUpdateDownload().catch(() => {});
       }
     };
-    // phase is the only reactive input and it IS the dep — no directive
-    // needed; the cleanup intentionally reads the phase from THIS closure
-  }, [phase.kind]);
+  }, []);
 
   const startDownload = async () => {
     // one flight at a time: the OS save dialog does NOT block the WebView,
@@ -147,7 +177,8 @@ export function UpdateModal(props: {
       if (closedRef.current) return;
 
       setPhase({ kind: "downloading", pct: 0, mb: formatSweepBytes(0) });
-      const finalPath = await api.downloadUpdate(info, dest, (ev) => {
+      downloadingRef.current = true;
+      const finalPath = await api.downloadUpdate(info.version, dest, (ev) => {
         if (ev.event === "progress") {
           const pct = ev.total > 0 ? Math.round((ev.downloaded / ev.total) * 100) : 0;
           setPhase({
@@ -158,8 +189,10 @@ export function UpdateModal(props: {
         }
         // done/failed also arrive via the command's own return — handled below
       });
+      downloadingRef.current = false;
       setPhase({ kind: "done", path: finalPath });
     } catch (e) {
+      downloadingRef.current = false;
       const reason = typeof e === "string" ? e : String(e);
       // exact match, not a substring: the backend rejects a cancelled
       // download with precisely "cancelled" — a real failure message that
@@ -181,9 +214,31 @@ export function UpdateModal(props: {
   };
 
   const cancel = () => {
-    void api.cancelUpdateDownload();
+    downloadingRef.current = false;
+    void api.cancelUpdateDownload().catch(() => {});
     close();
   };
+
+  /** a side action failed: say so on this modal, in the app's language */
+  const sideActionFailed = (e: unknown) => {
+    const raw = typeof e === "string" ? e : String(e);
+    setActionError(
+      errorDialog(raw, t.errors, {
+        somethingWrong: t.dialog.somethingWrong,
+        scanNeedsGame: t.dialog.scanNeedsGame,
+        scanNeedsGameBody: t.dialog.scanNeedsGameBody,
+        unknownErrorBody: t.dialog.unknownErrorBody,
+      }).body,
+    );
+  };
+
+  /** the error line, rendered inside whichever phase is showing */
+  const actionErrorLine = actionError ? (
+    <div className="um-fail">
+      <TriangleAlert size={16} />
+      <span>{actionError}</span>
+    </div>
+  ) : null;
 
   // ---- render per phase -----------------------------------------------
 
@@ -221,11 +276,15 @@ export function UpdateModal(props: {
         )}
         <button
           className="focus-ring-inset um-notes-link"
-          onClick={() => void api.openUrl(info.notes_url)}
+          onClick={() => {
+            setActionError(null);
+            void api.openUrl(info.notes_url).catch(sideActionFailed);
+          }}
         >
           {t.updateNotesLink}
           <ArrowUpRight size={12} />
         </button>
+        {actionErrorLine}
       </div>
     );
     actions = (
@@ -271,6 +330,7 @@ export function UpdateModal(props: {
           </span>
         </div>
         <p className="um-hint">{t.updateDoneHint}</p>
+        {actionErrorLine}
       </div>
     );
     actions = (
@@ -280,7 +340,10 @@ export function UpdateModal(props: {
         </button>
         <button
           className="focus-ring btn btn-md btn-primary"
-          onClick={() => void api.openDownloadFolder(phase.path)}
+          onClick={() => {
+            setActionError(null);
+            void api.openDownloadFolder(phase.path).catch(sideActionFailed);
+          }}
         >
           <FolderOpen size={14} />
           {t.updateOpenFolder}

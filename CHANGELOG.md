@@ -6,9 +6,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- The update download now asks the engine for the release it is fetching, so the file it verifies and saves is the one the project published, and the folder it can open is only the file it just wrote.
+
 ### Fixed
 - A background service is never offered as something to close.
 - The temporary and thumbnail cleanup always works on the folders Windows itself reports, so a redirected environment variable cannot point it somewhere else.
+- Closing the update window no longer cancels a download that had already finished.
 
 ## [2.0.2] - 2026-10-19
 

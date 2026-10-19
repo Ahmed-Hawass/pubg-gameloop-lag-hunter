@@ -14,9 +14,11 @@ import type { UpdateInfo } from "../bridge";
 
 const apiMock = vi.hoisted(() => ({
   downloadUpdate: vi.fn(),
-  cancelUpdateDownload: vi.fn(),
-  openDownloadFolder: vi.fn(),
-  openUrl: vi.fn(),
+  // the bridge contract is a promise for every command: the mock must
+  // honor it, or a `.catch()` on the result throws
+  cancelUpdateDownload: vi.fn(() => Promise.resolve()),
+  openDownloadFolder: vi.fn(() => Promise.resolve()),
+  openUrl: vi.fn(() => Promise.resolve()),
 }));
 
 // the UI language is switchable per test: the modal shows the update
@@ -171,5 +173,45 @@ describe("UpdateModal", () => {
     await user.click(screen.getByText(en.updateDownload));
     expect(await screen.findByText(en.updateFailedTitle)).toBeTruthy();
     expect(screen.getByText(en.updateRetry)).toBeTruthy();
+  });
+
+  it("a finished download is never cancelled by the phase change", async () => {
+    // the old cleanup watched the PHASE, so the downloading → done
+    // transition cancelled the download it had just finished
+    const user = userEvent.setup();
+    vi.mocked(saveDialog).mockResolvedValue("C:/dl/app-9.9.9.exe");
+    apiMock.downloadUpdate.mockResolvedValue("C:/dl/app-9.9.9.exe");
+    const { unmount } = open();
+    await user.click(screen.getByText(en.updateDownload));
+    await screen.findByText(en.updateDoneTitle);
+    expect(apiMock.cancelUpdateDownload).not.toHaveBeenCalled();
+    // and unmounting the finished modal must not cancel anything either
+    unmount();
+    expect(apiMock.cancelUpdateDownload).not.toHaveBeenCalled();
+  });
+
+  it("a side action that fails says so on the modal, in the app's language", async () => {
+    const user = userEvent.setup();
+    apiMock.openUrl.mockRejectedValue("no browser available");
+    open();
+    await user.click(screen.getByText(en.updateNotesLink));
+    // the failure is explained: no silent no-op
+    expect(
+      await screen.findByText(en.dialog.unknownErrorBody("no browser available")),
+    ).toBeTruthy();
+  });
+
+  it("the engine resolves the release: the UI only sends the version", async () => {
+    const user = userEvent.setup();
+    vi.mocked(saveDialog).mockResolvedValue("C:/dl/app-9.9.9.exe");
+    apiMock.downloadUpdate.mockResolvedValue("C:/dl/app-9.9.9.exe");
+    open();
+    await user.click(screen.getByText(en.updateDownload));
+    await waitFor(() => {
+      expect(apiMock.downloadUpdate).toHaveBeenCalledOnce();
+    });
+    // the first argument is the VERSION, never a copy of the asset URLs:
+    // the engine resolves the release itself
+    expect(apiMock.downloadUpdate.mock.calls[0][0]).toBe(info.version);
   });
 });

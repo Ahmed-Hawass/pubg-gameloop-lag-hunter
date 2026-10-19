@@ -370,9 +370,13 @@ export const api = {
   updateAlreadyAnnounced: (version: string) =>
     invoke<boolean>("update_already_announced", { version }),
   announceUpdate: (version: string) => invoke<void>("announce_update", { version }),
-  downloadUpdate: (info: UpdateInfo, dest: string, onEvent: (ev: DownloadEvent) => void) =>
+  /** The engine resolves the release itself: the UI says WHICH version it
+      wants, never WHERE the file comes from. The asset URLs and the
+      expected file name come from GitHub on the engine side, so a
+      compromised UI cannot point the download at its own file. */
+  downloadUpdate: (version: string, dest: string, onEvent: (ev: DownloadEvent) => void) =>
     invoke<string>("download_update", {
-      info,
+      version,
       dest,
       onEvent: new Channel<DownloadEvent>(onEvent),
     }),
@@ -772,6 +776,11 @@ export interface UpdateInfo {
   notes_ar: string[];
   /** the project site's changelog entry for this version (full notes) */
   notes_url: string;
+  /** the release's asset URLs. The UI must NOT use them for the
+      download: the engine resolves the release itself and fetches from
+      its own answer, so a tampered UI cannot point the download at its
+      own file. Only `asset_name` is used here (the save dialog's
+      pre-filled file name). */
   asset_url: string;
   asset_name: string;
   sums_url: string;
