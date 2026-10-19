@@ -690,10 +690,9 @@ fn remove_thumb_caches(dir: &Path) {
 // ---- locations (whitelisted, never user-supplied) -------------------------
 
 fn user_temp_dir() -> Option<PathBuf> {
-    std::env::var_os("TEMP")
-        .or_else(|| std::env::var_os("TMP"))
-        .map(PathBuf::from)
-        .filter(|p| p.is_dir())
+    // from the kernel, never the inherited environment: a %TEMP% pointed
+    // at another folder would make "clear temp" empty that folder
+    super::system::user_temp_dir()
 }
 
 #[cfg(windows)]
@@ -727,8 +726,9 @@ const MINIDUMP_KEEP_MS: i64 = 30 * 86_400 * 1000;
 
 #[cfg(windows)]
 fn explorer_dir() -> Option<PathBuf> {
-    std::env::var_os("LOCALAPPDATA")
-        .map(PathBuf::from)
+    // from the kernel, never the inherited environment (an elevated
+    // cleaner must resolve against the OS itself)
+    super::system::local_app_data_dir()
         .map(|p| p.join(r"Microsoft\Windows\Explorer"))
         .filter(|p| p.is_dir())
 }

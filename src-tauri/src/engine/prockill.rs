@@ -76,6 +76,38 @@ pub fn end_process(pid: u32) -> Result<(), String> {
     }
 }
 
+/// The kill policy as a pure function of what the handle says: the name,
+/// the image path, and the session the process lives in.
+///
+/// The session id is part of the decision: session 0 hosts services, and
+/// a service running from a program folder is still a service. It used to
+/// be passed as "unknown", so a service classified as an ordinary app and
+/// was terminated.
+fn refuse_by_identity(session: Option<u32>, name: Option<&str>, path: Option<&str>) -> bool {
+    let kind_ok = path
+        .map(|p| {
+            // an UNKNOWN session reads as session 0 HERE: the kill path
+            // fails safe toward "system" (the display path has the
+            // opposite rule, and must not be changed by this one)
+            super::system::classify_process(
+                Some(session.unwrap_or(0)),
+                Some(p),
+                &super::system::windows_dir().to_string_lossy(),
+            )
+        })
+        .unwrap_or("system")
+        == "app";
+    let stem = name
+        .map(|n| n.trim_end_matches(".exe").to_string())
+        .unwrap_or_default();
+    name.is_some_and(|n| {
+        n.trim().is_empty()
+            || super::sampler::is_gameloop_process(n)
+            || super::sampler::is_self_process(n)
+    }) || stem.eq_ignore_ascii_case("msedgewebview2")
+        || !kind_ok
+}
+
 #[cfg(windows)]
 fn end_process_windows(pid: u32) -> Result<(), String> {
     // Open first, ask questions after: the handle pins the process
@@ -96,28 +128,8 @@ fn end_process_windows(pid: u32) -> Result<(), String> {
         // non-app kinds, and the shared runtime refuse here no matter
         // what the UI passed (the UI gate is convenience, this is policy).
         let (name, path) = handle_name_and_path(handle);
-        let kind_ok = path
-            .as_deref()
-            .map(|p| {
-                super::system::classify_process(
-                    None,
-                    Some(p),
-                    &super::system::windows_dir().to_string_lossy(),
-                )
-            })
-            .unwrap_or("system")
-            == "app";
-        let stem = name
-            .as_deref()
-            .map(|n| n.trim_end_matches(".exe").to_string())
-            .unwrap_or_default();
-        let refused = name.as_deref().is_some_and(|n| {
-            n.trim().is_empty()
-                || super::sampler::is_gameloop_process(n)
-                || super::sampler::is_self_process(n)
-        }) || stem.eq_ignore_ascii_case("msedgewebview2")
-            || !kind_ok;
-        if refused {
+        let session = super::system::process_session_id(pid);
+        if refuse_by_identity(session, name.as_deref(), path.as_deref()) {
             super::logging::warn(&format!(
                 "end process refused (protected): {} pid={pid}",
                 name.as_deref().unwrap_or("?")
@@ -303,6 +315,49 @@ mod tests {
     #[test]
     fn zero_pid_refuses_without_touching_the_os() {
         assert_eq!(end_process(0).unwrap_err(), PROCESS_REFUSED);
+    }
+
+    /// A process in session 0 is a SERVICE, whatever folder it runs from.
+    /// It used to classify as an ordinary app (the session was passed as
+    /// "unknown") and was terminated.
+    #[test]
+    fn a_service_is_never_a_close_suggestion() {
+        let app_path = r"C:\Program Files\Some Vendor\service.exe";
+        // the same path in the user's own session is an ordinary app
+        assert!(
+            !refuse_by_identity(Some(1), Some("service.exe"), Some(app_path)),
+            "a program in the user's session is an ordinary app"
+        );
+        // the same path in session 0 is a service: never killed
+        assert!(
+            refuse_by_identity(Some(0), Some("service.exe"), Some(app_path)),
+            "a session-0 process must be refused whatever its folder"
+        );
+        // an unknown session stays conservative
+        assert!(
+            refuse_by_identity(None, Some("service.exe"), Some(app_path)),
+            "an unknown session reads as system, never as a target"
+        );
+    }
+
+    /// GameLoop and our own binary stay protected whatever the session.
+    #[test]
+    fn protected_names_stay_protected() {
+        assert!(refuse_by_identity(
+            Some(1),
+            Some("aow_exe.exe"),
+            Some(r"C:\Program Files\GameLoop\aow_exe.exe")
+        ));
+        assert!(refuse_by_identity(
+            Some(1),
+            Some("pubg-gameloop-lag-hunter.exe"),
+            Some(r"C:\Tools\pubg-gameloop-lag-hunter.exe")
+        ));
+        assert!(refuse_by_identity(
+            Some(1),
+            Some("msedgewebview2.exe"),
+            Some(r"C:\Program Files\Microsoft\Edge\msedgewebview2.exe")
+        ));
     }
 
     #[cfg(windows)]

@@ -1204,6 +1204,131 @@ fn query_one(e: super::prockill::ProcEntry) -> Option<RawProc> {
     }
 }
 
+/// The image path behind a PID, read through a limited-information handle.
+/// None when the PID is gone or the process refuses the query (protected).
+///
+/// A PID is a NUMBER, not an identity: Windows recycles them. This is how
+/// the sampler confirms that a number still belongs to the executable it
+/// spawned before acting on it.
+#[cfg(windows)]
+pub fn process_image_path(pid: u32) -> Option<String> {
+    unsafe {
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if handle.is_null() {
+            return None;
+        }
+        let mut buf = vec![0u16; 1024];
+        let mut len = 1024u32;
+        let path = if QueryFullProcessImageNameW(handle, 0, buf.as_mut_ptr(), &mut len) != 0 {
+            String::from_utf16(&buf[..len as usize]).ok()
+        } else {
+            None
+        };
+        CloseHandle(handle);
+        path
+    }
+}
+
+#[cfg(not(windows))]
+pub fn process_image_path(_pid: u32) -> Option<String> {
+    None
+}
+
+/// The session a PID belongs to: 0 = services (no interactive desktop),
+/// 1 = the user's own session. None when the call fails.
+///
+/// The kill path needs this: a service running from a program folder is
+/// still a service, and "classify by path" alone called it an ordinary app.
+pub fn process_session_id(pid: u32) -> Option<u32> {
+    #[cfg(windows)]
+    unsafe {
+        let mut session = 0u32;
+        if ProcessIdToSessionId(pid, &mut session) != 0 {
+            Some(session)
+        } else {
+            None
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = pid;
+        None
+    }
+}
+
+/// GUID (Win32): the fixed layout the shell API expects.
+#[cfg(windows)]
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct Guid {
+    data1: u32,
+    data2: u16,
+    data3: u16,
+    data4: [u8; 8],
+}
+
+/// FOLDERID_LocalAppData: the per-user application data folder.
+#[cfg(windows)]
+const FOLDERID_LOCALAPPDATA: Guid = Guid {
+    data1: 0xF1B32785,
+    data2: 0x6FBA,
+    data3: 0x4FCF,
+    data4: [0x9D, 0x55, 0x7B, 0x8E, 0x7F, 0x15, 0x70, 0x91],
+};
+
+/// The current user's temp directory, straight from the kernel
+/// (GetTempPathW). NEVER from %TEMP%: the environment is inherited and
+/// can be pointed anywhere, and "clear temp" would then empty whatever
+/// folder the variable names.
+#[cfg(windows)]
+pub fn user_temp_dir() -> Option<std::path::PathBuf> {
+    unsafe {
+        let mut buf = vec![0u16; 260];
+        let len = GetTempPathW(buf.len() as u32, buf.as_mut_ptr());
+        if len == 0 || len as usize >= buf.len() {
+            return None;
+        }
+        let s = String::from_utf16(&buf[..len as usize]).ok()?;
+        let p = std::path::PathBuf::from(s);
+        p.is_dir().then_some(p)
+    }
+}
+
+#[cfg(not(windows))]
+pub fn user_temp_dir() -> Option<std::path::PathBuf> {
+    None
+}
+
+/// The current user's LocalAppData folder, straight from the kernel
+/// (SHGetKnownFolderPath). NEVER from %LOCALAPPDATA%: the environment is
+/// inherited and can be pointed anywhere, and the cleanup would then empty
+/// a folder it never meant to touch.
+#[cfg(windows)]
+pub fn local_app_data_dir() -> Option<std::path::PathBuf> {
+    unsafe {
+        let mut raw: *mut u16 = std::ptr::null_mut();
+        if SHGetKnownFolderPath(&FOLDERID_LOCALAPPDATA, 0, std::ptr::null_mut(), &mut raw) != 0
+            || raw.is_null()
+        {
+            return None;
+        }
+        let mut len = 0usize;
+        while *raw.add(len) != 0 {
+            len += 1;
+        }
+        let slice = std::slice::from_raw_parts(raw, len);
+        let text = String::from_utf16(slice).ok();
+        CoTaskMemFree(raw.cast());
+        let p = std::path::PathBuf::from(text?);
+        p.is_dir().then_some(p)
+    }
+}
+
+#[cfg(not(windows))]
+pub fn local_app_data_dir() -> Option<std::path::PathBuf> {
+    None
+}
+
 /// Canonical Win32 spelling (same deliberate allow as the icon
 /// structs in icons.rs and SHELLEXECUTEINFOW in elevate.rs).
 #[cfg(windows)]
@@ -1230,12 +1355,30 @@ extern "system" {
     fn OpenProcess(desired: u32, inherit: i32, pid: u32) -> *mut core::ffi::c_void;
     fn CloseHandle(handle: *mut core::ffi::c_void) -> i32;
     fn ProcessIdToSessionId(pid: u32, session: *mut u32) -> i32;
+    fn GetTempPathW(buffer_length: u32, buffer: *mut u16) -> u32;
     fn QueryFullProcessImageNameW(
         handle: *mut core::ffi::c_void,
         flags: u32,
         name: *mut u16,
         size: *mut u32,
     ) -> i32;
+}
+
+#[cfg(windows)]
+#[link(name = "shell32")]
+extern "system" {
+    fn SHGetKnownFolderPath(
+        rfid: *const Guid,
+        dwflags: u32,
+        htoken: *mut core::ffi::c_void,
+        ppsz_path: *mut *mut u16,
+    ) -> i32;
+}
+
+#[cfg(windows)]
+#[link(name = "ole32")]
+extern "system" {
+    fn CoTaskMemFree(pv: *mut core::ffi::c_void);
 }
 
 #[cfg(windows)]
@@ -2958,6 +3101,52 @@ pub fn open_windows_panel(panel: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The cleanup EMPTIES the temp folder, so the folder the engine
+    /// resolves must be the one Windows reports for this user. The kernel
+    /// answer and the environment answer must name one folder: a mismatch
+    /// would mean the cleanup empties a different folder than the one the
+    /// app measured.
+    #[test]
+    #[cfg(windows)]
+    fn the_kernel_temp_dir_names_the_same_folder_as_the_environment() {
+        let from_kernel = user_temp_dir().expect("the temp dir must resolve");
+        assert!(from_kernel.is_absolute(), "the temp dir must be absolute");
+        assert!(from_kernel.is_dir(), "the temp dir must exist");
+        if let Some(env) = std::env::var_os("TEMP") {
+            assert_eq!(
+                from_kernel,
+                std::path::PathBuf::from(env),
+                "the kernel and the environment must name one folder"
+            );
+        }
+    }
+
+    /// The thumbnail cache lives under LocalAppData: the engine resolves
+    /// that folder from the kernel, so it must be the real one.
+    #[test]
+    #[cfg(windows)]
+    fn the_kernel_local_app_data_resolves_to_the_real_folder() {
+        let dir = local_app_data_dir().expect("LocalAppData must resolve");
+        assert!(dir.is_absolute(), "LocalAppData must be absolute");
+        assert!(dir.is_dir(), "LocalAppData must exist");
+        // the canonical shape: <profile>\AppData\Local
+        assert!(
+            dir.ends_with("AppData\\Local") || dir.ends_with("AppData/Local"),
+            "unexpected LocalAppData shape: {}",
+            dir.display()
+        );
+    }
+
+    /// The app runs in the user's own session, never in session 0 (the
+    /// services session): the kill path refuses session 0, so the app
+    /// itself must not be there.
+    #[test]
+    #[cfg(windows)]
+    fn our_own_session_is_never_the_services_session() {
+        let session = process_session_id(std::process::id()).expect("our own session reads");
+        assert_ne!(session, 0, "the app never runs in session 0");
+    }
 
     #[test]
     fn recommended_pagefile_is_half_to_one_and_a_half_ram() {

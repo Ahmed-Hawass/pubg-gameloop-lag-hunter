@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- A background service is never offered as something to close.
+- The temporary and thumbnail cleanup always works on the folders Windows itself reports, so a redirected environment variable cannot point it somewhere else.
+
 ## [2.0.2] - 2026-10-19
 
 ### Changed
