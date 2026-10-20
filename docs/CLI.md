@@ -27,7 +27,7 @@ switch off automatically when piped or under `NO_COLOR`).
 ```text
 > laghunter scan 10
 LAG HUNTER
-PUBG GameLoop Lag Hunter 2.0.0 (headless scan, 10 min)
+PUBG GameLoop Lag Hunter 2.0.2 (headless scan, 10 min)
 t+07s  samples=1  game  cpu=26  Ok
 ...
 done: 600 samples, 3 lag spike(s)
