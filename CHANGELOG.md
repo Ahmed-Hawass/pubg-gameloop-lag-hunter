@@ -17,6 +17,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - The measured counters keep their own column, so a counter this machine names differently can no longer shift the numbers next to it.
 - A stopped scan no longer risks ending an unrelated program.
 - A link that would not open, and a Windows settings shortcut that would not open, now say so instead of looking like a button that does nothing.
+- The app no longer shows a blank window after an unexpected error: it says what happened and offers a reload.
 - Closing the update window no longer cancels a download that had already finished.
 
 ## [2.0.2] - 2026-10-19

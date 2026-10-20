@@ -69,6 +69,14 @@ export const en = {
       `GameLoop is now on version ${v}. Windows stores graphics preferences per install location, so check the switches in Tools and turn back on anything the update reset.`,
   },
 
+  // ---- crash screen (the render-time error boundary) ----
+  /** the app hit an unexpected error and stopped: the window must say so
+      plainly instead of going blank (the log holds the details) */
+  crashTitle: "Something went wrong",
+  crashBody:
+    "The app hit an unexpected error and stopped. The technical details are in the log file.",
+  crashReload: "Reload",
+
   // ---- error codes from the backend ----
   errors: {
     GAMELOOP_NOT_RUNNING: "PUBG Mobile isn't running in GameLoop. Start the game first.",

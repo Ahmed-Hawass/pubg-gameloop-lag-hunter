@@ -1,7 +1,8 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
-import { LanguageProvider } from "./i18n";
+import { LanguageProvider, useLang } from "./i18n";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { installNativeBehavior } from "./webBehavior";
 import { api, logFrontendError, setWebviewZoom, showMainWindow } from "./bridge";
 // fonts: subset + base64-inlined (Google Sans latin, Cairo arabic) — first in
@@ -71,10 +72,25 @@ const iconPreload = new Image();
 iconPreload.src = appIcon;
 iconPreload.decode().catch(() => {});
 
+/** The render-time crash boundary. It sits INSIDE the language provider
+ *  so its fallback speaks the user's language; a render failure used to
+ *  unmount the whole tree and leave a blank window with nothing but a
+ *  line in the backend log. */
+function CrashBoundary(props: { children: React.ReactNode }) {
+  const { t } = useLang();
+  return (
+    <ErrorBoundary title={t.crashTitle} body={t.crashBody} reloadLabel={t.crashReload}>
+      {props.children}
+    </ErrorBoundary>
+  );
+}
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <LanguageProvider>
-      <App />
+      <CrashBoundary>
+        <App />
+      </CrashBoundary>
     </LanguageProvider>
   </React.StrictMode>,
 );
