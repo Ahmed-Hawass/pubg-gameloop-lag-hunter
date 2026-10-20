@@ -18,6 +18,9 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - The Arabic name for the Print Spooler now reads as the Windows service, not a description of print caching.
 - The CLI banner and the engine probe result use a colon before the detail, matching the documented output.
 
+### Security
+- Update downloads trust the current certificate roots, including the removal of distrusted intermediates.
+
 ## [2.0.3] - 2026-10-20
 
 ### Changed

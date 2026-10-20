@@ -1,0 +1,12 @@
+# cargo-audit config: run from the repo root with
+#   cargo audit --file src-tauri/Cargo.lock
+#
+# RUSTSEC-2026-0381 (distrusted emSign roots) is fixed by webpki-roots
+# 1.0.10, which the lock now carries. The scanner also flags 0.26.11,
+# but that crate is only a source-compat shim: its lib.rs re-exports
+# parent::TLS_SERVER_ROOTS from the 1.x crate, it bundles no roots of
+# its own. ureq 2.x (the documented MSRV 1.77.2 choice for update
+# downloads) requires the 0.26 line, so the shim cannot be raised to
+# 1.0.10 without moving the whole app to ureq 3 / Rust 1.85.
+[advisories]
+ignore = ["RUSTSEC-2026-0381"]
