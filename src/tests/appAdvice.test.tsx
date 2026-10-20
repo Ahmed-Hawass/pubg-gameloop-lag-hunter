@@ -5,7 +5,7 @@
 // first-run advice.
 
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { en } from "../locales/en";
@@ -147,7 +147,11 @@ describe("App one-shot advice", () => {
   it("pre-scan tip fires on the first real start and persists at show", async () => {
     boot({ advice: "game" });
     await screen.findByText(en.scanIdleStart);
-    enginePush({ payload: running({ session: "s-1" }) });
+    // act() flushes the effect deterministically (a bare push raced the
+    // React scheduler and the advice could be missed under load)
+    act(() => {
+      enginePush({ payload: running({ session: "s-1" }) });
+    });
     await screen.findByText(en.dialog.gameAdviceTitle);
     // persisted at SHOW, not at close: already recorded while open
     expect(apiMock.finishGameAdvice).toHaveBeenCalledOnce();
@@ -156,16 +160,23 @@ describe("App one-shot advice", () => {
   it("stay-in-game tip needs a visible-to-background transition", async () => {
     boot({ advice: "background" });
     await screen.findByText(en.scanIdleStart);
-    const tick = () => new Promise((r) => setTimeout(r, 0));
-    // starting minimized is expected, not nag-worthy: no dialog
-    enginePush({ payload: running({ session: "s-1", game_visible: false }) });
-    await tick();
+    // starting minimized is expected, not nag-worthy: no dialog.
+    // The pushes are wrapped in act(): it flushes the effects
+    // deterministically, while a setTimeout(0) flush races the React
+    // scheduler and failed under load (the transition was then missed
+    // and the advice never fired).
+    act(() => {
+      enginePush({ payload: running({ session: "s-1", game_visible: false }) });
+    });
     expect(screen.queryByText(en.dialog.backgroundAdviceTitle)).toBeNull();
     // the transition fires it once and persists it (pushes land on
     // separate ticks in production, so flush effects between them here)
-    enginePush({ payload: running({ session: "s-1", game_visible: true }) });
-    await tick();
-    enginePush({ payload: running({ session: "s-1", game_visible: false }) });
+    act(() => {
+      enginePush({ payload: running({ session: "s-1", game_visible: true }) });
+    });
+    act(() => {
+      enginePush({ payload: running({ session: "s-1", game_visible: false }) });
+    });
     await screen.findByText(en.dialog.backgroundAdviceTitle);
     expect(apiMock.finishBackgroundAdvice).toHaveBeenCalledOnce();
   });
