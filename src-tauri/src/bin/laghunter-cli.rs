@@ -344,7 +344,7 @@ fn cmd_scan(minutes: u64, quiet: bool, no_color: bool) -> i32 {
             println!("{}", paint(&row, "32;1", color));
         }
         println!(
-            "PUBG GameLoop Lag Hunter {} — headless scan, {} min (Ctrl+C stops, partial saves)",
+            "PUBG GameLoop Lag Hunter {}: headless scan, {} min (Ctrl+C stops, partial saves)",
             lag_hunter_lib::engine::VERSION,
             minutes
         );

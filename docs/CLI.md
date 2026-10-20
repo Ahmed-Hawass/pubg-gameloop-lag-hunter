@@ -27,7 +27,7 @@ switch off automatically when piped or under `NO_COLOR`).
 ```text
 > laghunter scan 10
 LAG HUNTER
-PUBG GameLoop Lag Hunter 2.0.2 (headless scan, 10 min)
+PUBG GameLoop Lag Hunter 2.0.3: headless scan, 10 min (Ctrl+C stops, partial saves)
 t+07s  samples=1  game  cpu=26  Ok
 ...
 done: 600 samples, 3 lag spike(s)
@@ -74,7 +74,7 @@ Reading the output:
 [1] starting session (no auto-stop)...
 [2] stopping...
 [3] final: samples=12 game_seen=true status=Finished
-== RESULT: ENGINE OK, samples flowed ==
+== RESULT: ENGINE OK: samples flowed ==
 == GAME DETECTION OK ==
 ```
 

@@ -93,7 +93,7 @@ Download `pubg-gameloop-lag-hunter-<version>.exe` from the [Releases](https://gi
 For example:
 
 ```text
-pubg-gameloop-lag-hunter-2.0.2.exe
+pubg-gameloop-lag-hunter-2.0.3.exe
 ```
 
 **No installer. No setup.**
@@ -152,7 +152,7 @@ npx tauri dev
 ### Prerequisites
 
 * [Node.js 22+](https://nodejs.org/) (the version CI builds and tests with)
-* [Rust 1.77+](https://rustup.rs/) with the MSVC toolchain
+* [Rust 1.77.2+](https://rustup.rs/) with the MSVC toolchain
 
 ### Release Build
 

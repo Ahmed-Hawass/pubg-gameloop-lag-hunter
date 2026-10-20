@@ -89,14 +89,14 @@ fn main() {
     );
 
     if last_count > 0 {
-        println!("== RESULT: ENGINE OK — samples flowed ==");
+        println!("== RESULT: ENGINE OK: samples flowed ==");
         if saw_game {
             println!("== GAME DETECTION OK ==");
         } else {
             println!("== WARNING: no emulator detected (is the game open?) ==");
         }
     } else {
-        println!("== RESULT: ENGINE BROKEN — zero samples flowed ==");
+        println!("== RESULT: ENGINE BROKEN: zero samples flowed ==");
         std::process::exit(2);
     }
 }

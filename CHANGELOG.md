@@ -16,6 +16,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - Locked startup rows name the action in their screen-reader label, for example "Disable X (Change as administrator)", instead of only the approval.
 - The startup list no longer scans the registry on window focus while its tab is hidden.
 - The Arabic name for the Print Spooler now reads as the Windows service, not a description of print caching.
+- The CLI banner and the engine probe result use a colon before the detail, matching the documented output.
 
 ## [2.0.3] - 2026-10-20
 
