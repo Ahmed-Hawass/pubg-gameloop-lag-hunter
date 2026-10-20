@@ -1,30 +1,13 @@
-import { readFileSync } from "node:fs";
-import type { Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
-// The boot splash theme (src/splash-theme.js) is a classic script, not a
-// module, so it runs during HTML parse before first paint. Vite only
-// bundles module scripts from index.html, so the build emits this file
-// verbatim at the same path the tag points to (dev serves /src/*
-// natively, no plugin needed there).
-function splashThemeScript(): Plugin {
-  return {
-    name: "splash-theme-external",
-    apply: "build",
-    generateBundle() {
-      this.emitFile({
-        type: "asset",
-        fileName: "src/splash-theme.js",
-        source: readFileSync("src/splash-theme.js", "utf8"),
-      });
-    },
-  };
-}
-
+// The boot splash theme lives in public/splash-theme.js: a classic script
+// copied verbatim to the build root, so it runs during HTML parse before
+// first paint. Vite bundles only module scripts from index.html, which is
+// exactly why this one stays in public and needs no custom plugin.
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react(), splashThemeScript()],
+  plugins: [react()],
   clearScreen: false,
   server: {
     port: 5173,

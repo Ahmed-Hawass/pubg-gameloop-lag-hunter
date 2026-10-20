@@ -18,7 +18,7 @@ export default tseslint.config(
   {
     // boot splash theme: plain browser script (no imports, no bundle),
     // needs document/window as readonly globals for the no-undef rule
-    files: ["src/splash-theme.js"],
+    files: ["public/splash-theme.js"],
     languageOptions: {
       globals: {
         document: "readonly",
