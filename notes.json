@@ -1,15 +1,15 @@
 {
-  "version": "2.0.2",
+  "version": "2.0.3",
   "en": [
-    "Update notes now appear in your language, with a link to the full details.",
-    "The window always opens fully visible, never behind the taskbar or off the screen.",
-    "Double-clicking the title bar now always maximizes or restores the window.",
-    "Text in dialogs, reports, and release notes can now be selected and copied."
+    "The window no longer freezes for a few seconds while a scan is running.",
+    "The app no longer shows a blank window after an unexpected error.",
+    "The update you download is now always the one the project published.",
+    "The Arabic interface now reads consistently, including the counts past ten."
   ],
   "ar": [
-    "ملاحظات التحديث تظهر الآن بلغتك، مع رابط إلى التفاصيل الكاملة.",
-    "تفتح النافذة الآن كاملة على الشاشة، بعيداً عن شريط المهام وحدود الشاشة.",
-    "النقر المزدوج على شريط العنوان يكبّر النافذة أو يعيدها الآن في كل مرة.",
-    "يمكنك الآن تحديد النصوص ونسخها في النوافذ والتقارير وملاحظات الإصدار."
+    "الواجهة تتجمّد أحياناً أثناء الفحص، وتوقفت الآن.",
+    "التطبيق لا يعرض نافذة فارغة بعد خطأ غير متوقع.",
+    "التحديث الذي تحفظه هو دائماً المنشور من المشروع.",
+    "الواجهة العربية متسقة الآن، بما فيها العدّ بعد العشرة."
   ]
 }

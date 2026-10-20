@@ -4,11 +4,10 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.0.3] - 2026-10-20
 
 ### Changed
 - The update download now asks the engine for the release it is fetching, so the file it verifies and saves is the one the project published, and the folder it can open is only the file it just wrote.
-- Arabic copy fixes: the introduction cards are no longer called identity cards, the graphics card reads the same everywhere, the counts past ten take the singular form with a matching verb, and a few words lost their tanween and their dual agreement.
 
 ### Fixed
 - A background service is never offered as something to close.
@@ -23,6 +22,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - The app no longer shows a blank window after an unexpected error: it says what happened and offers a reload.
 - Closing a window hands the keyboard focus back to the control that opened it, a tooltip is now announced by screen readers, and an informational notice no longer interrupts like an alert.
 - Closing the update window no longer cancels a download that had already finished.
+- The Arabic copy is consistent now: the introduction cards are no longer called identity cards, the graphics card reads the same everywhere, the counts past ten take the singular form with a matching verb, and a few words lost their tanween and their dual agreement.
 
 ## [2.0.2] - 2026-10-19
 

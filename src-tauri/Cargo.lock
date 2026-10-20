@@ -2735,7 +2735,7 @@ dependencies = [
 
 [[package]]
 name = "pubg-gameloop-lag-hunter"
-version = "2.0.2"
+version = "2.0.3"
 dependencies = [
  "ctrlc",
  "png 0.18.1",
