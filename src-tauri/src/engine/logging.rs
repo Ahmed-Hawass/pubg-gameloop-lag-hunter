@@ -56,13 +56,17 @@ fn log_path() -> PathBuf {
 const MAX_LOG_FILE_BYTES: u64 = 5 * 1024 * 1024;
 
 fn write_line_to(dir: &Path, level: &str, msg: &str) {
+    // The stamp is taken BEFORE the lock: it reads the OS time zone, and
+    // that read can spawn PowerShell when its cache expired. Holding the
+    // log lock across an external process would freeze every other writer
+    // for the length of that spawn.
+    let iso = sampler::iso_now();
+    let clock = iso.get(11..23).unwrap_or(&iso).to_string();
     let _guard = LOG_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     let _ = fs::create_dir_all(dir);
     if level != "WARN" && level != "ERROR" && file_too_big(dir) {
         return;
     }
-    let iso = sampler::iso_now();
-    let clock = iso.get(11..23).unwrap_or(&iso);
     if let Ok(mut f) = fs::OpenOptions::new()
         .create(true)
         .append(true)

@@ -145,18 +145,57 @@ pub(crate) fn spawn_tracked(cmd: &mut Command) -> std::io::Result<std::process::
     Ok(child)
 }
 
+/// Drain one pipe into a channel on its own thread. The thread ends when
+/// the pipe reaches EOF, which a grandchild that inherited the write end
+/// can postpone forever — the caller waits on the CHANNEL (with its own
+/// deadline), never on this thread.
+fn drain_pipe<R: std::io::Read + Send + 'static>(
+    mut pipe: R,
+    tx: std::sync::mpsc::Sender<Vec<u8>>,
+) {
+    thread::spawn(move || {
+        let mut buf = Vec::new();
+        let _ = pipe.read_to_end(&mut buf);
+        let _ = tx.send(buf);
+    });
+}
+
+/// How long the pipes are collected AFTER the child exited. The child is
+/// gone by then; only a grandchild holding the write end can still keep
+/// the pipe open, and it must not hold the caller past this point.
+const PIPE_DRAIN_TIMEOUT: Duration = Duration::from_secs(2);
+
 /// Run a short-lived child inside the kill-on-close job with a hard deadline.
 /// All probe commands use this path so a wedged Windows utility cannot block
 /// a session forever or outlive the app.
+///
+/// The pipes are drained on their own threads and collected with their own
+/// deadline. `wait_with_output()` used to do the collecting inline, and it
+/// blocks until EOF: a grandchild that inherited the pipe handle kept the
+/// read open forever, which silently defeated the deadline above.
 pub(crate) fn output_tracked(
     cmd: &mut Command,
     timeout: Duration,
 ) -> std::io::Result<std::process::Output> {
     let mut child = spawn_tracked(cmd)?;
+    let (tx_out, rx_out) = std::sync::mpsc::channel::<Vec<u8>>();
+    match child.stdout.take() {
+        Some(pipe) => drain_pipe(pipe, tx_out),
+        None => {
+            let _ = tx_out.send(Vec::new());
+        }
+    }
+    let (tx_err, rx_err) = std::sync::mpsc::channel::<Vec<u8>>();
+    match child.stderr.take() {
+        Some(pipe) => drain_pipe(pipe, tx_err),
+        None => {
+            let _ = tx_err.send(Vec::new());
+        }
+    }
     let deadline = std::time::Instant::now() + timeout;
-    loop {
+    let status = loop {
         match child.try_wait()? {
-            Some(_) => return child.wait_with_output(),
+            Some(status) => break status,
             None if std::time::Instant::now() >= deadline => {
                 let _ = child.kill();
                 let _ = child.wait();
@@ -167,7 +206,14 @@ pub(crate) fn output_tracked(
             }
             None => thread::sleep(Duration::from_millis(50)),
         }
-    }
+    };
+    let stdout = rx_out.recv_timeout(PIPE_DRAIN_TIMEOUT).unwrap_or_default();
+    let stderr = rx_err.recv_timeout(PIPE_DRAIN_TIMEOUT).unwrap_or_default();
+    Ok(std::process::Output {
+        status,
+        stdout,
+        stderr,
+    })
 }
 
 /// Handle for a spawned streaming source. Kill on drop.
@@ -194,7 +240,14 @@ impl Drop for SpawnedProcess {
 /// The kill is `taskkill /PID <id> /T /F` (no handle games on std's
 /// single-owner Child; taskkill is native, needs no elevation for our own
 /// children, and /T covers any grand-children typeperf itself spawned).
-fn spawn_source_watchdog(pid: u32, running: Arc<AtomicBool>) {
+///
+/// A PID is a NUMBER, not an identity: Windows recycles them, so a child
+/// that died earlier can leave its number pointing at an innocent process
+/// by the time the session stops. Before killing, the image behind the
+/// number is re-read and compared with the executable we spawned — a
+/// mismatch means the number was recycled, and the kill is skipped.
+fn spawn_source_watchdog(pid: u32, expected_exe: &str, running: Arc<AtomicBool>) {
+    let expected = expected_exe.to_ascii_lowercase();
     #[cfg(windows)]
     thread::spawn(move || {
         loop {
@@ -204,6 +257,20 @@ fn spawn_source_watchdog(pid: u32, running: Arc<AtomicBool>) {
             thread::sleep(Duration::from_secs(2));
         }
         // the session ended: reap the child even if its stream is silent
+        let Some(path) = crate::engine::system::process_image_path(pid) else {
+            return; // already gone: nothing to reap
+        };
+        let file = path
+            .rsplit(['\\', '/'])
+            .next()
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if file != expected {
+            super::logging::warn(&format!(
+                "watchdog skipped pid {pid}: it runs {file}, not our {expected}"
+            ));
+            return;
+        }
         let _ = Command::new(super::system::system32_exe("taskkill.exe"))
             .args(["/PID", &pid.to_string(), "/T", "/F"])
             .stdout(Stdio::null())
@@ -212,7 +279,7 @@ fn spawn_source_watchdog(pid: u32, running: Arc<AtomicBool>) {
             .status();
     });
     #[cfg(not(windows))]
-    let _ = (pid, running);
+    let _ = (pid, expected, running);
 }
 
 /// typeperf CSV counter names → Sample fields (parsed by header order).
@@ -357,7 +424,7 @@ while ($true) {{
     let stdout = child.stdout.take().ok_or("no stdout from pdh emitter")?;
     // reap this child even if its stream goes silent mid-session (the
     // watchdog polls the flag and taskkills by PID — see its doc comment)
-    spawn_source_watchdog(child.id(), Arc::clone(&running));
+    spawn_source_watchdog(child.id(), "powershell.exe", Arc::clone(&running));
 
     thread::spawn(move || {
         let _keep = SpawnedProcess { child };
@@ -437,6 +504,21 @@ while ($true) {{
         // _keep drops here: powershell killed after the stream ends
     });
     Ok(())
+}
+
+/// Parse a typeperf PDH-CSV header line into one slot per COLUMN.
+///
+/// An unknown counter becomes None and KEEPS ITS PLACE: the data line is
+/// read by position, so dropping unknown columns from the header shifted
+/// every following value (a disk-queue number read as CPU %).
+pub fn parse_typeperf_header(line: &str) -> Vec<Option<&'static str>> {
+    line.split("\",\"")
+        .skip(1)
+        .map(|p| {
+            let clean = p.trim_matches('"');
+            map_counter_key(clean)
+        })
+        .collect()
 }
 
 /// Parse one counter value the way Windows may have printed it.
@@ -520,14 +602,18 @@ where
     let stdout = child.stdout.take().ok_or("no stdout from typeperf")?;
     // reap this child even if its stream goes silent mid-session (the
     // watchdog polls the flag and taskkills by PID — see its doc comment)
-    spawn_source_watchdog(child.id(), Arc::clone(&running));
+    spawn_source_watchdog(child.id(), "typeperf.exe", Arc::clone(&running));
 
     // the reader thread OWNS the child — kills it on exit (Drop), never before
     thread::spawn(move || {
         let _keep = SpawnedProcess { child };
         super::logging::info("typeperf reader thread started");
         let reader = BufReader::new(stdout);
-        let mut header: Vec<&'static str> = Vec::new();
+        // The header keeps the RAW column count: an unknown counter becomes
+        // None, never a dropped column, because the data line is read by
+        // POSITION. Dropping unknown columns from the header shifted every
+        // value by one (a disk-queue number read as CPU %).
+        let mut header: Vec<Option<&'static str>> = Vec::new();
         let mut line_no: u32 = 0;
         for line in reader.lines() {
             line_no += 1;
@@ -550,17 +636,10 @@ where
             }
             // header line: "(PDH-CSV 4.0)","\\HOST\Counter name",...
             if line.starts_with("\"(PDH") {
-                header = line
-                    .split("\",\"")
-                    .skip(1)
-                    .filter_map(|p| {
-                        let clean = p.trim_matches('"');
-                        map_counter_key(clean)
-                    })
-                    .collect();
+                header = parse_typeperf_header(&line);
                 super::logging::info(&format!(
                     "typeperf header parsed: {} counters",
-                    header.len()
+                    header.iter().filter(|k| k.is_some()).count()
                 ));
                 continue;
             }
@@ -587,6 +666,9 @@ where
                 let Some(v) = parse_counter_value_logged(raw) else {
                     continue;
                 };
+                // an unknown counter keeps its PLACE (None) and is skipped
+                // here — the positions of the known ones never move
+                let Some(key) = key else { continue };
                 match *key {
                     "cpu" => s.cpu_total = Some(v),
                     // % Processor Performance is a ratio: physically it cannot
@@ -652,7 +734,7 @@ where
     let stdout = child.stdout.take().ok_or("no stdout from dmon")?;
     // reap this child even if its stream goes silent mid-session (the
     // watchdog polls the flag and taskkills by PID — see its doc comment)
-    spawn_source_watchdog(child.id(), Arc::clone(&running));
+    spawn_source_watchdog(child.id(), "nvidia-smi.exe", Arc::clone(&running));
 
     // the reader thread OWNS the child — kills it on exit (Drop), never before
     thread::spawn(move || {
@@ -1021,17 +1103,62 @@ pub fn iso_now() -> String {
     format!("{y:04}-{mth:02}-{d:02}T{h:02}:{m:02}:{s:02}.{millis:03}Z")
 }
 
+/// How long a SUCCESSFUL offset read stays valid.
+const OFFSET_FRESH_SECS: u64 = 600;
+/// How long a FAILED offset read is remembered before the next attempt.
+/// Shorter than the success window on purpose: the clock must recover by
+/// itself once PowerShell works again, without a 1 Hz spawn storm on a
+/// machine where it never will.
+const OFFSET_RETRY_SECS: u64 = 60;
+
+/// True while the offset read is failing: the timestamps fall back to the
+/// last known offset (or UTC when none was ever read). Read by the
+/// session thread, which reports it once — the reader itself must never
+/// log (it runs inside the log writer's own timestamp).
+static CLOCK_DEGRADED: AtomicBool = AtomicBool::new(false);
+/// The "reported" latch: one warning per degradation, re-armed by the next
+/// successful read.
+static CLOCK_REPORTED: AtomicBool = AtomicBool::new(false);
+
+/// Report a degraded clock once, from a thread that holds no logging lock.
+/// Called by the session loop, never from inside the offset reader.
+pub fn report_clock_degraded_once() {
+    if !CLOCK_DEGRADED.load(Ordering::Relaxed) {
+        return;
+    }
+    if CLOCK_REPORTED.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    super::logging::warn(
+        "local UTC offset read failed: timestamps use the last known offset until it recovers",
+    );
+}
+
 /// UTC offset of the local time zone, in seconds east of UTC (e.g. Egypt
 /// summer = +10800, winter = +7200). Cached with a periodic re-read so a
 /// DST transition mid-session corrects itself within ~10 minutes.
+///
+/// A FAILED read never refreshes the success stamp: it used to, and every
+/// timestamp then read UTC for the next ten minutes with no log line at
+/// all. A failure now retries sooner and keeps the last known offset.
 #[cfg(windows)]
 fn local_utc_offset_secs() -> i64 {
     use std::sync::atomic::{AtomicI64, Ordering};
     use std::sync::Mutex;
     static OFFSET: AtomicI64 = AtomicI64::new(i64::MIN); // MIN = not read yet
-    static LAST_READ: Mutex<Option<std::time::Instant>> = Mutex::new(None);
+                                                         // (when, did the last read succeed)
+    static LAST_READ: Mutex<Option<(std::time::Instant, bool)>> = Mutex::new(None);
     let mut last = LAST_READ.lock().unwrap_or_else(|p| p.into_inner());
-    let fresh = last.map(|t| t.elapsed().as_secs() < 600).unwrap_or(false);
+    let fresh = last
+        .map(|(at, ok)| {
+            let window = if ok {
+                OFFSET_FRESH_SECS
+            } else {
+                OFFSET_RETRY_SECS
+            };
+            at.elapsed().as_secs() < window
+        })
+        .unwrap_or(false);
     if !fresh {
         // [TimeZoneInfo]::Local.GetUtcOffset(DateTimeOffset.Now): native,
         // DST-aware, no registry parsing — the same source .NET uses.
@@ -1045,14 +1172,29 @@ fn local_utc_offset_secs() -> i64 {
                 .creation_flags(NO_WINDOW),
             Duration::from_secs(5),
         );
-        if let Ok(o) = out {
-            if let Ok(v) = String::from_utf8_lossy(&o.stdout).trim().parse::<i64>() {
-                if v.abs() <= 14 * 3600 {
-                    OFFSET.store(v, Ordering::Relaxed);
-                }
+        let parsed = out
+            .ok()
+            .and_then(|o| {
+                String::from_utf8_lossy(&o.stdout)
+                    .trim()
+                    .parse::<i64>()
+                    .ok()
+            })
+            .filter(|v| v.abs() <= 14 * 3600);
+        match parsed {
+            Some(v) => {
+                OFFSET.store(v, Ordering::Relaxed);
+                *last = Some((std::time::Instant::now(), true));
+                CLOCK_DEGRADED.store(false, Ordering::Relaxed);
+                CLOCK_REPORTED.store(false, Ordering::Relaxed);
+            }
+            None => {
+                // the last known offset stays in place (better than UTC);
+                // only the stamp says "try again sooner"
+                *last = Some((std::time::Instant::now(), false));
+                CLOCK_DEGRADED.store(true, Ordering::Relaxed);
             }
         }
-        *last = Some(std::time::Instant::now());
     }
     let v = OFFSET.load(Ordering::Relaxed);
     if v == i64::MIN {
@@ -1175,6 +1317,131 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// The bug this guards: the header dropped unknown counters, so every
+    /// following value landed in the wrong field (a disk-queue number read
+    /// as CPU %). An unknown column must KEEP ITS PLACE.
+    #[test]
+    fn typeperf_header_keeps_unknown_columns_in_place() {
+        let line = "\"(PDH-CSV 4.0)\",\"\\\\HOST\\Processor(_Total)\\% Processor Time\",\
+                    \"\\\\HOST\\Some Counter Nobody Knows\",\
+                    \"\\\\HOST\\Memory\\Available MBytes\"";
+        let header = parse_typeperf_header(line);
+        assert_eq!(header.len(), 3, "one slot per column, unknown ones kept");
+        assert_eq!(header[0], Some("cpu"));
+        assert_eq!(header[1], None, "the unknown counter keeps its slot");
+        assert_eq!(header[2], Some("avail"));
+    }
+
+    /// The data line is read by POSITION: the known columns must line up
+    /// with the header even when an unknown one sits between them.
+    #[test]
+    fn typeperf_values_read_by_position_around_an_unknown_column() {
+        let line = "\"(PDH-CSV 4.0)\",\"\\\\HOST\\Processor(_Total)\\% Processor Time\",\
+                    \"\\\\HOST\\Some Counter Nobody Knows\",\
+                    \"\\\\HOST\\Memory\\Available MBytes\"";
+        let header = parse_typeperf_header(line);
+        let data = "\"(2026-10-19 10:00:00.000)\",\"42.5\",\"7\",\"1024\"";
+        let parts: Vec<&str> = data.split("\",\"").collect();
+        assert_eq!(parts.len(), header.len() + 1);
+        let values = &parts[1..];
+        let read = |i: usize| -> Option<f64> {
+            header[i]?;
+            parse_counter_value(values.get(i).unwrap_or(&""))
+        };
+        assert_eq!(read(0), Some(42.5), "cpu keeps the first value");
+        assert_eq!(read(1), None, "the unknown column yields nothing");
+        assert_eq!(read(2), Some(1024.0), "avail keeps the third value");
+    }
+
+    /// A child that never exits must hit the deadline, and the call must
+    /// come back bounded — the promise this function makes.
+    #[test]
+    fn output_tracked_times_out_a_child_that_never_exits() {
+        let mut cmd = Command::new(crate::engine::system::powershell_exe());
+        cmd.args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "Start-Sleep -Seconds 30",
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .creation_flags(NO_WINDOW);
+        let started = std::time::Instant::now();
+        let res = output_tracked(&mut cmd, Duration::from_secs(2));
+        let elapsed = started.elapsed();
+        assert!(res.is_err(), "a child that never exits must time out");
+        assert!(
+            elapsed < Duration::from_secs(20),
+            "the timeout must actually bound the call (took {elapsed:?})"
+        );
+    }
+
+    /// A grandchild that inherits the pipe keeps the write end open after
+    /// the child exits: the old inline wait blocked on EOF forever. The
+    /// call must still come back.
+    #[test]
+    #[cfg(windows)]
+    fn output_tracked_returns_even_when_a_grandchild_holds_the_pipe() {
+        let mut cmd = Command::new(crate::engine::system::system32_exe("cmd.exe"));
+        cmd.args(["/c", "start /b ping -n 30 127.0.0.1 >nul & exit /b 0"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .creation_flags(NO_WINDOW);
+        let started = std::time::Instant::now();
+        let res = output_tracked(&mut cmd, Duration::from_secs(5));
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed < Duration::from_secs(25),
+            "a grandchild holding the pipe must not hold the caller (took {elapsed:?})"
+        );
+        // the child itself exited cleanly; the pipe content is irrelevant
+        assert!(res.is_ok(), "the child exited, so this is not an error");
+    }
+
+    /// The ordinary path still works: the drain threads hand the output
+    /// back untouched.
+    #[test]
+    #[cfg(windows)]
+    fn output_tracked_returns_the_child_output() {
+        let mut cmd = Command::new(crate::engine::system::powershell_exe());
+        cmd.args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "Write-Output 'laghunter-probe'",
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .creation_flags(NO_WINDOW);
+        let out = output_tracked(&mut cmd, Duration::from_secs(20)).expect("probe runs");
+        assert!(out.status.success());
+        let text = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            text.contains("laghunter-probe"),
+            "the child's stdout must survive the drain (got {text:?})"
+        );
+    }
+
+    /// The image behind a PID must be readable for our own process: the
+    /// watchdog uses it to tell "our child" from "a recycled number".
+    #[test]
+    #[cfg(windows)]
+    fn process_image_path_reads_our_own_executable() {
+        let me = std::process::id();
+        let path =
+            crate::engine::system::process_image_path(me).expect("our own image is readable");
+        assert!(
+            !path.is_empty(),
+            "our own process must have a readable image path"
+        );
+        // a PID nobody owns has no image
+        assert!(
+            crate::engine::system::process_image_path(0xFFFFFF).is_none(),
+            "a PID that does not exist has no image path"
+        );
     }
 
     #[test]

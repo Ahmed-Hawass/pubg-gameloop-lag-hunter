@@ -149,7 +149,11 @@ mod win {
         rect: Option<(i32, i32, i32, i32)>,
     ) {
         register_class();
-        let mut map = overlays().lock().expect("snap overlay state poisoned");
+        // Poison recovers, like every other lock in this codebase: a panic
+        // while the lock was held must not kill the app (the release profile
+        // aborts on panic, so an expect() here would take the whole window
+        // down from inside the WndProc).
+        let mut map = overlays().lock().unwrap_or_else(|p| p.into_inner());
         let entry = map.entry(parent).or_insert_with(|| {
             let child = CreateWindowExW(
                 0,
@@ -206,7 +210,7 @@ mod win {
     }
 
     unsafe fn child_state(child: HWND) -> Option<*mut Overlay> {
-        let map = overlays().lock().expect("snap overlay state poisoned");
+        let map = overlays().lock().unwrap_or_else(|p| p.into_inner());
         map.values()
             .find(|o| o.child == child as isize)
             .map(|o| o as *const Overlay as *mut Overlay)
@@ -286,7 +290,7 @@ mod win {
                 return 0;
             }
             WM_NCDESTROY => {
-                let mut map = overlays().lock().expect("snap overlay state poisoned");
+                let mut map = overlays().lock().unwrap_or_else(|p| p.into_inner());
                 map.retain(|_, o| o.child != hwnd as isize);
             }
             _ => {}

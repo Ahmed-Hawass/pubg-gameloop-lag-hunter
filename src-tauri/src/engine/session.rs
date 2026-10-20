@@ -304,6 +304,12 @@ impl Engine {
             *t = total_mem;
         }
 
+        // The clock is read BEFORE any lock is taken: it can spawn
+        // PowerShell when its cache expired, and the state lock must never
+        // be held across an external process (stop()/status()/tick would
+        // queue behind a five-second spawn).
+        let started_at = sampler::iso_now();
+
         // RE-CHECK under the SECOND lock: the first check ran before the slow
         // gates above (emulator probe, PowerShell queries), unlocked the whole
         // time — a second start() that slipped through both gates would
@@ -346,7 +352,7 @@ impl Engine {
             .file_name()
             .and_then(|s| s.to_str())
             .map(String::from);
-        st.started_at = Some(sampler::iso_now());
+        st.started_at = Some(started_at);
         st.writer = Some(writer);
         st.status = SessionStatus::Running;
         st.auto_stop_at = auto_stop_secs.map(|s| Instant::now() + Duration::from_secs(s));
@@ -520,6 +526,11 @@ impl Engine {
             .store(false, Ordering::SeqCst);
         std::thread::sleep(Duration::from_millis(600)); // let sources die
 
+        // The clock is read BEFORE the state lock: it can spawn PowerShell
+        // when its cache expired, and the finalize below runs under the
+        // lock (a five-second spawn there would wedge every waiter).
+        let now = sampler::iso_now();
+
         let mut st = self.state.lock().unwrap_or_else(|p| p.into_inner());
         // the 600ms window is uninsured: if a start() slipped in while we slept
         // (status flipped back to Running), our writer is NOT theirs — bail out
@@ -530,7 +541,6 @@ impl Engine {
             return Ok(None);
         }
         // close open conditions
-        let now = sampler::iso_now();
         let close_evs = st.detector.finish(&now);
         note_issue_kinds(&close_evs, &mut st.issue_kinds);
         st.events.extend(close_evs);
@@ -578,7 +588,7 @@ impl Engine {
         // evidence the report keeps, so a session with findings can never
         // read "Nothing unusual / 0 seconds" again.
         {
-            let (cards, secs) = super::diagnoser::final_verdict(&st.events, &sampler::iso_now());
+            let (cards, secs) = super::diagnoser::final_verdict(&st.events, &now);
             let kinds = st.issue_kinds.len() as u32;
             if let Some(ui) = st.last_ui.as_mut() {
                 ui.diagnoses = cards;
@@ -601,6 +611,12 @@ impl Engine {
     /// powershell on cache expiry) and the diagnoser build run OFF the lock
     /// so stop()/status()/tick_auto_stop() never block behind them.
     fn on_sample(&self, raw: Sample) {
+        // the clock is read FIRST, outside every lock: it can spawn
+        // PowerShell when its cache expired, and the state lock below must
+        // never be held across an external process
+        let now_ms = iso_ms(&sampler::iso_now()).unwrap_or(0);
+        sampler::report_clock_degraded_once();
+
         // snapshot the freshest GPU + emulator + visibility WITHOUT holding
         // the session lock (each has its own short lock, never nested inside
         // the session critical section below).
@@ -706,7 +722,7 @@ impl Engine {
                 samples: st.samples.clone(),
                 samples_total: st.samples_total,
                 // bounded clone: the UI only ever sees the diagnosis window
-                events: diagnosis_window(&st.events),
+                events: diagnosis_window(&st.events, now_ms),
                 active_count: active_conditions(&st.events),
                 issue_kinds: st.issue_kinds.len(),
                 game_running: st.game_running,
@@ -901,11 +917,12 @@ fn active_conditions(events: &[EngineEvent]) -> usize {
 /// rescue must keep reading it (the vanishing-card bug the rescue was
 /// written for). Their whole history rides along; a storm-open kind is
 /// also generating fresh events anyway, so the exemption stays cheap.
-fn diagnosis_window(events: &[EngineEvent]) -> Vec<EngineEvent> {
+/// `now_ms` is passed IN by the caller: reading the clock here would mean
+/// reading it under the session lock, and that read can spawn PowerShell.
+fn diagnosis_window(events: &[EngineEvent], now_ms: i64) -> Vec<EngineEvent> {
     /// mirrors diagnoser::CORRELATION_WINDOW_MS (the widest lookback) + a
     /// safety slack for a missed tick or a slow clock read
     const VIEW_MS: i64 = 15 * 60 * 1000 + 30 * 1000;
-    let now_ms = iso_ms(&super::sampler::iso_now()).unwrap_or(0);
     if now_ms <= VIEW_MS {
         return events.to_vec();
     }
@@ -1132,6 +1149,28 @@ impl Engine {
 mod tests {
     use super::*;
 
+    /// The thresholds are derived from these two readings, so a broken
+    /// probe would silently change every diagnosis (a RAM floor of the
+    /// fallback instead of the real size, a spindle count of zero). The
+    /// probe path changed under them (the output collector), so the
+    /// readings are pinned here.
+    #[test]
+    #[cfg(windows)]
+    fn the_machine_readings_are_real_numbers() {
+        let ram = total_ram_mb();
+        // the fallback is 8192 MB: a machine with exactly 8 GB would
+        // read the same, so the check is the plausible range
+        assert!(
+            (1024.0..=1024.0 * 1024.0).contains(&ram),
+            "total RAM must be a real reading, got {ram}"
+        );
+        let disks = physical_disk_count();
+        assert!(
+            (1..=64).contains(&disks),
+            "the spindle count must be a real reading, got {disks}"
+        );
+    }
+
     #[test]
     fn active_conditions_counted() {
         use super::super::types::{Phase, Severity};
@@ -1247,7 +1286,8 @@ mod tests {
             mk("mem_pressure", Phase::Start, "2026-08-31T04:50:00.000Z"),
             mk("gpu_mem_idle", Phase::Start, "2026-08-31T05:20:00.000Z"),
         ];
-        let view = diagnosis_window(&events);
+        let now_ms = iso_ms("2026-08-31T05:21:00.000Z").unwrap_or(0);
+        let view = diagnosis_window(&events, now_ms);
         assert!(
             view.iter().any(|e| e.kind == "mem_pressure"),
             "the still-open kind's events must ride along however old"
