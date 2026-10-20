@@ -3,6 +3,7 @@
 // (the sidebar expand orphan), and Escape/resize hide a live bubble.
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
+import React from "react";
 import { Tip } from "../components/components";
 
 function open(text: string) {
@@ -84,5 +85,38 @@ describe("Tip", () => {
     } finally {
       spy.mockRestore();
     }
+  });
+
+  it("the trigger describes itself with the bubble, so a screen reader reads it", () => {
+    // the bubble carries an id, so the element it describes must point at
+    // it (aria-describedby) — otherwise the tip text is unreachable to
+    // assistive tech
+    open("hello");
+    fireEvent.mouseEnter(wrap());
+    const bubble = screen.getByRole("tooltip");
+    const trigger = screen.getByRole("button", { name: "trigger" });
+    expect(bubble.id).toBeTruthy();
+    expect(trigger.getAttribute("aria-describedby")).toBe(bubble.id);
+  });
+
+  it("a hidden bubble leaves the trigger with no description", () => {
+    open("hello");
+    const trigger = screen.getByRole("button", { name: "trigger" });
+    expect(trigger.getAttribute("aria-describedby")).toBeNull();
+  });
+
+  it("the trigger keeps its own ref through the description", () => {
+    // the maximize button is measured through a ref for the snap overlay
+    // (a dropped ref would park the overlay and break the native picker)
+    const ref = React.createRef<HTMLButtonElement>();
+    render(
+      <Tip text="hello">
+        <button type="button" ref={ref}>
+          trigger
+        </button>
+      </Tip>,
+    );
+    expect(ref.current).toBeTruthy();
+    expect(ref.current?.tagName).toBe("BUTTON");
   });
 });

@@ -93,4 +93,38 @@ describe("Dialog", () => {
     expect(box.getAttribute("aria-labelledby")).toBe(titleId);
     expect(box.getAttribute("aria-describedby")).toBe(bodyId);
   });
+
+  it("announces a confirm as an alert and a notice as a plain dialog", () => {
+    // an urgent "are you sure?" interrupts a screen reader; an
+    // informational notice must not
+    confirm();
+    expect(document.querySelector(".dialog-box")!.getAttribute("role")).toBe("alertdialog");
+    document.body.innerHTML = "";
+    notice();
+    expect(document.querySelector(".dialog-box")!.getAttribute("role")).toBe("dialog");
+  });
+
+  it("gives the focus back to the element that opened it", () => {
+    // the WAI-ARIA dialog pattern: the trigger keeps the focus when the
+    // dialog goes away, so the next Tab does not restart at the top
+    const opener = document.createElement("button");
+    opener.textContent = "open me";
+    document.body.appendChild(opener);
+    opener.focus();
+    expect(document.activeElement).toBe(opener);
+    const { unmount } = render(
+      React.createElement(Dialog, {
+        title: "Something went wrong",
+        body: "boom",
+        kind: "notice",
+        okLabel: "OK",
+        onClose: vi.fn(),
+      }),
+    );
+    // the dialog took the focus for itself
+    expect(document.activeElement).not.toBe(opener);
+    unmount();
+    expect(document.activeElement).toBe(opener);
+    opener.remove();
+  });
 });

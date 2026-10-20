@@ -2,7 +2,7 @@
 // Every screen is assembled ONLY from these. No placeholders — data-driven only.
 // ALL icons come from lucide-react — zero hand-drawn SVGs anywhere.
 
-import { useEffect, useId, useState, useRef, type FocusEvent as ReactFocusEvent, type ReactNode } from "react";
+import { useEffect, useId, useState, useRef, cloneElement, isValidElement, type FocusEvent as ReactFocusEvent, type ReactElement, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, Cpu, Database, Gauge, Image, Info, Layers, Lightbulb, MemoryStick, Thermometer, X, Zap } from "lucide-react";
 import type { CardSeverity } from "../bridge";
@@ -190,6 +190,23 @@ export function Dialog(
   // dead page behind it. Tab cycles between the dialog's own focusables;
   // the initial focus stays on the first button (autoFocus below).
   const boxRef = useRef<HTMLDivElement>(null);
+  // focus restore: the dialog autofocuses a button, and the element that
+  // opened it must get the focus back when the dialog goes away (the
+  // WAI-ARIA dialog pattern) — otherwise the next Tab restarts from the
+  // top of the document.
+  //
+  // The opener is captured in a lazy state initializer, NOT in an effect:
+  // an effect runs after the commit, and by then the dialog's own
+  // autoFocus has already taken the focus (the effect would capture the
+  // dialog's own button and restore focus to a node that is gone).
+  const [opener] = useState<HTMLElement | null>(
+    () => (typeof document === "undefined" ? null : (document.activeElement as HTMLElement | null)),
+  );
+  useEffect(() => {
+    return () => {
+      if (opener && opener.isConnected) opener.focus();
+    };
+  }, [opener]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -225,7 +242,7 @@ export function Dialog(
       <div
         ref={boxRef}
         className="dialog-box"
-        role="alertdialog"
+        role={kind === "confirm" ? "alertdialog" : "dialog"}
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={bodyId}
@@ -439,6 +456,15 @@ export function Tip(props: { text: string; children: ReactNode }) {
   const { anchor, show, showForFocus, hide, adjust } = useAnchoredTooltip(ref, text);
   const tipId = useId();
 
+  // the bubble carries an id, so the element it describes must point at it
+  // (aria-describedby): without it a screen reader never announces the tip
+  // text, and the bubble was unreachable to assistive tech
+  const described = isValidElement(children)
+    ? cloneElement(children as ReactElement<{ "aria-describedby"?: string }>, {
+        "aria-describedby": anchor ? tipId : undefined,
+      })
+    : children;
+
   return (
     <span
       ref={ref}
@@ -448,7 +474,7 @@ export function Tip(props: { text: string; children: ReactNode }) {
       onMouseLeave={hide}
       onBlur={hide}
     >
-      {children}
+      {described}
       {anchor && text ? (
         <TooltipBubble text={text} anchor={anchor} id={tipId} onMeasured={adjust} />
       ) : null}
