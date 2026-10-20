@@ -65,6 +65,30 @@ describe("ToolsView page file editor", () => {
     expect(screen.queryByText(en.tweakPfApply)).toBeNull();
   });
 
+  it("drives are one tab stop and arrow to the next drive", async () => {
+    const user = userEvent.setup();
+    apiMock.pagefileSettings.mockResolvedValue(
+      pagefileSettings({
+        drives: [
+          { drive: "C:", free_mb: 50000, mode: "system", min_mb: null, max_mb: null },
+          { drive: "D:", free_mb: 120000, mode: "system", min_mb: null, max_mb: null },
+        ],
+      }),
+    );
+    await openPagefile(user);
+    await user.click(await screen.findByText(en.tweakPfTitle));
+    await screen.findByText(en.tweakPfAutoLabel);
+    const drives = await screen.findByRole("radiogroup", { name: en.tweakPfDrivesLabel });
+    const c = within(drives).getByRole("radio", { name: /^C:/ });
+    const d = within(drives).getByRole("radio", { name: /^D:/ });
+    expect(c.tabIndex).toBe(0);
+    expect(d.tabIndex).toBe(-1);
+    c.focus();
+    await user.keyboard("{ArrowRight}");
+    expect(d).toHaveAttribute("aria-checked", "true");
+    expect(d).toHaveFocus();
+  });
+
   it("custom sizes warn, confirm, write, then offer one reboot", async () => {
     const user = userEvent.setup();
     apiMock.pagefileSettings.mockResolvedValue(pagefileSettings());

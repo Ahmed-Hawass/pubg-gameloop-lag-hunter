@@ -102,6 +102,20 @@ describe("MonitorView — idle state", () => {
     expect(screen.getByText(en.scanStep2).closest(".step")).toBeTruthy();
   });
 
+  it("the duration pills are one tab stop and arrow through the options", async () => {
+    const user = userEvent.setup();
+    const { onDurationChange } = open({ status: "idle", ui: null });
+    const five = screen.getByRole("radio", { name: en.min5 });
+    expect(five.tabIndex).toBe(0);
+    expect(screen.getByRole("radio", { name: en.min10 }).tabIndex).toBe(-1);
+    five.focus();
+    await user.keyboard("{ArrowRight}");
+    expect(onDurationChange).toHaveBeenCalledWith(600);
+    // the callback is the parent's; focus still moves inside the group,
+    // so the next arrow starts where the eyes are
+    expect(screen.getByRole("radio", { name: en.min10 })).toHaveFocus();
+  });
+
   it("a busy Start is dead (no stacked sessions)", async () => {
     const user = userEvent.setup();
     const { onToggle } = open({ status: "idle", ui: null }, { busy: true });

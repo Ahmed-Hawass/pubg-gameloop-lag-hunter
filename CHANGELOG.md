@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- Each radio group is one tab stop now: the duration pills, the language, theme, zoom, and unsupported-apps choices, the page file drive and mode, and the sweep mode move with the arrow keys, Home, and End, and horizontal arrows follow the reading direction.
+
 ## [2.0.3] - 2026-10-20
 
 ### Changed

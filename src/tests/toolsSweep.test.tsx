@@ -72,6 +72,20 @@ async function openSweep(
 }
 
 describe("ToolsView storage sweep", () => {
+  it("the mode pills are one tab stop and arrow to deep", async () => {
+    const user = userEvent.setup();
+    await openSweep(user);
+    const group = screen.getByRole("radiogroup", { name: en.cleanupTitle });
+    const quick = within(group).getByRole("radio", { name: en.cleanupModeQuick });
+    const deep = within(group).getByRole("radio", { name: en.cleanupModeDeep });
+    expect(quick.tabIndex).toBe(0);
+    expect(deep.tabIndex).toBe(-1);
+    quick.focus();
+    await user.keyboard("{ArrowRight}");
+    expect(deep).toHaveAttribute("aria-checked", "true");
+    expect(deep).toHaveFocus();
+  });
+
   it("scans on demand and auto-ticks only measured places", async () => {
     const user = userEvent.setup();
     apiMock.storageScan.mockResolvedValue(cleanupScan());

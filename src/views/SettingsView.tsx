@@ -10,7 +10,12 @@ import { api } from "../bridge";
 import { useLang, type LangSetting } from "../i18n";
 import { INTRO_CARDS_EVENT } from "../useIntroCard";
 import { ZOOM_LEVELS } from "../useUiZoom";
+import { useRovingRadio } from "../useRovingRadio";
 import type { ThemeSetting } from "../theme";
+
+/** the two on/off choices: a boolean[] (not a tuple) so the hook's value
+    type is plain boolean, matching the persisted setting */
+const SHOW_UNSUPPORTED_VALUES: boolean[] = [false, true];
 
 export function SettingsView(props: {
   theme: ThemeSetting;
@@ -84,6 +89,23 @@ export function SettingsView(props: {
     { key: "light", label: t.themeLight },
   ];
 
+  const langRadio = useRovingRadio(
+    options.map((o) => o.key),
+    setting,
+    setLanguage,
+  );
+  const themeRadio = useRovingRadio(
+    themeOptions.map((o) => o.key),
+    theme,
+    onThemeChange,
+  );
+  const zoomRadio = useRovingRadio(ZOOM_LEVELS, zoom, onZoomChange);
+  const unsupportedRadio = useRovingRadio(
+    SHOW_UNSUPPORTED_VALUES,
+    showUnsupported,
+    onShowUnsupportedChange,
+  );
+
   return (
     <div className="settings-page">
       {/* one card for every personal preference (today language and
@@ -94,7 +116,12 @@ export function SettingsView(props: {
             <Languages size={13} />
             {t.language}
           </h3>
-          <div className="lang-segment" role="radiogroup" aria-label={t.language}>
+          <div
+            className="lang-segment"
+            role="radiogroup"
+            aria-label={t.language}
+            onKeyDown={langRadio.onKeyDown}
+          >
             {options.map((o) => (
               <button
                 key={o.key}
@@ -103,6 +130,8 @@ export function SettingsView(props: {
                 // the group announces no selectable state at all
                 role="radio"
                 aria-checked={setting === o.key}
+                tabIndex={langRadio.tabIndexFor(o.key)}
+                ref={(el) => langRadio.setItemRef(o.key, el)}
                 onClick={() => setLanguage(o.key)}
               >
                 {o.label}
@@ -115,13 +144,20 @@ export function SettingsView(props: {
             <SunMoon size={13} />
             {t.theme}
           </h3>
-          <div className="lang-segment" role="radiogroup" aria-label={t.theme}>
+          <div
+            className="lang-segment"
+            role="radiogroup"
+            aria-label={t.theme}
+            onKeyDown={themeRadio.onKeyDown}
+          >
             {themeOptions.map((o) => (
               <button
                 key={o.key}
                 className={`focus-ring-inset lang-seg ${theme === o.key ? "is-active" : ""}`}
                 role="radio"
                 aria-checked={theme === o.key}
+                tabIndex={themeRadio.tabIndexFor(o.key)}
+                ref={(el) => themeRadio.setItemRef(o.key, el)}
                 onClick={() => onThemeChange(o.key)}
               >
                 {o.label}
@@ -134,13 +170,20 @@ export function SettingsView(props: {
             <ZoomIn size={13} />
             {t.zoomTitle}
           </h3>
-          <div className="lang-segment" role="radiogroup" aria-label={t.zoomTitle}>
+          <div
+            className="lang-segment"
+            role="radiogroup"
+            aria-label={t.zoomTitle}
+            onKeyDown={zoomRadio.onKeyDown}
+          >
             {ZOOM_LEVELS.map((level) => (
               <button
                 key={level}
                 className={`focus-ring-inset lang-seg ${zoom === level ? "is-active" : ""}`}
                 role="radio"
                 aria-checked={zoom === level}
+                tabIndex={zoomRadio.tabIndexFor(level)}
+                ref={(el) => zoomRadio.setItemRef(level, el)}
                 onClick={() => onZoomChange(level)}
               >
                 {zoomLabels[level] ?? `${level}%`}
@@ -169,7 +212,12 @@ export function SettingsView(props: {
             {t.showUnsupportedTitle}
             <Hint text={t.showUnsupportedHint} />
           </h3>
-          <div className="lang-segment" role="radiogroup" aria-label={t.showUnsupportedTitle}>
+          <div
+            className="lang-segment"
+            role="radiogroup"
+            aria-label={t.showUnsupportedTitle}
+            onKeyDown={unsupportedRadio.onKeyDown}
+          >
             {(
               [
                 { value: false, label: t.settingOff },
@@ -181,6 +229,8 @@ export function SettingsView(props: {
                 className={`focus-ring-inset lang-seg ${showUnsupported === o.value ? "is-active" : ""}`}
                 role="radio"
                 aria-checked={showUnsupported === o.value}
+                tabIndex={unsupportedRadio.tabIndexFor(o.value)}
+                ref={(el) => unsupportedRadio.setItemRef(o.value, el)}
                 onClick={() => onShowUnsupportedChange(o.value)}
               >
                 {o.label}

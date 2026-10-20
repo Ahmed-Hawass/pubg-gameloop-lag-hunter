@@ -15,6 +15,12 @@ import { Check, CircleAlert, FileText, Play, RefreshCw, Square } from "lucide-re
 import { Button, fmtDur } from "../components/components";
 import type { StatusPayload } from "../bridge";
 import { useLang } from "../i18n";
+import { useRovingRadio } from "../useRovingRadio";
+
+/** the four offered durations; a stored value outside the list still
+    renders (the number above the pills is honest) but the first pill is
+    the group's tab stop. */
+const DURATIONS = [300, 600, 1800, 3600] as const;
 
 export function MonitorView(props: {
   status: StatusPayload;
@@ -111,6 +117,7 @@ function IdleState(props: {
 }) {
   const { busy, status, durationSecs, durationLabel, onDurationChange, onToggle } = props;
   const { t } = useLang();
+  const durationRadio = useRovingRadio(DURATIONS, durationSecs, onDurationChange);
   const minutes = Math.max(1, Math.round(durationSecs / 60));
   return (
     <div className="idle-state">
@@ -120,13 +127,20 @@ function IdleState(props: {
           <span className="num">{minutes}</span>
           <span className="plan-unit">{t.scanPlanUnit(minutes)}</span>
         </div>
-        <div className="scan-duration plan-seg" role="radiogroup" aria-label={t.autoStop}>
-          {[300, 600, 1800, 3600].map((v) => (
+        <div
+          className="scan-duration plan-seg"
+          role="radiogroup"
+          aria-label={t.autoStop}
+          onKeyDown={durationRadio.onKeyDown}
+        >
+          {DURATIONS.map((v) => (
             <button
               key={v}
               className={`focus-ring-inset scan-dur-btn ${durationSecs === v ? "is-active" : ""}`}
               role="radio"
               aria-checked={durationSecs === v}
+              tabIndex={durationRadio.tabIndexFor(v)}
+              ref={(el) => durationRadio.setItemRef(v, el)}
               onClick={() => onDurationChange(v)}
             >
               {durationLabel(v)}

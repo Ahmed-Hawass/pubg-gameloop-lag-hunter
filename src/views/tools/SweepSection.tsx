@@ -11,6 +11,7 @@ import { api, type CleanupCategory, type CleanupHistory, type CleanupResult, typ
 import type { Notice } from "../../errors";
 import { useLang } from "../../i18n";
 import { useHour12 } from "../../useHour12";
+import { useRovingRadio } from "../../useRovingRadio";
 import { cleanupHistoryLine, defaultCheckedIds, formatSweepBytes, BYTES_PER_GB, BYTES_PER_MB } from "./summary";
 import { useModalSignal, useYieldToAppDialog } from "./useModalSignals";
 import { useSpotTheme } from "./useSpotTheme";
@@ -60,6 +61,9 @@ const CL_HINT_GETTERS: Record<string, (t: Locale) => string> = {
   update_download: (t) => t.cleanupCatDownloadHint,
   system_logs: (t) => t.cleanupCatLogsHint,
 };
+
+/** the two sweep modes, in pill order */
+const CL_MODES = ["quick", "deep"] as const;
 
 export function SweepSection(props: {
   showHint: (title: string, body: string) => void;
@@ -114,6 +118,7 @@ export function SweepSection(props: {
       no twin buttons. A completed scan flips the mode to its own
       results; flipping the toggle by hand only switches the display. */
   const [clMode, setClMode] = useState<"quick" | "deep">("quick");
+  const modeRadio = useRovingRadio(CL_MODES, clMode, setClMode);
   /** live progress: current step; phase tells scan apart from clean */
   const [clProg, setClProg] = useState<{ index: number; total: number; id: string } | null>(null);
   const [clPhase, setClPhase] = useState<"scan" | "clean" | null>(null);
@@ -394,8 +399,13 @@ export function SweepSection(props: {
           ) : null}
           {/* mode toggle first: one control decides what Scan
               measures and what the list shows. No twin buttons. */}
-          <div className="cleanup-actions" role="radiogroup" aria-label={t.cleanupTitle}>
-            {(["quick", "deep"] as const).map((m) => (
+          <div
+            className="cleanup-actions"
+            role="radiogroup"
+            aria-label={t.cleanupTitle}
+            onKeyDown={modeRadio.onKeyDown}
+          >
+            {CL_MODES.map((m) => (
               <button
                 key={m}
                 type="button"
@@ -403,6 +413,8 @@ export function SweepSection(props: {
                 aria-checked={clMode === m}
                 className={`focus-ring-inset lang-seg${clMode === m ? " is-active" : ""}`}
                 disabled={clBusy}
+                tabIndex={modeRadio.tabIndexFor(m)}
+                ref={(el) => modeRadio.setItemRef(m, el)}
                 onClick={() => setClMode(m)}
               >
                 {m === "quick" ? t.cleanupModeQuick : t.cleanupModeDeep}

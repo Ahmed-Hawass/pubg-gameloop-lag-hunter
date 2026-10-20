@@ -146,6 +146,35 @@ describe("SettingsView language", () => {
     expect(onZoomChange).toHaveBeenCalledWith(125);
   });
 
+  it("theme pills are one tab stop and arrow through the options", async () => {
+    const user = userEvent.setup();
+    const onThemeChange = vi.fn();
+    render(
+      React.createElement(
+        LanguageProvider,
+        null,
+        React.createElement(SettingsView, {
+          theme: "dark",
+          onThemeChange,
+          active: true,
+          zoom: 100,
+          onZoomChange: vi.fn(),
+          showUnsupported: false,
+          onShowUnsupportedChange: vi.fn(),
+        }),
+      ),
+    );
+    const seg = await screen.findByRole("radiogroup", { name: en.theme });
+    const dark = within(seg).getByRole("radio", { name: en.themeDark });
+    const light = within(seg).getByRole("radio", { name: en.themeLight });
+    expect(dark.tabIndex).toBe(0);
+    expect(light.tabIndex).toBe(-1);
+    dark.focus();
+    await user.keyboard("{ArrowRight}");
+    expect(onThemeChange).toHaveBeenCalledWith("light");
+    expect(light).toHaveFocus();
+  });
+
   it("unsupported pills persist the preference", async () => {
     const user = userEvent.setup();
     const onShowUnsupportedChange = vi.fn();

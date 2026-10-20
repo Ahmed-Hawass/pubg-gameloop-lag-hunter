@@ -17,6 +17,10 @@ import { toErrorBody, type Notice } from "../../errors";
 import { useLang } from "../../i18n";
 import { useModalSignal, useYieldToAppDialog } from "./useModalSignals";
 import { syncPagefileWorkingCopies } from "./pagefileSync";
+import { useRovingRadio } from "../../useRovingRadio";
+
+/** the three page-file modes, in pill order */
+const PF_MODES = ["system", "custom", "off"] as const;
 
 export function PagefileEditor(props: {
   active: boolean;
@@ -150,6 +154,16 @@ export function PagefileEditor(props: {
     setMaxInput(live?.max_mb?.toString() ?? "");
   };
 
+  const driveRadio = useRovingRadio(
+    pfSettings?.drives.map((d) => d.drive) ?? [],
+    pfDrive,
+    selectPfDrive,
+  );
+  const modeRadio = useRovingRadio(PF_MODES, pfMode, (mode) => {
+    dirtyRef.current = true;
+    setPfMode(mode);
+  });
+
   /** one drive's mode label: system, custom with sizes, off, or
       unreadable (read, never derived from the working copies) */
   const pfModeLabel = (mode: string, min: number | null, max: number | null) =>
@@ -267,7 +281,12 @@ export function PagefileEditor(props: {
           </label>
           <div className={pfAutomatic ? "pf-manual is-disabled" : "pf-manual"}>
             <span className="switch-desc">{t.tweakPfDrivesLabel}</span>
-            <div className="pf-drives" role="radiogroup" aria-label={t.tweakPfDrivesLabel}>
+            <div
+              className="pf-drives"
+              role="radiogroup"
+              aria-label={t.tweakPfDrivesLabel}
+              onKeyDown={driveRadio.onKeyDown}
+            >
               {pfSettings.drives.map((d) => (
                 <button
                   key={d.drive}
@@ -276,6 +295,8 @@ export function PagefileEditor(props: {
                   aria-checked={d.drive === pfDrive}
                   className={`focus-ring pf-drive${d.drive === pfDrive ? " is-selected" : ""}`}
                   disabled={writeBusy || pfAutomatic}
+                  tabIndex={driveRadio.tabIndexFor(d.drive)}
+                  ref={(el) => driveRadio.setItemRef(d.drive, el)}
                   onClick={() => selectPfDrive(d.drive)}
                 >
                   <span className="pf-drive-id num">{d.drive}</span>
@@ -294,7 +315,12 @@ export function PagefileEditor(props: {
                 segmented pills as language/theme): one tap, the active
                 segment fills */}
             <span className="switch-desc">{t.tweakPfModeLabel}</span>
-            <div className="lang-segment" role="radiogroup" aria-label={t.tweakPfTitle}>
+            <div
+              className="lang-segment"
+              role="radiogroup"
+              aria-label={t.tweakPfTitle}
+              onKeyDown={modeRadio.onKeyDown}
+            >
               {(
                 [
                   ["system", t.tweakPfModeSystem],
@@ -309,6 +335,8 @@ export function PagefileEditor(props: {
                   aria-checked={pfMode === mode}
                   className={`focus-ring-inset lang-seg${pfMode === mode ? " is-active" : ""}`}
                   disabled={writeBusy || pfAutomatic}
+                  tabIndex={modeRadio.tabIndexFor(mode)}
+                  ref={(el) => modeRadio.setItemRef(mode, el)}
                   onClick={() => {
                     dirtyRef.current = true;
                     setPfMode(mode);
