@@ -291,6 +291,32 @@ describe("ProcessesView", () => {
     expect(imgs[0].getAttribute("src")).toBe("data:image/png;base64,iVBORw0KGgo");
   });
 
+  it("does not ask for the same artwork again while the first request is in flight", async () => {
+    // sync act flushes (the visibility test pattern): waitFor deadlocks
+    // under fake timers
+    vi.useFakeTimers();
+    try {
+      apiMock.topProcesses
+        .mockResolvedValueOnce(answer)
+        .mockResolvedValueOnce({ ...answer });
+      apiMock.getSettings.mockResolvedValue(settings());
+      apiMock.processIcons.mockReturnValue(new Promise(() => {}));
+      render(React.createElement(ProcessesView, { active: true }));
+      await act(async () => {});
+      expect(apiMock.processIcons).toHaveBeenCalledOnce();
+      // the 2s live poll delivers a fresh list while the first icon
+      // request is still pending
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+      await act(async () => {});
+      expect(apiMock.topProcesses.mock.calls.length).toBeGreaterThan(1);
+      expect(apiMock.processIcons).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("an app nobody measures still keeps its row (membership is not load-gated)", async () => {
     apiMock.topProcesses.mockResolvedValue({
       processes: [

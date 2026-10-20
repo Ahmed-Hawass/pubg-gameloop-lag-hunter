@@ -108,27 +108,46 @@ export function ProcessesView(props: { active: boolean }) {
   /** real artwork by representative PID (glyph until it lands): asked
       once per new PID, kept across polls like the name cache */
   const [icons, setIcons] = useState<Record<number, string>>({});
+  /** PIDs with an icon request in flight: a re-poll before the answer
+      lands must not ask for the same artwork again (the list answer is a
+      new object each time, so the effect does re-run) */
+  const iconRequestsRef = useRef(new Set<number>());
+  /** the request outlives an answer change: only a real unmount may drop
+      its result (the PIDs are stable, so late art is still the right art) */
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   useEffect(() => {
     if (apps.length === 0) return;
     const fresh = apps
       .map((p) => p.pids[0] ?? p.pid)
-      .filter((pid, i, all) => pid > 0 && !(pid in icons) && all.indexOf(pid) === i);
+      .filter(
+        (pid, i, all) =>
+          pid > 0 &&
+          !(pid in icons) &&
+          !iconRequestsRef.current.has(pid) &&
+          all.indexOf(pid) === i,
+      );
     if (fresh.length === 0) return;
-    let live = true;
+    for (const pid of fresh) iconRequestsRef.current.add(pid);
     void api
       .processIcons(fresh)
       .then((found) => {
-        if (!live || found.length === 0) return;
+        if (!mountedRef.current || found.length === 0) return;
         setIcons((prev) => {
           const next = { ...prev };
           for (const f of found) next[f.pid] = f.url;
           return next;
         });
       })
-      .catch(() => {});
-    return () => {
-      live = false;
-    };
+      .catch(() => {})
+      .finally(() => {
+        for (const pid of fresh) iconRequestsRef.current.delete(pid);
+      });
     // icons keyed by PID: a re-poll with the same set asks nothing
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [answer]);

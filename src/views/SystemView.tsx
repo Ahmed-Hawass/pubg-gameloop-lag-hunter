@@ -124,16 +124,30 @@ export function SystemView() {
 
   // copy-all: the exact on-screen strings as plain lines (locale-aware),
   // clipboard first with a notice fallback (never a silent dead button)
+  const copyTimerRef = useRef<number | null>(null);
   const copyAll = async () => {
     if (!info) return;
     try {
       await navigator.clipboard.writeText(specSheet(info, t));
       setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
+      // one copied flash at a time: a second click restarts the window
+      // instead of leaving two timers racing to clear it
+      if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = window.setTimeout(() => {
+        copyTimerRef.current = null;
+        setCopied(false);
+      }, 1500);
     } catch {
       setCopyFailed(true);
     }
   };
+
+  // and the flash timer never outlives the page: unmount clears it
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+    };
+  }, []);
 
   if (error) {
     return (

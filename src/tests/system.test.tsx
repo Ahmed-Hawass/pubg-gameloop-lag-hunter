@@ -3,7 +3,7 @@
 // sheet reuses the exact on-screen strings (pinned, not hand-copied).
 
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { en } from "../locales/en";
@@ -80,6 +80,28 @@ describe("SystemView", () => {
     expect(sheet).toBe(specSheet(info, en));
     expect(sheet).toContain("Intel Core i7-6820HQ");
     await screen.findByText(en.copiedSpecs);
+  });
+
+  it("the copied flash timer is cleared on unmount", async () => {
+    apiMock.systemInfo.mockResolvedValue(info);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    vi.useFakeTimers();
+    try {
+      const { unmount } = render(React.createElement(SystemView));
+      await act(async () => {});
+      fireEvent.click(screen.getByText(en.copySpecs));
+      await act(async () => {});
+      expect(screen.getByText(en.copiedSpecs)).toBeTruthy();
+      expect(vi.getTimerCount()).toBe(1);
+      unmount();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("missing values render honest placeholders, never blanks or guesses", async () => {
