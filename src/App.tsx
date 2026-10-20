@@ -82,7 +82,8 @@ export default function App() {
   /** the first-run advice dialog: shows ONCE, only right after the user
       finishes the welcome flow (loaded-true users never see it) */
   const [firstRunAdviceShown, setFirstRunAdviceShown] = useState(false);
-  /** the GameLoop-closed notice: once per session, never on manual/auto stops */
+  /** the GameLoop-closed notice: once per app launch, never on manual or
+      auto stops (a second closed scan in the same launch is the same news) */
   const [closedNoticeShown, setClosedNoticeShown] = useState(false);
   /** whether onboarding was ALREADY done when the app loaded (distinguishes
       "just finished the welcome" from "finished it last year") */
@@ -253,11 +254,11 @@ export default function App() {
   }, [updateInfo, firstRunAdviceUp, gameAdviceUp, backgroundAdviceUp, onboardingDone, openUpdateModal]);
 
   // state pushes land here (live + final): a finished session caused by
-  // GameLoop dying gets its explanation dialog — once per session, never
+  // GameLoop dying gets its explanation dialog — once per app launch, never
   // for manual stops or the auto-stop timer (those need no apology).
   // Kept fresh through a ref: the engine-state subscription is registered
   // ONCE below, but reads the latest handler — so `t` and the once-per-
-  // session flag can never go stale (language switch mid-session included).
+  // launch flag can never go stale (language switch mid-session included).
   const handleStateRef = useRef<(p: StatusPayload) => void>(() => {});
   const handleState = (payload: StatusPayload) => {
     setStatus(payload);
