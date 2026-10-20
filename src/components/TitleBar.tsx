@@ -69,7 +69,6 @@ export function TitleBar(props: {
   // language flips: RTL mirrors the button to the other corner.
   useEffect(() => {
     let timer = 0;
-    let unlistenResize: (() => void) | undefined;
     let observer: ResizeObserver | undefined;
     const sync = () => {
       window.clearTimeout(timer);
@@ -91,13 +90,15 @@ export function TitleBar(props: {
       observer = new ResizeObserver(() => sync());
       observer.observe(maxBtnRef.current);
     }
-    void onWindowResized(() => sync()).then((u) => {
-      unlistenResize = u;
-    });
+    // the unlisten handle arrives in a PROMISE: keeping it in a local
+    // assigned after the fact meant a teardown before the promise settled
+    // left the listener registered forever (the cleanup saw undefined).
+    // The promise is the handle, exactly like the two effects above.
+    const unlisten = onWindowResized(() => sync());
     return () => {
       window.clearTimeout(timer);
       observer?.disconnect();
-      unlistenResize?.();
+      unlisten.then((f) => f()).catch(() => {});
       // no stale hit area: a torn-down shell leaves nothing clickable
       void syncSnapOverlay(null).catch(() => {});
     };
