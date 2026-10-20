@@ -2,7 +2,7 @@
 // reports, deep-links resolve (or say so), deletion is always confirmed
 // and reported back, and a failed list is a page state, never a modal.
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
@@ -90,6 +90,12 @@ function open(props: Partial<React.ComponentProps<typeof ReportsView>> = {}, hou
   return { onOpened, onDeleted, onDeletedAll };
 }
 
+// a leftover once-queue would answer the NEXT test's clicks: mockReset
+// clears the queued one-shot answers (mockClear does not)
+afterEach(() => {
+  apiMock.loadReport.mockReset();
+});
+
 describe("ReportsView", () => {
   it("names the page with a standing hint line under the title", async () => {
     apiMock.sessionEntries.mockResolvedValue([]);
@@ -115,6 +121,44 @@ describe("ReportsView", () => {
     await screen.findByText(en.diagnoses.disk_wait.title);
     expect(screen.queryByText("backend english")).toBeNull();
     expect(screen.getByText(en.sessionReport)).toBeTruthy();
+  });
+
+  it("a slow first click never overwrites the report of a faster second one", async () => {
+    // two fast clicks (A then B): the answers come back out of order, and
+    // the OLDER report must not land on top of the one the user picked
+    const user = userEvent.setup();
+    apiMock.sessionEntries.mockResolvedValue(entries);
+    let resolveA!: (r: FriendlyReport) => void;
+    const slow = new Promise<FriendlyReport>((r) => {
+      resolveA = r;
+    });
+    // A carries a finding key the locale does not know, so its own title
+    // shows: the test can tell the two reports apart
+    const reportA: FriendlyReport = {
+      ...report,
+      id: "session-1",
+      date: "2026-09-25 10:00",
+      findings: [
+        { key: "only_in_a", title: "REPORT FROM THE SLOW CLICK", simple: "s", fix: "f", severity: "high" },
+      ],
+    };
+    apiMock.loadReport
+      .mockReturnValueOnce(slow) // A: slow
+      .mockResolvedValueOnce(report); // B: fast
+    open();
+    await screen.findByText("2026-09-25 10:00");
+    await user.click(screen.getByRole("button", { name: `2026-09-25 10:00, ${en.clean}` }));
+    await user.click(
+      screen.getByRole("button", { name: `2026-09-25 11:00, ${en.lagCaptured}` }),
+    );
+    // B landed
+    await screen.findByText(en.diagnoses.disk_wait.title);
+    // now the slow A answers: it must be ignored
+    resolveA(reportA);
+    await waitFor(() => {
+      expect(screen.getByText(en.diagnoses.disk_wait.title)).toBeTruthy();
+    });
+    expect(screen.queryByText("REPORT FROM THE SLOW CLICK")).toBeNull();
   });
 
   it("a deep-link to a missing session says so and clears one-shot", async () => {

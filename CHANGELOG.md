@@ -16,6 +16,8 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - The interface no longer freezes for a few seconds every ten minutes of scanning, when the clock was read while the session was busy.
 - The clock keeps the last known time zone when it cannot read a new one, instead of falling back to UTC for the next ten minutes, and the log says so.
 - The measured counters keep their own column, so a counter this machine names differently can no longer shift the numbers next to it.
+- Opening two reports in a row no longer shows the older one.
+- An error code that is only part of a longer word no longer picks the wrong advice.
 - A stopped scan no longer risks ending an unrelated program.
 - A link that would not open, and a Windows settings shortcut that would not open, now say so instead of looking like a button that does nothing.
 - The app no longer shows a blank window after an unexpected error: it says what happened and offers a reload.

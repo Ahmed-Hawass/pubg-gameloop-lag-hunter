@@ -35,8 +35,8 @@ function highlightTone(kind: string): "hl-bad" | "hl-warn" | "" {
 /** "Xm Ys" report-row duration: a deliberately different shape from the
  *  live session's mm:ss clock in components.tsx fmtDur (this one reads
  *  naturally in a list row, hence the fmtListDur name to prevent confusion).
- *  Units come from the locale (Latin m/s read as English inside Arabic
- *  rows). */
+ *  Units come from the locale, and the Arabic rows read the Arabic
+ *  abbreviations (د / ث) instead of Latin ones. */
 function fmtListDur(sec: number, units: { m: string; s: string }) {
   if (sec <= 0) return "--";
   const m = Math.floor(sec / 60);
@@ -87,6 +87,10 @@ export function ReportsView(props: {
   /** action-failure notice (null = no notice): full title+body so known
       backend codes get their locale copy, not just the unknown fallback */
   const [notice, setNotice] = useState<Notice | null>(null);
+  /** the report-request sequence: two fast clicks (A then B) can resolve
+      OUT OF ORDER, and the older report must never overwrite the newer
+      one the user actually picked */
+  const loadSeqRef = useRef(0);
 
   const refresh = () => {
     api
@@ -163,11 +167,19 @@ export function ReportsView(props: {
       }
       const target = openId;
       setLoadingId(target);
+      const seq = ++loadSeqRef.current;
       api
         .loadReport(target)
-        .then(setReport)
-        .catch(actionFailed)
+        .then((r) => {
+          if (seq !== loadSeqRef.current) return; // a newer request won
+          setReport(r);
+        })
+        .catch((e) => {
+          if (seq !== loadSeqRef.current) return;
+          actionFailed(e);
+        })
         .finally(() => {
+          if (seq !== loadSeqRef.current) return;
           setLoadingId(null);
           onOpened();
         });
@@ -178,13 +190,23 @@ export function ReportsView(props: {
   }, [openId, entries]);
 
   const openReport = (id: string) => {
+    const seq = ++loadSeqRef.current;
     setLoadingId(id);
     setNotice(null);
     api
       .loadReport(id)
-      .then(setReport)
-      .catch(actionFailed)
-      .finally(() => setLoadingId(null));
+      .then((r) => {
+        if (seq !== loadSeqRef.current) return; // a newer request won
+        setReport(r);
+      })
+      .catch((e) => {
+        if (seq !== loadSeqRef.current) return;
+        actionFailed(e);
+      })
+      .finally(() => {
+        if (seq !== loadSeqRef.current) return;
+        setLoadingId(null);
+      });
   };
 
   const removeSession = async (id: string) => {

@@ -19,6 +19,37 @@ export interface Notice {
 }
 
 /**
+ * Find the backend's error code inside a raw message.
+ *
+ * The backend's own error strings ARE the machine keys, so an exact match
+ * comes first. After that the key must stand ALONE in the message: a plain
+ * substring match would let a message that merely MENTIONS a code pick the
+ * wrong advice, and any future key that is a prefix of another would
+ * shadow it.
+ */
+export function findErrorCode(raw: string, errors: Record<string, string>): string | undefined {
+  const keys = Object.keys(errors);
+  const exact = keys.find((c) => raw === c);
+  if (exact) return exact;
+  return keys.find((c) => hasWholeToken(raw, c));
+}
+
+/** true when `code` appears in `text` as a whole token (not glued to
+    another word character) */
+function hasWholeToken(text: string, code: string): boolean {
+  const isWord = (c: string) => /[A-Za-z0-9_]/.test(c);
+  let from = 0;
+  for (;;) {
+    const at = text.indexOf(code, from);
+    if (at < 0) return false;
+    const before = at > 0 ? text[at - 1] : "";
+    const after = text[at + code.length] ?? "";
+    if (!isWord(before) && !isWord(after)) return true;
+    from = at + 1;
+  }
+}
+
+/**
  * Decide which dialog a thrown backend error maps to.
  * `raw` is the error as string; `errors` is the locale's error-code table;
  * `copy` carries the locale's titles (somethingWrong / scanNeedsGame pair
@@ -36,7 +67,7 @@ export function errorDialog(
     unknownErrorBody: (raw: string) => string;
   },
 ): ErrorDialog {
-  const code = Object.keys(errors).find((c) => raw.includes(c));
+  const code = findErrorCode(raw, errors);
   if (code === "GAMELOOP_NOT_RUNNING") {
     return { title: copy.scanNeedsGame, body: copy.scanNeedsGameBody, key: code };
   }
