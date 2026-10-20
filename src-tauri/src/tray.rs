@@ -120,6 +120,17 @@ pub fn reveal<R: Runtime>(app: &AppHandle<R>) {
     }
 }
 
+/// Live handles to the three menu items. A label push mutates their text in
+/// place: the scan item carries the live percent and moves in ~5% steps, so
+/// rebuilding the native menu on every push is wasted work with a real cost
+/// on the tray's main thread. The ids are stable, the items are clones of
+/// the handles the menu owns, and the tray stays the one owner of the menu.
+struct TrayItems<R: Runtime> {
+    open: MenuItem<R>,
+    scan: MenuItem<R>,
+    exit: MenuItem<R>,
+}
+
 /// Create the icon at startup. The labels arrive right after (frontend push);
 /// every failure is logged and swallowed, because a missing icon must never
 /// take the app down with it — the window path still works without one.
@@ -159,6 +170,9 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) {
             }
         }
         builder.build(app)?;
+        // keep the handles for in-place re-labeling; the tray now owns the
+        // menu itself, these are the same native items
+        let _ = app.manage(TrayItems { open, scan, exit });
         Ok(())
     })();
     match built {
@@ -192,23 +206,24 @@ fn on_menu<R: Runtime>(app: &AppHandle<R>, id: &str) {
     }
 }
 
-/// Re-label the menu (language switch). Rebuilds the three items instead of
-/// mutating text: the ids are what the click handler matches on, they never
-/// change, and a language switch is a once-in-a-launch event either way.
+/// Re-label the menu in place (language switch, live scan percent). The tray
+/// must already be built: no tray or no managed items means there is nothing
+/// visible to update, which is Ok, not an error.
 pub fn set_labels<R: Runtime>(
     app: &AppHandle<R>,
     open: &str,
     scan: &str,
     exit: &str,
 ) -> tauri::Result<()> {
-    let Some(tray) = app.tray_by_id(TRAY_ID) else {
+    let Some(_tray) = app.tray_by_id(TRAY_ID) else {
         return Ok(());
     };
-    let menu = Menu::new(app)?;
-    menu.append(&MenuItem::with_id(app, ID_OPEN, open, true, None::<&str>)?)?;
-    menu.append(&MenuItem::with_id(app, ID_SCAN, scan, true, None::<&str>)?)?;
-    menu.append(&MenuItem::with_id(app, ID_EXIT, exit, true, None::<&str>)?)?;
-    tray.set_menu(Some(menu))?;
+    let Some(items) = app.try_state::<TrayItems<R>>() else {
+        return Ok(());
+    };
+    items.open.set_text(open)?;
+    items.scan.set_text(scan)?;
+    items.exit.set_text(exit)?;
     Ok(())
 }
 

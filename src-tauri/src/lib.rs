@@ -380,7 +380,14 @@ async fn storage_deep_scan(
         }
         Err(e) => {
             engine::logging::warn(&format!("storage_deep_scan task failed: {e}"));
-            engine::cleanup::deep_scan_with(|_, _, _| {})
+            // the fallback walks directories too: keep it on the blocking
+            // pool instead of running the dir walks on the async runtime
+            tauri::async_runtime::spawn_blocking(|| engine::cleanup::deep_scan_with(|_, _, _| {}))
+                .await
+                .unwrap_or_else(|_| engine::cleanup::CleanupScan {
+                    categories: Vec::new(),
+                    history: Default::default(),
+                })
         }
     }
 }
