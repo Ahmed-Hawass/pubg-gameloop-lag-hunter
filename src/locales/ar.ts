@@ -361,7 +361,7 @@ export const ar: Locale = {
     procSearchHost: "مضيف البحث",
     procStartMenu: "قائمة ابدأ",
     procShellExperience: "مضيف تجربة واجهة النظام",
-    procSpooler: "التخزين المؤقت للطباعة",
+    procSpooler: "خدمة الطباعة",
   } as Record<string, string>,
   /** generic loading line for tabs that are not Top Processes */
   loading: "جارٍ التحميل...",

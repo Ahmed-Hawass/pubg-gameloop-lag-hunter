@@ -15,6 +15,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - The welcome slide counter is translated for screen readers instead of reading a hardcoded "1 / 2".
 - Locked startup rows name the action in their screen-reader label, for example "Disable X (Change as administrator)", instead of only the approval.
 - The startup list no longer scans the registry on window focus while its tab is hidden.
+- The Arabic name for the Print Spooler now reads as the Windows service, not a description of print caching.
 
 ## [2.0.3] - 2026-10-20
 
