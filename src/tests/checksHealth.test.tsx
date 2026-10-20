@@ -13,7 +13,9 @@ import { settings } from "./fixtures";
 
 const apiMock = vi.hoisted(() => ({
   systemChecks: vi.fn(),
-  openWindowsPanel: vi.fn(),
+  // the bridge contract is a promise for every command: the mock must
+  // honor it, or a `.catch()` on the result throws
+  openWindowsPanel: vi.fn(() => Promise.resolve()),
   getSettings: vi.fn(),
   dismissIntroCard: vi.fn(),
 }));

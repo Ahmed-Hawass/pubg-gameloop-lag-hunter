@@ -12,7 +12,9 @@ import type { UpdateInfo } from "../bridge";
 
 const apiMock = vi.hoisted(() => ({
   checkUpdate: vi.fn(),
-  openUrl: vi.fn(),
+  // the bridge contract is a promise for every command: the mock must
+  // honor it, or a `.catch()` on the result throws
+  openUrl: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock("../bridge", () => ({
@@ -84,5 +86,27 @@ describe("AboutView updates", () => {
     await user.click(screen.getByText(new RegExp(`v${release.version}`)));
     expect(onOpenUpdateModal).toHaveBeenCalledOnce();
     expect(apiMock.checkUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe("AboutView links", () => {
+  it("a link that would not open says so instead of doing nothing", async () => {
+    const user = userEvent.setup();
+    apiMock.openUrl.mockRejectedValue("no browser available");
+    open(null);
+    await user.click(screen.getByText(en.aboutGitHub));
+    // the failure is explained on the one modal surface
+    expect(
+      await screen.findByText(en.dialog.unknownErrorBody("no browser available")),
+    ).toBeTruthy();
+  });
+
+  it("a link that opens says nothing", async () => {
+    const user = userEvent.setup();
+    apiMock.openUrl.mockResolvedValue(undefined);
+    open(null);
+    await user.click(screen.getByText(en.aboutGitHub));
+    expect(apiMock.openUrl).toHaveBeenCalledOnce();
+    expect(screen.queryByText(en.dialog.somethingWrong)).toBeNull();
   });
 });

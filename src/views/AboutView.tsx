@@ -8,9 +8,10 @@
 
 import { useEffect, useState } from "react";
 import { Coffee, Code2, Cpu, Download, HardDrive, Heart, Leaf, MemoryStick, ShieldCheck, ToggleRight } from "lucide-react";
-import { Button } from "../components/components";
+import { Button, Dialog } from "../components/components";
 import { api, type UpdateInfo } from "../bridge";
 import { useLang } from "../i18n";
+import { useActionFailure } from "../useActionFailure";
 import appIcon from "../assets/app-icon.png";
 
 const REPO_URL = "https://github.com/Ahmed-Hawass/pubg-gameloop-lag-hunter";
@@ -41,6 +42,9 @@ export function AboutView(props: {
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<"latest" | "err" | null>(null);
   const appVersion = version;
+  // a link that would not open must SAY so: the button used to look
+  // exactly like one that does nothing
+  const { notice, onFailure, clear } = useActionFailure(t);
 
   // the startup check already knows — the dot shows immediately
   useEffect(() => {
@@ -148,19 +152,31 @@ export function AboutView(props: {
           label={t.aboutGitHub}
           icon={<Code2 size={14} />}
           variant="ghost"
-          onClick={() => void api.openUrl(REPO_URL)}
+          onClick={() => void api.openUrl(REPO_URL).catch(onFailure)}
         />
         <Button
           label={t.aboutSupport}
           icon={<Coffee size={14} />}
           variant="ghost"
           className="about-support"
-          onClick={() => void api.openUrl(SUPPORT_URL)}
+          onClick={() => void api.openUrl(SUPPORT_URL).catch(onFailure)}
         />
         <span className="about-made">
           {t.aboutMade} <Heart size={11} className="about-heart" /> <span className="by">Ahmed Hawass</span>
         </span>
       </div>
+
+      {/* a link that refused to open: the same notice surface every other
+          failed action uses (one modal surface, never a toast) */}
+      {notice ? (
+        <Dialog
+          title={notice.title}
+          body={notice.body}
+          kind="notice"
+          okLabel={t.dialog.ok}
+          onClose={clear}
+        />
+      ) : null}
     </div>
   );
 }

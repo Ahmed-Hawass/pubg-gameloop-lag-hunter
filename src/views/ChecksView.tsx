@@ -22,6 +22,7 @@ import { api, FEATURE_STATE_CHANGED_EVENT, type SystemChecks } from "../bridge";
 import { toErrorBody } from "../errors";
 import { useLang } from "../i18n";
 import { useIntroCard } from "../useIntroCard";
+import { useActionFailure } from "../useActionFailure";
 
 const LIVE_INTERVAL_MS = 30000;
 
@@ -42,6 +43,12 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
       Same unified Dialog as everywhere: one modal surface, yields to the
       App-level dialog like every view dialog. */
   const [hint, setHint] = useState<{ title: string; body: string } | null>(null);
+  // a shortcut that would not open says so on the same notice surface
+  const {
+    notice: actionNotice,
+    onFailure: onActionFailure,
+    clear: clearActionNotice,
+  } = useActionFailure(t);
   /** one-shot page guidance (replaces the static header line below):
       the smooth-or-stuttering verdict and the one-click fix path.
       Declared with every other hook (never past the error/loading early
@@ -199,7 +206,9 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
   // and land on it. Without the link, keep the Windows page.
   const openInAppOr = (toolId: string, panel: string) => () => {
     if (onOpenTool) onOpenTool(toolId);
-    else void api.openWindowsPanel(panel);
+    // a Windows page that would not open must SAY so: the button used to
+    // look exactly like one that does nothing
+    else void api.openWindowsPanel(panel).catch(onActionFailure);
   };
   const items: CheckItem[] = [
     {
@@ -327,6 +336,17 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
           kind="notice"
           okLabel={t.dialog.ok}
           onClose={() => setHint(null)}
+        />
+      ) : null}
+      {/* a shortcut that refused to open: the same notice surface, one
+          modal at a time (the hint yields to it) */}
+      {actionNotice ? (
+        <Dialog
+          title={actionNotice.title}
+          body={actionNotice.body}
+          kind="notice"
+          okLabel={t.dialog.ok}
+          onClose={clearActionNotice}
         />
       ) : null}
     </div>

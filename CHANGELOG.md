@@ -16,6 +16,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - The clock keeps the last known time zone when it cannot read a new one, instead of falling back to UTC for the next ten minutes, and the log says so.
 - The measured counters keep their own column, so a counter this machine names differently can no longer shift the numbers next to it.
 - A stopped scan no longer risks ending an unrelated program.
+- A link that would not open, and a Windows settings shortcut that would not open, now say so instead of looking like a button that does nothing.
 - Closing the update window no longer cancels a download that had already finished.
 
 ## [2.0.2] - 2026-10-19
