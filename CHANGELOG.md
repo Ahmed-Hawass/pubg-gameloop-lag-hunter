@@ -8,6 +8,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 - The update download now asks the engine for the release it is fetching, so the file it verifies and saves is the one the project published, and the folder it can open is only the file it just wrote.
+- Arabic copy fixes: the introduction cards are no longer called identity cards, the graphics card reads the same everywhere, the counts past ten take the singular form with a matching verb, and a few words lost their tanween and their dual agreement.
 
 ### Fixed
 - A background service is never offered as something to close.

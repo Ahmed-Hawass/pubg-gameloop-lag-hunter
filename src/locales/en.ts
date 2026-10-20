@@ -2,7 +2,7 @@
 // for English. The backend sends keys only; this file turns them into language.
 
 export const en = {
-  lang: { code: "en", dir: "ltr" as "ltr" | "rtl", label: "English" },
+  lang: { code: "en", dir: "ltr" as "ltr" | "rtl" },
 
   // ---- shell / title bar ----
   minimize: "Minimize",
@@ -163,8 +163,7 @@ export const en = {
   settingOff: "Off",
   settingOn: "On",
   // language names in the picker: every user-facing string lives here,
-  // including the names of the languages themselves (the hardcoded copies
-  // in the views drifted from the dead lang.label key)
+  // including the names of the languages themselves
   langEn: "English",
   langAr: "العربية",
   /** re-show action for dismissed intro cards: visible only while the

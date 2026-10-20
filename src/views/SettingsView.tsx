@@ -71,8 +71,8 @@ export function SettingsView(props: {
 
   const options: { key: LangSetting; label: string }[] = [
     // every label comes from the locale like the rest of the UI — the
-    // old hardcoded "English"/"العربية" literals duplicated the dead
-    // lang.label key and skipped translation entirely
+    // old hardcoded "English"/"العربية" literals skipped translation
+    // entirely
     { key: "auto", label: t.themeAuto },
     { key: "en", label: t.langEn },
     { key: "ar", label: t.langAr },

@@ -27,15 +27,34 @@ function counted(n: number, one: string, two: string, few: string, many: string)
   return `${n} ${r >= 3 && r <= 10 ? few : many}`;
 }
 
+// The form that follows a NUMERAL: 3-10 take the plural, everything else
+// (1, 2, and 11 and up) takes the singular. Arabic writes "2 دقيقة" and
+// "11 دقيقة" — the dual and the tamyiz only appear when the word itself
+// carries the count ("دقيقتان"). Used where the number is rendered
+// elsewhere (the big "5" of the session plan).
+function numeralForm(n: number, few: string, many: string): string {
+  const r = n % 100;
+  return r >= 3 && r <= 10 ? few : many;
+}
+
+// The verb that agrees with a counted noun: the dual takes the dual verb
+// ("إعدادان يحتاجان"), the plural takes the plural one ("إعدادات تحتاج"),
+// and the singular takes the singular one ("إعداد يحتاج").
+function agreeingVerb(noun: string, singular: string, dual: string, plural: string): string {
+  if (noun === "إعدادان" || noun === "خياران") return dual;
+  if (noun.endsWith("إعدادات") || noun.endsWith("خيارات")) return plural;
+  return singular;
+}
+
 export const ar: Locale = {
-  lang: { code: "ar", dir: "rtl" as "ltr" | "rtl", label: "العربية" },
+  lang: { code: "ar", dir: "rtl" as "ltr" | "rtl" },
 
   // ---- shell / title bar ----
   minimize: "تصغير",
   maximize: "تكبير",
   restore: "استعادة",
   /** زر X لم يعد يخرج: يخفي النافذة في منطقة الإعلام، فلا يجوز أن يدعي إغلاق التطبيق */
-  hideToTray: "إخفاء في الدرج",
+  hideToTray: "إخفاء في منطقة الإعلام",
 
   // ---- tray (the notification-area icon) ----
   trayOpen: "فتح",
@@ -192,9 +211,9 @@ export const ar: Locale = {
   // including the names of the languages themselves
   langEn: "English",
   langAr: "العربية",
-  introResetTitle: "البطاقات التعريفية",
+  introResetTitle: "بطاقات التعريف",
   introResetAction: "إظهار مجددًا",
-  introResetHint: "يعيد إظهار كل بطاقة تعريفية أغلقتها بزر X.",
+  introResetHint: "يعيد إظهار كل بطاقة من بطاقات التعريف أغلقتها بزر X.",
   // small measurement units: GB stays Latin ("16 GB" reads as one technical
   // token). Minutes and seconds use the standard Arabic abbreviations
   // (د / ث) because a lone "m" or "s" looks foreign inside Arabic UI.
@@ -238,7 +257,7 @@ export const ar: Locale = {
   /** scope line under the System tab title: the standing header shows it
       on every visit (loading and error states included); the one-shot
       card below owns the longer promise, so this never repeats it */
-  systemScope: "المعالج والذاكرة وبطاقة الرسوميات والتخزين بنظرة واحدة.",
+  systemScope: "المعالج والذاكرة وكرت الشاشة والتخزين بنظرة واحدة.",
   yourRig: "جهازك",
   storageTitle: "وحدات التخزين",
   deviceSystemTitle: "الجهاز والنظام",
@@ -250,7 +269,7 @@ export const ar: Locale = {
   /** spec value labels (label: value lines, MSA-safe for every count) */
   specCores: "الأنوية",
   specThreads: "الخيوط",
-  specDedicated: "VRAM مخصصة",
+  specDedicated: "ذاكرة VRAM مخصصة",
   specSpeedLabel: "السرعة",
   specScaleLabel: "المقياس",
   /** per-disk usage sentence (kind, size, and free share one line) */
@@ -287,7 +306,7 @@ export const ar: Locale = {
     "اختر ما يُفتح عند تسجيل الدخول: برامج أقل تعني بدء تشغيل أسرع. المهام المجدولة والخدمات غير مدرجة هنا.",
   introStartupTitle: "سرّع بدء التشغيل",
   introStartupBody:
-    "أوقف ما لا تحتاجه فورا. يبقى كل شيء مثبتا ويُفتح عاديا متى احتجته.",
+    "أوقف ما لا تحتاجه فورًا. يبقى كل شيء مثبّتًا ويُفتح عاديًا متى احتجته.",
   startupEmpty: "لا توجد برامج بدء تشغيل",
   /** admin-locked rows show greyed with this reason (never flippable) */
   startupLockedReason: "مقفل من ويندوز: تغييره يتطلب موافقة المسؤول.",
@@ -375,12 +394,13 @@ export const ar: Locale = {
       The count is at most 5, so singular / dual / plural covers it. */
   healthAllGood: "كل شيء جيد",
   healthAllGoodSub: "لا يوجد في هذا الجهاز ما يعيق لعبك",
-  healthNeedsTitle: (n: number) =>
-    n === 1
-      ? "إعداد واحد يحتاج إلى انتباه"
-      : n === 2
-        ? "إعدادان يحتاجان إلى انتباه"
-        : `${n} إعدادات تحتاج إلى انتباه`,
+  healthNeedsTitle: (n: number) => {
+    const noun = counted(n, "إعداد واحد", "إعدادان", "إعدادات", "إعداد");
+    // the verb agrees with the NOUN's form: "إعدادان يحتاجان" (dual),
+    // "إعدادات تحتاج" (plural), "إعداد يحتاج" (singular, and 11+)
+    const verb = agreeingVerb(noun, "يحتاج", "يحتاجان", "تحتاج");
+    return `${noun} ${verb} إلى انتباه`;
+  },
   healthNeedsSub: "كل شيء آخر جيد",
   /** header above the full archive list (attention cards repeat above it
       as the featured summary, so this labels what follows, not a filter) */
@@ -528,12 +548,11 @@ export const ar: Locale = {
       covers it. */
   tweakBannerGood: "كل شيء محسّن",
   tweakBannerGoodSub: "كل خيار على حالته الموصى بها",
-  tweakBannerNeeds: (n: number) =>
-    n === 1
-      ? "خيار واحد يحتاج إلى ضبط"
-      : n === 2
-        ? "خياران يحتاجان إلى ضبط"
-        : `${n} خيارات تحتاج إلى ضبط`,
+  tweakBannerNeeds: (n: number) => {
+    const noun = counted(n, "خيار واحد", "خياران", "خيارات", "خيار");
+    const verb = agreeingVerb(noun, "يحتاج", "يحتاجان", "تحتاج");
+    return `${noun} ${verb} إلى ضبط`;
+  },
   tweakBannerNeedsSub: "كل شيء آخر محسّن",
   storageAllTitle: "كل خيارات التخزين",
   /** header above the full archive list (attention rows repeat above it
@@ -677,7 +696,7 @@ export const ar: Locale = {
   // The big number is rendered separately, so the unit only has to agree
   // with it: 3-10 take دقائق, everything else takes دقيقة (5 and 10 read
   // دقائق, 30 and 60 read دقيقة).
-  scanPlanUnit: (m: number) => `${m % 100 >= 3 && m % 100 <= 10 ? "دقائق" : "دقيقة"} للجلسة`,
+  scanPlanUnit: (m: number) => `${numeralForm(m, "دقائق", "دقيقة")} للجلسة`,
   scanStep1: "ابدأ الفحص",
   scanStep2: "العب كالمعتاد",
   scanStep3: "اقرأ التقرير",
@@ -697,7 +716,7 @@ export const ar: Locale = {
       ? "دقيقة واحدة متبقية"
       : m === 2
         ? "دقيقتان متبقيتان"
-        : `${m} ${m % 100 >= 3 && m % 100 <= 10 ? "دقائق" : "دقيقة"} متبقية`,
+        : `${m} ${numeralForm(m, "دقائق", "دقيقة")} متبقية`,
   scanSamples: "العينات",
   scanOfSession: "من الجلسة",
   scanMoments: (n: number) => `تم رصد ${counted(n, "لحظة واحدة", "لحظتين", "لحظات", "لحظة")}`,
@@ -742,7 +761,7 @@ export const ar: Locale = {
     paging_churn: {
       title: "نقل ملفات في الخلفية",
       simple:
-        "كان النظام ينقل ملفات اللعبة بين الذاكرة والقرص في الخلفية، رغم أن كليهما كان يعمل بشكل طبيعي. هذا أمر عادي وليس نقصًا في الموارد، لكن كل عملية نقل قد تظهر كتقطيعة بسيطة.",
+        "كان النظام ينقل ملفات اللعبة بين الذاكرة والقرص في الخلفية، رغم أن كليهما كانا يعملان بشكل طبيعي. هذا أمر عادي وليس نقصًا في الموارد، لكن كل عملية نقل قد تظهر كتقطيعة بسيطة.",
       fix: "خصّص ذاكرة أكبر لـ GameLoop من إعداداته. وإذا استمرت المشكلة، فزد حجم ملف الترحيل على قرص SSD.",
     },
     gpu_wake: {
@@ -754,7 +773,7 @@ export const ar: Locale = {
     scene_hitch: {
       title: "تحميل مشهد لأول مرة",
       simple:
-        "عند ظهور مشهد لأول مرة (مثل اللوبي أو خريطة جديدة)، يجهّز الجهاز رسومياته، ما يسبب تقطيعة واحدة بسيطة ثم سلاسة تامة بعدها. وتكون العودة إلى المشهد نفسه سلسة لاحقًا لأنه أصبح مخزَّنًا مؤقتًا.",
+        "عند ظهور مشهد لأول مرة (مثل صالة الانتظار أو خريطة جديدة)، يجهّز الجهاز رسومياته، ما يسبب تقطيعة واحدة بسيطة ثم سلاسة تامة بعدها. وتكون العودة إلى المشهد نفسه سلسة لاحقًا لأنه أصبح مخزَّنًا مؤقتًا.",
       fix: "لا يوجد حل دائم لهذا الأمر؛ فتقلّ حدّته مع تكرار المشاهد، ويتحسن مع تحديث تعريف كرت الشاشة.",
     },
     gpu_busy: {

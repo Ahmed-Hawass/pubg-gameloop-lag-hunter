@@ -77,4 +77,57 @@ describe("locale parity", () => {
       expect(String(ar.procNames[key] ?? "").trim().length).toBeGreaterThan(0);
     }
   });
+
+  it("no Arabic string is empty", () => {
+    // a dropped translation renders as a blank label at runtime; the key
+    // parity test cannot see it (the key is there, the text is not)
+    const walk = (obj: Record<string, unknown>, path = ""): void => {
+      for (const [k, v] of Object.entries(obj)) {
+        const p = path ? `${path}.${k}` : k;
+        if (typeof v === "string") {
+          expect(v.trim().length, `${p} is empty in the Arabic locale`).toBeGreaterThan(0);
+        } else if (typeof v === "object" && v !== null && !Array.isArray(v)) {
+          walk(v as Record<string, unknown>, p);
+        }
+      }
+    };
+    walk(ar as unknown as Record<string, unknown>);
+  });
+});
+
+describe("Arabic counted nouns", () => {
+  it("the session plan shows the unit, never the number twice", () => {
+    // the big "5" is rendered beside the unit: a unit that carried the
+    // number too showed "5 5 دقائق" in the idle screen
+    expect(ar.scanPlanUnit(5)).toBe("دقائق للجلسة");
+    expect(ar.scanPlanUnit(5)).not.toContain("5");
+    expect(ar.scanPlanUnit(30)).toBe("دقيقة للجلسة");
+    expect(ar.scanPlanUnit(60)).toBe("دقيقة للجلسة");
+  });
+
+  it("11 and up take the singular, 3-10 take the plural", () => {
+    // Arabic: 11 takes the singular ("11 إعداد"), 3-10 the plural
+    expect(ar.healthNeedsTitle(3)).toContain("إعدادات");
+    expect(ar.healthNeedsTitle(11)).toContain("11 إعداد");
+    expect(ar.healthNeedsTitle(11)).not.toContain("إعدادات");
+    expect(ar.tweakBannerNeeds(11)).toContain("11 خيار");
+    expect(ar.tweakBannerNeeds(11)).not.toContain("خيارات");
+  });
+
+  it("the verb agrees with the noun's form", () => {
+    expect(ar.healthNeedsTitle(1)).toBe("إعداد واحد يحتاج إلى انتباه");
+    expect(ar.healthNeedsTitle(2)).toBe("إعدادان يحتاجان إلى انتباه");
+    expect(ar.healthNeedsTitle(3)).toBe("3 إعدادات تحتاج إلى انتباه");
+    expect(ar.healthNeedsTitle(11)).toBe("11 إعداد يحتاج إلى انتباه");
+    expect(ar.tweakBannerNeeds(1)).toBe("خيار واحد يحتاج إلى ضبط");
+    expect(ar.tweakBannerNeeds(2)).toBe("خياران يحتاجان إلى ضبط");
+    expect(ar.tweakBannerNeeds(3)).toBe("3 خيارات تحتاج إلى ضبط");
+  });
+
+  it("the remaining time reads naturally", () => {
+    expect(ar.scanRemaining(1)).toBe("دقيقة واحدة متبقية");
+    expect(ar.scanRemaining(2)).toBe("دقيقتان متبقيتان");
+    expect(ar.scanRemaining(5)).toBe("5 دقائق متبقية");
+    expect(ar.scanRemaining(30)).toBe("30 دقيقة متبقية");
+  });
 });
