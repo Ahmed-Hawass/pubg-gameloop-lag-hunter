@@ -137,7 +137,7 @@ describe("UpdateModal", () => {
     const user = userEvent.setup();
     vi.mocked(saveDialog).mockResolvedValue("C:/dl/app-9.9.9.exe");
     apiMock.downloadUpdate.mockReturnValue(new Promise(() => {}));
-    const { onClose } = open();
+    const { onClose, onDownloadingChange } = open();
     await user.click(screen.getByText(en.updateDownload));
     await waitFor(() => {
       expect(apiMock.downloadUpdate).toHaveBeenCalledOnce();
@@ -145,6 +145,24 @@ describe("UpdateModal", () => {
     await user.keyboard("{Escape}");
     expect(apiMock.cancelUpdateDownload).toHaveBeenCalledOnce();
     expect(onClose).toHaveBeenCalledOnce();
+    // the shell's exit gate must stop claiming a download is running
+    expect(onDownloadingChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("unmounting mid-download clears the shell's download flag", async () => {
+    const user = userEvent.setup();
+    vi.mocked(saveDialog).mockResolvedValue("C:/dl/app-9.9.9.exe");
+    apiMock.downloadUpdate.mockReturnValue(new Promise(() => {}));
+    const { onDownloadingChange, unmount } = open();
+    await user.click(screen.getByText(en.updateDownload));
+    await waitFor(() => {
+      expect(apiMock.downloadUpdate).toHaveBeenCalledOnce();
+    });
+    expect(onDownloadingChange).toHaveBeenLastCalledWith(true);
+    // App can swap the modal out for an advice/error dialog without close()
+    unmount();
+    expect(onDownloadingChange).toHaveBeenLastCalledWith(false);
+    expect(apiMock.cancelUpdateDownload).toHaveBeenCalledOnce();
   });
 
   it('an exact "cancelled" rejection closes silently, anything else fails loudly', async () => {

@@ -58,6 +58,9 @@ export function UpdateModal(props: {
   const close = () => {
     if (closedRef.current) return;
     closedRef.current = true;
+    // the shell's exit gate mirrors this flag; a close during a download
+    // must clear it at once, not wait for the component to vanish
+    onDownloadingChange?.(false);
     onClose();
   };
 
@@ -132,6 +135,14 @@ export function UpdateModal(props: {
   useEffect(() => {
     onDownloadingChange?.(phase.kind === "downloading");
   }, [phase.kind, onDownloadingChange]);
+
+  // The modal can also vanish WITHOUT close() (App swaps it for an advice
+  // or error dialog). The effect above already told the shell "true", so
+  // reset that mirror on the way out or the exit confirm keeps claiming a
+  // download that no longer exists.
+  useEffect(() => {
+    return () => onDownloadingChange?.(false);
+  }, [onDownloadingChange]);
 
   // UNMOUNT mid-download = the same orphan the Escape path guards against:
   // App can swap this modal out for the advice/error dialog while the

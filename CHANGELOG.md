@@ -9,6 +9,9 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 - Each radio group is one tab stop now: the duration pills, the language, theme, zoom, and unsupported-apps choices, the page file drive and mode, and the sweep mode move with the arrow keys, Home, and End, and horizontal arrows follow the reading direction.
 
+### Fixed
+- Closing the update window, or leaving it for another dialog, no longer leaves the exit confirm claiming a download is still running.
+
 ## [2.0.3] - 2026-10-20
 
 ### Changed
