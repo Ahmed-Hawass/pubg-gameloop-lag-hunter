@@ -334,7 +334,7 @@ export default function App() {
     // events have no UI consumer yet (the Start button stays pressable and
     // the engine gate answers on press) — but the WATCHER itself must run:
     // it keeps the session-start gate's emulator snapshot warm.
-    void api.watchGameloop();
+    void api.watchGameloop().catch(() => {});
     return () => {
       un.then((f) => f?.());
     };
