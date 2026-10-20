@@ -38,6 +38,12 @@ export function StartupSection(props: {
   /** action failure notice on the one modal surface */
   const [notice, setNotice] = useState<Notice | null>(null);
   const busyRef = useRef(false);
+  /** the focus listener outlives renders: read the live tab visibility
+      from a ref so a hidden tab never re-scans on window focus */
+  const activeRef = useRef(active);
+  useEffect(() => {
+    activeRef.current = active;
+  }, [active]);
   const closeConfirm = () => {
     setConfirmOn(null);
     setConfirmAdmin(false);
@@ -63,10 +69,14 @@ export function StartupSection(props: {
   };
 
   // first data + window-focus re-read (a flip in Settings or Task Manager
-  // lands here: Windows is the truth, this page only mirrors it)
+  // lands here: Windows is the truth, this page only mirrors it). The
+  // listener checks the live tab visibility: all views stay mounted, so an
+  // unfocused hidden tab must not run a registry scan on every focus.
   useEffect(() => {
     void load(false);
-    const onFocus = () => void load(true);
+    const onFocus = () => {
+      if (activeRef.current) void load(true);
+    };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
     // mount-once bootstrap like every polling view: load's identity is
@@ -205,7 +215,9 @@ function StartupRow(props: {
   const { t } = useLang();
   const action = e.enabled ? t.startupDisable : t.startupEnable;
   const state = e.enabled ? t.startupStateOn : t.startupStateOff;
-  const label = e.locked ? `${t.startupChangeAsAdmin}: ${e.name}` : `${action} ${e.name}`;
+  const label = e.locked
+    ? `${action} ${e.name} (${t.startupChangeAsAdmin})`
+    : `${action} ${e.name}`;
   return (
     <li className="proc-row">
       {e.icon_url ? (

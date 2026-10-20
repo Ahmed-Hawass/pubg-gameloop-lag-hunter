@@ -7,7 +7,7 @@
 // paints the re-read truth (never its own guess).
 
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { en } from "../locales/en";
@@ -73,6 +73,28 @@ describe("StartupSection", () => {
     expect(screen.queryByRole("button", { name: /About / })).toBeNull();
   });
 
+  it("window focus re-reads only while the tab is visible", async () => {
+    apiMock.startupEntries.mockResolvedValue([entry()]);
+    const { rerender } = render(
+      React.createElement(StartupSection, { active: false }),
+    );
+    await screen.findByText("Discord");
+    apiMock.startupEntries.mockClear();
+    // a hidden tab stays quiet on every window focus
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(apiMock.startupEntries).not.toHaveBeenCalled();
+    // the visible tab arms the same listener
+    rerender(React.createElement(StartupSection, { active: true }));
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    await waitFor(() => {
+      expect(apiMock.startupEntries).toHaveBeenCalledOnce();
+    });
+  });
+
   it("enabling names the program and its cost first, then flips on confirm", async () => {
     const user = userEvent.setup();
     apiMock.startupEntries.mockResolvedValue([entry({ enabled: false })]);
@@ -125,7 +147,7 @@ describe("StartupSection", () => {
     await screen.findByText(en.startupLockedReason);
     // the state stays on the button, the shield action in its name
     const btn = screen.getByRole("button", {
-      name: `${en.startupChangeAsAdmin}: Locked`,
+      name: `${en.startupDisable} Locked (${en.startupChangeAsAdmin})`,
     });
     expect(btn).not.toBeDisabled();
     expect(btn.textContent).toContain(en.startupStateOn);
@@ -156,7 +178,9 @@ describe("StartupSection", () => {
     await screen.findByText("D");
     // turning on names the program first, like every enable
     await user.click(
-      screen.getByRole("button", { name: `${en.startupChangeAsAdmin}: D` }),
+      screen.getByRole("button", {
+        name: `${en.startupEnable} D (${en.startupChangeAsAdmin})`,
+      }),
     );
     await screen.findByText(en.startupEnableConfirmTitle);
     expect(screen.getByText(en.startupEnableConfirmBody("D"))).toBeTruthy();
@@ -177,7 +201,9 @@ describe("StartupSection", () => {
     open();
     await screen.findByText("D");
     await user.click(
-      screen.getByRole("button", { name: `${en.startupChangeAsAdmin}: D` }),
+      screen.getByRole("button", {
+        name: `${en.startupEnable} D (${en.startupChangeAsAdmin})`,
+      }),
     );
     await screen.findByText(en.startupEnableConfirmTitle);
     await user.click(screen.getByRole("button", { name: en.startupEnable }));
