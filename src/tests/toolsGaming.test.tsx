@@ -263,6 +263,18 @@ describe("ToolsView gaming switches", () => {
     expect(document.querySelector(".page-intro .intro-card")).toBeTruthy();
   });
 
+  it("Back returns focus to the card that opened the section", async () => {
+    const user = userEvent.setup();
+    openGaming();
+    await user.click(screen.getByText(en.toolGamingTweaks));
+    await screen.findByText(en.tweakDvrTitle);
+    await user.click(screen.getByRole("button", { name: en.toolsBack }));
+    // the grid is a fresh mount: focus lands on the same card, not the
+    // top of the page
+    const card = screen.getByText(en.toolGamingTweaks).closest("button")!;
+    expect(card).toHaveFocus();
+  });
+
   it("memory integrity flips off through one elevated write", async () => {
     const user = userEvent.setup();
     apiMock.tweakStates.mockResolvedValue(

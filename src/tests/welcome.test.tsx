@@ -33,6 +33,23 @@ describe("WelcomeView slides", () => {
     await screen.findByText(en.welcomeFindsLabel);
   });
 
+  it("focus follows the slide", async () => {
+    const user = userEvent.setup();
+    open();
+    await screen.findByText(en.welcomeFindsLabel);
+    await user.click(screen.getByText(en.welcomeNextBtn));
+    await screen.findByText(en.welcomeHowTitle);
+    // the heading of the new slide takes focus, not the dead old button
+    expect(
+      screen.getByRole("heading", { name: en.welcomeHowTitle }),
+    ).toHaveFocus();
+    await user.click(screen.getByText(en.welcomeBack));
+    await screen.findByText(en.welcomeFindsLabel);
+    expect(
+      screen.getByRole("heading", { name: en.welcomeTitle }),
+    ).toHaveFocus();
+  });
+
   it("Skip finishes onboarding exactly like Begin", async () => {
     const user = userEvent.setup();
     const { done } = open();
@@ -92,10 +109,14 @@ describe("WelcomeView slides", () => {
   it("announces the slide position to screen readers", async () => {
     open();
     await screen.findByText(en.welcomeFindsLabel);
-    expect(screen.getByRole("status").getAttribute("aria-label")).toBe("1 / 2");
+    expect(screen.getByRole("status").getAttribute("aria-label")).toBe(
+      en.welcomePage(1, 2),
+    );
     fireEvent.click(screen.getByText(en.welcomeNextBtn));
     await screen.findByText(en.welcomeHowTitle);
-    expect(screen.getByRole("status").getAttribute("aria-label")).toBe("2 / 2");
+    expect(screen.getByRole("status").getAttribute("aria-label")).toBe(
+      en.welcomePage(2, 2),
+    );
   });
 
   it("reduced motion freezes the sample on the first finding", async () => {

@@ -69,6 +69,9 @@ export function ReportsView(props: {
   /** key moments collapse (same toggle as the monitor feed, open by
       default: a report is a record, hiding its moments takes a tap) */
   const [momentsOpen, setMomentsOpen] = useState(true);
+  /** the session row to focus after Back (keyboard users return to it) */
+  const [returnFocus, setReturnFocus] = useState<string | null>(null);
+  const rowRefs = useRef(new Map<string, HTMLButtonElement>());
 
   const outcomeMeta: Record<string, { label: string; tone: "ok" | "bad" | "warn" }> = {
     clean: { label: t.clean, tone: "ok" },
@@ -209,6 +212,19 @@ export function ReportsView(props: {
       });
   };
 
+  // Back returns focus to the row that opened the report: the list is a
+  // fresh mount, so the ref is the only route back.
+  useEffect(() => {
+    if (report !== null || returnFocus === null) return;
+    rowRefs.current.get(returnFocus)?.focus();
+    setReturnFocus(null);
+  }, [report, returnFocus]);
+
+  const rowRef = (id: string) => (el: HTMLButtonElement | null) => {
+    if (el) rowRefs.current.set(id, el);
+    else rowRefs.current.delete(id);
+  };
+
   const removeSession = async (id: string) => {
     try {
       await api.deleteSession(id);
@@ -270,7 +286,13 @@ export function ReportsView(props: {
     return (
       <div className="reports">
         <div className="report-back-row">
-          <button className="focus-ring-inset back-btn" onClick={() => setReport(null)}>
+          <button
+            className="focus-ring-inset back-btn"
+            onClick={() => {
+              setReturnFocus(report.id);
+              setReport(null);
+            }}
+          >
             <ArrowLeft size={16} />
             {t.allSessions}
           </button>
@@ -441,6 +463,7 @@ export function ReportsView(props: {
                     type="button"
                     className="focus-ring-inset sl-open"
                     aria-label={`${e.date}, ${meta.label}`}
+                    ref={rowRef(e.id)}
                     onClick={() => openReport(e.id)}
                   >
                     <span className={`sl-icon sl-icon-${meta.tone}`}>

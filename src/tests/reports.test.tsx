@@ -123,6 +123,26 @@ describe("ReportsView", () => {
     expect(screen.getByText(en.sessionReport)).toBeTruthy();
   });
 
+  it("Back returns focus to the session row", async () => {
+    const user = userEvent.setup();
+    apiMock.sessionEntries.mockResolvedValue(entries);
+    apiMock.loadReport.mockResolvedValue(report);
+    open();
+    await user.click(
+      await screen.findByRole("button", {
+        name: `2026-09-25 11:00, ${en.lagCaptured}`,
+      }),
+    );
+    await screen.findByText(en.sessionReport);
+    await user.click(screen.getByRole("button", { name: en.allSessions }));
+    // the list is a fresh mount: focus lands on the same row, not the top
+    expect(
+      await screen.findByRole("button", {
+        name: `2026-09-25 11:00, ${en.lagCaptured}`,
+      }),
+    ).toHaveFocus();
+  });
+
   it("a slow first click never overwrites the report of a faster second one", async () => {
     // two fast clicks (A then B): the answers come back out of order, and
     // the OLDER report must not land on top of the one the user picked

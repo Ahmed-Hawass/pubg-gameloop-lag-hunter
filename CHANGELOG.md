@@ -11,6 +11,8 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - Closing the update window, or leaving it for another dialog, no longer leaves the exit confirm claiming a download is still running.
+- Back in Tools and Reports returns keyboard focus to the card or session row that opened the page, and changing a welcome slide focuses its heading instead of dropping focus to the page.
+- The welcome slide counter is translated for screen readers instead of reading a hardcoded "1 / 2".
 
 ## [2.0.3] - 2026-10-20
 

@@ -2,7 +2,7 @@
 // then how it works around one real sample finding plus what it costs.
 // Shown ONCE (onboarding_done is persisted); never again after the first launch.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Cpu,
   Database,
@@ -19,6 +19,15 @@ import { useLang } from "../i18n";
 export function WelcomeView(props: { onDone: () => void }) {
   const { t, lang, setLanguage } = useLang();
   const [page, setPage] = useState<0 | 1>(0);
+  /** the slide heading takes focus after a page change: the Next/Back
+      button that was pressed unmounts, and focus must not fall to <body> */
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const lastPageRef = useRef(page);
+  useEffect(() => {
+    if (lastPageRef.current === page) return;
+    lastPageRef.current = page;
+    titleRef.current?.focus();
+  }, [page]);
   /** rotating sample findings (visual demo only: static translated copy
       cycling disk, cpu, gpu every few seconds — never live data) */
   const [sample, setSample] = useState(0);
@@ -70,7 +79,9 @@ export function WelcomeView(props: { onDone: () => void }) {
       {page === 0 ? (
         <>
           <img className="welcome-icon" src={appIcon} alt="" width={64} height={64} draggable={false} />
-          <h1 className="welcome-title">{t.welcomeTitle}</h1>
+          <h1 className="welcome-title" ref={titleRef} tabIndex={-1}>
+            {t.welcomeTitle}
+          </h1>
           <p className="welcome-what">{t.welcomeWhat}</p>
 
           <div className="welcome-label">{t.welcomeFindsLabel}</div>
@@ -106,7 +117,9 @@ export function WelcomeView(props: { onDone: () => void }) {
         </>
       ) : (
         <>
-          <h1 className="welcome-title">{t.welcomeHowTitle}</h1>
+          <h1 className="welcome-title" ref={titleRef} tabIndex={-1}>
+            {t.welcomeHowTitle}
+          </h1>
           <p className="welcome-what">{t.welcomeHowSub}</p>
 
           <div className="welcome-label">{t.welcomeSampleLabel}</div>
@@ -162,7 +175,7 @@ export function WelcomeView(props: { onDone: () => void }) {
           </div>
         </>
       )}
-      <div className="welcome-dots" role="status" aria-label={`${page + 1} / 2`}>
+      <div className="welcome-dots" role="status" aria-label={t.welcomePage(page + 1, 2)}>
         <span className={page === 0 ? "dot on" : "dot"} aria-hidden="true" />
         <span className={page === 1 ? "dot on" : "dot"} aria-hidden="true" />
       </div>

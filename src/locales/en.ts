@@ -207,6 +207,8 @@ export const en = {
   welcomeCostPrivacyVal: "Local",
   welcomeCostPrivacyLabel: "reports never leave your PC",
   welcomeBegin: "Get started",
+  /** screen-reader page counter under the slides */
+  welcomePage: (page: number, total: number) => `Page ${page} of ${total}`,
 
   // ---- system tab ----
   /** one-shot page intro: the page name plus its one-number-per-part

@@ -6,7 +6,7 @@
 // state; this shell only routes cards and deep-links and owns the two
 // shared dialogs (hint, failed-write notice).
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Dialog, dispatchModalOpen, APP_DIALOG_OPEN_EVENT } from "../components/components";
 import { api, type CleanupHistory } from "../bridge";
@@ -27,6 +27,8 @@ import spotCleanupDark from "../assets/spot-clean-temp-dark.svg?url";
 import spotCleanupLight from "../assets/spot-clean-temp-light.svg?url";
 import spotStorageDark from "../assets/spot-storage-dark.svg?url";
 import spotStorageLight from "../assets/spot-storage-light.svg?url";
+
+type ToolCard = "gaming" | "storage" | "pagefile" | "cleanup";
 
 export function ToolsView(props: {
   active: boolean;
@@ -49,7 +51,13 @@ export function ToolsView(props: {
       lands: raw 24-hour meanwhile, the stored truth itself) */
   const hour12 = useHour12();
   /** which card's details are open (the landing cards need no data) */
-  const [openCard, setOpenCard] = useState<"gaming" | "storage" | "pagefile" | "cleanup" | null>(null);
+  const [openCard, setOpenCard] = useState<ToolCard | null>(null);
+  /** the card to focus after Back (keyboard users return to where they were) */
+  const [returnFocus, setReturnFocus] = useState<ToolCard | null>(null);
+  const gamingCardRef = useRef<HTMLButtonElement>(null);
+  const pagefileCardRef = useRef<HTMLButtonElement>(null);
+  const cleanupCardRef = useRef<HTMLButtonElement>(null);
+  const storageCardRef = useRef<HTMLButtonElement>(null);
   /** failed-write notice (null = no notice) */
   const [notice, setNotice] = useState<Notice | null>(null);
   /** background-note dialog behind a row's (?) button (null = closed).
@@ -129,6 +137,27 @@ export function ToolsView(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toolOpenId]);
 
+  // Back returns focus to the card that opened the section: the grid is
+  // unmounted while details show, so the ref is the only route back.
+  useEffect(() => {
+    if (openCard !== null || returnFocus === null) return;
+    const target =
+      returnFocus === "gaming"
+        ? gamingCardRef.current
+        : returnFocus === "pagefile"
+          ? pagefileCardRef.current
+          : returnFocus === "cleanup"
+            ? cleanupCardRef.current
+            : storageCardRef.current;
+    target?.focus();
+    setReturnFocus(null);
+  }, [openCard, returnFocus]);
+
+  const goBack = () => {
+    setReturnFocus(openCard);
+    setOpenCard(null);
+  };
+
   // a dialog mounting under a parked cursor never fires mouseleave — tell
   // every tooltip to hide the moment ours opens (same signal as the shell)
   useEffect(() => {
@@ -157,7 +186,7 @@ export function ToolsView(props: {
     // the title): passed down as the header trail so all four sections
     // share one row shape instead of repeating this button
     const backBtn = (
-      <button className="focus-ring-inset back-btn" onClick={() => setOpenCard(null)}>
+      <button className="focus-ring-inset back-btn" onClick={goBack}>
         <ArrowLeft size={16} />
         {t.toolsBack}
       </button>
@@ -237,7 +266,11 @@ export function ToolsView(props: {
         </span>
       </div>
       <div className="tools-grid">
-        <button className="focus-ring card tool-card" onClick={() => setOpenCard("gaming")}>
+        <button
+          className="focus-ring card tool-card"
+          ref={gamingCardRef}
+          onClick={() => setOpenCard("gaming")}
+        >
           <img
             className="tool-spot"
             src={spotTheme === "light" ? spotGamingLight : spotGamingDark}
@@ -255,7 +288,11 @@ export function ToolsView(props: {
             </span>
           ) : null}
         </button>
-        <button className="focus-ring card tool-card" onClick={() => setOpenCard("pagefile")}>
+        <button
+          className="focus-ring card tool-card"
+          ref={pagefileCardRef}
+          onClick={() => setOpenCard("pagefile")}
+        >
           <img
             className="tool-spot"
             src={spotTheme === "light" ? spotPagefileLight : spotPagefileDark}
@@ -273,7 +310,11 @@ export function ToolsView(props: {
             </span>
           ) : null}
         </button>
-        <button className="focus-ring card tool-card" onClick={() => setOpenCard("cleanup")}>
+        <button
+          className="focus-ring card tool-card"
+          ref={cleanupCardRef}
+          onClick={() => setOpenCard("cleanup")}
+        >
           <img
             className="tool-spot"
             src={spotTheme === "light" ? spotCleanupLight : spotCleanupDark}
@@ -296,7 +337,11 @@ export function ToolsView(props: {
             </span>
           ) : null}
         </button>
-        <button className="focus-ring card tool-card" onClick={() => setOpenCard("storage")}>
+        <button
+          className="focus-ring card tool-card"
+          ref={storageCardRef}
+          onClick={() => setOpenCard("storage")}
+        >
           <img
             className="tool-spot"
             src={spotTheme === "light" ? spotStorageLight : spotStorageDark}

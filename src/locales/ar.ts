@@ -248,6 +248,8 @@ export const ar: Locale = {
   welcomeCostPrivacyVal: "محلي",
   welcomeCostPrivacyLabel: "التقارير لا تغادر جهازك",
   welcomeBegin: "لنبدأ",
+  /** screen-reader page counter under the slides */
+  welcomePage: (page: number, total: number) => `الصفحة ${page} من ${total}`,
 
   // ---- system tab ----
   /** one-shot page intro: the page name plus its one-number-per-part
