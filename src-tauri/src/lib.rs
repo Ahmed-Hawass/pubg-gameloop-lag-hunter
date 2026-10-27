@@ -75,7 +75,13 @@ fn watch_gameloop(app: tauri::AppHandle) {
 #[tauri::command]
 async fn system_info() -> Result<engine::system::SystemInfo, String> {
     let _t = engine::logging::timed("ipc: system_info");
-    engine::system::system_info_async().await
+    engine::system::system_info_async("system-page").await
+}
+
+#[tauri::command]
+async fn system_disks() -> Result<Vec<engine::system::DiskInfo>, String> {
+    let _t = engine::logging::timed("ipc: system_disks");
+    engine::system::system_disks_async("system-page").await
 }
 
 #[tauri::command]
@@ -1230,6 +1236,7 @@ pub fn run() {
             ps_available,
             watch_gameloop,
             system_info,
+            system_disks,
             top_processes,
             end_processes,
             process_icons,

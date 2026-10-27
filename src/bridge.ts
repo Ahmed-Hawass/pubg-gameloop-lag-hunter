@@ -338,6 +338,7 @@ export const api = {
   openUrl: (url: string) => invoke<void>("open_url", { url }),
   getVersion: () => invoke<string>("get_version"),
   systemInfo: () => invoke<SystemInfo>("system_info"),
+  systemDisks: () => invoke<DiskInfo[]>("system_disks"),
   topProcesses: (force?: boolean) => invoke<TopProcesses>("top_processes", { force: force ?? false }),
   /** end one app group by PIDs (Processes tab action): the engine
       re-guards every member by live name, GameLoop and ourselves refuse */

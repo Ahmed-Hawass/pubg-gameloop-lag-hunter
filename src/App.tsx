@@ -746,10 +746,9 @@ export default function App() {
               />
             )}
             <main className="content">
-              {/* every view mounts ONCE and stays alive; switching only flips
-                  CSS visibility. Data-carrying tabs (system/processes/checks)
-                  keep their state and never re-pay a PowerShell spawn per
-                  visit - the engine's TTL cache handles freshness. */}
+              {/* Every view mounts ONCE and stays alive; activation gates
+                  expensive reads, while the engine caches results between
+                  visits. */}
               <div className={view === "monitor" ? "" : "is-hidden-view"}>
                 <MonitorView
                   status={effectiveStatus}
@@ -764,7 +763,7 @@ export default function App() {
                 />
               </div>
               <div className={view === "system" ? "" : "is-hidden-view"}>
-                <SystemView />
+                <SystemView active={view === "system"} />
               </div>
               <div className={view === "processes" ? "" : "is-hidden-view"}>
                 <ProcessesView active={view === "processes"} />

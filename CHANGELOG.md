@@ -8,6 +8,8 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 - Each radio group is one tab stop now: the duration pills, the language, theme, zoom, and unsupported-apps choices, the page file drive and mode, and the sweep mode move with the arrow keys, Home, and End, and horizontal arrows follow the reading direction.
+- The System page shows device details while storage is still being checked, and the health page no longer starts a duplicate check while hidden.
+- A failed storage read now shows a translated retry message without hiding the rest of the device details.
 
 ### Fixed
 - The window now opens at the saved interface size instead of briefly showing the default size.

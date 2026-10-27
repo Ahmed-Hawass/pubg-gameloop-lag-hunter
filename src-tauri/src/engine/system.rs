@@ -3,7 +3,7 @@
 
 use std::fs;
 use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -21,9 +21,12 @@ const PS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 /// Hardware inventory runs four CIM providers at once and is paid once per
 /// machine (then disk-cached): a longer bound than the 15s poll budget.
 const PS_INVENTORY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+const PS_DISK_INVENTORY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
 /// Machine key surfaced to the UI when a PowerShell query exceeds its
 /// deadline (keys, not sentences: the locales turn this into language).
 pub const POWERSHELL_TIMEOUT: &str = "POWERSHELL_TIMEOUT";
+pub const SYSTEM_INFO_FAILED: &str = "SYSTEM_INFO_FAILED";
+pub const SYSTEM_DISKS_FAILED: &str = "SYSTEM_DISKS_FAILED";
 /// A PowerShell timeout becomes the machine key above (logged by the caller
 /// first, so the log keeps the original detail); any other error passes
 /// through untouched.
@@ -32,6 +35,13 @@ fn map_ps_timeout(err: String) -> String {
         POWERSHELL_TIMEOUT.into()
     } else {
         err
+    }
+}
+fn map_inventory_error(err: String, failure_key: &str) -> String {
+    if err.contains("timed out") {
+        POWERSHELL_TIMEOUT.into()
+    } else {
+        failure_key.into()
     }
 }
 pub(crate) fn ps(script: &str) -> Result<String, String> {
@@ -205,32 +215,107 @@ fn probe_powershell() -> bool {
 // System info - the "Your rig" tab. Hardware identity doesn't change between
 // launches: queried at most once per MACHINE, cached on DISK, instant boots.
 //
-// The bug this layout fixes: `Get-PhysicalDisk` performs a live hardware
-// inventory (SMART probes over every spindle) - 20+ seconds on machines with
-// an HDD, EVERY launch. The rig doesn't change between runs, so after the
-// first successful query the result is persisted under the app dir and all
-// later launches read it in microseconds. The in-memory OnceLock then guards
-// within the run itself.
-//
-// async callers only (see lib.rs): the first-ever query still takes its
-// hardware-inventory time - off the UI thread, never freezing the window.
+// Core device details and physical-disk enumeration have separate caches and
+// requests: a slow storage provider cannot delay the rest of the System page.
 // ---------------------------------------------------------------------------
 
 use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Condvar, Mutex, OnceLock};
 
 static SYSTEM_CACHE: OnceLock<SystemInfo> = OnceLock::new();
+static SYSTEM_DISKS_CACHE: OnceLock<Vec<DiskInfo>> = OnceLock::new();
 const SYSTEM_CACHE_MAX_AGE: std::time::Duration = std::time::Duration::from_secs(30 * 86_400);
-/// one query in flight at a time - a second caller waits for the first
-/// result instead of racing a second 20s inventory. Held INSIDE the
-/// blocking task (see system_info_async): the std Mutex guard lives and
-/// dies on the blocking pool thread, never across an await point.
-static SYSTEM_QUERY_LOCK: Mutex<()> = Mutex::new(());
+static SYSTEM_QUERY: SingleFlight<SystemInfo> = SingleFlight::new();
+static SYSTEM_DISKS_QUERY: SingleFlight<Vec<DiskInfo>> = SingleFlight::new();
+
+struct Flight<T> {
+    id: u64,
+    result: Mutex<Option<Result<T, String>>>,
+    ready: Condvar,
+    waiters: AtomicU64,
+}
+
+struct FlightOutcome<T> {
+    id: u64,
+    shared: bool,
+    result: Result<T, String>,
+}
+
+struct SingleFlight<T> {
+    next_id: AtomicU64,
+    current: Mutex<Option<Arc<Flight<T>>>>,
+}
+
+impl<T> SingleFlight<T> {
+    const fn new() -> Self {
+        Self {
+            next_id: AtomicU64::new(1),
+            current: Mutex::new(None),
+        }
+    }
+}
+
+impl<T: Clone> SingleFlight<T> {
+    fn run(&self, query: impl FnOnce() -> Result<T, String>) -> FlightOutcome<T> {
+        let (flight, leader) = {
+            let mut current = self.current.lock().unwrap_or_else(|p| p.into_inner());
+            match current.as_ref() {
+                Some(flight) => (Arc::clone(flight), false),
+                None => {
+                    let flight = Arc::new(Flight {
+                        id: self.next_id.fetch_add(1, Ordering::Relaxed),
+                        result: Mutex::new(None),
+                        ready: Condvar::new(),
+                        waiters: AtomicU64::new(0),
+                    });
+                    *current = Some(Arc::clone(&flight));
+                    (flight, true)
+                }
+            }
+        };
+
+        if leader {
+            let result = query();
+            {
+                let mut slot = flight.result.lock().unwrap_or_else(|p| p.into_inner());
+                *slot = Some(result.clone());
+            }
+            flight.ready.notify_all();
+            let mut current = self.current.lock().unwrap_or_else(|p| p.into_inner());
+            if matches!(current.as_ref(), Some(active) if Arc::ptr_eq(active, &flight)) {
+                *current = None;
+            }
+            FlightOutcome {
+                id: flight.id,
+                shared: false,
+                result,
+            }
+        } else {
+            flight.waiters.fetch_add(1, Ordering::Relaxed);
+            let mut result = flight.result.lock().unwrap_or_else(|p| p.into_inner());
+            while result.is_none() {
+                result = flight.ready.wait(result).unwrap_or_else(|p| p.into_inner());
+            }
+            FlightOutcome {
+                id: flight.id,
+                shared: true,
+                result: result
+                    .as_ref()
+                    .expect("flight result set before notify")
+                    .clone(),
+            }
+        }
+    }
+}
 
 /// Where the rig profile lives on disk. Same folder as settings/sessions -
 /// `%LOCALAPPDATA%\LagHunter\system-cache.json`.
 fn system_cache_path() -> std::path::PathBuf {
     super::storage::app_dir().join("system-cache.json")
+}
+
+fn system_disks_cache_path() -> std::path::PathBuf {
+    super::storage::app_dir().join("system-disks-cache.json")
 }
 
 /// Load the persisted rig profile. `None` when absent/corrupt - callers fall
@@ -259,40 +344,175 @@ fn save_system_cache(info: &SystemInfo) {
     }
 }
 
+fn load_system_disks_cache() -> Option<Vec<DiskInfo>> {
+    let path = system_disks_cache_path();
+    let modified = fs::metadata(&path).ok()?.modified().ok()?;
+    if modified.elapsed().ok()? > SYSTEM_CACHE_MAX_AGE {
+        super::logging::info("system disk cache expired");
+        return None;
+    }
+    let text = fs::read_to_string(path).ok()?;
+    serde_json::from_str(&text).ok()
+}
+
+fn save_system_disks_cache(disks: &[DiskInfo]) {
+    let _ = fs::create_dir_all(super::storage::app_dir());
+    if let Ok(body) = serde_json::to_string(disks) {
+        if let Err(e) =
+            super::storage::write_file_atomic(&system_disks_cache_path(), body.as_bytes())
+        {
+            super::logging::warn(&format!("system disk cache write failed: {e}"));
+        }
+    }
+}
+
+fn cached_system_disks() -> Option<Vec<DiskInfo>> {
+    if let Some(disks) = SYSTEM_DISKS_CACHE.get() {
+        return Some(disks.clone());
+    }
+    let disks = load_system_disks_cache()?;
+    let _ = SYSTEM_DISKS_CACHE.set(disks.clone());
+    super::logging::info("system disk inventory loaded from disk cache");
+    Some(disks)
+}
+
+fn seed_legacy_system_disks(info: &SystemInfo) {
+    if !info.disks.is_empty() {
+        let _ = SYSTEM_DISKS_CACHE.set(info.disks.clone());
+    }
+}
+
+fn log_inventory_result(
+    phase: &str,
+    source: &str,
+    id: u64,
+    shared: bool,
+    elapsed: std::time::Duration,
+    result: &Result<impl Sized, String>,
+) {
+    let role = if shared { "shared" } else { "leader" };
+    match result {
+        Ok(_) => super::logging::info(&format!(
+            "system inventory phase={phase} attempt={id} source={source} role={role} outcome=ok elapsed_ms={}",
+            elapsed.as_millis()
+        )),
+        Err(e) => super::logging::warn(&format!(
+            "system inventory phase={phase} attempt={id} source={source} role={role} outcome=error elapsed_ms={} error={}",
+            elapsed.as_millis(),
+            super::logging::flatten(e, 180)
+        )),
+    }
+}
+
 /// Rig info, disk-cached across runs: instant after the first launch on a
 /// machine. MUST be called from an async context - the first run pays the
-/// PowerShell hardware inventory on the blocking pool (see module notes).
-/// The whole first-query path (std lock + live query + cache save) runs
-/// INSIDE one blocking task so the lock guard never crosses an await.
-pub async fn system_info_async() -> Result<SystemInfo, String> {
+/// PowerShell core inventory on the blocking pool. Disk enumeration is
+/// separate so a slow storage provider cannot hold up the device details.
+pub async fn system_info_async(source: &str) -> Result<SystemInfo, String> {
     if let Some(cached) = SYSTEM_CACHE.get() {
-        return Ok(cached.clone());
+        let mut info = cached.clone();
+        if let Some(disks) = cached_system_disks() {
+            info.disks = disks;
+        }
+        return Ok(info);
     }
-    // disk cache: the machine doesn't change between launches
     if let Some(disk) = load_system_cache() {
+        seed_legacy_system_disks(&disk);
         let _ = SYSTEM_CACHE.set(disk.clone());
         super::logging::info("rig profile loaded from disk cache");
-        return Ok(disk);
-    }
-    // first run on this machine: one blocking task owns the whole query -
-    // callers that race in behind it wait for the task, not a second query
-    let started = std::time::Instant::now();
-    let info = tauri::async_runtime::spawn_blocking(|| -> Result<SystemInfo, String> {
-        // serialize: whoever got here first runs the inventory; the rest
-        // find the cache filled when the lock reaches them
-        let _serial = SYSTEM_QUERY_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-        if let Some(cached) = SYSTEM_CACHE.get() {
-            return Ok(cached.clone());
+        let mut info = disk;
+        if let Some(disks) = cached_system_disks() {
+            info.disks = disks;
         }
-        let info = query_system_info()?;
-        save_system_cache(&info);
-        let _ = SYSTEM_CACHE.set(info.clone());
-        Ok(info)
+        return Ok(info);
+    }
+
+    let started = std::time::Instant::now();
+    let outcome = tauri::async_runtime::spawn_blocking(|| {
+        SYSTEM_QUERY.run(|| -> Result<SystemInfo, String> {
+            if let Some(cached) = SYSTEM_CACHE.get() {
+                return Ok(cached.clone());
+            }
+            if let Some(cached) = load_system_cache() {
+                seed_legacy_system_disks(&cached);
+                let _ = SYSTEM_CACHE.set(cached.clone());
+                return Ok(cached);
+            }
+            let info = query_system_info()?;
+            save_system_cache(&info);
+            let _ = SYSTEM_CACHE.set(info.clone());
+            Ok(info)
+        })
     })
     .await
-    .map_err(|e| format!("system info task failed: {e}"))??;
-    super::logging::perf("system_info first query", started.elapsed().as_millis());
+    .map_err(|e| format!("system info task failed: {e}"))?;
+    log_inventory_result(
+        "core",
+        source,
+        outcome.id,
+        outcome.shared,
+        started.elapsed(),
+        &outcome.result,
+    );
+    let mut info = outcome.result?;
+    if let Some(disks) = cached_system_disks() {
+        info.disks = disks;
+    }
     Ok(info)
+}
+
+pub async fn system_disks_async(source: &str) -> Result<Vec<DiskInfo>, String> {
+    if let Some(disks) = cached_system_disks() {
+        return Ok(disks);
+    }
+    if let Some(info) = SYSTEM_CACHE.get() {
+        seed_legacy_system_disks(info);
+        if let Some(disks) = cached_system_disks() {
+            return Ok(disks);
+        }
+    } else if let Some(info) = load_system_cache() {
+        seed_legacy_system_disks(&info);
+        let _ = SYSTEM_CACHE.set(info);
+        if let Some(disks) = cached_system_disks() {
+            return Ok(disks);
+        }
+    }
+
+    let started = std::time::Instant::now();
+    let outcome = tauri::async_runtime::spawn_blocking(|| {
+        SYSTEM_DISKS_QUERY.run(|| -> Result<Vec<DiskInfo>, String> {
+            if let Some(disks) = cached_system_disks() {
+                return Ok(disks);
+            }
+            if let Some(disks) = load_system_disks_cache() {
+                let _ = SYSTEM_DISKS_CACHE.set(disks.clone());
+                return Ok(disks);
+            }
+            let disks = query_system_disks()?;
+            save_system_disks_cache(&disks);
+            let _ = SYSTEM_DISKS_CACHE.set(disks.clone());
+            if let Some(info) = SYSTEM_CACHE.get() {
+                let mut updated = info.clone();
+                updated.disks = disks.clone();
+                save_system_cache(&updated);
+            }
+            Ok(disks)
+        })
+    })
+    .await
+    .map_err(|e| format!("system disk task failed: {e}"))?;
+    log_inventory_result(
+        "disks",
+        source,
+        outcome.id,
+        outcome.shared,
+        started.elapsed(),
+        &outcome.result,
+    );
+    if let Ok(disks) = &outcome.result {
+        super::logging::info(&format!("system inventory disks count={}", disks.len()));
+    }
+    outcome.result
 }
 
 /// Machine facts the session needs (RAM MB + physical disk count) straight
@@ -300,20 +520,19 @@ pub async fn system_info_async() -> Result<SystemInfo, String> {
 /// `None` when the cache isn't filled yet (first machine run before the
 /// async warm-up completes): the caller falls back to its own probe path.
 pub fn cached_machine_profile() -> Option<(f64, u32)> {
-    if let Some(info) = SYSTEM_CACHE.get() {
-        if info.ram_gb <= 0.0 {
-            return None;
-        }
-        return Some((info.ram_gb * 1024.0, info.disks.len().max(1) as u32));
-    }
-    // first call before the async warm-up: read the disk file once and
-    // seed the memory cache with it, so later calls in this run stop
-    // paying a file read + JSON parse every time.
-    let info = load_system_cache()?;
+    let info = SYSTEM_CACHE.get().cloned().or_else(load_system_cache)?;
     if info.ram_gb <= 0.0 {
         return None;
     }
-    let out = (info.ram_gb * 1024.0, info.disks.len().max(1) as u32);
+    seed_legacy_system_disks(&info);
+    let disks = cached_system_disks().or_else(|| {
+        if info.disks.is_empty() {
+            None
+        } else {
+            Some(info.disks.clone())
+        }
+    })?;
+    let out = (info.ram_gb * 1024.0, disks.len().max(1) as u32);
     let _ = SYSTEM_CACHE.set(info);
     Some(out)
 }
@@ -568,31 +787,37 @@ pub fn os_identity() -> String {
 }
 
 /// Boot-time warm-up for every engine cache, called ONCE from setup() on a
-/// background async task. The OLD code spawned raw threads that ran the
-/// PowerShell scripts WITHOUT a blocking pool - the 20s Get-PhysicalDisk
-/// inventory froze the UI on HDD machines. Now:
-///   * rig profile  - disk-cache hit (instant) or one async query
+/// background async task. Now:
+///   * core rig profile and disk inventory - separate async queries
 ///   * checks        - refreshed off-thread; the tab reads the cache
 ///   * top processes - refreshed off-thread
 ///
-/// The one-line rig log it produces answers most support questions:
-/// `rig: ram=8192MB disks=2 gpu_counters=true powershell=true os=Windows 11 Pro build=26200`
+/// The rig log includes disk-count readiness, and each inventory phase logs
+/// its source, attempt, outcome, and duration.
 pub async fn warm_system_caches() {
     let _t = super::logging::timed("startup warm-up");
     let os = os_identity();
-    // rig (fills memory + disk cache on first machine run)
-    match system_info_async().await {
+    super::logging::info(&format!("system inventory environment os={os}"));
+    let disk_refresh = tauri::async_runtime::spawn(async {
+        let _ = system_disks_async("startup").await;
+    });
+    match system_info_async("startup").await {
         Ok(info) => {
+            let disk_count = if SYSTEM_DISKS_CACHE.get().is_some() {
+                info.disks.len().to_string()
+            } else {
+                "pending".into()
+            };
             super::logging::info(&format!(
-                "rig: ram={:.0}MB disks={} gpu_counters={} powershell={} os={os}",
+                "rig: ram={:.0}MB disks={disk_count} gpu_counters={} powershell={} os={os}",
                 info.ram_gb * 1024.0,
-                info.disks.len(),
                 info.gpu_counters,
                 info.powershell_available
             ));
         }
         Err(e) => super::logging::warn(&format!("rig warm-up failed: {e}")),
     }
+    drop(disk_refresh);
     // checks + top processes: off-thread refreshes, results land in caches
     let checks = tauri::async_runtime::spawn_blocking(query_system_checks_serialized);
     let procs = tauri::async_runtime::spawn_blocking(query_top_processes_serialized);
@@ -801,27 +1026,6 @@ Get-CimInstance Win32_VideoController | ForEach-Object { "gpu|$($_.Name)|$([math
 "ram|$([math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB,1))"
 $pm = Get-CimInstance Win32_PhysicalMemory | Select-Object -First 1
 "rammod|$($pm.SMBIOSMemoryType)|$($pm.Speed)"
-Get-PhysicalDisk | ForEach-Object {
-  $pd = $_
-  # free space summed over this disk's lettered volumes (DeviceId tracks
-  # the Get-Disk number, so partitions resolve to the right spindle).
-  # $sawVol stays false for letterless/offline layouts: blank reads as
-  # unknown, and a truly full disk still reports an honest 0.
-  $freeStr = ""
-  try {
-    $dn = [int]$pd.DeviceId
-    $sawVol = $false
-    $freeBytes = [int64]0
-    foreach ($pt in (Get-Partition -DiskNumber $dn -ErrorAction Stop)) {
-      if ($pt.DriveLetter) {
-        $vol = Get-Volume -DriveLetter $pt.DriveLetter -ErrorAction SilentlyContinue
-        if ($vol -and ($null -ne $vol.SizeRemaining)) { $sawVol = $true; $freeBytes += $vol.SizeRemaining }
-      }
-    }
-    if ($sawVol) { $freeStr = [math]::Round($freeBytes/1GB,0) }
-  } catch {}
-  "disk|$($pd.FriendlyName)|$($pd.MediaType)|$($pd.BusType)|$([math]::Round($pd.Size/1GB,0))|$freeStr"
-}
 $cs = Get-CimInstance Win32_ComputerSystem
 "sys|$($cs.Manufacturer)|$($cs.Model)"
 $os = Get-CimInstance Win32_OperatingSystem
@@ -836,7 +1040,7 @@ $vr = (Get-CimInstance Win32_VideoController | Where-Object { $_.CurrentRefreshR
     )
     .map_err(|e| {
         super::logging::warn(&format!("system inventory failed: {e}"));
-        map_ps_timeout(e)
+        map_inventory_error(e, SYSTEM_INFO_FAILED)
     })?;
     let mut info = SystemInfo {
         cpu: CpuInfo {
@@ -914,24 +1118,6 @@ $vr = (Get-CimInstance Win32_VideoController | Where-Object { $_.CurrentRefreshR
                     .map(str::to_string);
                 info.ram.speed_mhz = parts.next().and_then(|v| v.trim().parse().ok());
             }
-            Some("disk") => {
-                let name = parts.next().unwrap_or("").trim().to_string();
-                let media = parts.next().unwrap_or("").trim().to_string();
-                let bus = parts.next().unwrap_or("").trim().to_string();
-                let size = parts
-                    .next()
-                    .and_then(|v| v.trim().parse().ok())
-                    .unwrap_or(0.0);
-                if !name.is_empty() {
-                    info.disks.push(DiskInfo {
-                        name,
-                        media,
-                        bus,
-                        size_gb: size,
-                        free_gb: parse_optional_gb(parts.next()),
-                    });
-                }
-            }
             Some("sys") => {
                 let manu = parts.next().unwrap_or("").trim().to_string();
                 let model = parts.next().unwrap_or("").trim().to_string();
@@ -968,6 +1154,66 @@ $vr = (Get-CimInstance Win32_VideoController | Where-Object { $_.CurrentRefreshR
         }
     }
     Ok(info)
+}
+
+pub fn query_system_disks() -> Result<Vec<DiskInfo>, String> {
+    let text = ps_with_timeout(
+        r#"
+Get-PhysicalDisk | ForEach-Object {
+  $pd = $_
+  $freeStr = ""
+  try {
+    $dn = [int]$pd.DeviceId
+    $sawVol = $false
+    $freeBytes = [int64]0
+    foreach ($pt in (Get-Partition -DiskNumber $dn -ErrorAction Stop)) {
+      if ($pt.DriveLetter) {
+        $vol = Get-Volume -DriveLetter $pt.DriveLetter -ErrorAction SilentlyContinue
+        if ($vol -and ($null -ne $vol.SizeRemaining)) { $sawVol = $true; $freeBytes += $vol.SizeRemaining }
+      }
+    }
+    if ($sawVol) { $freeStr = [math]::Round($freeBytes/1GB,0) }
+  } catch {}
+  "disk|$($pd.FriendlyName)|$($pd.MediaType)|$($pd.BusType)|$([math]::Round($pd.Size/1GB,0))|$freeStr"
+}
+"#,
+        PS_DISK_INVENTORY_TIMEOUT,
+    )
+    .map_err(|e| {
+        super::logging::warn(&format!("system disk inventory failed: {e}"));
+        map_inventory_error(e, SYSTEM_DISKS_FAILED)
+    })?;
+    Ok(parse_disk_inventory(&text))
+}
+
+fn parse_disk_inventory(text: &str) -> Vec<DiskInfo> {
+    text.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .filter_map(|line| {
+            let mut parts = line.split('|');
+            if parts.next() != Some("disk") {
+                return None;
+            }
+            let name = parts.next().unwrap_or("").trim().to_string();
+            if name.is_empty() {
+                return None;
+            }
+            let media = parts.next().unwrap_or("").trim().to_string();
+            let bus = parts.next().unwrap_or("").trim().to_string();
+            let size_gb = parts
+                .next()
+                .and_then(|v| v.trim().parse().ok())
+                .unwrap_or(0.0);
+            Some(DiskInfo {
+                name,
+                media,
+                bus,
+                size_gb,
+                free_gb: parse_optional_gb(parts.next()),
+            })
+        })
+        .collect()
 }
 
 /// Optional gigabyte fields (per-disk free space): blank reads as unknown
@@ -3256,23 +3502,101 @@ mod tests {
     }
 
     #[test]
+    fn disk_inventory_parses_known_and_unknown_free_space() {
+        let disks = parse_disk_inventory(
+            "disk|NVMe Drive|SSD|NVMe|500|286\ndisk|Offline|Unspecified|SATA|100|\nnoise|ignored",
+        );
+        assert_eq!(disks.len(), 2);
+        assert_eq!(disks[0].name, "NVMe Drive");
+        assert_eq!(disks[0].free_gb, Some(286.0));
+        assert_eq!(disks[1].free_gb, None);
+    }
+
+    #[test]
+    fn singleflight_shares_result_and_allows_retry_after_failure() {
+        use std::sync::atomic::AtomicUsize;
+        use std::sync::mpsc;
+
+        let flight = Arc::new(SingleFlight::<u32>::new());
+        let query_count = Arc::new(AtomicUsize::new(0));
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+
+        let leader_flight = Arc::clone(&flight);
+        let leader_count = Arc::clone(&query_count);
+        let leader = std::thread::spawn(move || {
+            leader_flight.run(|| {
+                leader_count.fetch_add(1, Ordering::Relaxed);
+                started_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+                Err("inventory failed".into())
+            })
+        });
+        started_rx.recv().unwrap();
+
+        let follower_flight = Arc::clone(&flight);
+        let follower_count = Arc::clone(&query_count);
+        let follower = std::thread::spawn(move || {
+            follower_flight.run(|| {
+                follower_count.fetch_add(1, Ordering::Relaxed);
+                Ok(99)
+            })
+        });
+        let active = flight
+            .current
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .as_ref()
+            .cloned()
+            .expect("leader flight must remain active");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while active.waiters.load(Ordering::Relaxed) == 0 {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "follower did not join"
+            );
+            std::thread::yield_now();
+        }
+        release_tx.send(()).unwrap();
+
+        let leader = leader.join().unwrap();
+        let follower = follower.join().unwrap();
+        assert_eq!(leader.id, follower.id);
+        assert!(!leader.shared);
+        assert!(follower.shared);
+        assert_eq!(leader.result, Err("inventory failed".into()));
+        assert_eq!(follower.result, Err("inventory failed".into()));
+        assert_eq!(query_count.load(Ordering::Relaxed), 1);
+
+        let retry = flight.run(|| {
+            query_count.fetch_add(1, Ordering::Relaxed);
+            Ok(7)
+        });
+        assert_eq!(retry.result, Ok(7));
+        assert_eq!(query_count.load(Ordering::Relaxed), 2);
+    }
+
+    #[cfg(windows)]
+    #[test]
     fn live_system_info_shapes() {
-        // runs everywhere Windows (CI included): the extended inventory
-        // must parse on any machine - core identity never blank, RAM
-        // consistent between the flat legacy field and the new struct.
-        let info = match query_system_info() {
-            Ok(info) => info,
-            Err(_) => {
-                return;
-            }
-        };
+        let info = query_system_info().expect("core system inventory must succeed on Windows");
         assert!(!info.cpu.name.is_empty());
         assert!(info.ram.total_gb > 0.0);
         assert_eq!(info.ram_gb, info.ram.total_gb);
+        assert!(info.disks.is_empty());
         assert!(matches!(
             info.system.directx.as_str(),
             "DirectX 12" | "DirectX 11"
         ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "requires live Windows storage providers"]
+    fn live_system_disk_inventory_returns_rows() {
+        let disks = query_system_disks().expect("disk inventory must succeed on Windows");
+        assert!(!disks.is_empty());
+        assert!(disks.iter().all(|disk| !disk.name.is_empty()));
     }
 
     #[test]
@@ -3436,6 +3760,18 @@ mod tests {
         assert_eq!(
             map_ps_timeout("powershell spawn failed: boom".into()),
             "powershell spawn failed: boom"
+        );
+    }
+
+    #[test]
+    fn inventory_errors_use_localizable_keys_except_timeouts() {
+        assert_eq!(
+            map_inventory_error("powershell timed out".into(), SYSTEM_DISKS_FAILED),
+            POWERSHELL_TIMEOUT
+        );
+        assert_eq!(
+            map_inventory_error("powershell exited nonzero".into(), SYSTEM_DISKS_FAILED),
+            SYSTEM_DISKS_FAILED
         );
     }
 

@@ -35,6 +35,7 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
   // never stack queries: a 30s tick that fires while a slow PowerShell batch
   // is still in flight is skipped, not queued (same guard as ProcessesView)
   const busyRef = useRef(false);
+  const hasLoadedRef = useRef(false);
   // one pending slot for a manual press that lands mid-query: instead of
   // swallowing the click silently, the button spins immediately and the
   // press runs right after the in-flight query finishes - one click suffices
@@ -69,6 +70,7 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
     if (!silent) setBusy(true);
     try {
       setChecks(await api.systemChecks(force));
+      hasLoadedRef.current = true;
       setError(null);
     } catch (e) {
       // the locale copy for known backend keys, with the raw message riding
@@ -87,13 +89,6 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
     }
   };
 
-  useEffect(() => {
-    void load(false);
-    // mount-time fetch only: the retry button and focus handler below
-    // own every later attempt
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // live poll wiring lives in one hook (interval plus off-tab plus
   // hidden-document skip); the silent body stays here with its own
   // busy and error contract
@@ -101,7 +96,7 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
 
   useEffect(() => {
     if (!active) return;
-    void load(true, true);
+    void load(hasLoadedRef.current, true);
     // returning from Windows Settings (after flipping a toggle) refreshes
     // immediately: force pays one PowerShell spawn, skipped while busy
     const onFocus = () => void load(true, true);

@@ -13,6 +13,7 @@ import { settings } from "./fixtures";
 
 const apiMock = vi.hoisted(() => ({
   systemInfo: vi.fn(),
+  systemDisks: vi.fn(),
   getSettings: vi.fn(),
   dismissIntroCard: vi.fn(),
 }));
@@ -50,7 +51,52 @@ const info: SystemInfo = {
   powershell_available: true,
 };
 
+apiMock.systemDisks.mockResolvedValue(info.disks);
+
 describe("SystemView", () => {
+  it("does not query until the hidden page becomes active", async () => {
+    apiMock.systemInfo.mockResolvedValue(info);
+    const props = { active: false };
+    const view = render(React.createElement(SystemView, props));
+    expect(apiMock.systemInfo).not.toHaveBeenCalled();
+    expect(apiMock.systemDisks).not.toHaveBeenCalled();
+    view.rerender(React.createElement(SystemView, { active: true }));
+    await screen.findByText("Intel Core i7-6820HQ");
+    expect(apiMock.systemInfo).toHaveBeenCalledOnce();
+    expect(apiMock.systemDisks).toHaveBeenCalledOnce();
+  });
+
+  it("shows core specifications while disk inventory is still running", async () => {
+    let resolveDisks!: (value: SystemInfo["disks"]) => void;
+    apiMock.systemInfo.mockResolvedValue({ ...info, disks: [] });
+    apiMock.systemDisks.mockReturnValue(
+      new Promise<SystemInfo["disks"]>((resolve) => {
+        resolveDisks = resolve;
+      }),
+    );
+    render(React.createElement(SystemView, { active: true }));
+    await screen.findByText("Intel Core i7-6820HQ");
+    expect(screen.getByText(en.loading)).toBeTruthy();
+    expect(screen.getByRole("button", { name: en.copySpecs })).toBeDisabled();
+    await act(async () => resolveDisks(info.disks));
+    expect(await screen.findByText("NVMe · 500 GB · 286 GB free")).toBeTruthy();
+    expect(screen.getByRole("button", { name: en.copySpecs })).toBeEnabled();
+  });
+
+  it("keeps core specs available and retries a failed disk inventory", async () => {
+    const user = userEvent.setup();
+    apiMock.systemInfo.mockResolvedValue({ ...info, disks: [] });
+    apiMock.systemDisks
+      .mockRejectedValueOnce("POWERSHELL_TIMEOUT")
+      .mockResolvedValueOnce(info.disks);
+    render(React.createElement(SystemView, { active: true }));
+    await screen.findByText("Intel Core i7-6820HQ");
+    expect(await screen.findByText(en.errors.POWERSHELL_TIMEOUT)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: en.refresh }));
+    expect(await screen.findByText("NVMe · 500 GB · 286 GB free")).toBeTruthy();
+    expect(apiMock.systemDisks).toHaveBeenCalledTimes(2);
+  });
+
   it("renders spec cards, storage, device rows and copies the sheet", async () => {
     const user = userEvent.setup();
     apiMock.systemInfo.mockResolvedValue(info);

@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { Button, Dialog, EmptyState } from "../components/components";
 import { PageIntro } from "../components/sections";
-import { api, type SystemInfo } from "../bridge";
+import { api, type DiskInfo, type SystemInfo } from "../bridge";
 import { toErrorBody } from "../errors";
 import { useLang } from "../i18n";
 import type { Locale } from "../locales/en";
@@ -74,14 +74,19 @@ export function diskMeterTone(pct: number): "ok" | "crit" {
   return pct >= DISK_CRIT_USED_PCT ? "crit" : "ok";
 }
 
-export function SystemView() {
+export function SystemView(props: { active?: boolean }) {
+  const { active = true } = props;
   const { t } = useLang();
   const [info, setInfo] = useState<SystemInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [disks, setDisks] = useState<DiskInfo[] | null>(null);
+  const [diskError, setDiskError] = useState<string | null>(null);
+  const [diskBusy, setDiskBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
   const busyRef = useRef(false);
+  const diskBusyRef = useRef(false);
 
   const load = async () => {
     if (busyRef.current) return; // never stack queries
@@ -101,26 +106,39 @@ export function SystemView() {
     }
   };
 
-  // first data. A transient PowerShell failure used to leave this tab
-  // dead until app restart (single mount-time fetch, keep-alive tab, no
-  // retry path) - now the error state carries a retry button and a
-  // window-focus re-read.
-  useEffect(() => {
-    void load();
-    // mount-time fetch only: the retry button and focus handler below
-    // own every later attempt
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const loadDisks = async () => {
+    if (diskBusyRef.current) return;
+    diskBusyRef.current = true;
+    setDiskBusy(true);
+    try {
+      setDisks(await api.systemDisks());
+      setDiskError(null);
+    } catch (e) {
+      setDiskError(toErrorBody(e, t));
+    } finally {
+      diskBusyRef.current = false;
+      setDiskBusy(false);
+    }
+  };
 
   useEffect(() => {
-    if (!error) return;
-    const onFocus = () => void load();
+    if (!active) return;
+    void load();
+    void loadDisks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
+
+  useEffect(() => {
+    if (!active || (!error && !diskError)) return;
+    const onFocus = () => {
+      if (error) void load();
+      if (diskError) void loadDisks();
+    };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-    // load re-resolves the fresh locale through its closure on every
-    // focus fire - its identity is not part of the subscription contract
+    // each loader re-resolves the fresh locale through its closure
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [error]);
+  }, [active, error, diskError]);
 
   // copy-all: the exact on-screen strings as plain lines (locale-aware),
   // clipboard first with a notice fallback (never a silent dead button)
@@ -128,7 +146,7 @@ export function SystemView() {
   const copyAll = async () => {
     if (!info) return;
     try {
-      await navigator.clipboard.writeText(specSheet(info, t));
+      await navigator.clipboard.writeText(specSheet({ ...info, disks: disks ?? info.disks }, t));
       setCopied(true);
       // one copied flash at a time: a second click restarts the window
       // instead of leaving two timers racing to clear it
@@ -187,6 +205,7 @@ export function SystemView() {
     );
   }
 
+  const shownDisks = disks ?? info.disks;
   const gpu = info.gpus[0] ?? null;
   const cpuName = text(info.cpu.name);
   const gpuName = gpu && text(gpu.name) ? gpu.name : null;
@@ -285,8 +304,8 @@ export function SystemView() {
       <section className="sys-section">
         <h3 className="sys-title">{t.storageTitle}</h3>
         <ul className="card spec-list">
-          {info.disks.length > 0 ? (
-            info.disks.map((d, i) => {
+          {shownDisks.length > 0 ? (
+            shownDisks.map((d, i) => {
               const kind = diskKindLabel(d.media, d.bus);
               const pct = diskUsedPct(d.size_gb, d.free_gb);
               const sub = [
@@ -323,10 +342,23 @@ export function SystemView() {
             })
           ) : (
             <li className="spec-row">
-              <span className="spec-row-main">--</span>
+              <span className="spec-row-main">
+                {diskError ?? (diskBusy ? t.loading : "--")}
+              </span>
             </li>
           )}
         </ul>
+        {diskError ? (
+          <div className="sys-retry">
+            <Button
+              label={diskBusy ? t.loading : t.refresh}
+              icon={<RefreshCw size={15} className={diskBusy ? "spin" : ""} />}
+              variant="ghost"
+              disabled={diskBusy}
+              onClick={() => void loadDisks()}
+            />
+          </div>
+        ) : null}
       </section>
 
       {/* device and system */}
@@ -361,6 +393,7 @@ export function SystemView() {
           label={copied ? t.copiedSpecs : t.copySpecs}
           icon={<Copy size={15} />}
           variant="ghost"
+          disabled={diskBusy || diskError !== null || disks === null}
           onClick={() => void copyAll()}
         />
       </div>

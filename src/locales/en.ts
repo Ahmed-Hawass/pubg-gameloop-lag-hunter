@@ -96,6 +96,8 @@ export const en = {
     PF_MAX_INVALID: "The maximum size isn't valid for that drive.",
     PF_WRITE_FAILED: "Windows rejected the page file change.",
     POWERSHELL_TIMEOUT: "The system check took too long. Try again.",
+    SYSTEM_INFO_FAILED: "Couldn't read the device details. Try again.",
+    SYSTEM_DISKS_FAILED: "Couldn't read storage devices. Try again.",
     EMULATOR_UNKNOWN:
       "This GameLoop version isn't recognized yet. If the game is running, update Lag Hunter to the latest version.",
     PROCESS_NOT_FOUND: "That app has already closed, so nothing was ended.",

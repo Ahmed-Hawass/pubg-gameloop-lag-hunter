@@ -64,10 +64,21 @@ const threeWarns: SystemChecks = {
 };
 
 describe("ChecksView health summary", () => {
+  it("waits until the hidden page becomes active before querying", async () => {
+    apiMock.systemChecks.mockResolvedValue(allGood);
+    apiMock.getSettings.mockResolvedValue(settings());
+    const props = { active: false, onOpenTool: vi.fn() };
+    const view = render(React.createElement(ChecksView, props));
+    expect(apiMock.systemChecks).not.toHaveBeenCalled();
+    view.rerender(React.createElement(ChecksView, { ...props, active: true }));
+    await screen.findByText(en.healthAllGood);
+    expect(apiMock.systemChecks).toHaveBeenCalledOnce();
+  });
+
   it("all green shows the good banner and no attention section", async () => {
     apiMock.systemChecks.mockResolvedValue(allGood);
     apiMock.getSettings.mockResolvedValue(settings());
-    render(React.createElement(ChecksView, { active: false, onOpenTool: vi.fn() }));
+    render(React.createElement(ChecksView, { active: true, onOpenTool: vi.fn() }));
     await screen.findByText(en.healthAllGood);
     expect(screen.getByText(en.healthAllGoodSub)).toBeTruthy();
     // new user: the one-shot page card explains banner and shortcuts
@@ -86,7 +97,7 @@ describe("ChecksView health summary", () => {
   it("warnings show a counted banner plus featured cards above the archive", async () => {
     apiMock.systemChecks.mockResolvedValue(threeWarns);
     apiMock.getSettings.mockResolvedValue(settings());
-    render(React.createElement(ChecksView, { active: false, onOpenTool: vi.fn() }));
+    render(React.createElement(ChecksView, { active: true, onOpenTool: vi.fn() }));
     await screen.findByText(en.healthNeedsTitle(3));
     expect(screen.getByText(en.healthNeedsSub)).toBeTruthy();
     // each warning repeats: once featured, once in the archive
@@ -100,7 +111,7 @@ describe("ChecksView health summary", () => {
   it("the archive keeps every open button (featured cards add, never move)", async () => {
     apiMock.systemChecks.mockResolvedValue(threeWarns);
     apiMock.getSettings.mockResolvedValue(settings());
-    render(React.createElement(ChecksView, { active: false, onOpenTool: vi.fn() }));
+    render(React.createElement(ChecksView, { active: true, onOpenTool: vi.fn() }));
     await screen.findByText(en.healthNeedsTitle(3));
     // 3 destinations x 2 sections: moving a button instead of repeating
     // it would silently cut the archive's deep-links in half
@@ -110,7 +121,7 @@ describe("ChecksView health summary", () => {
   it("the banner carries no manual refresh (poll plus focus own it)", async () => {
     apiMock.systemChecks.mockResolvedValue(allGood);
     apiMock.getSettings.mockResolvedValue(settings());
-    render(React.createElement(ChecksView, { active: false, onOpenTool: vi.fn() }));
+    render(React.createElement(ChecksView, { active: true, onOpenTool: vi.fn() }));
     await screen.findByText(en.healthAllGood);
     // the verdict banner is display-only; the error state below owns
     // the single retry button
@@ -120,7 +131,7 @@ describe("ChecksView health summary", () => {
   it("the error state keeps its retry button", async () => {
     apiMock.systemChecks.mockRejectedValue("boom");
     apiMock.getSettings.mockResolvedValue(settings());
-    render(React.createElement(ChecksView, { active: false, onOpenTool: vi.fn() }));
+    render(React.createElement(ChecksView, { active: true, onOpenTool: vi.fn() }));
     await screen.findByText(en.dialog.somethingWrong);
     expect(screen.getByRole("button", { name: en.refresh })).toBeTruthy();
   });
@@ -133,7 +144,7 @@ describe("ChecksView health summary", () => {
       pagefile_pending: true,
     });
     apiMock.getSettings.mockResolvedValue(settings());
-    render(React.createElement(ChecksView, { active: false, onOpenTool: vi.fn() }));
+    render(React.createElement(ChecksView, { active: true, onOpenTool: vi.fn() }));
     // configured truth plus the same pending badge the editor shows,
     // composed into one state line
     const state = await screen.findByText((_, el) => el?.textContent === `${en.pagefileManual(16384)} · ${en.tweakPfPendingBadge}`);
@@ -143,7 +154,7 @@ describe("ChecksView health summary", () => {
   it("hint buttons announce their context, never a bare duplicate", async () => {
     apiMock.systemChecks.mockResolvedValue(allGood);
     apiMock.getSettings.mockResolvedValue(settings());
-    render(React.createElement(ChecksView, { active: false, onOpenTool: vi.fn() }));
+    render(React.createElement(ChecksView, { active: true, onOpenTool: vi.fn() }));
     await screen.findByText(en.healthAllGood);
     const hints = document.querySelectorAll(".switch-hint");
     expect(hints.length).toBeGreaterThan(0);
@@ -156,7 +167,7 @@ describe("ChecksView health summary", () => {
   it("names the page with a standing header above the banner", async () => {
     apiMock.systemChecks.mockResolvedValue(allGood);
     apiMock.getSettings.mockResolvedValue(settings());
-    render(React.createElement(ChecksView, { active: false, onOpenTool: vi.fn() }));
+    render(React.createElement(ChecksView, { active: true, onOpenTool: vi.fn() }));
     await screen.findByText(en.healthAllGood);
     // permanent identity (unlike the one-shot card): tab name plus the
     // standing scope line, both above the verdict banner
@@ -171,7 +182,7 @@ describe("ChecksView health summary", () => {
       memory_integrity_pending: true,
     });
     apiMock.getSettings.mockResolvedValue(settings());
-    render(React.createElement(ChecksView, { active: false, onOpenTool: vi.fn() }));
+    render(React.createElement(ChecksView, { active: true, onOpenTool: vi.fn() }));
     // warn card (featured + archive) with the composed state line
     expect(await screen.findAllByText(en.checkHvci)).toHaveLength(2);
     const states = await screen.findAllByText(
@@ -187,7 +198,7 @@ describe("ChecksView health summary", () => {
       memory_integrity_supported: false,
     });
     apiMock.getSettings.mockResolvedValue(settings());
-    render(React.createElement(ChecksView, { active: false, onOpenTool: vi.fn() }));
+    render(React.createElement(ChecksView, { active: true, onOpenTool: vi.fn() }));
     await screen.findByText(en.healthAllGood);
     // no card, no hint, no button: reporting on an absent feature
     // would be fiction
