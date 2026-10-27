@@ -353,6 +353,10 @@ pub fn clamp_ui_zoom(pct: u32) -> u32 {
     pct.clamp(80, 125)
 }
 
+pub fn ui_zoom_factor(pct: u32) -> f64 {
+    f64::from(clamp_ui_zoom(pct)) / 100.0
+}
+
 pub fn default_ui_zoom() -> u32 {
     100
 }
@@ -622,6 +626,15 @@ mod tests {
         assert_eq!(clamp_ui_zoom(125), 125);
         assert_eq!(clamp_ui_zoom(9999), 125);
         assert_eq!(default_ui_zoom(), 100);
+    }
+
+    #[test]
+    fn ui_zoom_factor_matches_saved_percent() {
+        assert!((ui_zoom_factor(80) - 0.8).abs() < f64::EPSILON);
+        assert!((ui_zoom_factor(100) - 1.0).abs() < f64::EPSILON);
+        assert!((ui_zoom_factor(125) - 1.25).abs() < f64::EPSILON);
+        assert!((ui_zoom_factor(0) - 0.8).abs() < f64::EPSILON);
+        assert!((ui_zoom_factor(u32::MAX) - 1.25).abs() < f64::EPSILON);
     }
 
     #[test]

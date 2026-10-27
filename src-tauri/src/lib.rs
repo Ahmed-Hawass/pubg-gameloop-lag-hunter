@@ -1365,6 +1365,10 @@ pub fn run() {
             // main.tsx). Showing here would put a dark empty window on
             // screen while the bundle parses and the IPC gates resolve.
             if let Some(win) = _app.get_webview_window("main") {
+                let zoom = engine::settings::load().ui_zoom_pct;
+                if let Err(e) = win.set_zoom(engine::settings::ui_zoom_factor(zoom)) {
+                    engine::logging::warn(&format!("initial window zoom failed: {e}"));
+                }
                 if !restore_window_geometry(_app, &win) {
                     let _ = win.center();
                 }

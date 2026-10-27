@@ -10,6 +10,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - Each radio group is one tab stop now: the duration pills, the language, theme, zoom, and unsupported-apps choices, the page file drive and mode, and the sweep mode move with the arrow keys, Home, and End, and horizontal arrows follow the reading direction.
 
 ### Fixed
+- The window now opens at the saved interface size instead of briefly showing the default size.
 - Closing the update window, or leaving it for another dialog, no longer leaves the exit confirm claiming a download is still running.
 - Back in Tools and Reports returns keyboard focus to the card or session row that opened the page, and changing a welcome slide focuses its heading instead of dropping focus to the page.
 - The welcome slide counter is translated for screen readers instead of reading a hardcoded "1 / 2".
