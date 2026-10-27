@@ -1,4 +1,4 @@
-// useRovingRadio.ts — the keyboard contract for the app's hand-rolled
+// useRovingRadio.ts - the keyboard contract for the app's hand-rolled
 // role="radiogroup" pills (duration, language/theme/zoom, pagefile drive/mode,
 // sweep mode). One tab stop for the whole group, arrows move AND select,
 // Home/End jump to the ends, and RTL flips the horizontal arrows so "right"

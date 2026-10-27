@@ -1,5 +1,5 @@
-// version.rs — release comparison on the engine side: plain x.y.z numeric
-// comparison. Text comparison was the old bug — an older longer tag read as
+// version.rs - release comparison on the engine side: plain x.y.z numeric
+// comparison. Text comparison was the old bug - an older longer tag read as
 // "update available".
 
 /// Parse "1.2.3" into numeric components; missing parts count as 0.
@@ -10,7 +10,7 @@ fn parts(v: &str) -> Vec<u64> {
 }
 
 // >0 when remote is newer than local, 0 when equal, <0 when older.
-// Non-numeric components compare as 0 — malformed input can never claim
+// Non-numeric components compare as 0 - malformed input can never claim
 // an update that isn't there.
 pub fn compare(remote: &str, local: &str) -> i64 {
     let (a, b) = (parts(remote), parts(local));

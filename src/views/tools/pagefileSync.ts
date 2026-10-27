@@ -1,4 +1,4 @@
-// pagefileSync.ts — the working-copy sync rule for the Virtual Memory
+// pagefileSync.ts - the working-copy sync rule for the Virtual Memory
 // editor: which drive stays selected and what mode/sizes prefill from
 // the fresh read. Extracted pure from the editor so the rule is pinned
 // by unit test: the selection survives when the drive is still there,

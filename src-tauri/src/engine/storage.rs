@@ -1,4 +1,4 @@
-// storage.rs — AppData layout, session files, settings persistence
+// storage.rs - AppData layout, session files, settings persistence
 // %LOCALAPPDATA%\LagHunter\
 //   sessions\<id>\ {samples.jsonl, events.json, report.md, samples.csv}
 //   settings.json
@@ -67,7 +67,7 @@ pub(crate) fn read_limited(path: &Path) -> Option<String> {
 /// Create a new session directory named by local time: session-YYYY-MM-DD_HHMMSS
 /// (local = wall-clock time on the user's machine, DST-aware).
 /// Second-resolution ids collide when a stop+start lands inside the same
-/// wall-clock second — the id must stay SORTABLE (it is the list ordering
+/// wall-clock second - the id must stay SORTABLE (it is the list ordering
 /// AND carries the date), so a collision takes a monotonic -2, -3, ...
 /// suffix instead of waiting for the next second (which could land the new
 /// session BEFORE its true start time).
@@ -254,7 +254,7 @@ impl SessionWriter {
                                     parsed_bytes += t.len() as u64;
                                     if parsed_bytes > MAX_SAMPLE_BYTES {
                                         // TOCTOU growth: file was small at
-                                        // stat but streamed past the cap —
+                                        // stat but streamed past the cap -
                                         // drop everything, finalize empty.
                                         out.clear();
                                         break;
@@ -368,7 +368,7 @@ impl SessionStats {
             .filter_map(|s| s.cpu_total)
             .collect::<Vec<_>>();
         // NaN-safe ordering: a "NaN" string CAN parse as f64 out of a typeperf
-        // CSV field, and partial_cmp on NaN is None — with panic="abort" that
+        // CSV field, and partial_cmp on NaN is None - with panic="abort" that
         // single bad line would kill the whole app and take the session with
         // it. Equal-comparison on unorderable pairs keeps the sort total.
         cpus.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
@@ -462,11 +462,11 @@ fn build_report(stats: &SessionStats, events: &[EngineEvent], n: u64) -> String 
         md.push_str(&format!("- GPU temp max: {v:.0}C\n"));
     }
     // honesty line: a session spent mostly outside the game is not a match
-    // report — say so instead of letting GPU numbers masquerade as gameplay
+    // report - say so instead of letting GPU numbers masquerade as gameplay
     if let Some(pct) = stats.background_pct {
         if pct >= 60.0 {
             md.push_str(&format!(
-                "- Note: the game window was in the background for ~{pct:.0}% of this session — results may not reflect a real match.\n"
+                "- Note: the game window was in the background for ~{pct:.0}% of this session - results may not reflect a real match.\n"
             ));
         }
     }
@@ -495,7 +495,7 @@ fn build_report(stats: &SessionStats, events: &[EngineEvent], n: u64) -> String 
         // never silently truncate: the full log stays in events.json
         if events.len() > 200 {
             md.push_str(&format!(
-                "\n_Showing the first 200 of {} events — see events.json for the full list._\n",
+                "\n_Showing the first 200 of {} events - see events.json for the full list._\n",
                 events.len()
             ));
         }
@@ -564,7 +564,7 @@ pub struct SessionEntry {
 
 /// Session list with the numbers users care about. Newest first.
 /// `live_id`: the session being written RIGHT NOW (from the engine, not
-/// the filesystem) — hidden from the list whatever state its files are
+/// the filesystem) - hidden from the list whatever state its files are
 /// in. The old heuristic (hide only when summary.json is missing) broke
 /// at the first autosave (~50s in, summary.json appears with
 /// partial:true) and the half-written session showed up as a
@@ -574,19 +574,19 @@ pub fn session_entries(live_id: Option<&str>) -> Vec<SessionEntry> {
     let mut out: Vec<SessionEntry> = Vec::new();
     for id in ids {
         if Some(id.as_str()) == live_id {
-            continue; // live session — not a report yet
+            continue; // live session - not a report yet
         }
         let dir = sessions_root().join(&id);
         // legacy safety net for crashed runs: a session with no summary
         // whose samples were touched within the last minute is a run that
-        // died mid-write — hide it until it is a minute old
+        // died mid-write - hide it until it is a minute old
         let summary_exists = dir.join("summary.json").is_file();
         if !summary_exists {
             if let Ok(meta) = fs::metadata(dir.join("samples.jsonl")) {
                 if let Ok(modified) = meta.modified() {
                     if let Ok(age) = modified.elapsed() {
                         if age.as_secs() < 60 {
-                            continue; // fresh corpse of a crashed run — not a report yet
+                            continue; // fresh corpse of a crashed run - not a report yet
                         }
                     }
                 }
@@ -768,13 +768,13 @@ pub fn delete_session(id: &str) -> Result<(), String> {
 }
 
 /// Delete every saved session directory (bulk cleanup from Reports).
-/// Only `session-*` directories are touched — anything else in the folder
+/// Only `session-*` directories are touched - anything else in the folder
 /// (and anything failing the id guard) is left alone; a locked file skips
 /// its session instead of aborting the whole run (the list refresh right
 /// after shows what is really gone).
 /// The live writer's directory is skipped when its id is passed: deleting
 /// it mid-write would corrupt its report. The UI also disables the button
-/// while a session runs — this is the second lock.
+/// while a session runs - this is the second lock.
 pub fn delete_all_sessions(root: &Path, exclude_id: Option<&str>) -> Result<Vec<String>, String> {
     let mut deleted = Vec::new();
     let Ok(rd) = fs::read_dir(root) else {
@@ -836,7 +836,7 @@ fn stats_bg_pct(summary: &serde_json::Value) -> Option<f64> {
 }
 
 /// Friendly in-app report: human sections built from summary + events.
-/// The UI renders this — same language and tone as the rest of the app.
+/// The UI renders this - same language and tone as the rest of the app.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct FriendlyReport {
     pub id: String,
@@ -844,7 +844,7 @@ pub struct FriendlyReport {
     pub duration_sec: u64,
     pub samples: u64,
     pub lag_spikes: u64,
-    /// "clean" | "issues" | "laggy" | "partial" — honest outcome
+    /// "clean" | "issues" | "laggy" | "partial" - honest outcome
     pub outcome: String,
     /// user-facing lines: key moments in plain language
     pub highlights: Vec<HighlightEntry>,
@@ -936,7 +936,7 @@ pub fn friendly_report(id: &str) -> Result<FriendlyReport, String> {
         });
     }
 
-    // highlights: known event facts only (kind + clock + duration) — the
+    // highlights: known event facts only (kind + clock + duration) - the
     // UI composes the sentence in the user's language. Max 8, newest
     // last. Unknown kinds are skipped (a planted kind string never
     // reaches the UI verbatim); findings already map them to Other event.
@@ -989,7 +989,7 @@ pub fn friendly_report(id: &str) -> Result<FriendlyReport, String> {
         }
     }
 
-    // metrics summary from summary.json stats — machine keys + raw numbers,
+    // metrics summary from summary.json stats - machine keys + raw numbers,
     // the UI composes the sentence per language (the old English sentences
     // shipped verbatim into Arabic reports; keys follow the highlights
     // contract now)
@@ -1047,7 +1047,7 @@ pub fn friendly_report(id: &str) -> Result<FriendlyReport, String> {
     })
 }
 
-/// A report highlight: raw facts — the UI composes the sentence per language.
+/// A report highlight: raw facts - the UI composes the sentence per language.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct HighlightEntry {
     /// machine event kind (e.g. "disk_queue", "nothing", "noSamples")
@@ -1099,7 +1099,7 @@ fn finding_key(kind: &str) -> &'static str {
     }
 }
 
-/// (key, title, simple, fix, severity) — SINGLE-SOURCED from the
+/// (key, title, simple, fix, severity) - SINGLE-SOURCED from the
 /// diagnoser's dictionary: the saved report and the live cards can never
 /// drift apart in wording again. Only the English fallback text flows
 /// from here (the UI translates by key); `cause` is dropped, reports
@@ -1168,7 +1168,7 @@ mod tests {
     fn p95_is_nearest_rank_not_max_for_small_samples() {
         // 20 sorted values 1..20: nearest-rank p95 = ceil(0.95·20) − 1 =
         // index 18 → 19.0. The old form returned index 19 → 20.0 (the
-        // MAX) — every short session overstated its CPU p95.
+        // MAX) - every short session overstated its CPU p95.
         let vals: Vec<Sample> = (1..=20)
             .map(|i| Sample {
                 t: "2026-08-31T05:00:00.000Z".into(),
@@ -1207,7 +1207,7 @@ mod tests {
 
     #[test]
     fn old_samples_without_visibility_stay_none() {
-        // sessions recorded before this feature parse fine — backgroundPct is
+        // sessions recorded before this feature parse fine - backgroundPct is
         // simply absent and the report says nothing about background share
         let mk = || Sample {
             t: "2026-08-31T05:00:00.000Z".into(),
@@ -1259,7 +1259,7 @@ mod tests {
         let _ = fs::remove_dir_all(&d);
         fs::create_dir_all(&d).unwrap();
         fs::write(d.join("samples.jsonl"), "{\"t\":\"x\"}\n{\"t\":\"y\"}\n").unwrap();
-        // NO summary.json — as if the app died mid-session
+        // NO summary.json - as if the app died mid-session
         let entries_path = d.join("events.json");
         fs::write(&entries_path, "[]").unwrap();
         // re-use the outcome branch logic directly (no summary file present)

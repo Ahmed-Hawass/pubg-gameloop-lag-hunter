@@ -1,4 +1,4 @@
-// useUiZoom.ts — interface zoom state (the whole window scales, like
+// useUiZoom.ts - interface zoom state (the whole window scales, like
 // VS Code's zoom: layout and fonts together, zero CSS changes). One
 // fixed ladder shared by pills, shortcuts, and stored values, so no
 // surface can invent an off-ladder value; the engine only guards the
@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, setWebviewZoom } from "./bridge";
 
-/** fixed zoom ladder in percent: Small, Default, Large — the only
+/** fixed zoom ladder in percent: Small, Default, Large - the only
     values the UI ever stores (pills, shortcuts, and disk speak steps,
     never free numbers, so no surface can invent an off-ladder value) */
 export const ZOOM_LEVELS = [80, 100, 125];
@@ -38,7 +38,7 @@ export function useUiZoom(): {
   const zoomRef = useRef(100);
   /** apply generation: async persist confirmations (and the mount read)
       must never clobber a NEWER user action that landed while they
-      were in flight — only the latest generation writes state */
+      were in flight - only the latest generation writes state */
   const genRef = useRef(0);
   /** true once the user changes anything: a slow mount read resolving
       afterwards must not paint over the user's own choice */

@@ -1,4 +1,4 @@
-// useHour12.ts — the OS clock convention (12-hour or not) for wall-clock
+// useHour12.ts - the OS clock convention (12-hour or not) for wall-clock
 // display. Read once per mount from the engine's registry read (a
 // microseconds call, no cache to stale): an OS change mid-run lands on
 // the next mount. Unreadable means 24-hour, today's behavior exactly,

@@ -1,12 +1,12 @@
-// update.rs — the update path: check GitHub, download the release exe,
+// update.rs - the update path: check GitHub, download the release exe,
 // verify it against the published SHA256SUMS, hand the file to the user.
 //
 // SCOPE (deliberate, matches the tool's portable nature): no self-replace,
 // no auto-restart. The most this module ever does is put a VERIFIED file
-// next to the user and open its folder — the double-click is the user's.
+// next to the user and open its folder - the double-click is the user's.
 //
 // Security rules:
-//   * hosts are allowlisted exactly like open_url — https only, GitHub only
+//   * hosts are allowlisted exactly like open_url - https only, GitHub only
 //   * the downloaded exe MUST match the SHA-256 published in SHA256SUMS.txt
 //     (this is the real protection: files fetched by an HTTP client get no
 //     Mark-of-the-Web, so SmartScreen will NOT warn when the user runs it)
@@ -15,7 +15,7 @@
 //     on the project site, opened in the browser
 //
 // Everything runs on the blocking pool (spawn_blocking from lib.rs) and
-// logs every step: check → found → download start/pct/verified/failed —
+// logs every step: check → found → download start/pct/verified/failed -
 // a stuck update is diagnosable from the log alone.
 
 use std::io::Read;
@@ -29,7 +29,7 @@ use sha2::{Digest, Sha256};
 use super::logging;
 
 // ---------------------------------------------------------------------------
-// Allowlist — the same philosophy as OPEN_URL_ALLOWED_HOSTS in lib.rs.
+// Allowlist - the same philosophy as OPEN_URL_ALLOWED_HOSTS in lib.rs.
 // Downloads redirect across these hosts; anything else is refused.
 //
 // NOTE (4 vs 4): this list has 4 hosts on purpose: the 2 GitHub hosts
@@ -49,7 +49,7 @@ pub const ALLOWED_HOSTS: [&str; 4] = [
 const RELEASES_LATEST_URL: &str =
     "https://api.github.com/repos/Ahmed-Hawass/pubg-gameloop-lag-hunter/releases/latest";
 
-/// Hard bounds — "bounded everything" applies to downloads too.
+/// Hard bounds - "bounded everything" applies to downloads too.
 const MAX_DOWNLOAD_BYTES: u64 = 60 * 1024 * 1024; // 60 MB: release exe is ~5-8 MB
 const MAX_METADATA_BYTES: u64 = 2 * 1024 * 1024; // release JSON + checksum list
 const STALL_TIMEOUT: Duration = Duration::from_secs(30); // no bytes for 30s = cancel
@@ -119,7 +119,7 @@ struct GithubNotesFile {
 }
 
 /// Ask GitHub for the latest release. Ok(None) = no newer version / no
-/// release at all. Errors are logged and swallowed — a failed check must
+/// release at all. Errors are logged and swallowed - a failed check must
 /// never disturb the app (the UI shows nothing, exactly like today).
 pub fn check_latest(local_version: &str) -> Option<UpdateInfo> {
     let _t = logging::timed("update: check");
@@ -214,7 +214,7 @@ pub fn resolve_release(version: &str) -> Result<UpdateInfo, String> {
 }
 
 /// Build the update info from a release the engine fetched itself. Every
-/// URL in the result comes from that release — never from the caller.
+/// URL in the result comes from that release - never from the caller.
 fn build_info(release: &GithubRelease, version: &str) -> Result<UpdateInfo, String> {
     // the versioned exe asset + the SHA256SUMS asset must both exist
     let asset = release
@@ -314,10 +314,10 @@ fn notes_page_url(version: &str) -> String {
 // Download
 // ---------------------------------------------------------------------------
 
-/// Global cancel flag — one download at a time; a second request while one
+/// Global cancel flag - one download at a time; a second request while one
 /// is running is refused (the UI's modal is the only trigger).
 static DOWNLOAD_RUNNING: AtomicBool = AtomicBool::new(false);
-/// The path of the file being written — cleaned up on cancel/exit.
+/// The path of the file being written - cleaned up on cancel/exit.
 static ACTIVE_DOWNLOAD: Mutex<Option<std::path::PathBuf>> = Mutex::new(None);
 /// The current download's cancel handle (set at download start, taken on end).
 static ACTIVE_CANCEL: Mutex<Option<std::sync::Arc<AtomicBool>>> = Mutex::new(None);
@@ -331,7 +331,7 @@ static LAST_VERIFIED: Mutex<Option<String>> = Mutex::new(None);
 /// Wire the cancel handle of a starting download (called by the command).
 /// Refused while a download is already running: registering over a live
 /// download would DROP the first one's Arc (the only cancel path it has),
-/// leaving it running but uncancellable — app exit could no longer stop
+/// leaving it running but uncancellable - app exit could no longer stop
 /// it. The command layer's "one modal" rule is UI convention; THIS is the
 /// engine's own enforcement.
 pub fn register_cancel(cancel: std::sync::Arc<AtomicBool>) -> Result<(), String> {
@@ -395,10 +395,10 @@ fn sha_from_sums(sums: &str, file_name: &str) -> Option<String> {
 /// verdict on the asset), distinct from a genuine name miss below.
 fn expected_digest(sums_text: &str, asset_name: &str) -> Result<String, String> {
     if sums_text.trim().is_empty() {
-        return Err("checksum list came back empty — try again".into());
+        return Err("checksum list came back empty - try again".into());
     }
     sha_from_sums(sums_text, asset_name).ok_or_else(|| {
-        format!("asset {asset_name} not listed in SHA256SUMS.txt — refusing unverified download")
+        format!("asset {asset_name} not listed in SHA256SUMS.txt - refusing unverified download")
     })
 }
 
@@ -454,7 +454,7 @@ fn validate_dest(dest: &std::path::Path, expected_name: &str) -> Result<(), Stri
 
 /// Download + verify + write to `dest`. The whole body is held in memory
 /// (the cap keeps it bounded), hashed, compared to SHA256SUMS, and only
-/// then written to disk — a partial/failed file never touches the path
+/// then written to disk - a partial/failed file never touches the path
 /// the user chose.
 ///
 /// `version` is a REQUEST: the release is resolved HERE, from GitHub, so
@@ -508,7 +508,7 @@ fn download_inner(
 ) -> Result<String, String> {
     let _t = logging::timed("update: download");
 
-    // fetch the sums first — if we can't verify, we don't download at all
+    // fetch the sums first - if we can't verify, we don't download at all
     let sums_text = http_get_text(&info.sums_url)?;
     logging::info(&format!("update sums: {} bytes", sums_text.len()));
     let expected = expected_digest(&sums_text, &info.asset_name)?;
@@ -566,10 +566,10 @@ fn download_inner(
     // a hollow download (the same 200-empty shape as the sums quirk) must
     // never reach the hash compare disguised as a "mismatch"
     if buf.is_empty() {
-        return Err("download came back empty — try again".into());
+        return Err("download came back empty - try again".into());
     }
 
-    // verify BEFORE writing — a wrong hash never reaches the disk
+    // verify BEFORE writing - a wrong hash never reaches the disk
     let actual = format!("{:x}", hasher.finalize());
     if actual != expected {
         logging::error(&format!(
@@ -577,14 +577,14 @@ fn download_inner(
             info.version
         ));
         return Err(
-            "verification failed — the downloaded file does not match its published hash".into(),
+            "verification failed - the downloaded file does not match its published hash".into(),
         );
     }
 
     // write to a namespaced temp sibling, then rename over the
     // destination: our extension can never be a user's own file (and a
     // file the user may already have at dest is only ever replaced by
-    // the verified rename — Windows asks about overwriting in the save
+    // the verified rename - Windows asks about overwriting in the save
     // dialog, but we still never leave a half-written exe behind)
     let tmp = part_sibling(&dest);
     std::fs::write(&tmp, &buf).map_err(|e| format!("write: {e}"))?;
@@ -605,11 +605,11 @@ fn download_inner(
     Ok(path_str)
 }
 
-/// Remove any in-flight download PARTIAL — called on cancel and app exit.
+/// Remove any in-flight download PARTIAL - called on cancel and app exit.
 /// Takes (not peeks) the path so a completed download can never be swept:
 /// by the time the file is Done, ACTIVE_DOWNLOAD was already cleared.
 /// The in-progress body writes to our namespaced sibling; the DEST
-/// itself is only ever created by the final verified rename — so cleanup
+/// itself is only ever created by the final verified rename - so cleanup
 /// removes ONLY that sibling. A file the user already had anywhere,
 /// under any extension, is never touched by a cancelled/failed download.
 pub fn cleanup_active_download() {
@@ -630,7 +630,7 @@ fn part_sibling(dest: &std::path::Path) -> std::path::PathBuf {
     dest.with_extension("laghunter-part")
 }
 
-/// Open Explorer with the downloaded file selected — the standard
+/// Open Explorer with the downloaded file selected - the standard
 /// "/select," pattern every browser and installer uses. Read-only.
 ///
 /// Scope: ONLY the file this module verified and wrote. The path is
@@ -683,7 +683,7 @@ pub fn open_folder_selected(path: &str) -> Result<(), String> {
 }
 
 // ---------------------------------------------------------------------------
-// HTTP plumbing — one agent, allowlist enforced on EVERY redirect hop.
+// HTTP plumbing - one agent, allowlist enforced on EVERY redirect hop.
 // ---------------------------------------------------------------------------
 
 /// Verify the URL against the allowlist (called for the initial request
@@ -700,13 +700,13 @@ fn agent() -> ureq::Agent {
     // before the next request is made.
     let mut builder = ureq::AgentBuilder::new()
         .timeout_connect(Duration::from_secs(10))
-        .timeout_read(STALL_TIMEOUT) // a stalled read becomes an error — no infinite hangs
+        .timeout_read(STALL_TIMEOUT) // a stalled read becomes an error - no infinite hangs
         .redirects(0);
 
     // VPN/WARP users: Cloudflare WARP and many corporate setups route via a
     // local loopback proxy (WARP's local proxy mode listens on 127.0.0.1:40000
     // in some configurations) or a system-configured proxy. ureq only reads
-    // HTTPS_PROXY/HTTP_PROXY env vars by default — desktop apps launched
+    // HTTPS_PROXY/HTTP_PROXY env vars by default - desktop apps launched
     // from the Start menu have none, so we honor the Windows registry proxy
     // (the same setting browsers use) when no env override exists.
     if std::env::var_os("HTTPS_PROXY").is_none() && std::env::var_os("https_proxy").is_none() {
@@ -733,7 +733,7 @@ fn redact_proxy(url: &str) -> String {
     }
 }
 
-/// Read the Windows system proxy (WinINET settings — the same ones browsers
+/// Read the Windows system proxy (WinINET settings - the same ones browsers
 /// follow) from the registry. None when the user runs direct (default), or
 /// when the value can't be parsed.
 #[cfg(windows)]
@@ -774,7 +774,7 @@ fn windows_system_proxy() -> Option<String> {
 /// download endpoint answers some non-browser HTTP stacks with `200` plus a
 /// `Location` header and a proven-empty body instead of a 302 (observed Oct
 /// 2026: `content-length: 0` alongside the signed CDN URL). Pure: follow
-/// ONLY when emptiness is proven by an explicit `content-length: 0` — a
+/// ONLY when emptiness is proven by an explicit `content-length: 0` - a
 /// real body (any length, or an unknown streamed length) is never hijacked.
 fn empty_body_redirect(location: Option<&str>, content_length: Option<&str>) -> Option<String> {
     let loc = location.unwrap_or("").trim();
@@ -824,7 +824,7 @@ fn http_get(url: &str) -> Result<ureq::Response, String> {
                 current = next.to_string();
             }
             Err(ureq::Error::Status(code, resp)) => {
-                // 403/429 from the API: capture the reason line for the log —
+                // 403/429 from the API: capture the reason line for the log -
                 // rate limit vs UA policy vs WARP egress IPs differ here, and
                 // "http 403" alone leaves us guessing in user reports
                 let body = resp.into_string().unwrap_or_default();
@@ -890,7 +890,7 @@ mod tests {
 
     #[test]
     fn sums_digest_shape_validated() {
-        // a 63-char digest is not a SHA-256 — must be rejected
+        // a 63-char digest is not a SHA-256 - must be rejected
         let bad = "abc  file.exe";
         assert_eq!(sha_from_sums(bad, "file.exe"), None);
     }
@@ -935,11 +935,11 @@ mod tests {
         // hollow fetch: honest and retryable, never a trust verdict
         assert_eq!(
             expected_digest("", "pubg-gameloop-lag-hunter-2.0.0.exe"),
-            Err("checksum list came back empty — try again".into())
+            Err("checksum list came back empty - try again".into())
         );
         assert_eq!(
             expected_digest("   \r\n", "pubg-gameloop-lag-hunter-2.0.0.exe"),
-            Err("checksum list came back empty — try again".into())
+            Err("checksum list came back empty - try again".into())
         );
         // non-empty but nameless: genuine refusal, wording unchanged
         assert!(expected_digest(&sums, "other.exe")
@@ -1182,7 +1182,7 @@ mod tests {
         let dotdot = std::env::temp_dir().join("..").join(asset);
         assert!(validate_dest(&dotdot, asset).is_err());
         // a real folder + the exact asset name → accepted (existing FILE
-        // at the path is fine — cleanup only ever removes our namespaced
+        // at the path is fine - cleanup only ever removes our namespaced
         // sibling)
         let tmp = std::env::temp_dir().join(asset);
         assert!(validate_dest(&tmp, asset).is_ok());
@@ -1223,7 +1223,7 @@ mod tests {
         // the version cannot resolve (it is not a version shape at all, so
         // the refusal happens locally, with no network call): the call
         // fails BEFORE any path is touched, and the cancel slot must still
-        // be released — otherwise every later attempt is refused
+        // be released - otherwise every later attempt is refused
         let bad = std::path::PathBuf::from("relative.exe");
         assert!(download_and_verify("not-a-version", bad, &cancel, |_| {}).is_err());
         assert!(
@@ -1245,7 +1245,7 @@ mod tests {
     fn cleanup_removes_part_sibling_only() {
         // simulate a registered download over PRE-EXISTING user files:
         // cleanup must remove our sibling and leave everything else
-        // alone — including a user's own plain ".part" file next door
+        // alone - including a user's own plain ".part" file next door
         let dir = std::env::temp_dir();
         let dest = dir.join("laghunter-cleanup-test-existing.txt");
         let ours = dir.join("laghunter-cleanup-test-existing.laghunter-part");

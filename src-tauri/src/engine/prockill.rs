@@ -1,4 +1,4 @@
-// prockill.rs — end one user app group by PIDs (Top Processes action).
+// prockill.rs - end one user app group by PIDs (Top Processes action).
 //
 // Read-only system.rs stays read-only: this module owns the single write
 // the Processes tab performs. Scope is deliberately narrow:

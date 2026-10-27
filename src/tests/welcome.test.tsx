@@ -1,4 +1,4 @@
-// tests/welcome.test.tsx — the two-slide onboarding contract: dots
+// tests/welcome.test.tsx - the two-slide onboarding contract: dots
 // track the slide, Back returns, Skip finishes like Begin, and the
 // sample is a real translated finding (never mock copy).
 

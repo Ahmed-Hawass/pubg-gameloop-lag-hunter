@@ -1,4 +1,4 @@
-// clock.ts — wall-clock display for the OS 12/24 convention. Machine
+// clock.ts - wall-clock display for the OS 12/24 convention. Machine
 // strings stay 24-hour everywhere stored (reports parse and sort from
 // them); only pixels convert, through this one helper. Language comes
 // from the app (user-facing strings live in the app locale) while the

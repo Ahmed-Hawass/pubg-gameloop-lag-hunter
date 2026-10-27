@@ -1,4 +1,4 @@
-// PagefileSection.tsx — the virtual-memory details page: the editor,
+// PagefileSection.tsx - the virtual-memory details page: the editor,
 // alone, under its own card. Split out of StorageSection so the page
 // file owns its landing card and its deep-link; the editor itself owns
 // its read and its state (this shell only gates the first paint and
@@ -58,7 +58,7 @@ export function PagefileSection(props: {
 
   // The editor mounts ALWAYS (even before its read lands): the gate
   // below waits on the editor's own settled signal, so gating the
-  // editor behind it would deadlock — a spinner with nothing reading
+  // editor behind it would deadlock - a spinner with nothing reading
   // behind it, forever. The editor renders nothing until its read
   // lands, so the spinner is the only visible thing meanwhile.
   return (

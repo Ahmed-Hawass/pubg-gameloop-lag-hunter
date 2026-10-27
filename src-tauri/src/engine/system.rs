@@ -1,4 +1,4 @@
-// system.rs — one-shot, read-only system queries: rig info, top processes,
+// system.rs - one-shot, read-only system queries: rig info, top processes,
 // environment checks. Nothing here ever modifies the user's machine.
 
 use std::fs;
@@ -124,7 +124,7 @@ pub(crate) fn ps_with_timeout(
 }
 
 // ---------------------------------------------------------------------------
-// PowerShell availability — the one-shot startup probe.
+// PowerShell availability - the one-shot startup probe.
 // Sessions still work without it (typeperf/tasklist/nvidia-smi are native),
 // but the PS-backed paths degrade: machine-adaptive thresholds fall back to
 // defaults, timestamp correction reverts to UTC, the window-visibility probe
@@ -134,7 +134,7 @@ pub(crate) fn ps_with_timeout(
 
 /// Is PowerShell usable on this machine? Probed ONCE per app run.
 /// Conservative: a missing binary, a policy block, or a hang past the
-/// deadline all read as unavailable — the banner can appear on a false
+/// deadline all read as unavailable - the banner can appear on a false
 /// negative, never stay hidden on a false positive.
 pub fn powershell_available() -> bool {
     static AVAILABLE: OnceLock<bool> = OnceLock::new();
@@ -142,9 +142,9 @@ pub fn powershell_available() -> bool {
         let ok = probe_powershell();
         if !ok {
             // one log line for user reports: everything downstream degrades
-            // silently by design — this is the only trace of why
+            // silently by design - this is the only trace of why
             super::logging::info(
-                "PowerShell unavailable — limited mode: \
+                "PowerShell unavailable - limited mode: \
                 adaptive thresholds default, timestamps may read UTC, \
                 GPU window checks muted",
             );
@@ -202,18 +202,18 @@ fn probe_powershell() -> bool {
 }
 
 // ---------------------------------------------------------------------------
-// System info — the "Your rig" tab. Hardware identity doesn't change between
+// System info - the "Your rig" tab. Hardware identity doesn't change between
 // launches: queried at most once per MACHINE, cached on DISK, instant boots.
 //
 // The bug this layout fixes: `Get-PhysicalDisk` performs a live hardware
-// inventory (SMART probes over every spindle) — 20+ seconds on machines with
+// inventory (SMART probes over every spindle) - 20+ seconds on machines with
 // an HDD, EVERY launch. The rig doesn't change between runs, so after the
 // first successful query the result is persisted under the app dir and all
 // later launches read it in microseconds. The in-memory OnceLock then guards
 // within the run itself.
 //
 // async callers only (see lib.rs): the first-ever query still takes its
-// hardware-inventory time — off the UI thread, never freezing the window.
+// hardware-inventory time - off the UI thread, never freezing the window.
 // ---------------------------------------------------------------------------
 
 use std::collections::HashMap;
@@ -221,19 +221,19 @@ use std::sync::{Mutex, OnceLock};
 
 static SYSTEM_CACHE: OnceLock<SystemInfo> = OnceLock::new();
 const SYSTEM_CACHE_MAX_AGE: std::time::Duration = std::time::Duration::from_secs(30 * 86_400);
-/// one query in flight at a time — a second caller waits for the first
+/// one query in flight at a time - a second caller waits for the first
 /// result instead of racing a second 20s inventory. Held INSIDE the
 /// blocking task (see system_info_async): the std Mutex guard lives and
 /// dies on the blocking pool thread, never across an await point.
 static SYSTEM_QUERY_LOCK: Mutex<()> = Mutex::new(());
 
-/// Where the rig profile lives on disk. Same folder as settings/sessions —
+/// Where the rig profile lives on disk. Same folder as settings/sessions -
 /// `%LOCALAPPDATA%\LagHunter\system-cache.json`.
 fn system_cache_path() -> std::path::PathBuf {
     super::storage::app_dir().join("system-cache.json")
 }
 
-/// Load the persisted rig profile. `None` when absent/corrupt — callers fall
+/// Load the persisted rig profile. `None` when absent/corrupt - callers fall
 /// back to a live query. Corrupt = silently ignored (fail-soft, like the
 /// settings store).
 fn load_system_cache() -> Option<SystemInfo> {
@@ -247,7 +247,7 @@ fn load_system_cache() -> Option<SystemInfo> {
     serde_json::from_str(&text).ok()
 }
 
-/// Persist the rig profile. Best effort — a failed write only means the next
+/// Persist the rig profile. Best effort - a failed write only means the next
 /// launch pays the query cost again. Atomic like the settings store: a
 /// crash mid-write must not leave a half-written cache behind.
 fn save_system_cache(info: &SystemInfo) {
@@ -260,7 +260,7 @@ fn save_system_cache(info: &SystemInfo) {
 }
 
 /// Rig info, disk-cached across runs: instant after the first launch on a
-/// machine. MUST be called from an async context — the first run pays the
+/// machine. MUST be called from an async context - the first run pays the
 /// PowerShell hardware inventory on the blocking pool (see module notes).
 /// The whole first-query path (std lock + live query + cache save) runs
 /// INSIDE one blocking task so the lock guard never crosses an await.
@@ -274,7 +274,7 @@ pub async fn system_info_async() -> Result<SystemInfo, String> {
         super::logging::info("rig profile loaded from disk cache");
         return Ok(disk);
     }
-    // first run on this machine: one blocking task owns the whole query —
+    // first run on this machine: one blocking task owns the whole query -
     // callers that race in behind it wait for the task, not a second query
     let started = std::time::Instant::now();
     let info = tauri::async_runtime::spawn_blocking(|| -> Result<SystemInfo, String> {
@@ -296,7 +296,7 @@ pub async fn system_info_async() -> Result<SystemInfo, String> {
 }
 
 /// Machine facts the session needs (RAM MB + physical disk count) straight
-/// from the rig cache — no PowerShell round-trip, no hardware inventory.
+/// from the rig cache - no PowerShell round-trip, no hardware inventory.
 /// `None` when the cache isn't filled yet (first machine run before the
 /// async warm-up completes): the caller falls back to its own probe path.
 pub fn cached_machine_profile() -> Option<(f64, u32)> {
@@ -319,7 +319,7 @@ pub fn cached_machine_profile() -> Option<(f64, u32)> {
 }
 
 // ---------------------------------------------------------------------------
-// TTL caches — tab data goes stale, not obsolete. A fresh read costs a full
+// TTL caches - tab data goes stale, not obsolete. A fresh read costs a full
 // PowerShell spawn (0.5–2 s); a tab switch should never pay it twice inside
 // a few seconds. Stale-while-revalidate: serve the cached copy IMMEDIATELY
 // if it exists, refresh it in the background when the TTL lapsed.
@@ -336,7 +336,7 @@ impl<T: Clone> TtlCache<T> {
         }
     }
 
-    /// cached value if present — caller decides whether to also refresh
+    /// cached value if present - caller decides whether to also refresh
     fn get(&self) -> Option<T> {
         let guard = self.value.lock().unwrap_or_else(|p| p.into_inner());
         guard.as_ref().map(|(v, _)| v.clone())
@@ -366,10 +366,10 @@ impl<T: Clone> TtlCache<T> {
     }
 }
 
-/// top processes: "who is eating the machine RIGHT NOW" — short TTL, still
+/// top processes: "who is eating the machine RIGHT NOW" - short TTL, still
 // long enough to cover tab-flipping; refresh happens off the click
 static TOP_PROCESSES_CACHE: TtlCache<TopProcesses> = TtlCache::new();
-/// system checks: power plan/pagefile/battery — people don't flip these
+/// system checks: power plan/pagefile/battery - people don't flip these
 /// mid-session; a longer window is fine
 static SYSTEM_CHECKS_CACHE: TtlCache<SystemChecks> = TtlCache::new();
 
@@ -405,7 +405,7 @@ fn query_system_checks_serialized() -> Result<SystemChecks, String> {
 /// exists (even stale) and refreshes in the background past the TTL.
 pub fn top_processes_cached() -> Result<TopProcesses, String> {
     if let Some(cached) = TOP_PROCESSES_CACHE.get() {
-        // stale — serve the copy now, refresh in the background
+        // stale - serve the copy now, refresh in the background
         if !TOP_PROCESSES_CACHE.fresh_for(TOP_PROCESSES_TTL)
             && TOP_REFRESHING
                 .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
@@ -540,7 +540,7 @@ fn os_display_name(name: &str, build: &str) -> String {
 
 /// Windows build identity for the boot log, read straight from the registry
 /// (no PowerShell spawn, no elevation): `ProductName` + `CurrentBuildNumber`.
-/// This is what makes any user-sent log readable on the 10/11 axis — the
+/// This is what makes any user-sent log readable on the 10/11 axis - the
 /// compatibility story of every feature decision starts at this one line.
 pub fn os_identity() -> String {
     let hklm = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE);
@@ -569,11 +569,11 @@ pub fn os_identity() -> String {
 
 /// Boot-time warm-up for every engine cache, called ONCE from setup() on a
 /// background async task. The OLD code spawned raw threads that ran the
-/// PowerShell scripts WITHOUT a blocking pool — the 20s Get-PhysicalDisk
+/// PowerShell scripts WITHOUT a blocking pool - the 20s Get-PhysicalDisk
 /// inventory froze the UI on HDD machines. Now:
-///   * rig profile  — disk-cache hit (instant) or one async query
-///   * checks        — refreshed off-thread; the tab reads the cache
-///   * top processes — refreshed off-thread
+///   * rig profile  - disk-cache hit (instant) or one async query
+///   * checks        - refreshed off-thread; the tab reads the cache
+///   * top processes - refreshed off-thread
 ///
 /// The one-line rig log it produces answers most support questions:
 /// `rig: ram=8192MB disks=2 gpu_counters=true powershell=true os=Windows 11 Pro build=26200`
@@ -639,7 +639,7 @@ pub struct SystemInfo {
     /// can the tool read NVIDIA GPU counters? (false on AMD/Intel-only machines)
     pub gpu_counters: bool,
     /// is PowerShell usable? (false = limited mode: defaults, UTC-ish timestamps,
-    /// muted GPU window checks — the UI surfaces this honestly)
+    /// muted GPU window checks - the UI surfaces this honestly)
     pub powershell_available: bool,
 }
 
@@ -655,7 +655,7 @@ pub struct CpuInfo {
     pub threads: Option<u32>,
 }
 
-/// Memory: total plus the spec lines (first stick wins — mixed kits are
+/// Memory: total plus the spec lines (first stick wins - mixed kits are
 /// rare, and the total is what sizing decisions use).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct RamInfo {
@@ -664,7 +664,7 @@ pub struct RamInfo {
     pub speed_mhz: Option<u32>,
 }
 
-/// Primary display: bounds plus refresh and DPI scale. All optional —
+/// Primary display: bounds plus refresh and DPI scale. All optional -
 /// headless sessions and exotic drivers omit freely.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DisplayInfo {
@@ -714,7 +714,7 @@ fn nvidia_vram_mb() -> Option<f64> {
 }
 
 /// SMBIOS memory-device type codes to marketing names (only the
-/// well-documented values — anything else reads as unknown, never a guess).
+/// well-documented values - anything else reads as unknown, never a guess).
 fn memory_type_name(code: u32) -> Option<&'static str> {
     match code {
         24 => Some("DDR3"),
@@ -1001,7 +1001,7 @@ fn os_release_name(build: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// Top processes — who is eating the machine (GameLoop excluded: that's the game)
+// Top processes - who is eating the machine (GameLoop excluded: that's the game)
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -1015,7 +1015,7 @@ pub struct TopProcess {
     /// resident memory (working set) summed over the group, MB
     pub ram_mb: f64,
     /// "app" (user software, safe to close before playing) or "system"
-    /// (leave running) — decided by classify() below, never guessed
+    /// (leave running) - decided by classify() below, never guessed
     pub kind: String,
     /// curated display key (e.g. "procPowershell") when the exe is a
     /// known OS staple; the UI translates it, else falls back below
@@ -1133,7 +1133,7 @@ struct RawProc {
 
 /// Native process snapshot: Toolhelp for identity/parentage, then one
 /// limited-information handle per PID for memory, path and session.
-/// Unopenable processes (protected) are absent — same fail-safe as the
+/// Unopenable processes (protected) are absent - same fail-safe as the
 /// missing-path rule below (unknown reads as system when classifiable,
 /// invisible otherwise).
 #[cfg(windows)]
@@ -1429,7 +1429,7 @@ pub fn query_top_processes() -> Result<TopProcesses, String> {
     // contain the user name) until display names resolve below
     let mut rows: Vec<(TopProcess, Option<String>)> = Vec::new();
     for raw in raws {
-        // the game (all GameLoop processes) is never a suspect —
+        // the game (all GameLoop processes) is never a suspect -
         // and neither is the tool itself nor anything it spawned
         if super::sampler::is_gameloop_process(&raw.name)
             || super::sampler::is_self_process(&raw.name)
@@ -1468,7 +1468,7 @@ pub fn query_top_processes() -> Result<TopProcesses, String> {
     let rows = group_by_exe(rows);
     let rows = rank_groups(rows);
     // display names resolve AFTER truncation, for kept rows only: unique
-    // paths of non-curated rows, cached across polls — steady state costs
+    // paths of non-curated rows, cached across polls - steady state costs
     // zero extra spawns
     let mut want: Vec<String> = Vec::new();
     for (row, path) in &rows {
@@ -1498,7 +1498,7 @@ pub fn query_top_processes() -> Result<TopProcesses, String> {
 }
 
 // ---------------------------------------------------------------------------
-// System checks — read-only status + "take me there" (no modification, ever)
+// System checks - read-only status + "take me there" (no modification, ever)
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -1507,7 +1507,7 @@ pub struct SystemChecks {
     pub power_name: String,
     /// true = performance-class plan active
     pub power_ok: bool,
-    /// "auto" | "manual" | "off" — from the same registry flag+entries
+    /// "auto" | "manual" | "off" - from the same registry flag+entries
     /// the editor reads (single source; the old WMI flag disagreed
     /// transiently across reboots and reported running sizes instead of
     /// configured ones)
@@ -1548,7 +1548,7 @@ pub struct SystemChecks {
 }
 
 /// The Tools tab's switches, live from the registry plus three native
-/// powercfg reads (tens of ms each on the blocking pool) — never the
+/// powercfg reads (tens of ms each on the blocking pool) - never the
 /// full system_checks batch whose rows this page does not display.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct TweakStates {
@@ -1569,7 +1569,7 @@ pub struct TweakStates {
     /// missing is the OS default = on, so the switch reads off)
     pub mouse_accel_off: bool,
     /// windowed-games optimization state (Win11+ only); None = unsupported
-    /// build (row hides — there is no such Settings toggle to mirror there)
+    /// build (row hides - there is no such Settings toggle to mirror there)
     pub windowed_game_opt: Option<bool>,
     /// High Performance row state: On = a performance-class plan is
     /// active; Off = present or restorable; HiddenUltimate/HiddenS0 =
@@ -1585,22 +1585,22 @@ pub struct TweakStates {
     /// one-time client-update notice: the GameLoop build changed since the
     /// last Tools read (path-keyed GPU/FSO prefs orphan on client updates,
     /// so the user re-flips). The engine persists the new version on the
-    /// notifying read — later reads are quiet until the next change.
+    /// notifying read - later reads are quiet until the next change.
     pub emulator_updated: bool,
     /// detected GameLoop client version ("7.0.19.05"), "" when unknown
     pub emulator_version: String,
 }
 
 /// Visibility of a Tools row whose availability depends on the machine.
-/// The UI translates the reason (keys, not sentences — the engine never
+/// The UI translates the reason (keys, not sentences - the engine never
 /// ships user-facing text):
 /// - On/Off: live switch state, row interactive.
-/// - DisabledGameloopNotFound: visible but greyed — GameLoop exes did not
+/// - DisabledGameloopNotFound: visible but greyed - GameLoop exes did not
 ///   resolve, which the user can fix (install/run GameLoop). A row the
 ///   user can act on must explain itself, never vanish silently.
-/// - Hidden: can never work here, cause unknown to the UI — the row is
+/// - Hidden: can never work here, cause unknown to the UI - the row is
 ///   absent entirely (legacy shape; new hides name their cause below).
-/// - LockedPolicy: owned by policy or UEFI lock — the row SHOWS greyed
+/// - LockedPolicy: owned by policy or UEFI lock - the row SHOWS greyed
 ///   with its translated reason (the user must learn why it refuses,
 ///   unlike a hidden row). Never flippable, writes stay refused.
 /// - HiddenOldBuild: needs a newer Windows (windowed needs Win11, the
@@ -1663,7 +1663,7 @@ pub(crate) fn windows_build_number() -> Option<u32> {
 /// First build shipping per-app GPU preferences (Win10 1803): older
 /// builds silently ignore the UserGpuPreferences values, so our
 /// verify-by-re-read would report success for a write the OS never
-/// honors — a manufactured success. Unreadable build fails OPEN (match
+/// honors - a manufactured success. Unreadable build fails OPEN (match
 /// current behavior everywhere): only a positively-identified old build
 /// hides the row.
 pub(crate) const GPU_PREF_MIN_BUILD: u32 = 17134;
@@ -1723,10 +1723,10 @@ pub(crate) fn hvci_state(
 }
 
 /// Live DWORD read from a registry subkey under a given root, as bool-ish
-/// tri-state: Some(value) / None (value missing) — key-open errors also read
+/// tri-state: Some(value) / None (value missing) - key-open errors also read
 /// as None for CHECKS (a probe failure must never fire a false warning;
 /// `tweaks.rs` keeps the stricter Err contract for writes).
-/// Architecture rule: registry access is winreg, in-process — never a
+/// Architecture rule: registry access is winreg, in-process - never a
 /// PowerShell script line.
 fn reg_dword(root: winreg::HKEY, subkey: &str, name: &str) -> Option<u32> {
     let hk = winreg::RegKey::predef(root);
@@ -1734,7 +1734,7 @@ fn reg_dword(root: winreg::HKEY, subkey: &str, name: &str) -> Option<u32> {
     key.get_value::<u32, _>(name).ok()
 }
 
-/// Live string read from a registry subkey — same fail-soft contract as
+/// Live string read from a registry subkey - same fail-soft contract as
 /// reg_dword above: anything missing or unreadable is None, never an
 /// error (a probe failure must never fire a false warning).
 fn reg_string(root: winreg::HKEY, subkey: &str, name: &str) -> Option<String> {
@@ -1745,7 +1745,7 @@ fn reg_string(root: winreg::HKEY, subkey: &str, name: &str) -> Option<String> {
 
 /// Is the Storage Sense policy KEY present on this build? (Availability is
 /// the KEY existing, not the value: Windows never deletes this key when
-/// the user turns Storage Sense off — it zeroes `01`, verified live.)
+/// the user turns Storage Sense off - it zeroes `01`, verified live.)
 fn ss_policy_key_exists() -> bool {
     winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
         .open_subkey(
@@ -1757,10 +1757,10 @@ fn ss_policy_key_exists() -> bool {
 pub fn query_system_checks() -> Result<SystemChecks, String> {
     // ---- registry-sourced checks FIRST, in-process (winreg): the batch
     // below keeps only what genuinely needs a command (powercfg, CIM,
-    // disks) — every registry line moved here is one spawn-line less that
+    // disks) - every registry line moved here is one spawn-line less that
     // can break on quoting or locale.
     // The two verdicts below come from query_tweak_states (the SAME
-    // derivation the Tools tab's lightweight read uses — one rule, two
+    // derivation the Tools tab's lightweight read uses - one rule, two
     // consumers). The raw reads here exist only for the diagnostic log
     // line naming the exact values behind an armed verdict.
     let states = query_tweak_states();
@@ -1926,7 +1926,7 @@ fn extract_power_name(raw: &str) -> String {
 }
 
 /// The scheme GUID from the same powercfg line: `...: <guid>  (Name)`.
-/// GUIDs are identical on every Windows language — the only reliable
+/// GUIDs are identical on every Windows language - the only reliable
 /// signal on an Arabic (or any localized) Windows where the display name
 /// comes back translated ("أقصى أداء" etc.).
 pub(crate) fn extract_power_guid(raw: &str) -> String {
@@ -1955,7 +1955,7 @@ pub(crate) fn is_performance_plan(name: &str, guid: &str) -> bool {
     if guid == POWER_GUID_HIGH_PERFORMANCE || guid == POWER_GUID_ULTIMATE_PERFORMANCE {
         return true;
     }
-    // OEM/custom schemes carry their own GUIDs we can't know — fall back to
+    // OEM/custom schemes carry their own GUIDs we can't know - fall back to
     // matching the display name. English + Arabic covered (user base is
     // largely Arabic Windows); other languages fall through to "not matched".
     let n = name.to_lowercase();
@@ -1968,7 +1968,7 @@ pub(crate) fn is_performance_plan(name: &str, guid: &str) -> bool {
         || n.contains("أقصى الأداء")
         || n.contains("الأداء الأقصى")
         // reported Arabic display name of Ultimate Performance; unverified
-        // live (no Arabic Ultimate machine seen yet) — kept because a miss
+        // live (no Arabic Ultimate machine seen yet) - kept because a miss
         // only risks a false warn, never a wrong write
         || n.contains("الأداء المطلق");
     english || arabic
@@ -1986,7 +1986,7 @@ fn looks_like_guid(s: &str) -> bool {
 
 /// All power schemes from `powercfg /list` as (guid, display name) pairs.
 /// Names matter: a user-created High Performance duplicate carries a
-/// fresh GUID every time, so GUID-only matching can never see it — the
+/// fresh GUID every time, so GUID-only matching can never see it - the
 /// name fallback in is_performance_plan is what recognizes it.
 pub fn power_list() -> Vec<(String, String)> {
     let out = super::sampler::output_tracked(
@@ -2044,7 +2044,7 @@ pub fn power_active_scheme() -> (String, String) {
 /// True when the firmware reports S0 Low Power Idle (Modern Standby) as
 /// AVAILABLE. Parsed structurally: only the section before the "not
 /// available" marker counts (S0 also appears in the unavailable list on
-/// S3 machines — live-proven on the dev box). The marker is English-only;
+/// S3 machines - live-proven on the dev box). The marker is English-only;
 /// on locales where it is absent we assume NOT S0 (show the row; a flip
 /// that cannot work fails honestly at verify time instead of hiding a
 /// working feature). Powercfg output is native-fast, no PowerShell.
@@ -2075,7 +2075,7 @@ fn s0_available_in(powercfg_a: &str) -> bool {
 }
 
 /// The Tools power row state: On = a performance-class plan is active
-/// (built-in GUID, custom duplicate, or name fallback — the dev box
+/// (built-in GUID, custom duplicate, or name fallback - the dev box
 /// itself runs a custom High Performance duplicate); Off = a
 /// performance plan exists or the machine can restore one;
 /// HiddenUltimate = Ultimate already active (nothing above it to
@@ -2099,7 +2099,7 @@ pub fn power_row_state(
         return RowState::On;
     }
     // presence = ANY performance-class plan (a duplicate's GUID is fresh
-    // every creation, so builtin-only matching would re-create forever —
+    // every creation, so builtin-only matching would re-create forever -
     // the exact bug that littered duplicate plans).
     let perf_present = list.iter().any(|(g, n)| is_performance_plan(n, g));
     if perf_present || !s0 {
@@ -2110,7 +2110,7 @@ pub fn power_row_state(
 
 fn pagefile_ok(mode: &str, mb: u64) -> bool {
     match mode {
-        // Windows manages it — fine
+        // Windows manages it - fine
         "auto" => true,
         // a fixed file below 8GB is the classic stutter cause we diagnosed
         "manual" => mb >= 8192,
@@ -2156,7 +2156,7 @@ pub struct PagefileSettings {
     /// installed" strip and the recommendation below, never a gate
     pub ram_total_mb: Option<u64>,
     /// recommended custom sizes for the installed RAM (None when RAM is
-    /// unreadable): a starting point next to the inputs, not a gate —
+    /// unreadable): a starting point next to the inputs, not a gate -
     /// the 8 GB warn floor still guards the write
     pub recommended_min_mb: Option<u32>,
     pub recommended_max_mb: Option<u32>,
@@ -2272,7 +2272,7 @@ pub(crate) fn read_pagefile_flag_and_entries() -> Result<(bool, Vec<String>), Pa
     // A missing flag is not corruption: Windows itself defaults to
     // automatic management when the value is absent (the dialog shows
     // checked), so the read follows the OS instead of refusing. Any
-    // other read error still refuses — an unreadable flag is not an
+    // other read error still refuses - an unreadable flag is not an
     // answer. Logged at info (a legitimate state), never warn.
     let auto: bool = match mem.get_value::<u32, _>("AutomaticManagedPagefile") {
         Ok(v) => v == 1,
@@ -2296,7 +2296,7 @@ pub(crate) fn read_pagefile_flag_and_entries() -> Result<(bool, Vec<String>), Pa
 /// own reads as system-managed; no entry at all = off. Other drives'
 /// entries are never interpreted here, only preserved on write.
 /// Strict like Windows on one point: an empty line ENDS the list (that is
-/// what "" means in a REG_MULTI_SZ), it is never skipped — a poisoned
+/// what "" means in a REG_MULTI_SZ), it is never skipped - a poisoned
 /// list reads as off, which is exactly what Windows activates.
 pub(crate) fn parse_drive_mode(
     raw: &[String],
@@ -2614,7 +2614,7 @@ extern "system" {
 /// Pending-restart visibility, pure: a change is pending while the clock
 /// still reads past the write moment; a reboot zeroes the clock and the
 /// note clears itself with zero writes. (49-day wraparound without a
-/// reboot clears it early — documented, accepted: a wall clock would
+/// reboot clears it early - documented, accepted: a wall clock would
 /// break on manual time changes, which is worse.)
 pub fn restart_pending_visible(stored_at_ms: u64, now_ms: u64) -> bool {
     now_ms >= stored_at_ms
@@ -2635,9 +2635,9 @@ fn gamedvr_armed_winreg(historical: Option<u32>, policy: Option<u32>) -> bool {
 }
 
 /// Storage Sense tri-state from (key-exists, value): a missing policy KEY
-/// means the feature is not on this build (None — the row hides, never a
+/// means the feature is not on this build (None - the row hides, never a
 /// dead switch); a present key is on iff its value is 1 (Windows zeroes
-/// it for off, never deletes the key — verified live). ONE definition
+/// it for off, never deletes the key - verified live). ONE definition
 /// shared by the full batch and the lightweight tweak read, so the two
 /// paths can never disagree on what "on" means.
 fn storage_sense_state(exists: bool, value: Option<u32>) -> Option<bool> {
@@ -2651,7 +2651,7 @@ fn storage_sense_state(exists: bool, value: Option<u32>) -> Option<bool> {
 /// Game Mode is on iff BOTH master toggles read 1. A missing value is the
 /// OS default (on): Settings shows the toggle on for a fresh profile, so
 /// a missing key must never read as "off" (that would flip a user's
-/// switch off on first sight — the exact false-negative class the DVR
+/// switch off on first sight - the exact false-negative class the DVR
 /// rule was written against).
 pub(crate) fn game_mode_on(allow: Option<u32>, auto: Option<u32>) -> bool {
     allow.unwrap_or(1) == 1 && auto.unwrap_or(1) == 1
@@ -2678,13 +2678,13 @@ pub(crate) fn parse_gpu_pref(raw: &str) -> Option<u32> {
 }
 
 /// The windowed-games optimization is on iff its token reads exactly 1.
-/// Anything else (absent, 0, garbage) is off — the OS default.
+/// Anything else (absent, 0, garbage) is off - the OS default.
 pub(crate) fn wgc_opt_on(raw: Option<&str>) -> bool {
     raw.and_then(|r| parse_pref_token(r, super::tweaks::WGC_TOKEN)) == Some(1)
 }
 
 /// Build a UserGpuPreferences value with our token set (on) or removed
-/// (off). None = nothing remains — the caller deletes the value instead
+/// (off). None = nothing remains - the caller deletes the value instead
 /// of writing an empty string (matches "revert to Windows decides").
 pub(crate) fn with_gpu_pref(raw: Option<&str>, on: bool) -> Option<String> {
     let mut kept: Vec<&str> = raw
@@ -2711,7 +2711,7 @@ pub(crate) fn with_gpu_pref(raw: Option<&str>, on: bool) -> Option<String> {
 /// 1 (on) or 0 (off), preserving sibling tokens. Unlike the per-exe GPU
 /// preference (whose off DELETES the token), off here WRITES `=0`: that
 /// is byte-for-byte what the Settings toggle itself does (verified live
-/// on Win11 24H2 — off leaves `SwapEffectUpgradeEnable=0;` present, never
+/// on Win11 24H2 - off leaves `SwapEffectUpgradeEnable=0;` present, never
 /// deletes). Always returns a value: there is always a token to write.
 pub(crate) fn with_wgc_token(raw: Option<&str>, on: bool) -> String {
     let mut kept: Vec<&str> = raw
@@ -2745,8 +2745,8 @@ pub(crate) fn fso_has_flag(raw: Option<&str>) -> bool {
 
 /// Build a Layers value with our flag set (on) or removed (off),
 /// preserving every other compatibility flag byte-for-byte in content
-/// (whitespace is normalized — these values are machine-written).
-/// None = nothing remains — the caller deletes the value instead of
+/// (whitespace is normalized - these values are machine-written).
+/// None = nothing remains - the caller deletes the value instead of
 /// leaving a bare "~" behind.
 pub(crate) fn fso_with_flag(raw: Option<&str>, on: bool) -> Option<String> {
     let body = raw.unwrap_or("");
@@ -2781,7 +2781,7 @@ pub(crate) fn fso_with_flag(raw: Option<&str>, on: bool) -> Option<String> {
 
 /// Pointer precision is off iff all three values read exactly zero.
 /// Anything missing is the OS default (precision on), so the switch
-/// reads off — never a false "already off".
+/// reads off - never a false "already off".
 pub(crate) fn mouse_accel_off(speed: Option<u32>, t1: Option<u32>, t2: Option<u32>) -> bool {
     speed == Some(0) && t1 == Some(0) && t2 == Some(0)
 }
@@ -2800,12 +2800,12 @@ pub(crate) fn unanimous_state(states: &[bool]) -> Option<bool> {
 
 /// GameLoop rendering executables, resolved live across BOTH client
 /// generations (never spawned, never recursed): roots come from the
-/// emulator snapshot — Uninstall dirs (any build), the v7 direct value,
-/// v6 subkey values, then stock locations — crossed with legacy `ui\`,
+/// emulator snapshot - Uninstall dirs (any build), the v7 direct value,
+/// v6 subkey values, then stock locations - crossed with legacy `ui\`,
 /// `Application\`, and versioned `Application\<build>\` layouts (client
 /// updates bump the build number; a fixed path would rot every release).
 /// Each candidate contributes only when the file actually exists: a
-/// bounded handful of exists() checks — microseconds, no process
+/// bounded handful of exists() checks - microseconds, no process
 /// enumeration, no PowerShell.
 pub(crate) fn gameloop_exe_paths() -> Vec<std::path::PathBuf> {
     use super::emulator;
@@ -2825,7 +2825,7 @@ pub(crate) fn gameloop_exe_paths() -> Vec<std::path::PathBuf> {
     for cand in emulator::candidate_paths(&roots, &exes, &versioned) {
         // case-insensitive dedup: `UI\aow_exe.exe` and
         // `ui\aow_exe.exe` are the SAME file on Windows, but
-        // PathBuf equality is byte-wise — without this the same
+        // PathBuf equality is byte-wise - without this the same
         // exe resolves twice (live-proven: exes=4 for 2 files)
         // and every write/verify runs doubled with a lying count
         if cand.is_file() && !contains_case_insensitive(&out, &cand) {
@@ -2846,7 +2846,7 @@ fn contains_case_insensitive(haystack: &[std::path::PathBuf], needle: &std::path
         .any(|p| p.to_string_lossy().to_lowercase() == needle)
 }
 
-/// The Tools tab's switches, live from the registry — and ONLY that.
+/// The Tools tab's switches, live from the registry - and ONLY that.
 /// Same derivation as the full batch (shared helpers above), so the two
 /// paths agree by construction. Silent by design: the diagnostic log
 /// lines live on the full-batch path, not on every tab open.
@@ -2910,7 +2910,7 @@ pub fn query_tweak_states() -> TweakStates {
     // per-exe states over the resolved GameLoop executables. No resolved
     // exes + supported build = DISABLED with an actionable reason (the
     // user can install/run GameLoop); unsupported build = HiddenOldBuild (can
-    // never work here — a permanently dead row is clutter). The GPU row
+    // never work here - a permanently dead row is clutter). The GPU row
     // additionally requires Win10 1803+: older builds ignore the
     // preference value while our re-read would still "verify", so the
     // write would lie about succeeding.
@@ -2958,7 +2958,7 @@ pub fn query_tweak_states() -> TweakStates {
     // windowed-games optimization: same UserGpuPreferences store as the
     // per-app GPU preference (verified live: ON writes
     // `SwapEffectUpgradeEnable=1;`, OFF writes `=0`, never deletes).
-    // Win11+ only — older builds have no such toggle to mirror.
+    // Win11+ only - older builds have no such toggle to mirror.
     let build = windows_build_number();
     let windowed_game_opt = if !windowed_opt_supported(build) {
         None
@@ -2973,7 +2973,7 @@ pub fn query_tweak_states() -> TweakStates {
         ))
     };
     // power row: three native powercfg reads (each ~tens of ms, NO_WINDOW,
-    // fixed args — the batch's 0.5-2s PowerShell cost stays untouched).
+    // fixed args - the batch's 0.5-2s PowerShell cost stays untouched).
     // Active scheme line carries "GUID (Name)": the same parse the health
     // batch uses, so the row and the card can never disagree on what is on.
     let power_active_raw = super::sampler::output_tracked(
@@ -2998,7 +2998,7 @@ pub fn query_tweak_states() -> TweakStates {
     // GameLoop client-update notice (point 6 of the v7 study): GPU/FSO
     // prefs are path-keyed, so a client update orphans them silently.
     // First sighting stores quietly (fresh installs never nag); a change
-    // fires once and persists on this read — the UI shows one dialog.
+    // fires once and persists on this read - the UI shows one dialog.
     let (emulator_updated, emulator_version) = {
         let current = super::emulator::read_snapshot().v7_version;
         let stored = current
@@ -3028,9 +3028,9 @@ pub fn query_tweak_states() -> TweakStates {
     }
 }
 
-/// Open a Windows settings panel — strictly whitelisted, never a free string.
+/// Open a Windows settings panel - strictly whitelisted, never a free string.
 pub fn open_windows_panel(panel: &str) -> Result<(), String> {
-    // control.exe only opens .cpl APPLETS — a standalone exe handed to it
+    // control.exe only opens .cpl APPLETS - a standalone exe handed to it
     // fails silently (this exact bug: the Pagefile button launched
     // control.exe with a non-applet and nothing appeared). Each arm
     // therefore builds its OWN command: CPLs go through control.exe,
@@ -3224,7 +3224,7 @@ mod tests {
     #[test]
     fn os_display_name_repairs_stale_win10_caption() {
         // the upgraded-box case from a real log: ProductName still says 10
-        // while the build is 11-only — the edition tail survives the repair
+        // while the build is 11-only - the edition tail survives the repair
         assert_eq!(
             os_display_name("Microsoft Windows 10 Pro", "26200"),
             "Windows 11 Pro"
@@ -3258,7 +3258,7 @@ mod tests {
     #[test]
     fn live_system_info_shapes() {
         // runs everywhere Windows (CI included): the extended inventory
-        // must parse on any machine — core identity never blank, RAM
+        // must parse on any machine - core identity never blank, RAM
         // consistent between the flat legacy field and the new struct.
         let info = match query_system_info() {
             Ok(info) => info,
@@ -3441,7 +3441,7 @@ mod tests {
 
     #[test]
     fn powershell_probe_matches_availability() {
-        // the probe itself runs on this machine — availability is whatever it
+        // the probe itself runs on this machine - availability is whatever it
         // says, and the cached flag must agree with a fresh probe result.
         // (On dev machines PS exists; the point is the two paths agree.)
         assert_eq!(powershell_available(), probe_powershell());
@@ -3475,7 +3475,7 @@ mod tests {
 
     #[test]
     fn unknown_panel_refused_without_spawning() {
-        // the whitelist rejects before any process spawns — safe to assert
+        // the whitelist rejects before any process spawns - safe to assert
         // in CI (no window ever opens). Case-sensitive: no fuzzy match.
         assert!(open_windows_panel("nope").is_err());
         assert!(open_windows_panel("").is_err());
@@ -3502,7 +3502,7 @@ mod tests {
             ),
             "e72c17b6-94d2-4509-adfc-8f2302229d1a"
         );
-        // Arabic Windows: same GUID, translated name — GUID must still parse
+        // Arabic Windows: same GUID, translated name - GUID must still parse
         assert_eq!(
             extract_power_guid(
                 "Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (أقصى أداء)"
@@ -3519,7 +3519,7 @@ mod tests {
         assert!(is_performance_plan("Ultimate Performance", ""));
         assert!(!is_performance_plan("Power saver", ""));
         assert!(!is_performance_plan("Balanced", ""));
-        // by GUID — locale-independent truth (Arabic Windows shows the
+        // by GUID - locale-independent truth (Arabic Windows shows the
         // translated name; the GUID is what must match)
         assert!(is_performance_plan(
             "أقصى أداء",
@@ -3556,7 +3556,7 @@ mod tests {
     #[test]
     fn s0_detected_only_in_the_available_section() {
         // the dev box shape: S3 machine whose UNAVAILABLE list still names
-        // S0 — a naive substring would hide the row on a working machine
+        // S0 - a naive substring would hide the row on a working machine
         let s3 = "The following sleep states are available on this system:\n    Standby (S3)\n    Hibernate\n\nThe following sleep states are not available on this system:\n    Standby (S0 Low Power Idle)\n\tThe system firmware does not support this standby state.\n";
         assert!(!s0_available_in(s3));
         let s0 = "The following sleep states are available on this system:\n    Standby (S0 Low Power Idle) Network Connected\n    Hibernate\n\nThe following sleep states are not available on this system:\n    Standby (S3)\n\tThe system firmware does not support this standby state.\n";
@@ -3564,7 +3564,7 @@ mod tests {
         assert!(!s0_available_in("garbage"));
         assert!(!s0_available_in(""));
         // non-English output with no marker: S0 may sit in the unavailable
-        // section in another language — unknown means NOT S0 (show the row)
+        // section in another language - unknown means NOT S0 (show the row)
         assert!(!s0_available_in("Standby (S0 Low Power Idle)"));
     }
 
@@ -3739,7 +3739,7 @@ mod tests {
         );
         // an empty line ENDS the list (REG_MULTI_SZ terminator semantics,
         // exactly like Windows): a valid entry after it is invisible, so
-        // the drive reads as off — never as the entry Windows will not
+        // the drive reads as off - never as the entry Windows will not
         // activate
         assert_eq!(
             parse_drive_mode(&["".into(), "C:\\pagefile.sys 1024 4096".into()], "C:"),
@@ -3811,7 +3811,7 @@ mod tests {
         // key present, value 1 = ON
         assert_eq!(storage_sense_state(true, Some(1)), Some(true));
         // key present, value 0 = OFF (Settings zeroes the value, never
-        // deletes the key — verified live)
+        // deletes the key - verified live)
         assert_eq!(storage_sense_state(true, Some(0)), Some(false));
         // key present, value missing (never touched) = OFF
         assert_eq!(storage_sense_state(true, None), Some(false));
@@ -3823,7 +3823,7 @@ mod tests {
     #[test]
     fn game_mode_on_needs_both_toggles() {
         // the Settings toggle writes the pair together: ON means both
-        // read 1, and a missing value is the OS default (on) — never a
+        // read 1, and a missing value is the OS default (on) - never a
         // false "off" that would flip a user's switch on first sight
         assert!(game_mode_on(Some(1), Some(1)));
         assert!(game_mode_on(None, None));
@@ -3893,7 +3893,7 @@ mod tests {
     #[test]
     fn gpu_pref_supported_needs_win10_1803() {
         // per-app GPU preferences arrived in 1803 (build 17134): older
-        // builds ignore the value while our re-read would still verify —
+        // builds ignore the value while our re-read would still verify -
         // fail OPEN on unreadable (match current behavior everywhere),
         // hide only on a positively-identified old build
         assert!(gpu_pref_supported(None));
@@ -3964,7 +3964,7 @@ mod tests {
     fn mouse_accel_off_needs_all_three_zero() {
         assert!(mouse_accel_off(Some(0), Some(0), Some(0)));
         // anything missing is the OS default (precision on), so the
-        // switch reads off — never a false "already off"
+        // switch reads off - never a false "already off"
         assert!(!mouse_accel_off(None, None, None));
         assert!(!mouse_accel_off(Some(0), Some(0), Some(6)));
         assert!(!mouse_accel_off(Some(1), Some(6), Some(10)));
@@ -3972,7 +3972,7 @@ mod tests {
 
     #[test]
     fn windowed_opt_reads_exactly_one() {
-        // ON is exactly `=1`; anything else (absent, 0, garbage) is off —
+        // ON is exactly `=1`; anything else (absent, 0, garbage) is off -
         // the verified-live OFF state is a present `=0`, not absence
         assert!(wgc_opt_on(Some("SwapEffectUpgradeEnable=1;")));
         assert!(!wgc_opt_on(Some("SwapEffectUpgradeEnable=0;")));
@@ -3985,7 +3985,7 @@ mod tests {
     fn windowed_opt_build_writes_zero_on_off() {
         // unlike the per-exe GPU preference (whose off DELETES the token),
         // off here writes `=0`: byte-for-byte what the Settings toggle
-        // itself does (verified live — off leaves the value present)
+        // itself does (verified live - off leaves the value present)
         assert_eq!(with_wgc_token(None, true), "SwapEffectUpgradeEnable=1;");
         assert_eq!(
             with_wgc_token(Some("SwapEffectUpgradeEnable=0;"), true),

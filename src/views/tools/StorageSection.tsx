@@ -1,4 +1,4 @@
-// StorageSection.tsx — the storage details page: live-mirrored option
+// StorageSection.tsx - the storage details page: live-mirrored option
 // rows under a one-glance banner like the gaming page. The full general
 // pattern holds (banner, featured attention, full archive): future
 // options join the rows below, nothing restructures. The rows own
@@ -86,7 +86,7 @@ export function StorageSection(props: {
 
   /** one row per storage option: the attention section and the full
       archive render the SAME row below (edit once, both follow). A row
-      counts as needing attention only when rendered AND off — the same
+      counts as needing attention only when rendered AND off - the same
       rule as the gaming page, so future options slot in untouched. */
   type StorageRow = { id: string; off: boolean; el: ReactNode };
   const rows: StorageRow[] = [];

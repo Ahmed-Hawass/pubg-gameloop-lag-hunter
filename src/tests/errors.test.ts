@@ -1,4 +1,4 @@
-// errors.test.ts — the dialog mapping users see when a scan fails.
+// errors.test.ts - the dialog mapping users see when a scan fails.
 
 import { describe, expect, it } from "vitest";
 import { errorDialog, findErrorCode } from "../errors";

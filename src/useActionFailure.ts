@@ -1,4 +1,4 @@
-// useActionFailure.ts — the one way a view says "the action failed": a
+// useActionFailure.ts - the one way a view says "the action failed": a
 // notice on the single modal surface, never a toast and never a silent
 // no-op. A failed action explains itself in a dialog (the app's own rule:
 // failed actions explain in a dialog, failed page loads show a retry).
@@ -6,7 +6,7 @@
 // It exists so the rule is written once: every view that fires a command
 // the user can see failing (open a link, open a Windows page, open the
 // download folder) uses this hook instead of `void api.x()` with no
-// catch — a failed command used to look exactly like a button that does
+// catch - a failed command used to look exactly like a button that does
 // nothing.
 
 import { useCallback, useState } from "react";

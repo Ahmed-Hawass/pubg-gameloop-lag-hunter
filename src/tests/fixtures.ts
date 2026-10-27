@@ -1,4 +1,4 @@
-// tests/fixtures.ts — canned backend answers shared by component tests.
+// tests/fixtures.ts - canned backend answers shared by component tests.
 // Every value mirrors a bridge.ts contract; the mocks below only feed the
 // UI, they never reimplement engine logic.
 

@@ -1,4 +1,4 @@
-// tests/toolsSummary.test.ts — shared Tools math: the sweep-memory
+// tests/toolsSummary.test.ts - shared Tools math: the sweep-memory
 // line shapes (last run plus last-30-days, or never).
 
 import { describe, expect, it } from "vitest";

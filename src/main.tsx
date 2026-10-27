@@ -5,7 +5,7 @@ import { LanguageProvider, useLang } from "./i18n";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { installNativeBehavior } from "./webBehavior";
 import { api, logFrontendError, setWebviewZoom, showMainWindow } from "./bridge";
-// fonts: subset + base64-inlined (Google Sans latin, Cairo arabic) — first in
+// fonts: subset + base64-inlined (Google Sans latin, Cairo arabic) - first in
 // the import order so every style that follows resolves against loaded faces;
 // no fontsource fetch, no first-paint swap
 import "./styles/fonts/fonts.css";
@@ -24,7 +24,7 @@ installNativeBehavior();
 // last-resort crash reporting: a React render failure on a user machine
 // otherwise leaves zero traces (the window just stays hidden). The
 // listeners themselves never throw (fire-and-forget invoke), so they
-// cannot loop on their own failure. Diagnostic only — the UI itself
+// cannot loop on their own failure. Diagnostic only - the UI itself
 // stays exactly as it was.
 window.addEventListener("error", (ev) => {
   void logFrontendError(`error: ${ev.message} @${ev.filename}:${ev.lineno}`).catch(() => {});
@@ -35,7 +35,7 @@ window.addEventListener("unhandledrejection", (ev) => {
 
 // apply the saved UI zoom as early as the theme seed: the read races
 // the first-paint reveal above, so non-100% users see at most one
-// flipped frame (same honesty as the contradicting-theme case below —
+// flipped frame (same honesty as the contradicting-theme case below -
 // unavoidable without a synchronous bridge, splash covers the window).
 void api
   .getSettings()
@@ -66,7 +66,7 @@ requestAnimationFrame(() => {
 
 // warm the app icon early: the <img> tags (titlebar/welcome/about) only
 // mount after the settings IPC gate, so without this the fetch+decode
-// starts seconds in. Same hashed URL Vite emits for the views — one
+// starts seconds in. Same hashed URL Vite emits for the views - one
 // network entry, decoded ahead of first paint.
 const iconPreload = new Image();
 iconPreload.src = appIcon;

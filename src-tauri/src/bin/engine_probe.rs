@@ -1,11 +1,11 @@
-// engine headless test: run a session WITHOUT the UI — pure engine isolation.
+// engine headless test: run a session WITHOUT the UI - pure engine isolation.
 // cargo run --bin engine_probe [-- <seconds>] (default 12, 1..120)
 
 use lag_hunter_lib::engine::session;
 use std::time::{Duration, Instant};
 
 /// Probe duration from argv (pure: every shape below is unit-tested).
-/// No flags, one optional number — a dev tool, not a product surface.
+/// No flags, one optional number - a dev tool, not a product surface.
 fn probe_secs(args: &[String]) -> Result<u64, String> {
     if args.len() > 1 {
         return Err("engine_probe takes at most one duration".into());

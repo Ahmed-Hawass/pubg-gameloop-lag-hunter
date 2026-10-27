@@ -1,4 +1,4 @@
-// session.rs — the session orchestrator: owns samplers, detector, storage, and pushes UI state.
+// session.rs - the session orchestrator: owns samplers, detector, storage, and pushes UI state.
 // The single source of truth. The UI only sends commands: start/stop; everything else is pushed.
 
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -21,7 +21,7 @@ pub struct Engine {
     /// stop callers wait here for the writer's own outcome, never race it.
     state_cv: Condvar,
     /// the CURRENT session's running flag. Readers spawned by start() hold
-    /// their OWN Arc — this slot only tells stop() WHICH flag to flip (the
+    /// their OWN Arc - this slot only tells stop() WHICH flag to flip (the
     /// current session's), never mutated in place (a `&self` method can't),
     /// replaced via the write lock at each start.
     running_flag: std::sync::RwLock<Arc<AtomicBool>>,
@@ -30,13 +30,13 @@ pub struct Engine {
     /// deletion snapshots the live id BEFORE its background task runs, so
     /// a session starting in that window could otherwise land inside the
     /// deletion walk. Both sides take this guard around the
-    /// create-or-delete critical section — in the same order (fs guard,
+    /// create-or-delete critical section - in the same order (fs guard,
     /// then state) so the two can never deadlock against each other.
     fs_guard: std::sync::Mutex<()>,
     /// consecutive GameLoop probe misses (auto-stop after ~15s of silence)
     gameloop_misses: AtomicU32,
     /// bumped on every start(): guard/timer threads capture it and die as
-    /// soon as it's no longer current — no duplicate guards can ever run.
+    /// soon as it's no longer current - no duplicate guards can ever run.
     generation: AtomicU32,
     /// Set when the window begins closing. A start already in its slow gate
     /// path observes this before creating a writer or spawning samplers.
@@ -94,7 +94,7 @@ struct UiSnapshot {
 }
 
 impl Default for Engine {
-    /// Same as `Engine::new` — thresholds come from the settings store.
+    /// Same as `Engine::new` - thresholds come from the settings store.
     fn default() -> Self {
         Self::new()
     }
@@ -215,9 +215,9 @@ impl Engine {
 
     /// Start a monitoring session. `auto_stop_secs`: None = manual stop only
     /// (used by the headless `engine_probe` binary; the Tauri command always
-    /// sends a bounded value — see MAX_SESSION_SECS in lib.rs).
+    /// sends a bounded value - see MAX_SESSION_SECS in lib.rs).
     /// Returns the session generation (guards/timers use it to self-retire).
-    /// Requires GameLoop to be running — the tool measures the game, not the desktop.
+    /// Requires GameLoop to be running - the tool measures the game, not the desktop.
     pub fn start(&self, auto_stop_secs: Option<u64>) -> Result<u32, String> {
         let _t = super::logging::timed("session start");
         if self.shutdown_requested.load(Ordering::SeqCst) {
@@ -228,7 +228,7 @@ impl Engine {
             if st.status == SessionStatus::Running {
                 return Err("SESSION_ALREADY_RUNNING".into());
             }
-            // finalize is still flushing files — a start here would race it
+            // finalize is still flushing files - a start here would race it
             // for the same writer and corrupt the session being written
             if st.status == SessionStatus::Stopping {
                 return Err("SESSION_STOPPING".into());
@@ -277,7 +277,7 @@ impl Engine {
         // machine profile per session → dynamic thresholds. RAM + disk count
         // ride the rig profile's disk cache (instant after first machine run)
         // instead of their own PowerShell round-trips; a missing cache falls
-        // back to the documented defaults — the scan never waits on hardware.
+        // back to the documented defaults - the scan never waits on hardware.
         let ps_ok = super::system::powershell_available();
         let (total_mem, disk_count) = match super::system::cached_machine_profile() {
             Some((mem, disks)) => (mem, disks),
@@ -312,7 +312,7 @@ impl Engine {
 
         // RE-CHECK under the SECOND lock: the first check ran before the slow
         // gates above (emulator probe, PowerShell queries), unlocked the whole
-        // time — a second start() that slipped through both gates would
+        // time - a second start() that slipped through both gates would
         // double-spawn sources and orphan a writer (double-click race).
         //
         // The fs guard is taken BEFORE the state lock (same order as the
@@ -362,7 +362,7 @@ impl Engine {
         // already Running so a concurrent stop() flips to Stopping and the
         // re-lock below bails out instead of overwriting it.
 
-        // GPU max clocks (best effort — logged: a silent miss here is why a
+        // GPU max clocks (best effort - logged: a silent miss here is why a
         // gpu_clock_low rule could fire with bogus ratios)
         let gpu_max = sampler::query_gpu_max_clocks();
         match &gpu_max {
@@ -379,12 +379,12 @@ impl Engine {
         // ---- spawn streaming sources ----
         // Routes thread callbacks to the global engine instance (set in lib.rs).
         // Drop every cross-session snapshot FIRST: a previous session's
-        // evidence must never feed this one. The order matters — the probes
+        // evidence must never feed this one. The order matters - the probes
         // below run AFTER the wipe so their fresh results survive (the old
         // order stored the visibility probe and then wiped it in the same
         // critical section, discarding the probe's work every time).
         reset_snapshots();
-        // the emulator is known-live (the gate above confirmed it) — seed
+        // the emulator is known-live (the gate above confirmed it) - seed
         // the snapshot so tick zero already knows what it is measuring
         if let Ok(procs) = sampler::query_emulator_procs() {
             if !procs.is_empty() {
@@ -420,7 +420,7 @@ impl Engine {
             st.emulator = emulator;
         }
         // FRESH flag per session (not the shared one): the old stop→start
-        // race leaked readers — stop() flips the flag false and sleeps 600ms,
+        // race leaked readers - stop() flips the flag false and sleeps 600ms,
         // but a start() in that window flips the SAME flag back to true
         // before the old 1Hz reader ever observes false, so the old
         // typeperf/dmon pair feeds the new session forever. Per-session
@@ -472,7 +472,7 @@ impl Engine {
         self.generation.load(Ordering::SeqCst)
     }
 
-    /// True while `gen` is still the latest start() — guards let old
+    /// True while `gen` is still the latest start() - guards let old
     /// sessions' threads detect they've been superseded.
     pub fn generation_is_current(&self, gen: u32) -> bool {
         self.generation.load(Ordering::SeqCst) == gen
@@ -483,14 +483,14 @@ impl Engine {
         self.stop_with_reason(StopReason::Manual)
     }
 
-    /// Stop with the reason the session ended — the UI explains it instead
+    /// Stop with the reason the session ended - the UI explains it instead
     /// of staying silent when GameLoop dies mid-session.
     ///
     /// SINGLE-FLIGHT: the first caller from Running becomes the writer; every
     /// other caller waits for and receives the SAME finalize outcome (report
     /// path, or the finalize error). An early `Ok(None)` for a concurrent
     /// caller is how the CLI used to exit mid-finalize and kill the report
-    /// with it — auto-stop and GameLoop-close both lost theirs.
+    /// with it - auto-stop and GameLoop-close both lost theirs.
     pub fn stop_with_reason(&self, reason: StopReason) -> Result<Option<String>, String> {
         let _t = super::logging::timed_with("session stop", 3_000);
         super::logging::info(&format!("session stop: reason={reason:?}"));
@@ -517,7 +517,7 @@ impl Engine {
             }
         }
 
-        // flip the CURRENT session's flag (read under the lock — never the
+        // flip the CURRENT session's flag (read under the lock - never the
         // same Arc an old session's readers hold). Poison recovers: a stale
         // flag must still be flipped or the samplers never die.
         self.running_flag
@@ -533,7 +533,7 @@ impl Engine {
 
         let mut st = self.state.lock().unwrap_or_else(|p| p.into_inner());
         // the 600ms window is uninsured: if a start() slipped in while we slept
-        // (status flipped back to Running), our writer is NOT theirs — bail out
+        // (status flipped back to Running), our writer is NOT theirs - bail out
         // without touching anything rather than corrupt the new session.
         if st.status != SessionStatus::Stopping {
             drop(st);
@@ -578,7 +578,7 @@ impl Engine {
                     }
                 }
             }
-            // no writer: already stopped/finished — benign, not a save failure
+            // no writer: already stopped/finished - benign, not a save failure
             None => None,
         };
         // verdict rewrite: the finished card must agree with the saved
@@ -596,7 +596,7 @@ impl Engine {
                 ui.issue_kinds = kinds;
             }
         }
-        // the commit: status, stored outcome, and wake-up land together —
+        // the commit: status, stored outcome, and wake-up land together -
         // Finished never reads before the outcome exists
         st.status = SessionStatus::Finished;
         st.finalize_result = Some(Ok(report.clone()));
@@ -639,7 +639,7 @@ impl Engine {
             .and_then(|t| t.get())
             .copied();
 
-        // attach the freshest snapshots —
+        // attach the freshest snapshots -
         // freshness-gated: a snapshot older than SNAPSHOT_TTL is dropped to
         // None instead of being worn as fresh evidence (stale attribution)
         let mut s = raw;
@@ -665,7 +665,7 @@ impl Engine {
             // periodic autosave below into a per-tick storm
             st.ticks_total += 1;
 
-            // every sample hits disk immediately — the file is the source of truth
+            // every sample hits disk immediately - the file is the source of truth
             let sample_result = st
                 .writer
                 .as_mut()
@@ -681,7 +681,7 @@ impl Engine {
                 }
             }
 
-            // rolling RAM window: detector needs ~30 recent ticks, UI needs 60 — keep 300 max
+            // rolling RAM window: detector needs ~30 recent ticks, UI needs 60 - keep 300 max
             st.samples.push(s.clone());
             let overflow = st.samples.len().saturating_sub(300);
             if overflow > 0 {
@@ -730,7 +730,7 @@ impl Engine {
                 auto_stop_at: st.auto_stop_at,
                 total_mem_mb: total_mem,
             })
-        }; // state lock released here — clock + diagnoser run unlocked
+        }; // state lock released here - clock + diagnoser run unlocked
 
         if let Some(inputs) = ui_inputs {
             let session_id = inputs.session_id.clone();
@@ -816,7 +816,7 @@ impl Engine {
     }
 
     /// Called by the probe loop: if GameLoop died mid-session, the scan has
-    /// nothing left to measure — stop it cleanly and mark the reason.
+    /// nothing left to measure - stop it cleanly and mark the reason.
     pub fn check_gameloop_alive(&self) -> bool {
         // release the state lock before touching LATEST_EMU: holding both
         // lengthens contention with stop()/status() for no reason.
@@ -828,7 +828,7 @@ impl Engine {
             return true; // nothing to guard
         }
         // freshness matters: a stale "alive" snapshot would keep the session
-        // running on ghost evidence after the probe thread itself died —
+        // running on ghost evidence after the probe thread itself died -
         // the same TTL gate on_sample applies. A snapshot past its TTL
         // reads as a miss, never as alive.
         let emu: Vec<super::types::ProcInfo> = LATEST_EMU
@@ -842,7 +842,7 @@ impl Engine {
         if alive {
             // v7 has no per-game process (closing PUBG leaves the emulator
             // up): the VM's own app counter decides. v6 world has no such
-            // key — process presence stays the whole truth there.
+            // key - process presence stays the whole truth there.
             // A None verdict (not a v7 snapshot) keeps the old answer.
             if let Some(game) = super::emulator::v7_game_active(&emu) {
                 alive = game;
@@ -857,7 +857,7 @@ impl Engine {
         };
         let misses = self.gameloop_misses.load(Ordering::SeqCst);
         if misses >= 3 {
-            super::logging::error("GameLoop closed mid-session — auto-stopping");
+            super::logging::error("GameLoop closed mid-session - auto-stopping");
             let _ = self.stop_with_reason(StopReason::GameLoopClosed);
             return false;
         }
@@ -865,7 +865,7 @@ impl Engine {
     }
 }
 
-/// Record the session's distinct problem kinds — one definition with the
+/// Record the session's distinct problem kinds - one definition with the
 /// report's classify_events: any non-ok event whose phase is not End. The
 /// live moments badge, the finished verdict, and the reports list read this,
 /// so a sub-three-second blip that the report will keep still ticks the
@@ -883,7 +883,7 @@ fn active_conditions(events: &[EngineEvent]) -> usize {
     // diagnoser gates behind correlation evidence (gpu_mem_idle needs a
     // cliff inside its window, paging_churn the same). Counting them made
     // a sustained open wake show a red "Lag" banner with ZERO cards (the
-    // correlation gate suppressed the card, the counter still fired) —
+    // correlation gate suppressed the card, the counter still fired) -
     // the exact "red with nothing explaining why" shape the still-open
     // rescue was written to kill. The kinds the correlator can still
     // upgrade to a card pass through: their Start alone is honest signal.
@@ -911,7 +911,7 @@ fn active_conditions(events: &[EngineEvent]) -> usize {
 /// The diagnoser's view of the event history: everything from the oldest
 /// window it can still read backward. The live window is 5 min and the
 /// correlation window 15 min (diagnoser.rs owns both), so events older
-/// than the correlation window + slack are invisible to every rule — the
+/// than the correlation window + slack are invisible to every rule - the
 /// walk starts after them. STILL-OPEN kinds are exempt: a condition open
 /// for 20 minutes has a Start older than any window, but the still-open
 /// rescue must keep reading it (the vanishing-card bug the rescue was
@@ -927,7 +927,7 @@ fn diagnosis_window(events: &[EngineEvent], now_ms: i64) -> Vec<EngineEvent> {
         return events.to_vec();
     }
     let cutoff = now_ms - VIEW_MS;
-    // kinds whose latest Start has no End after it (still open) — their
+    // kinds whose latest Start has no End after it (still open) - their
     // whole history rides along however old
     let mut open_kinds: std::collections::HashSet<&str> = std::collections::HashSet::new();
     for e in events {
@@ -948,7 +948,7 @@ fn diagnosis_window(events: &[EngineEvent], now_ms: i64) -> Vec<EngineEvent> {
         .collect()
 }
 
-/// When the CURRENT session's samplers were spawned — the first-sample log
+/// When the CURRENT session's samplers were spawned - the first-sample log
 /// measures pipeline latency from here (spawn → first tick). Reset at every
 /// start(): the old OnceLock version was set once per process, so session #2
 /// in the same run logged absurd latencies ("first sample: 860383ms").
@@ -978,7 +978,7 @@ fn total_ram_mb() -> f64 {
     }
 }
 
-/// Physical disk count (spindles/NVMe devices) — feeds the dynamic disk-queue
+/// Physical disk count (spindles/NVMe devices) - feeds the dynamic disk-queue
 /// threshold: each device can legitimately serve ~1 parallel request.
 fn physical_disk_count() -> u32 {
     use std::os::windows::process::CommandExt;
@@ -1006,23 +1006,23 @@ fn physical_disk_count() -> u32 {
 
 // ---- process-wide singletons ------------------------------------------------
 // LATEST_GPU / LATEST_EMU / LATEST_VISIBLE: freshest snapshots shared between
-// sampler threads — each stamped with the moment it was captured, so samples
+// sampler threads - each stamped with the moment it was captured, so samples
 // never attach evidence older than its source's TTL. LATEST_VISIBLE: None =
 // not probed yet (conservative mute). All three are cleared at every start():
 // a snapshot from a previous session is not evidence in this one.
 
 /// Per-source freshness windows, matched to how often each source SPEAKS:
 /// a TTL must cover the source's native interval plus slack for one missed
-/// cycle — anything tighter starves evidence (a flat 2s TTL against a 10s
+/// cycle - anything tighter starves evidence (a flat 2s TTL against a 10s
 /// probe cadence left 85% of ticks visibility-blind in session #2/#3).
 ///
 /// - gpu: dmon emits at 1 Hz; 2s = the reading plus one missed cycle. GPU
-///   data is a MEASUREMENT — a stalled dmon means stale numbers, drop them.
+///   data is a MEASUREMENT - a stalled dmon means stale numbers, drop them.
 /// - emu: the emulator probe runs every ~5s (guard thread cycle); 12s = two
 ///   full misses tolerated before "game alive" evidence lapses.
 /// - visible: the visibility probe runs every ~10s; 30s = generous slack
 ///   because window state is a rarely-changing FACT, not a 1 Hz measurement
-///   — a 10s-old "visible" is still true unless the user just minimized.
+///   - a 10s-old "visible" is still true unless the user just minimized.
 const SNAPSHOT_TTLS: SnapshotTtls = SnapshotTtls {
     gpu: Duration::from_secs(2),
     emu: Duration::from_secs(12),
@@ -1035,7 +1035,7 @@ struct SnapshotTtls {
     visible: Duration,
 }
 
-/// A sampler snapshot plus its capture time — freshness is part of the data.
+/// A sampler snapshot plus its capture time - freshness is part of the data.
 struct Timestamped<T> {
     value: T,
     at: Instant,
@@ -1065,7 +1065,7 @@ static LATEST_EMU: Mutex<Option<Timestamped<Vec<super::types::ProcInfo>>>> = Mut
 static LATEST_VISIBLE: Mutex<Option<Timestamped<bool>>> = Mutex::new(None);
 
 /// Drop every cross-session snapshot so a new session starts from zero
-/// evidence. Called at every start(): the old bug — session #2 silently
+/// evidence. Called at every start(): the old bug - session #2 silently
 /// inherited session #1's GPU/visibility snapshots (fresh-looking but old).
 pub fn reset_snapshots() {
     *LATEST_GPU.lock().unwrap_or_else(|p| p.into_inner()) = None;
@@ -1208,7 +1208,7 @@ mod tests {
         // the shared guard starter must never hang the caller: with no
         // global engine (unit tests never init one) both threads find
         // nothing to guard and exit on their first check. The callback
-        // must not fire — nothing stopped.
+        // must not fire - nothing stopped.
         use std::sync::atomic::{AtomicBool, Ordering};
         use std::sync::Arc;
         let fired = Arc::new(AtomicBool::new(false));
@@ -1222,7 +1222,7 @@ mod tests {
 
     /// The red-banner-with-zero-cards bug: a correlation-gated condition
     /// (gpu_mem_idle open for minutes) must NOT drive Overall::Lag on its
-    /// own — the diagnoser suppresses its card until a cliff confirms it,
+    /// own - the diagnoser suppresses its card until a cliff confirms it,
     /// so counting it left a red banner with nothing explaining why. The
     /// ungated disk_queue Start below still counts on its own.
     #[test]
@@ -1259,7 +1259,7 @@ mod tests {
     }
 
     /// The diagnosis view window: old QUIET-CLOSED history drops out, but
-    /// a still-open condition's events ride along however old — the
+    /// a still-open condition's events ride along however old - the
     /// vanishing-card bug the still-open rescue exists for. (A kind with a
     /// RECENT event keeps everything too: recent = inside the window, and
     /// the kind being open at that point means its older pairs are
@@ -1351,11 +1351,11 @@ mod tests {
         }
         // start() with the game gate unreachable: detect_emulator() returns
         // None on a machine without GameLoop, so the first gate should
-        // already refuse — but if it somehow passed (game running on the
+        // already refuse - but if it somehow passed (game running on the
         // CI box), the second-gate re-check must still refuse
         let res = eng.start(Some(60));
         assert!(res.is_err());
-        // status must still be Running — nothing was reset
+        // status must still be Running - nothing was reset
         let st = eng.state.lock().unwrap_or_else(|p| p.into_inner());
         assert!(st.status == SessionStatus::Running);
     }
@@ -1365,7 +1365,7 @@ mod tests {
     #[test]
     fn per_session_running_flag_not_shared() {
         let eng = Engine::new();
-        // simulate session 1: start() installs a fresh flag (true) — the
+        // simulate session 1: start() installs a fresh flag (true) - the
         // session's readers capture THEIR OWN Arc to it
         let first = Arc::new(AtomicBool::new(true));
         if let Ok(mut slot) = eng.running_flag.write() {
@@ -1375,7 +1375,7 @@ mod tests {
         if let Ok(current) = eng.running_flag.read() {
             current.store(false, Ordering::SeqCst);
         }
-        // a fast restart: start() installs a NEW flag for session 2 — the
+        // a fast restart: start() installs a NEW flag for session 2 - the
         // engine's slot now points at a different Arc
         let second = Arc::new(AtomicBool::new(true));
         if let Ok(mut slot) = eng.running_flag.write() {

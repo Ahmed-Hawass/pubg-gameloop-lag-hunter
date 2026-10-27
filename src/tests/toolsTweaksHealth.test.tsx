@@ -1,4 +1,4 @@
-// tests/toolsTweaksHealth.test.tsx — the gaming rows follow the health
+// tests/toolsTweaksHealth.test.tsx - the gaming rows follow the health
 // pattern: one-glance banner derived from the rendered rows, off-rows
 // repeated featured above the archive (never moved), row copy is the
 // name alone with the definition behind the (?) button.

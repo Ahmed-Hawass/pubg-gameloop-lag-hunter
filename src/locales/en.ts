@@ -283,7 +283,7 @@ export const en = {
     `${name} will open every time you sign in, which adds to your startup time.`,
   /** row action + status words (Task Manager language, merged into one
       control: the button text names the state, its accessible name the
-      action — no switch implies no preferred direction) */
+      action - no switch implies no preferred direction) */
   startupEnable: "Enable",
   startupDisable: "Disable",
   startupStateOn: "Enabled",
@@ -353,7 +353,7 @@ export const en = {
       not announced as a bare duplicate of the row name */
   hintAbout: (name: string) => `About ${name}`,
   /** summary banner: one-glance verdict above the cards, derived in the
-      UI from the five checks (no backend change — counts warn cards) */
+      UI from the five checks (no backend change - counts warn cards) */
   healthAllGood: "Everything looks good",
   healthAllGoodSub: "Nothing on this PC is holding your game back",
   healthNeedsTitle: (n: number) => `${n} ${n === 1 ? "setting needs" : "settings need"} attention`,
@@ -418,7 +418,7 @@ export const en = {
   introStorageBody:
     "Watch your disk space and keep it tidy, automatically or on demand.",
 
-  // ---- tweaks (Tools tab writes — switch mirrors live state).
+  // ---- tweaks (Tools tab writes - switch mirrors live state).
   // Row copy is the name alone; the definition plus the effect timing
   // live behind the (?) button (same contract as the health cards). */
   tweakDvrTitle: "Turn off background recording (DVR)",
@@ -490,7 +490,7 @@ export const en = {
   rebootNow: "Restart",
   rebootLater: "Later",
   tweakPowerTitle: "Turn on High performance",
-  /** visible effect timing (shared lines, verified rows only — the
+  /** visible effect timing (shared lines, verified rows only - the
       card shows when, the (?) shows what and why) */
   tweakEffectNow: "Takes effect immediately",
   tweakEffectReopen: "Close and reopen the game to apply",
@@ -510,7 +510,7 @@ export const en = {
       as the featured summary, so this labels what follows, not a filter) */
   tweakAllTweaks: "All tweaks",
   /** reason line under a greyed-out row whose precondition the user can
-      fix (GameLoop exes not resolved) — never shown for rows that can
+      fix (GameLoop exes not resolved) - never shown for rows that can
       never work here (those hide instead) */
   tweakNeedsGameloop: "Requires GameLoop to be installed on this PC.",
   tweakNeedsWin11: "Requires Windows 11 or later on this PC.",

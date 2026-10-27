@@ -1,11 +1,11 @@
-// display_names.rs — human names for processes: a curated table for the
+// display_names.rs - human names for processes: a curated table for the
 // stable Windows set, ProductName auto-naming for everything else, raw
 // names as the eternal fallback. Three layers, each honest about what
 // it knows:
 //
 //   1. curated: ~15 OS staples that never change (svchost, dwm, ...).
 //      The engine emits a machine KEY, the UI translates it (keys, not
-//      sentences — same contract as diagnoses).
+//      sentences - same contract as diagnoses).
 //   2. ProductName: read from the exe's own version resource (what the
 //      vendor calls it: "Google Chrome", "Brave"). Proper nouns stay
 //      Latin in every locale, so no translation table can ever rot.
@@ -13,7 +13,7 @@
 //
 // Resolved per unique PATH (not per row) with a bounded memory cache:
 // steady state costs zero spawns. Unknown paths and protected processes
-// (no path even for admins) fall through to layer 1 or 3 — a missing
+// (no path even for admins) fall through to layer 1 or 3 - a missing
 // name is never invented.
 
 use std::collections::HashMap;
@@ -21,7 +21,7 @@ use std::sync::Mutex;
 
 /// Curated OS staples: exe stem (lowercase, no extension) to display key.
 /// Only processes whose names are stable across Windows builds belong
-/// here. User software is NEVER listed (infinite tail) — ProductName
+/// here. User software is NEVER listed (infinite tail) - ProductName
 /// names it, raw names back it.
 const CURATED: [(&str, &str); 15] = [
     ("powershell", "procPowershell"),
@@ -62,7 +62,7 @@ pub fn curated_key(exe_name: &str) -> Option<&'static str> {
 /// PowerShell batch spawned a whole process per poll for a handful of
 /// strings (and its own parse could never match, so every name fell
 /// back to raw). Paths that fail (protected processes, vanished PIDs)
-/// are simply absent from the map — the caller falls back, never retries.
+/// are simply absent from the map - the caller falls back, never retries.
 #[cfg(windows)]
 pub fn product_names(paths: &[String]) -> HashMap<String, String> {
     let mut out = HashMap::new();
@@ -221,7 +221,7 @@ extern "system" {
     ) -> i32;
 }
 
-/// Cache ceiling: paths are stable per machine, but updates rename files —
+/// Cache ceiling: paths are stable per machine, but updates rename files -
 /// a bounded map that resets instead of growing forever across weeks.
 const CACHE_CEILING: usize = 1000;
 

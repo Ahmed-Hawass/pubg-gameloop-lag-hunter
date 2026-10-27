@@ -1,4 +1,4 @@
-// tests/updateModal.test.tsx — the update dialog's four phases and its
+// tests/updateModal.test.tsx - the update dialog's four phases and its
 // two cancellation contracts: Escape mid-download cancels the stream,
 // and an exact "cancelled" rejection closes silently (a message merely
 // containing the word is a real failure card).

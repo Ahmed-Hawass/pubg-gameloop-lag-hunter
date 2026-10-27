@@ -1,4 +1,4 @@
-// useTweaks.ts — the gaming-switch state family: live positions, the
+// useTweaks.ts - the gaming-switch state family: live positions, the
 // lightweight tweak_states read, and the optimistic flip. One instance
 // serves one mounted section (gaming and storage details never mount
 // together, and every mount re-reads live truth, so instances can never
@@ -23,7 +23,7 @@ export function useTweaks(failNotice: (notice: Notice | null) => void) {
   const [ssOn, setSsOn] = useState<boolean | null>(null);
   const [gameModeOn, setGameModeOn] = useState<boolean | null>(null);
   /** tri-state rows (on/off/disabled-with-reason/hidden*) for
-      preconditions the user can fix — hidden shapes never reach the
+      preconditions the user can fix - hidden shapes never reach the
       render below by themselves (the section reveals caused ones
       greyed under the show-unsupported preference) */
   const [fsoState, setFsoState] = useState<RowState>("hidden");
@@ -41,11 +41,11 @@ export function useTweaks(failNotice: (notice: Notice | null) => void) {
   const [mouseOn, setMouseOn] = useState<boolean | null>(null);
   const [tweakBusy, setTweakBusy] = useState(false);
   /** the busy gate as a REF (the Checks/Processes pattern): two clicks in
-      the same tick both read a stale `false` from state — the ref is
+      the same tick both read a stale `false` from state - the ref is
       synchronous, so the second click is refused immediately */
   const tweakBusyRef = useRef(false);
   /** read generation: bumped on every flip start. A reload that STARTED
-      before the current generation applies nothing on completion — it
+      before the current generation applies nothing on completion - it
       read the pre-flip truth and would paint it over the verified
       result (the ON-bounce seen on the slow power row: UAC + powercfg
       leave seconds for a stale read to land late). */
@@ -84,7 +84,7 @@ export function useTweaks(failNotice: (notice: Notice | null) => void) {
     fso: {
       goal: (on: boolean): 0 | 1 => (on ? 1 : 0), // ON = optimizations disabled
       set: (v: boolean) => setFsoState(v ? "on" : "off"),
-      // only on/off are flippable — disabled/hidden never reach the
+      // only on/off are flippable - disabled/hidden never reach the
       // button (disabled renders greyed, hidden renders nothing)
       get: () => (fsoState === "on" ? true : fsoState === "off" ? false : null),
     },
@@ -96,7 +96,7 @@ export function useTweaks(failNotice: (notice: Notice | null) => void) {
     powerplan: {
       goal: (on: boolean): 0 | 1 => (on ? 1 : 0), // ON = High performance active
       set: (v: boolean) => setPowerState(v ? "on" : "off"),
-      // only on/off are flippable — hidden never reaches the render below.
+      // only on/off are flippable - hidden never reaches the render below.
       // The flip runs elevated (one UAC per press); a refused prompt rolls
       // back silently, a post-consent failure shows the notice.
       get: () => (powerState === "on" ? true : powerState === "off" ? false : null),
@@ -104,7 +104,7 @@ export function useTweaks(failNotice: (notice: Notice | null) => void) {
     memoryintegrity: {
       goal: (on: boolean): 0 | 1 => (on ? 0 : 1), // ON = protection actually off
       set: (v: boolean) => setHvciState(v ? "on" : "off"),
-      // only on/off are flippable — locked never reaches the button
+      // only on/off are flippable - locked never reaches the button
       // (greyed with its reason), hidden never reaches the render below.
       // The flip runs elevated (one UAC per press) like the power plan.
       get: () => (hvciState === "on" ? true : hvciState === "off" ? false : null),
@@ -146,7 +146,7 @@ export function useTweaks(failNotice: (notice: Notice | null) => void) {
       setMouseOn(s.mouse_accel_off);
       setLoadError(null);
       // one-time client-update notice (the engine persists on this very
-      // read, so the sibling section's read stays quiet — one dialog max)
+      // read, so the sibling section's read stays quiet - one dialog max)
       if (s.emulator_updated) {
         failNotice({
           title: t.dialog.emulatorUpdatedTitle,
@@ -167,7 +167,7 @@ export function useTweaks(failNotice: (notice: Notice | null) => void) {
   /** generic flip: optimistic move, explicit write both directions,
       verified live truth settles the final position. A verified result IS
       the fresh truth (the engine re-read the registry to confirm it), so
-      no full reload after a click — the heavy batch refresh stays at its
+      no full reload after a click - the heavy batch refresh stays at its
       real entry points: opening the view and window focus. */
   const flipTweak = async (id: TweakId, on: boolean) => {
     const tweak = TWEAKS[id];
@@ -188,13 +188,13 @@ export function useTweaks(failNotice: (notice: Notice | null) => void) {
         return;
       }
       notifyFeatureStateChanged();
-      // verified: the switch stays where the optimistic move put it —
+      // verified: the switch stays where the optimistic move put it -
       // the engine confirmed the registry holds exactly this state now
     } catch (e) {
       tweak.set(before);
       const raw = typeof e === "string" ? e : String(e);
       // a refused elevation is a choice, not a failure: roll back silently
-      // (same exact-"cancelled" contract as the update flow — a message
+      // (same exact-"cancelled" contract as the update flow - a message
       // merely containing the word still counts as a real error)
       if (raw === "cancelled") return;
       failNotice({

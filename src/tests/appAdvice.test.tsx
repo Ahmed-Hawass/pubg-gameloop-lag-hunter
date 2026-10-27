@@ -1,4 +1,4 @@
-// tests/appAdvice.test.tsx — the once-ever advice contracts: the
+// tests/appAdvice.test.tsx - the once-ever advice contracts: the
 // pre-scan tip fires on the first real session start, the stay-in-game
 // tip only on a visible-to-background transition (never on the starting
 // state), and finishing welcome persists onboarding and raises the

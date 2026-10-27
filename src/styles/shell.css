@@ -41,7 +41,7 @@
   flex: none;
 }
 
-/* the collapse control — pinned at the sidebar's floor (after the spacer),
+/* the collapse control - pinned at the sidebar's floor (after the spacer),
    quiet, same visual weight as a tab */
 .sb-spacer {
   flex: 1;
@@ -94,7 +94,7 @@
 
 
 
-/* windows controls — real, not decoration */
+/* windows controls - real, not decoration */
 .win-controls {
   display: flex;
   height: 100%;
@@ -186,7 +186,7 @@
   background: var(--hover-bg);
 }
 
-/* active = FILLED green, exactly the Start button's language — one selection
+/* active = FILLED green, exactly the Start button's language - one selection
    style everywhere in the app */
 .sb-item.is-active {
   color: var(--on-primary);
@@ -196,9 +196,9 @@
 }
 
 /* the update dot on the About entry: a quiet WARN-yellow badge in the corner
-   (matches "a new version is available" — green reads as "all good" and
+   (matches "a new version is available" - green reads as "all good" and
    vanished against the active/hover state), present for the whole life of
-   a newer release — never dismissible */
+   a newer release - never dismissible */
 .sb-item {
   position: relative;
 }
@@ -234,7 +234,7 @@
   padding: 10px 0;
 }
 /* collapsed rail: the corner dot re-anchors to the centered glyph
-   (half the 9px dot off the middle — logical, mirrors with RTL) */
+   (half the 9px dot off the middle - logical, mirrors with RTL) */
 .sidebar.is-collapsed .sb-dot {
   inset-inline-end: calc(50% - 4.5px);
 }
@@ -277,7 +277,7 @@
 .content > div > .monitor {
   overflow-y: auto;
   /* container pattern for free window sizes: readable measure on wide
-     screens, full width down to the 1024px minimum — centered, not stuck
+     screens, full width down to the 1024px minimum - centered, not stuck
      to the reading-start edge */
   width: 100%;
   max-width: min(100%, 1100px);
@@ -330,7 +330,7 @@
   background: transparent;
 }
 
-/* HIDDEN beats the flex layout above — same specificity class + element
+/* HIDDEN beats the flex layout above - same specificity class + element
    chain would lose to `.content > div`; this wins regardless of order */
 .content > div.is-hidden-view {
   display: none;

@@ -1,6 +1,6 @@
-// i18n.tsx — the language layer. Zero dependencies: two locale files + context.
+// i18n.tsx - the language layer. Zero dependencies: two locale files + context.
 // Resolution order: user toggle (persisted) > OS locale (at launch) > English.
-// "auto" re-resolves from the OS on every launch — a fresh machine starts right.
+// "auto" re-resolves from the OS on every launch - a fresh machine starts right.
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { en, type Locale } from "./locales/en";
@@ -59,7 +59,7 @@ export function LanguageProvider(props: { children: ReactNode }) {
   const lang: LangCode = setting === "auto" ? osLanguage() : setting;
   const t = LOCALES[lang];
 
-  // flip document direction — the whole shell is logical-CSS, so this is enough
+  // flip document direction - the whole shell is logical-CSS, so this is enough
   useEffect(() => {
     document.documentElement.dir = t.lang.dir;
     document.documentElement.lang = t.lang.code;
@@ -77,7 +77,7 @@ export function LanguageProvider(props: { children: ReactNode }) {
     });
   };
 
-  // don't render until the persisted language arrives — avoids a visible flip
+  // don't render until the persisted language arrives - avoids a visible flip
   if (!ready) return null;
   return <Ctx.Provider value={{ t, lang, setting, setLanguage }}>{children}</Ctx.Provider>;
 }

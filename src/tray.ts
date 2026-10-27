@@ -1,4 +1,4 @@
-// tray.ts — the tray's two decisions, as pure logic.
+// tray.ts - the tray's two decisions, as pure logic.
 //
 // The native surface is Rust's (tray.rs); the COPY is the locale files'. What
 // is left here is exactly what the frontend owns: WHEN the tooltip changes,

@@ -1,4 +1,4 @@
-// ToolsView.tsx — one card per area (game performance, virtual memory,
+// ToolsView.tsx - one card per area (game performance, virtual memory,
 // disk cleanup, storage), each opening its own details section. A switch
 // MIRRORS THE LIVE RESULT of its named action (ON = the action holds
 // right now, whoever made it hold), so manual changes outside the app
@@ -34,7 +34,7 @@ export function ToolsView(props: {
   active: boolean;
   /** health-card deep-link target (a gaming row id, or "pagefile" for
       the virtual-memory page): one-shot, cleared by the landing section
-      once it finishes — same contract as the Reports openId */
+      once it finishes - same contract as the Reports openId */
   toolOpenId: string | null;
   onToolOpened: () => void;
   /** reports cleanup activity to the shell (the exit confirm needs it) */
@@ -158,7 +158,7 @@ export function ToolsView(props: {
     setOpenCard(null);
   };
 
-  // a dialog mounting under a parked cursor never fires mouseleave — tell
+  // a dialog mounting under a parked cursor never fires mouseleave - tell
   // every tooltip to hide the moment ours opens (same signal as the shell)
   useEffect(() => {
     if (notice || hint) {
@@ -227,7 +227,7 @@ export function ToolsView(props: {
             headerTrail={backBtn}
           />
         )}
-        {/* background note behind a row's (?) button — the same unified
+        {/* background note behind a row's (?) button - the same unified
             Dialog as the failed-write notice below (one modal surface) */}
         {hint ? (
           <Dialog
@@ -238,7 +238,7 @@ export function ToolsView(props: {
             onClose={() => setHint(null)}
           />
         ) : null}
-        {/* failed write — the unified Dialog, notice only (the flip itself
+        {/* failed write - the unified Dialog, notice only (the flip itself
             is the consent, there is no confirm step) */}
         {notice ? (
           <Dialog

@@ -1,4 +1,4 @@
-// SweepSection.tsx — the storage sweep: manual scan of the safe places,
+// SweepSection.tsx - the storage sweep: manual scan of the safe places,
 // delete only the ticked ones. Fully self-owned (page header, state,
 // runners, confirm): the section never scans by itself, the Scan button
 // below is the only trigger, so the sweep costs nothing until asked.
@@ -90,7 +90,7 @@ export function SweepSection(props: {
   const [clBusy, setClBusy] = useState(false);
   const clBusyRef = useRef(false);
   /** payoff flash: true from a successful clean until the next scan
-      starts — the cleaned hero owns the moment, then the work card
+      starts - the cleaned hero owns the moment, then the work card
       takes back over with fresh truth */
   const [clCleanedFlash, setClCleanedFlash] = useState(false);
   /** deep scan answer (null = never asked). Deep places are NEVER

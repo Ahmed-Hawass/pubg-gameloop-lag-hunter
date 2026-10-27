@@ -1,4 +1,4 @@
-// tests/appDialogs.test.tsx — the shell's two pushed-dialog contracts:
+// tests/appDialogs.test.tsx - the shell's two pushed-dialog contracts:
 // a GameLoop death mid-session explains itself exactly once (never for
 // manual stops), X hides to the tray without quitting, and the tray Exit
 // names in-flight work instead of silently dropping it.

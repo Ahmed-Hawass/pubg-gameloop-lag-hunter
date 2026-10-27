@@ -1,4 +1,4 @@
-// ErrorBoundary.tsx — the last line of defense for a render-time crash.
+// ErrorBoundary.tsx - the last line of defense for a render-time crash.
 //
 // Without it, any exception during render unmounts the whole tree and the
 // window shows nothing at all: the user sees a blank app and the only

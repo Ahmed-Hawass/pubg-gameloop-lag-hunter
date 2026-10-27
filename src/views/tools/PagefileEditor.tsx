@@ -1,4 +1,4 @@
-// PagefileEditor.tsx — the Virtual Memory-style editor: one summary row
+// PagefileEditor.tsx - the Virtual Memory-style editor: one summary row
 // (title + live global status) with the editor one tap under it, plus the
 // pre-write confirms and the one-time reboot offer. Owns its page file
 // read, its working copies, and its write busy gate; the parent only
@@ -52,7 +52,7 @@ export function PagefileEditor(props: {
       destructive destination, "small" warns below the stutter floor */
   const [pfConfirm, setPfConfirm] = useState<{ warning: "off" | "small" } | null>(null);
   /** reboot offer after a verified page file write (once per write,
-      never on load — Later dismisses for good until the next write) */
+      never on load - Later dismisses for good until the next write) */
   const [rebootModal, setRebootModal] = useState(false);
   /** write busy gate: an elevated apply in flight (focus reads skip it,
       like the switch flips above) */
@@ -433,7 +433,7 @@ export function PagefileEditor(props: {
         />
       ) : null}
       {/* reboot offer, once per verified write (Later dismisses until
-          the next write — never nagged on load) */}
+          the next write - never nagged on load) */}
       {rebootModal ? (
         <Dialog
           title={t.rebootTitle}

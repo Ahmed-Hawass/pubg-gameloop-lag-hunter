@@ -1,4 +1,4 @@
-// tests/errorBoundary.test.tsx — the render-time crash contract: a
+// tests/errorBoundary.test.tsx - the render-time crash contract: a
 // throwing component must NOT leave a blank window, it must say plainly
 // that the app broke and offer a reload.
 
@@ -17,7 +17,7 @@ vi.mock("../bridge", () => ({
   logFrontendError: logFrontendErrorMock,
 }));
 
-/** a component that throws while rendering — the exact case the boundary
+/** a component that throws while rendering - the exact case the boundary
     exists for */
 function Boom(): React.ReactElement {
   throw new Error("kaboom from the view");

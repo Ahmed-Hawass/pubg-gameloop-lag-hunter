@@ -1,4 +1,4 @@
-// tests/tip.test.tsx — Tip orphan/stick contract: an empty text never
+// tests/tip.test.tsx - Tip orphan/stick contract: an empty text never
 // renders a bubble, flipping text to "" clears a previously shown bubble
 // (the sidebar expand orphan), and Escape/resize hide a live bubble.
 import { describe, expect, it, vi } from "vitest";
@@ -89,7 +89,7 @@ describe("Tip", () => {
 
   it("the trigger describes itself with the bubble, so a screen reader reads it", () => {
     // the bubble carries an id, so the element it describes must point at
-    // it (aria-describedby) — otherwise the tip text is unreachable to
+    // it (aria-describedby) - otherwise the tip text is unreachable to
     // assistive tech
     open("hello");
     fireEvent.mouseEnter(wrap());

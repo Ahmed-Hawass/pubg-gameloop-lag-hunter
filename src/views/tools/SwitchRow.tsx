@@ -1,4 +1,4 @@
-// SwitchRow.tsx — one Tools switch row. The switch mirrors the live RESULT
+// SwitchRow.tsx - one Tools switch row. The switch mirrors the live RESULT
 // of its named action (ON = the action holds right now). The label names
 // the action itself ("Turn off X"), so ON is always the recommended state
 // by construction. Row copy is the name alone; the definition lives
@@ -31,7 +31,7 @@ export function SwitchRow(props: {
   /** flip handler (absent on revealed-unsupported rows: a disabled
       switch never fires, so there is nothing to handle) */
   onFlip?: (next: boolean) => void;
-  /** greyed, non-clickable row with a translated reason underneath —
+  /** greyed, non-clickable row with a translated reason underneath -
       fixable preconditions (GameLoop) or revealed-unsupported rows
       (never flippable by design) */
   disabled?: boolean;

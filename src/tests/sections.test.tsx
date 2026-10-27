@@ -1,4 +1,4 @@
-// tests/sections.test.tsx — the shared section shapes: the verdict
+// tests/sections.test.tsx - the shared section shapes: the verdict
 // banner reads its tone from the count, and the featured-plus-archive
 // list keys both copies without collision. Pure props, no backend.
 import { describe, expect, it } from "vitest";

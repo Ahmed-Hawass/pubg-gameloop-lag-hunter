@@ -1,4 +1,4 @@
-// window_state.rs — remembered main-window geometry: pure rules only.
+// window_state.rs - remembered main-window geometry: pure rules only.
 //
 // The window opens at the config default (tauri.conf.json) unless the user
 // customized it before: outer size, position and the maximized flag persist
@@ -38,7 +38,7 @@ pub struct Screen {
 pub const MIN_W: u32 = 500;
 pub const MIN_H: u32 = 400;
 /// absurd saved dims (hand-edited file, corrupt JSON): larger than any
-/// real display — treated as "no geometry", never applied.
+/// real display - treated as "no geometry", never applied.
 const MAX_DIM: u32 = 7680;
 /// where Windows parks a minimized window, with an iconic size beside it
 /// (199 by 34 at 125% scaling on the machine this was found on).

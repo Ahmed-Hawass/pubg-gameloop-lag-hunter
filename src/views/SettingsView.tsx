@@ -1,6 +1,6 @@
-// SettingsView.tsx — user preferences. Today: language. Tomorrow's settings
+// SettingsView.tsx - user preferences. Today: language. Tomorrow's settings
 // land here too (one home for everything personal).
-// Language picker: a segmented row (like the duration pills) — the app's own
+// Language picker: a segmented row (like the duration pills) - the app's own
 // selection language: filled green on the active segment, nothing else.
 
 import { useEffect, useState } from "react";
@@ -75,7 +75,7 @@ export function SettingsView(props: {
   };
 
   const options: { key: LangSetting; label: string }[] = [
-    // every label comes from the locale like the rest of the UI — the
+    // every label comes from the locale like the rest of the UI - the
     // old hardcoded "English"/"العربية" literals skipped translation
     // entirely
     { key: "auto", label: t.themeAuto },

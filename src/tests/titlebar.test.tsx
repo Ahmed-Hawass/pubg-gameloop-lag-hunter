@@ -1,4 +1,4 @@
-// tests/titlebar.test.tsx — the window chrome contract: version text,
+// tests/titlebar.test.tsx - the window chrome contract: version text,
 // never an update dot (the sidebar About dot and the heading dot own
 // the signal), one deep drag region over the caption with the double
 // click left to Tauri's own drag script, restore glyph differs from

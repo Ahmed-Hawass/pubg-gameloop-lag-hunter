@@ -1,4 +1,4 @@
-// errors.ts — map a backend error string to the dialog the user should see.
+// errors.ts - map a backend error string to the dialog the user should see.
 // Extracted verbatim from App.tsx's toggle() so the decision is testable:
 // a known code gets its copy; GAMELOOP_NOT_RUNNING gets the friendly dialog;
 // anything else shows the raw message under the generic title.
@@ -54,7 +54,7 @@ function hasWholeToken(text: string, code: string): boolean {
  * `raw` is the error as string; `errors` is the locale's error-code table;
  * `copy` carries the locale's titles (somethingWrong / scanNeedsGame pair
  * plus the unknown-error body: a novel Rust message must never ship raw
- * English into an Arabic dialog — the locale explains, the raw string
+ * English into an Arabic dialog - the locale explains, the raw string
  * rides along as a technical line).
  */
 export function errorDialog(

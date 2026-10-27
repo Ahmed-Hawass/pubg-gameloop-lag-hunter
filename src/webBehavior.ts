@@ -1,9 +1,9 @@
-// webBehavior.ts — remove every browser habit from the app window.
+// webBehavior.ts - remove every browser habit from the app window.
 // Official Tauri practice: the WebView is a browser; these guards make it feel native.
 // Registered once at startup (main.tsx).
 
 /** Pure decision: should this keydown be swallowed as a browser habit?
- *  Exposed for tests — the DOM listener below only wires it up. */
+ *  Exposed for tests - the DOM listener below only wires it up. */
 export function isBrowserShortcut(e: {
   key: string;
   ctrlKey: boolean;
@@ -53,7 +53,7 @@ export function installNativeBehavior() {
     document.addEventListener(ev, (e) => e.preventDefault()),
   );
 
-  // 4) no accidental text selection outside the copyable surfaces — native
+  // 4) no accidental text selection outside the copyable surfaces - native
   // app feel. The stylesheet is the single source of truth: base.css sets
   // user-select: none on the body and text on a whitelist, and this guard
   // enforces exactly what CSS declares (reading the computed value), so a

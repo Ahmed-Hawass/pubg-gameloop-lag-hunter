@@ -1,4 +1,4 @@
-// summary.ts — shared Tools math with the exact rules the details pages
+// summary.ts - shared Tools math with the exact rules the details pages
 // render, plus the shared sweep-memory formatting. One function per
 // consumer group: faces can never drift from the pages behind them.
 
@@ -8,10 +8,10 @@ import type { LangCode } from "../../i18n";
 import { formatClockTime } from "../../clock";
 
 /** every Hidden* shape plus legacy "hidden": never rendered, never
-    counted by default — the show-unsupported preference names each
+    counted by default - the show-unsupported preference names each
     cause instead. Lives here (not bridge: test mocks replace the
     bridge module wholesale, and a runtime import from it would crash
-    every suite — types alone are erased and safe). */
+    every suite - types alone are erased and safe). */
 export function isHiddenRowState(s: RowState): boolean {
   return s === "hidden" || s === "hidden_old_build" || s === "hidden_s0" || s === "hidden_ultimate";
 }

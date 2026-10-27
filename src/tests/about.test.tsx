@@ -1,4 +1,4 @@
-// tests/about.test.tsx — the About update contract: a manual check that
+// tests/about.test.tsx - the About update contract: a manual check that
 // finds nothing says latest, one that finds a release hands it UP to the
 // shell (never opening on stale data), and a failed check says so.
 

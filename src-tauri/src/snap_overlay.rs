@@ -1,4 +1,4 @@
-// snap_overlay.rs — the native snap-layouts hit target over our custom
+// snap_overlay.rs - the native snap-layouts hit target over our custom
 // maximize button.
 //
 // Windows shows the snap-layouts flyout only when the cursor sits over a
@@ -14,7 +14,7 @@
 // behavior (toggle, tooltip, keyboard, focus ring).
 //
 // Technique note (the sampler.rs rule): this uses generated windows-sys
-// bindings — the same linking Tauri itself uses — never a hand-written
+// bindings - the same linking Tauri itself uses - never a hand-written
 // extern block (the banned technique that once crashed webview creation).
 // Geometry always comes from the frontend's own measurement (DOM rect +
 // devicePixelRatio), so RTL mirroring, zoom, and DPI need no special
@@ -122,7 +122,7 @@ mod win {
                 hIcon: std::ptr::null_mut(),
                 hIconSm: std::ptr::null_mut(),
                 hCursor: std::ptr::null_mut(),
-                // NULL brush: erase paints nothing, WM_PAINT draws nothing —
+                // NULL brush: erase paints nothing, WM_PAINT draws nothing -
                 // invisibility comes from never painting, never from layering
                 // (WS_EX_LAYERED would cost the hit test we exist for).
                 hbrBackground: GetStockObject(NULL_BRUSH) as HBRUSH,
@@ -237,7 +237,7 @@ mod win {
                 // THE flyout answer: over our maximize button, the OS sees
                 // a native maximize button. Hover enter rides along (the
                 // webview never sees this mouse, so the button's own
-                // :hover cannot fire — the frontend mirrors it from the
+                // :hover cannot fire - the frontend mirrors it from the
                 // enter/leave events instead).
                 if let Some(state) = child_state(hwnd) {
                     if !(*state).hovering {

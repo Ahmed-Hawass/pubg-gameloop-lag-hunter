@@ -1,5 +1,5 @@
-// sampler.rs — collects measurement ticks: CPU/RAM/disk via typeperf, GPU via nvidia-smi
-// Portable: every source is optional and fails soft (None) — never crashes the session.
+// sampler.rs - collects measurement ticks: CPU/RAM/disk via typeperf, GPU via nvidia-smi
+// Portable: every source is optional and fails soft (None) - never crashes the session.
 
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
@@ -17,7 +17,7 @@ use std::os::windows::process::CommandExt;
 const NO_WINDOW: u32 = 0x0800_0000; // CREATE_NO_WINDOW
 
 /// A Windows Job Object with JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE: every child
-/// assigned to it dies the moment OUR process goes away — including a hard
+/// assigned to it dies the moment OUR process goes away - including a hard
 /// abort (panic = "abort" leaves no chance for Drop handlers). This is the
 /// only mechanism that reliably reaps typeperf/dmon/powershell orphans.
 /// The handle is intentionally leaked for the process lifetime.
@@ -28,7 +28,7 @@ fn child_job() -> &'static windows_sys_job::Job {
     JOB.get_or_init(windows_sys_job::Job::create)
 }
 
-/// Minimal Kill-On-Close Job Object wrapper — no external crates, raw FFI.
+/// Minimal Kill-On-Close Job Object wrapper - no external crates, raw FFI.
 #[cfg(windows)]
 mod windows_sys_job {
     #[repr(C)]
@@ -48,7 +48,7 @@ mod windows_sys_job {
         minimum_working_set_size: usize,
         maximum_working_set_size: usize,
         active_process_limit: u32,
-        /// JOB_OBJECT_LIMIT_* flags — KILL_ON_JOB_CLOSE lives here
+        /// JOB_OBJECT_LIMIT_* flags - KILL_ON_JOB_CLOSE lives here
         limit_flags: u32,
         affinity: usize,
         priority_class: u32,
@@ -97,7 +97,7 @@ mod windows_sys_job {
 
     impl Job {
         /// Create the job with KILL_ON_JOB_CLOSE; failure returns a no-op
-        /// job (handle null) — children then behave exactly as before this
+        /// job (handle null) - children then behave exactly as before this
         /// fix existed (fail soft, never crashes the session).
         pub fn create() -> Self {
             unsafe {
@@ -122,7 +122,7 @@ mod windows_sys_job {
             }
         }
 
-        /// Attach a spawned child to the job. No-op on failure — best effort.
+        /// Attach a spawned child to the job. No-op on failure - best effort.
         pub fn assign(&self, child: &std::process::Child) {
             if self.handle.is_null() {
                 return;
@@ -147,7 +147,7 @@ pub(crate) fn spawn_tracked(cmd: &mut Command) -> std::io::Result<std::process::
 
 /// Drain one pipe into a channel on its own thread. The thread ends when
 /// the pipe reaches EOF, which a grandchild that inherited the write end
-/// can postpone forever — the caller waits on the CHANNEL (with its own
+/// can postpone forever - the caller waits on the CHANNEL (with its own
 /// deadline), never on this thread.
 fn drain_pipe<R: std::io::Read + Send + 'static>(
     mut pipe: R,
@@ -228,7 +228,7 @@ impl Drop for SpawnedProcess {
 }
 
 /// Watchdog for a streaming source: the reader thread only notices
-/// `running == false` when a LINE arrives — a silent emitter (typeperf
+/// `running == false` when a LINE arrives - a silent emitter (typeperf
 /// wedged on corrupted counters, a Get-Counter loop parked in its catch
 /// branch) emits nothing, the reader blocks on `lines()` forever, and the
 /// child outlives every stop/start cycle until app exit (one orphan per
@@ -244,7 +244,7 @@ impl Drop for SpawnedProcess {
 /// A PID is a NUMBER, not an identity: Windows recycles them, so a child
 /// that died earlier can leave its number pointing at an innocent process
 /// by the time the session stops. Before killing, the image behind the
-/// number is re-read and compared with the executable we spawned — a
+/// number is re-read and compared with the executable we spawned - a
 /// mismatch means the number was recycled, and the kill is skipped.
 fn spawn_source_watchdog(pid: u32, expected_exe: &str, running: Arc<AtomicBool>) {
     let expected = expected_exe.to_ascii_lowercase();
@@ -305,7 +305,7 @@ fn map_counter_key(path: &str) -> Option<&'static str> {
 
 /// The English counter paths we ask PDH for. On a localized Windows the
 /// English names still resolve via PdhAddEnglishCounter/typeperf's own
-/// English-counter handling — EXCEPT on some builds where typeperf
+/// English-counter handling - EXCEPT on some builds where typeperf
 /// resolves counter paths against the localized set and fails outright.
 const COUNTER_PATHS: [&str; 6] = [
     "\\Processor(_Total)\\% Processor Time",
@@ -318,7 +318,7 @@ const COUNTER_PATHS: [&str; 6] = [
 
 /// One-shot probe: does `typeperf` accept the English counter paths on this
 /// machine? On Arabic (and other localized) Windows the counter names in
-/// PDH are translated and typeperf may reject the English strings — the
+/// PDH are translated and typeperf may reject the English strings - the
 /// session would then run CPU/RAM/disk-blind with zero samples and no error.
 /// Cost: one typeperf process that exits by itself in ~1-2s. Cached.
 pub fn english_counters_work() -> bool {
@@ -353,7 +353,7 @@ pub fn english_counters_work() -> bool {
             Err(_) => false,
         }
     };
-    // if typeperf itself is missing entirely, treat as "English works" —
+    // if typeperf itself is missing entirely, treat as "English works" -
     // the spawn_typeperf path will log its own failure as before.
     ANSWER.store(if ok { 1 } else { 2 }, Ordering::Relaxed);
     ok
@@ -363,7 +363,7 @@ pub fn english_counters_work() -> bool {
 /// Runs on its own thread. Returns immediately.
 /// On localized Windows where typeperf rejects the English counter paths,
 /// falls back to a PowerShell PDH emitter (PdhAddEnglishCounter) that prints
-/// the same CSV shape — locale-proof sampling either way.
+/// the same CSV shape - locale-proof sampling either way.
 pub fn spawn_typeperf<F>(interval_sec: u32, running: Arc<AtomicBool>, emit: F) -> Result<(), String>
 where
     F: Fn(Sample) + Send + Sync + 'static,
@@ -372,7 +372,7 @@ where
         spawn_typeperf_native(interval_sec, running, emit)
     } else {
         super::logging::info(
-            "typeperf rejected English counters (localized Windows) — using PDH emitter",
+            "typeperf rejected English counters (localized Windows) - using PDH emitter",
         );
         spawn_pdh_emitter(interval_sec, running, emit)
     }
@@ -380,12 +380,12 @@ where
 
 /// PowerShell Get-Counter fallback. The cmdlet resolves counter paths via
 /// the English (locale-independent) PDH API internally, so it accepts the
-/// English paths on any Windows display language — exactly what typeperf
+/// English paths on any Windows display language - exactly what typeperf
 /// sometimes refuses on localized builds. The loop prints one CSV line per
 /// tick in the fixed COUNTER_PATHS order; values map by position.
 /// Verified against the raw PdhGetFormattedCounterValue P/Invoke route,
 /// which dies with 0xC0000135 inside Add-Type-compiled assemblies on
-/// real machines — Get-Counter is the supported surface.
+/// real machines - Get-Counter is the supported surface.
 fn spawn_pdh_emitter<F>(interval_sec: u32, running: Arc<AtomicBool>, emit: F) -> Result<(), String>
 where
     F: Fn(Sample) + Send + Sync + 'static,
@@ -423,7 +423,7 @@ while ($true) {{
     })?;
     let stdout = child.stdout.take().ok_or("no stdout from pdh emitter")?;
     // reap this child even if its stream goes silent mid-session (the
-    // watchdog polls the flag and taskkills by PID — see its doc comment)
+    // watchdog polls the flag and taskkills by PID - see its doc comment)
     spawn_source_watchdog(child.id(), "powershell.exe", Arc::clone(&running));
 
     thread::spawn(move || {
@@ -435,7 +435,7 @@ while ($true) {{
         // matches FULL paths (typeperf CSV headers carry them verbatim),
         // this one matches SUFFIXES (Get-Counter lines carry \\HOST\path
         // prefixes of varying length). Same key vocabulary, different
-        // matching contract — merging them would silently change which
+        // matching contract - merging them would silently change which
         // strings each reader accepts.
         let key_of = |path: &str| -> Option<&'static str> {
             let p = path.to_ascii_lowercase();
@@ -464,7 +464,7 @@ while ($true) {{
             if line.is_empty() {
                 continue;
             }
-            // line: "\\host\path=v,\\host\path2=v2,..." — the value may
+            // line: "\\host\path=v,\\host\path2=v2,..." - the value may
             // itself carry a comma (comma-decimal cultures: "\\...\available
             // mbytes=12,5"), so pairs are split on ",\\" (every pair starts
             // with a backslash path); a bare ',' split would cut the value
@@ -475,7 +475,7 @@ while ($true) {{
             };
             for pair in line.split(",\\") {
                 // the first pair keeps its leading backslash, later ones
-                // lost theirs to the split — normalize before key_of
+                // lost theirs to the split - normalize before key_of
                 let pair = pair.strip_prefix('\\').unwrap_or(pair);
                 let Some(eq) = pair.find('=') else { continue };
                 let path = format!("\\{}", pair[..eq].trim());
@@ -525,11 +525,11 @@ pub fn parse_typeperf_header(line: &str) -> Vec<Option<&'static str>> {
 /// typeperf PDH-CSV is always dot-decimal (culture-independent), but the
 /// PowerShell Get-Counter emitter formats with the CURRENT culture: on a
 /// comma-decimal Windows (de-DE, fr-FR, es-ES, ...) a value arrives as
-/// "12,5" — which fails `parse::<f64>()` in the typeperf-shaped readers
+/// "12,5" - which fails `parse::<f64>()` in the typeperf-shaped readers
 /// and would be silently MISREAD as "12" by any bare-comma split. ONE
 /// parser for both paths: dot first (every locale we support today),
 /// then a strict digits,digits comma-decimal fallback. Anything else is
-/// None — a value we cannot confidently read is dropped, never guessed
+/// None - a value we cannot confidently read is dropped, never guessed
 /// (dropping is honest; misreading is a manufactured diagnosis).
 /// Public so the live integration test checks what actually runs.
 pub fn parse_counter_value(raw: &str) -> Option<f64> {
@@ -538,7 +538,7 @@ pub fn parse_counter_value(raw: &str) -> Option<f64> {
         return Some(v);
     }
     // comma-decimal shape: exactly digits ',' digits, nothing else.
-    // Grouping shapes ("1,234,567") never match — no culture groups with
+    // Grouping shapes ("1,234,567") never match - no culture groups with
     // the same char it uses as its decimal separator.
     let (whole, frac) = t.split_once(',')?;
     if !whole.is_empty()
@@ -601,10 +601,10 @@ where
     })?;
     let stdout = child.stdout.take().ok_or("no stdout from typeperf")?;
     // reap this child even if its stream goes silent mid-session (the
-    // watchdog polls the flag and taskkills by PID — see its doc comment)
+    // watchdog polls the flag and taskkills by PID - see its doc comment)
     spawn_source_watchdog(child.id(), "typeperf.exe", Arc::clone(&running));
 
-    // the reader thread OWNS the child — kills it on exit (Drop), never before
+    // the reader thread OWNS the child - kills it on exit (Drop), never before
     thread::spawn(move || {
         let _keep = SpawnedProcess { child };
         super::logging::info("typeperf reader thread started");
@@ -667,7 +667,7 @@ where
                     continue;
                 };
                 // an unknown counter keeps its PLACE (None) and is skipped
-                // here — the positions of the known ones never move
+                // here - the positions of the known ones never move
                 let Some(key) = key else { continue };
                 match *key {
                     "cpu" => s.cpu_total = Some(v),
@@ -720,7 +720,7 @@ where
 
     // 'u' = utilization: WITHOUT it dmon never emits the sm/mem columns and
     // render-stall / gpu-mem-idle detection silently dies (real-machine bug).
-    // (dmon has NO sample cap — without the Job Object an app abort leaked
+    // (dmon has NO sample cap - without the Job Object an app abort leaked
     // it forever; the job now reaps it with us.)
     let mut child = spawn_tracked(
         Command::new("nvidia-smi")
@@ -733,10 +733,10 @@ where
 
     let stdout = child.stdout.take().ok_or("no stdout from dmon")?;
     // reap this child even if its stream goes silent mid-session (the
-    // watchdog polls the flag and taskkills by PID — see its doc comment)
+    // watchdog polls the flag and taskkills by PID - see its doc comment)
     spawn_source_watchdog(child.id(), "nvidia-smi.exe", Arc::clone(&running));
 
-    // the reader thread OWNS the child — kills it on exit (Drop), never before
+    // the reader thread OWNS the child - kills it on exit (Drop), never before
     thread::spawn(move || {
         let _keep = SpawnedProcess { child };
         let reader = BufReader::new(stdout);
@@ -802,7 +802,7 @@ fn normalize_arabic_digits(s: &str) -> String {
 }
 
 /// GameLoop process snapshot via `tasklist` (native, ~5MB transient per call,
-/// zero resident cost — unlike spawning a full PowerShell every probe).
+/// zero resident cost - unlike spawning a full PowerShell every probe).
 /// PUBG Mobile on GameLoop only: the tool's entire identity.
 pub fn query_emulator_procs() -> Result<Vec<ProcInfo>, String> {
     let out = output_tracked(
@@ -860,13 +860,13 @@ pub fn query_emulator_procs() -> Result<Vec<ProcInfo>, String> {
     Ok(procs)
 }
 
-/// GameLoop-only process match — the tool exists for PUBG Mobile on GameLoop.
+/// GameLoop-only process match - the tool exists for PUBG Mobile on GameLoop.
 /// v6: aow_exe = the game runtime, TBS = UI engine, TxGameAssistant =
 /// launcher, AndroidEmulatorEn = engine host. v7 (Androws): the GameLoop
 /// family and GLABox VM hosts (CefRendererProcess embeds in unrelated
-/// apps, so the UI renderers stay OUT of the gate — they match nothing).
+/// apps, so the UI renderers stay OUT of the gate - they match nothing).
 /// ONE list, THREE consumers: this matcher, the visibility probe's process
-/// name filter below, and the top-process suspects exclusion in system.rs —
+/// name filter below, and the top-process suspects exclusion in system.rs -
 /// the names can never drift apart.
 ///
 /// The set MUST equal the union of the emulator.rs profile families (the
@@ -897,7 +897,7 @@ pub fn is_gameloop_process(name: &str) -> bool {
 }
 
 /// Is this OURSELVES? The tool must never appear as a suspect in its own list.
-/// Matches any versioned name (`...-1.0.0`) — releases are versioned by hand,
+/// Matches any versioned name (`...-1.0.0`) - releases are versioned by hand,
 /// so the pattern stays true no matter what the exe is called this release.
 /// The companion CLI (`laghunter-cli`) and the test harness binaries
 /// (`lag_hunter_*`) are ourselves too: same namespace, every separator.
@@ -944,7 +944,7 @@ pub fn presence() -> Presence {
 }
 
 /// Every process name on the box (unfiltered): the presence scan above.
-/// Fail-soft like the filtered query — an unreadable table reads as empty.
+/// Fail-soft like the filtered query - an unreadable table reads as empty.
 pub fn query_all_proc_names() -> Result<Vec<String>, String> {
     let out = output_tracked(
         Command::new(super::system::system32_exe("tasklist.exe"))
@@ -962,7 +962,7 @@ pub fn query_all_proc_names() -> Result<Vec<String>, String> {
 }
 
 /// Pure CSV first-column parse (the filtered query shares it): quoted
-/// names, any locale — only the name column is ever read here.
+/// names, any locale - only the name column is ever read here.
 fn parse_tasklist_names(text: &str) -> Vec<String> {
     let mut names = Vec::new();
     for line in text.lines() {
@@ -990,20 +990,20 @@ pub fn detect_emulator() -> Option<String> {
 
 /// Is any GameLoop window VISIBLE (not minimized)? None = unknown.
 ///
-/// The renderer can be alive while the window sits in the taskbar — and the
+/// The renderer can be alive while the window sits in the taskbar - and the
 /// dGPU drops to idle clocks while the user is on the desktop. Treating that
 /// as "in-game" produced phantom GPU-wake cards; GPU rules must be muted
 /// while the game is in the background.
 ///
 /// Implementation: the Win32 IsIconic call lives INSIDE powershell.exe via
-/// Add-Type — never linked into our binary (the user32 extern-block lesson:
+/// Add-Type - never linked into our binary (the user32 extern-block lesson:
 /// hand-linked Win32 crashed webview creation on real machines).
 /// Called from the existing probe thread only (~every 10s), so the transient
 /// PowerShell cost stays bounded and never touches the 1 Hz sampling path.
 #[cfg(windows)]
 pub fn query_game_visible() -> Option<bool> {
     use std::os::windows::process::CommandExt;
-    // the process list comes from the SAME const is_gameloop_process uses —
+    // the process list comes from the SAME const is_gameloop_process uses -
     // the two copies used to drift (a name added to one silently missed
     // by the other)
     let names = GAMELOOP_PROC_NAMES
@@ -1050,7 +1050,7 @@ pub fn query_game_visible() -> Option<bool> {
     None
 }
 
-/// GPU max clocks (gr, mem) — called once at session start.
+/// GPU max clocks (gr, mem) - called once at session start.
 pub fn query_gpu_max_clocks() -> Option<(f64, f64)> {
     let out = super::sampler::output_tracked(
         Command::new("nvidia-smi")
@@ -1089,7 +1089,7 @@ pub fn iso_now() -> String {
     let days = (secs_local / 86_400) as i64;
     let rem = secs_local % 86_400;
     let (h, m, s) = (rem / 3600, (rem % 3600) / 60, rem % 60);
-    // civil-from-days algorithm (Howard Hinnant) — no chrono dependency
+    // civil-from-days algorithm (Howard Hinnant) - no chrono dependency
     let z = days + 719_468;
     let era = z.div_euclid(146_097);
     let doe = z.rem_euclid(146_097);
@@ -1113,7 +1113,7 @@ const OFFSET_RETRY_SECS: u64 = 60;
 
 /// True while the offset read is failing: the timestamps fall back to the
 /// last known offset (or UTC when none was ever read). Read by the
-/// session thread, which reports it once — the reader itself must never
+/// session thread, which reports it once - the reader itself must never
 /// log (it runs inside the log writer's own timestamp).
 static CLOCK_DEGRADED: AtomicBool = AtomicBool::new(false);
 /// The "reported" latch: one warning per degradation, re-armed by the next
@@ -1161,7 +1161,7 @@ fn local_utc_offset_secs() -> i64 {
         .unwrap_or(false);
     if !fresh {
         // [TimeZoneInfo]::Local.GetUtcOffset(DateTimeOffset.Now): native,
-        // DST-aware, no registry parsing — the same source .NET uses.
+        // DST-aware, no registry parsing - the same source .NET uses.
         const SCRIPT: &str =
             "[int][TimeZoneInfo]::Local.GetUtcOffset([DateTimeOffset]::Now).TotalSeconds";
         let out = output_tracked(
@@ -1244,7 +1244,7 @@ mod tests {
         // current culture): "12,5" is 12.5, NOT silently misread as 12
         assert_eq!(parse_counter_value("12,5"), Some(12.5));
         assert_eq!(parse_counter_value("\"4096,0\""), Some(4096.0));
-        // grouping shapes are NOT comma decimals — refuse rather than guess
+        // grouping shapes are NOT comma decimals - refuse rather than guess
         assert_eq!(parse_counter_value("1,234,567"), None);
         assert_eq!(parse_counter_value("1 234"), None);
         assert_eq!(parse_counter_value("x1,2"), None);
@@ -1266,7 +1266,7 @@ mod tests {
     #[test]
     #[cfg(windows)]
     fn iso_now_is_local_time() {
-        // The bug this guards: epoch math is UTC — on Egypt (UTC+3) the clock
+        // The bug this guards: epoch math is UTC - on Egypt (UTC+3) the clock
         // showed "00:19" while the wall clock said "03:19". Cross-check our
         // offset source against the OS truth directly.
         let offset = local_utc_offset_secs();
@@ -1356,7 +1356,7 @@ mod tests {
     }
 
     /// A child that never exits must hit the deadline, and the call must
-    /// come back bounded — the promise this function makes.
+    /// come back bounded - the promise this function makes.
     #[test]
     fn output_tracked_times_out_a_child_that_never_exits() {
         let mut cmd = Command::new(crate::engine::system::powershell_exe());

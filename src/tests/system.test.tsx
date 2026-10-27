@@ -1,4 +1,4 @@
-// tests/system.test.tsx — the rig page contract: spec cards with honest
+// tests/system.test.tsx - the rig page contract: spec cards with honest
 // placeholders, storage and device rows, and a copy-all button whose
 // sheet reuses the exact on-screen strings (pinned, not hand-copied).
 

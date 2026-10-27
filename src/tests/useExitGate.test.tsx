@@ -1,4 +1,4 @@
-// tests/useExitGate.test.tsx — the tray Exit gate: quiet work quits
+// tests/useExitGate.test.tsx - the tray Exit gate: quiet work quits
 // straight away, a running scan or an active download/cleaning names
 // itself in one confirm instead.
 

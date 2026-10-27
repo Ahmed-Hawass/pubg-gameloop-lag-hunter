@@ -6,13 +6,13 @@
     <title>PUBG GameLoop Lag Hunter</title>
     <style>
       /* boot splash: paints during HTML parse, before any JS bundle or IPC
-         gate resolves — replaces the old dark empty window on launch.
+         gate resolves - replaces the old dark empty window on launch.
          React wipes #root on mount (createRoot), so this only ever shows
          for the first second. Self-contained: zero external requests.
          Theme: dark by default, light when the OS prefers it (an inline
          script below sets data-splash before first paint; a saved theme
          contradicting the OS still flips later, same caveat as the
-         main.tsx seed — one frame at most). */
+         main.tsx seed - one frame at most). */
       html, body { height: 100%; }
       body { margin: 0; background: #141613; overflow: hidden; }
       html[data-splash="light"] body { background: #eef1ec; }

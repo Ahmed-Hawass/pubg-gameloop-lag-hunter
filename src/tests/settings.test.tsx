@@ -1,4 +1,4 @@
-// tests/settings.test.tsx — the language picker contract through the
+// tests/settings.test.tsx - the language picker contract through the
 // real provider: a successful switch persists and re-renders, a failed
 // write rolls back visibly to the previous language (self-evident, no
 // modal by design). Plus the intro-cards re-show action: visible only
@@ -200,7 +200,7 @@ describe("SettingsView language", () => {
     ).toHaveAttribute("aria-checked", "true");
     await user.click(within(seg).getByRole("radio", { name: en.settingOn }));
     // the pills report upward (App persists through its own setter,
-    // like the theme pills — SettingsView never touches IPC itself)
+    // like the theme pills - SettingsView never touches IPC itself)
     expect(onShowUnsupportedChange).toHaveBeenCalledWith(true);
   });
 });

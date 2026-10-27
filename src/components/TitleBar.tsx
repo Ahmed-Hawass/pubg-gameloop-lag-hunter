@@ -1,8 +1,8 @@
-// TitleBar.tsx — window chrome: icon + drag + window controls.
+// TitleBar.tsx - window chrome: icon + drag + window controls.
 // The sidebar collapse lives in the sidebar's bottom. Drag via
 // data-tauri-drag-region. Resizable window: maximize toggles and tracks
 // the maximized state for its tooltip and icon.
-// ALL tooltips are the app's own (Tip component) — never the OS one.
+// ALL tooltips are the app's own (Tip component) - never the OS one.
 // The X button HIDES to the tray (never quits): Exit lives in the tray menu
 // and runs the exit gate there, so a running scan survives dismissing the window.
 
@@ -29,7 +29,7 @@ export function TitleBar(props: {
   const { version } = props;
   const [maximized, setMaximized] = useState(false);
   /** hover mirror for the maximize button: the native snap overlay owns
-      the mouse over it, so :hover cannot fire — enter/leave drive the
+      the mouse over it, so :hover cannot fire - enter/leave drive the
       same fill instead. Keyboard focus keeps the real :focus path. */
   const [snapHover, setSnapHover] = useState(false);
   const maxBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -50,7 +50,7 @@ export function TitleBar(props: {
   }, []);
 
   // overlay mouse reports: hover mirrors the highlight, a click runs the
-  // same toggle as the button itself (the overlay owns mouse only —
+  // same toggle as the button itself (the overlay owns mouse only -
   // keyboard Enter/Space still reach the real button).
   useEffect(() => {
     const unlisten = onSnapOverlay((kind) => {
@@ -64,7 +64,7 @@ export function TitleBar(props: {
   }, []);
 
   // overlay geometry: the hit target tracks the real button rect
-  // (debounced — resize fires per tick while dragging, and an invoke per
+  // (debounced - resize fires per tick while dragging, and an invoke per
   // tick would spam the main thread with moves). Re-runs when the
   // language flips: RTL mirrors the button to the other corner.
   useEffect(() => {

@@ -1,4 +1,4 @@
-// tray.rs — the notification-area icon: the app's second face.
+// tray.rs - the notification-area icon: the app's second face.
 //
 // The window is not the app. Closing it now hides it (the X button keeps
 // its one honest meaning: get this off my screen) and the icon stays behind
@@ -108,7 +108,7 @@ fn action_for(id: &str) -> MenuAction {
 }
 
 /// Bring the window back: un-minimize, show, focus. All three, in that
-/// order — `show()` on a minimized window brings back a minimized window,
+/// order - `show()` on a minimized window brings back a minimized window,
 /// and a window that comes back without focus looks broken to the user who
 /// just asked for it. Failures are ignored: this runs on a tray click where
 /// there is no dialog to report into.
@@ -133,7 +133,7 @@ struct TrayItems<R: Runtime> {
 
 /// Create the icon at startup. The labels arrive right after (frontend push);
 /// every failure is logged and swallowed, because a missing icon must never
-/// take the app down with it — the window path still works without one.
+/// take the app down with it - the window path still works without one.
 pub fn build<R: Runtime>(app: &AppHandle<R>) {
     let built = (|| -> tauri::Result<()> {
         let open = MenuItem::with_id(app, ID_OPEN, "", true, None::<&str>)?;

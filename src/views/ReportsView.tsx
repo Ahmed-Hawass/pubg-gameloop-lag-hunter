@@ -10,7 +10,7 @@ import { useLang } from "../i18n";
 import { useHour12 } from "../useHour12";
 import { formatClockTime } from "../clock";
 
-/** moment dot severity from the engine kind (no backend change — the
+/** moment dot severity from the engine kind (no backend change - the
     kinds are a closed, documented set): sustained drops read danger,
     load warnings read warn, session notes stay neutral. Unknown future
     kinds read warn (a highlight the engine bothered to emit is worth a
@@ -395,7 +395,7 @@ export function ReportsView(props: {
             icon={<FileText size={15} />}
             variant="ghost"
               onClick={() => {
-                // open the report file externally — an action, so a
+                // open the report file externally - an action, so a
                 // failure lands in the notice dialog (never an unhandled
                 // rejection leaving the user with a silently dead button)
                 api.openPath(report.raw_path).catch(actionFailed);
@@ -433,7 +433,7 @@ export function ReportsView(props: {
       ) : (
         <>
           {/* one-glance totals over the saved sessions: how many, and how
-              many had issues (spikes or an issue/laggy outcome — a partial
+              many had issues (spikes or an issue/laggy outcome - a partial
               scan is interrupted, not an issue, so it stays out) */}
           <div className="card totals">
             <div className="total">

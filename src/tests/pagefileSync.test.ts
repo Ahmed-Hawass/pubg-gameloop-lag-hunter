@@ -1,4 +1,4 @@
-// tests/pagefileSync.test.ts — the editor's working-copy sync rule:
+// tests/pagefileSync.test.ts - the editor's working-copy sync rule:
 // the selection survives when the drive is still there, the mode falls
 // back to custom on an unreadable drive, sizes prefill from live.
 

@@ -1,4 +1,4 @@
-// startup.rs — startup programs (Windows autostart), read + reversible toggle.
+// startup.rs - startup programs (Windows autostart), read + reversible toggle.
 //
 // Phase 1 sources: HKCU/HKLM Run, WOW6432Node Run, both Startup folders.
 // Deliberately OUT of scope: RunOnce (self-deleting), Task Scheduler,
@@ -9,7 +9,7 @@
 // overlay byte only (02 on, 03 off), exactly like Task Manager. The HKCU
 // overlay covers HKLM entries per-user too, so toggling needs no
 // elevation, ever. All registry work is in-process winreg (milliseconds,
-// like tweaks) — PowerShell has no place here.
+// like tweaks) - PowerShell has no place here.
 
 use std::path::PathBuf;
 
@@ -119,7 +119,7 @@ pub fn startup_list() -> Vec<StartupEntry> {
     // friendly names from the exes themselves (FileDescription, like Task
     // Manager): a hash-suffixed value name never reaches the UI when the
     // binary names itself. Missing or blank names fall back to the raw
-    // value name — displayed, never invented.
+    // value name - displayed, never invented.
     let exes: Vec<String> = out.iter().filter_map(|e| e.exe_path.clone()).collect();
     let friendly = super::display_names::product_names(&exes);
     for entry in &mut out {
@@ -340,7 +340,7 @@ fn overlay_state(source: StartupSource, name: &str) -> (bool, bool) {
 
 /// Pure half of the merge (the registry edges live below): a machine-wide
 /// disable holds for every user, so an HKLM overlay saying off locks the
-/// row (only an admin clearing it can change that — our HKCU-only writes
+/// row (only an admin clearing it can change that - our HKCU-only writes
 /// must never pretend otherwise). Otherwise the user overlay decides.
 fn merge_overlay_state(hkcu: Option<&[u8]>, hklm: Option<&[u8]>) -> (bool, bool) {
     match hklm {

@@ -1,4 +1,4 @@
-// tests/toolsDeeplink.test.tsx — the health-card deep-link contract:
+// tests/toolsDeeplink.test.tsx - the health-card deep-link contract:
 // a row link opens the gaming page and rings the row, "pagefile" opens
 // its own virtual-memory page with the editor expanded, and a link to a
 // row this machine lacks clears instead of re-firing on every visit.

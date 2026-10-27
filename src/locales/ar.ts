@@ -29,7 +29,7 @@ function counted(n: number, one: string, two: string, few: string, many: string)
 
 // The form that follows a NUMERAL: 3-10 take the plural, everything else
 // (1, 2, and 11 and up) takes the singular. Arabic writes "2 دقيقة" and
-// "11 دقيقة" — the dual and the tamyiz only appear when the word itself
+// "11 دقيقة" - the dual and the tamyiz only appear when the word itself
 // carries the count ("دقيقتان"). Used where the number is rendered
 // elsewhere (the big "5" of the session plan).
 function numeralForm(n: number, few: string, many: string): string {
@@ -322,7 +322,7 @@ export const ar: Locale = {
     `سيُفتح ${name} عند كل تسجيل دخول، مما يزيد زمن بدء التشغيل.`,
   /** row action + status words (Task Manager language, merged into one
       control: the button text names the state, its accessible name the
-      action — no switch implies no preferred direction) */
+      action - no switch implies no preferred direction) */
   startupEnable: "تمكين",
   startupDisable: "تعطيل",
   startupStateOn: "مفعّل",
@@ -392,7 +392,7 @@ export const ar: Locale = {
       not announced as a bare duplicate of the row name */
   hintAbout: (name: string) => `معلومات عن ${name}`,
   /** summary banner: one-glance verdict above the cards, derived in the
-      UI from the five checks (no backend change — counts warn cards).
+      UI from the five checks (no backend change - counts warn cards).
       The count is at most 5, so singular / dual / plural covers it. */
   healthAllGood: "كل شيء جيد",
   healthAllGoodSub: "لا يوجد في هذا الجهاز ما يعيق لعبك",
@@ -464,7 +464,7 @@ export const ar: Locale = {
   introStorageBody:
     "راقب مساحة القرص وحافظ عليها مرتبة، تلقائيًا أو عند الطلب.",
 
-  // ---- tweaks (Tools tab writes — switch mirrors live state).
+  // ---- tweaks (Tools tab writes - switch mirrors live state).
   // Row copy is the name alone; the definition plus the effect timing
   // live behind the (?) button (same contract as the health cards). */
   tweakDvrTitle: "إيقاف التسجيل في الخلفية (DVR)",
@@ -536,7 +536,7 @@ export const ar: Locale = {
   rebootNow: "إعادة التشغيل",
   rebootLater: "لاحقًا",
   tweakPowerTitle: "تشغيل خطة الأداء العالي",
-  /** visible effect timing (shared lines, verified rows only — the
+  /** visible effect timing (shared lines, verified rows only - the
       card shows when, the (?) shows what and why) */
   tweakEffectNow: "يسري فورًا",
   tweakEffectReopen: "أغلق اللعبة وأعد فتحها لتطبيق التغيير",
@@ -561,7 +561,7 @@ export const ar: Locale = {
       as the featured summary, so this labels what follows, not a filter) */
   tweakAllTweaks: "كل الخيارات",
   /** reason line under a greyed-out row whose precondition the user can
-      fix (GameLoop exes not resolved) — never shown for rows that can
+      fix (GameLoop exes not resolved) - never shown for rows that can
       never work here (those hide instead) */
   tweakNeedsGameloop: "يتطلب تثبيت GameLoop على هذا الجهاز.",
   tweakNeedsWin11: "يتطلب ويندوز 11 أو أحدث على هذا الجهاز.",
@@ -815,6 +815,6 @@ export const ar: Locale = {
   partial: "غير مكتملة",
   samples: "عينة",
   // MSA counting: 1 = singular, 2 = dual, 3-10 = plural, 11+ = singular
-  // again ("11 تقطيعة") — the bare-plural-for-everything shape reads wrong
+  // again ("11 تقطيعة") - the bare-plural-for-everything shape reads wrong
   spikeCount: (n: number) => counted(n, "تقطيعة واحدة", "تقطيعتان", "تقطيعات", "تقطيعة"),
 };

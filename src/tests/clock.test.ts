@@ -1,4 +1,4 @@
-// tests/clock.test.ts — wall-clock display for the OS convention: stable
+// tests/clock.test.ts - wall-clock display for the OS convention: stable
 // machine shapes convert ("14:30" to "2:30 PM" on 12-hour), 24-hour mode
 // keeps today's pixels exactly, and anything unparseable comes back
 // verbatim (a clock line never goes blank, never throws).

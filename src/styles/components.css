@@ -1,4 +1,4 @@
-/* components — design system blocks (monochrome + green) */
+/* components - design system blocks (monochrome + green) */
 
 /* Button */
 .btn {
@@ -36,7 +36,7 @@
 .btn-primary:hover {
   background: var(--primary-hover);
 }
-/* the FILLED danger — used where the destructive action is the point
+/* the FILLED danger - used where the destructive action is the point
    (the running-scan Stop button, the delete-dialog confirm): solid
    danger fill with white text in both themes (literal white, not a
    token: no theme text token stays white-on-red in both modes) */
@@ -64,7 +64,7 @@
   pointer-events: none;
 }
 
-/* Shared primitives — single source of truth for surfaces, state
+/* Shared primitives - single source of truth for surfaces, state
    fills, pills, icon tiles, back buttons and row actions. Domain classes
    keep only layout and padding; materials live here. Load order
    (components before views/reports/pages) plus equal specificity keeps
@@ -130,7 +130,7 @@
   font-weight: 700;
   border-radius: 999px;
 }
-/* totals strip: two big honest numbers (saved sessions) — one
+/* totals strip: two big honest numbers (saved sessions) - one
    definition, Reports only */
 .totals {
   display: flex;
@@ -209,7 +209,7 @@
 }
 
 /* inset divider list: one measured answer on a sunk surface (sweep
-   results, cost rows, visibility rows) — container plus rows, dividers
+   results, cost rows, visibility rows) - container plus rows, dividers
    included; per-domain classes keep only their extras */
 .inset-list {
   list-style: none;
@@ -278,7 +278,7 @@
 }
 /* light-theme balance (trial values, eyeball before keeping): without
    borders the flat fill needs one step more depth on paper, or buttons
-   sink into the page. Hover must darken with it — the stock hover fill
+   sink into the page. Hover must darken with it - the stock hover fill
    is lighter than the trial fill and would invert the feel. */
 [data-theme="light"] .btn-ghost,
 [data-theme="light"] .row-act {
@@ -307,7 +307,7 @@
 }
 /* update-signal halo pulse, shared by the two update dots (sidebar,
    About heading): single definition, same rule as the
-   entrance keyframes above. The dot itself never moves or recolors —
+   entrance keyframes above. The dot itself never moves or recolors -
    only its halo breathes, so layout never shifts. */
 @keyframes update-ping {
   0%,
@@ -319,7 +319,7 @@
   }
 }
 
-/* Start button: hover lift + icon nudge — one scale (1.18) shared
+/* Start button: hover lift + icon nudge - one scale (1.18) shared
    with spec/sidebar glyphs */
 /* the button owns its glyph size, same contract as the tile. Button text
    is 13px, so the glyph sits one step above it; the four numbers the
@@ -352,7 +352,7 @@ html[dir="rtl"] .btn:hover:not(.is-disabled) .flip-rtl {
   transform: scaleX(-1) scale(1.18);
 }
 
-/* NoteCard — solid highlighter fills (title, body, and fix box all in
+/* NoteCard - solid highlighter fills (title, body, and fix box all in
    the card ink: dark on amber, white on red). Severity reads from the
    icon + fill; no dot, no extra marks. */
 .note {
@@ -423,7 +423,7 @@ html[dir="rtl"] .btn:hover:not(.is-disabled) .flip-rtl {
   align-self: center;
 }
 
-/* EmptyState — flat panel, no frame: the medallion follows the tile
+/* EmptyState - flat panel, no frame: the medallion follows the tile
    corner language (5px like icon-tile), and its hover carries the exact
    button-glyph treatment (same nudge, same easing). Spinning loaders are
    excluded from the hover: the running animation owns their transform. */
@@ -455,7 +455,7 @@ html[dir="rtl"] .btn:hover:not(.is-disabled) .flip-rtl {
   color: var(--primary);
 }
 /* loading moment: the same medallion with a spinning glyph (same panel,
-   same shape and size — motion is the only difference) */
+   same shape and size - motion is the only difference) */
 .empty-ico.spin {
   width: 38px;
   height: 38px;
@@ -481,7 +481,7 @@ html[dir="rtl"] .btn:hover:not(.is-disabled) .flip-rtl {
   line-height: 1.6;
 }
 
-/* IntroCard — one-shot page guidance: info fill with ink text (never a
+/* IntroCard - one-shot page guidance: info fill with ink text (never a
    severity tone), borderless like every filled surface. The icon tile
    rides the fill with the fill's own light ink; the X owns its own
    accessible name (Tip is visual-only). */
@@ -509,7 +509,7 @@ html[dir="rtl"] .btn:hover:not(.is-disabled) .flip-rtl {
   color: var(--text-info);
   line-height: 1.6;
 }
-/* instant dismiss — small quiet X. Its base rule is shared by every card
+/* instant dismiss - small quiet X. Its base rule is shared by every card
    that offers a dismiss (IntroCard today); the intro variant only retints
    it to the info ink. */
 .card-x {
@@ -542,7 +542,7 @@ html[dir="rtl"] .btn:hover:not(.is-disabled) .flip-rtl {
   border-color: transparent;
 }
 
-/* Dialog — the single modal surface (no toasts anywhere) */
+/* Dialog - the single modal surface (no toasts anywhere) */
 .dialog-overlay {
   position: fixed;
   inset: 0;
@@ -597,7 +597,7 @@ html[dir="rtl"] .btn:hover:not(.is-disabled) .flip-rtl {
   margin-top: 14px;
 }
 
-/* ---- update modal (UpdateModal.tsx) — rides the Dialog box styles ---- */
+/* ---- update modal (UpdateModal.tsx) - rides the Dialog box styles ---- */
 .um-box {
   max-width: 480px;
 }
@@ -684,7 +684,7 @@ html[dir="rtl"] .btn:hover:not(.is-disabled) .flip-rtl {
   text-decoration: underline;
 }
 
-/* Progress — the single bar language (update download, storage sweep).
+/* Progress - the single bar language (update download, storage sweep).
    Base matches the button radius scale; .progress-md matches the btn-md
    row height for inline placement next to buttons. Fill grows from the
    inline-start side by block flow (RTL-safe, no physical properties). */
@@ -745,7 +745,7 @@ html[dir="rtl"] .btn:hover:not(.is-disabled) .flip-rtl {
   margin: 0;
 }
 
-/* Hint — a real button. The tooltip is PORTALED to <body> with fixed
+/* Hint - a real button. The tooltip is PORTALED to <body> with fixed
    coordinates, so no overflow/transform ancestor can clip it. */
 .hint {
   display: inline-flex;
@@ -775,7 +775,7 @@ html[dir="rtl"] .btn:hover:not(.is-disabled) .flip-rtl {
   opacity: 0.7;
 }
 
-/* Tip wrapper — inline by default; becomes a full-width block inside
+/* Tip wrapper - inline by default; becomes a full-width block inside
    vertical lists (sidebar) so the wrapped control keeps the list's shape */
 .tip-wrap {
   display: inline-flex;
@@ -788,7 +788,7 @@ html[dir="rtl"] .btn:hover:not(.is-disabled) .flip-rtl {
   flex: 1;
 }
 
-/* the tooltip — fixed to the viewport, rendered at <body> level */
+/* the tooltip - fixed to the viewport, rendered at <body> level */
 .hint-tooltip {
   position: fixed;
   width: max-content;

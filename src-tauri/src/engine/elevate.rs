@@ -1,9 +1,9 @@
-// elevate.rs — per-action elevation without ever elevating the app.
+// elevate.rs - per-action elevation without ever elevating the app.
 //
 // The app stays unprivileged. A tweak that needs admin runs as the SAME
 // binary with a hidden CLI flag, spawned through ShellExecuteW "runas"
 // (one UAC prompt per flip, never at launch): the elevated run writes
-// ONLY, then exits, while the normal flow re-reads to verify — so the
+// ONLY, then exits, while the normal flow re-reads to verify - so the
 // verify-by-re-read contract holds unchanged for elevated rows too.
 //
 // Refusal discipline (agreed, and the codebase's own rule everywhere a
@@ -68,7 +68,7 @@ pub fn is_elevated_id(id: &str) -> bool {
 /// Headless entry point for the elevated run. Returns a process exit
 /// code (never panics out: main() turns it into process::exit).
 /// Refusal gates run BEFORE any registry access, so unit tests (and CI)
-/// can cover every non-zero path without touching a real registry —
+/// can cover every non-zero path without touching a real registry -
 /// the same discipline as the tweaks refusal tests.
 ///
 /// Shapes: `[id, 0|1]` for switches, `[pagefile-settings, 0|1, DRIVE,
@@ -78,7 +78,7 @@ pub fn is_elevated_id(id: &str) -> bool {
 pub fn run_elevated_action(args: &[String]) -> i32 {
     super::logging::init_panic_hook();
     if !args.is_empty() && args[0] == super::cleanup::STORAGE_CLEAN_ID {
-        // category words only, at least one, admin scope only — the
+        // category words only, at least one, admin scope only - the
         // child resolves the whitelisted dirs itself, never from args
         // (defense in depth: no path ever crosses the boundary). The
         // cap is the admin-category count (system temp, delivery,
@@ -229,7 +229,7 @@ pub fn map_exit_code(code: u32) -> Result<(), String> {
 /// Spawn this same binary elevated for one whitelisted write and wait
 /// for it. Returns the child's exit code. A denied UAC prompt is
 /// ERROR_CANCELLED (1223): Err("cancelled"), exact, for the UI's silent
-/// rollback — never a scary dialog for a deliberate No.
+/// rollback - never a scary dialog for a deliberate No.
 /// Bounded wait (60s): an INFINITE wait wedged the IPC thread forever when
 /// the elevated child hung (registry/powercfg stall). On timeout the child
 /// is terminated and a timeout error is returned.
@@ -400,7 +400,7 @@ fn spawn_elevated_raw(params: &str) -> Result<*mut core::ffi::c_void, String> {
     };
     // SAFETY: ShellExecuteExW only reads the struct and the nul-terminated
     // buffers for the duration of the call; all outlive it on our stack.
-    // FLAG_NO_UI suppresses the OS error dialogs — we map errors ourselves.
+    // FLAG_NO_UI suppresses the OS error dialogs - we map errors ourselves.
     let ok = unsafe { ShellExecuteExW(&mut info) };
     if ok == 0 {
         // SAFETY: GetLastError has no preconditions.
@@ -512,7 +512,7 @@ const WAIT_TIMEOUT: u32 = 258;
 #[cfg(windows)]
 fn wait_for_elevated_child(process: *mut core::ffi::c_void) -> Result<u32, String> {
     // SAFETY: process is ours (NOCLOSEPROCESS); wait, read the code,
-    // then close — the only handle calls this module ever makes.
+    // then close - the only handle calls this module ever makes.
     unsafe {
         let waited = WaitForSingleObject(process, ELEVATED_TIMEOUT_MS);
         if waited == WAIT_TIMEOUT {
@@ -526,7 +526,7 @@ fn wait_for_elevated_child(process: *mut core::ffi::c_void) -> Result<u32, Strin
         }
         let mut code: u32 = 0;
         // the read itself can fail (invalid handle): an unread code
-        // must never pass as 0/success — fail loudly instead.
+        // must never pass as 0/success - fail loudly instead.
         if GetExitCodeProcess(process, &mut code) == 0 {
             CloseHandle(process);
             return Err("could not read elevated child exit code".into());
@@ -563,7 +563,7 @@ struct SHELLEXECUTEINFOW {
 // Only THREE bindings beyond main.rs's MessageBoxW, all textbook Win32
 // with no linking tricks (the main.rs comment explains what went wrong
 // last time someone hand-linked here: advapi32 probing that crashed
-// webview creation — these three do no probing, they act).
+// webview creation - these three do no probing, they act).
 #[cfg(windows)]
 #[link(name = "shell32")]
 extern "system" {

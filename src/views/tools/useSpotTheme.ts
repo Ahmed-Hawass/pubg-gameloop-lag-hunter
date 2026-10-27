@@ -1,4 +1,4 @@
-// useSpotTheme.ts — resolved theme for the Tools landing spot art.
+// useSpotTheme.ts - resolved theme for the Tools landing spot art.
 // Subscribes to the shell's data-theme so a theme flip while on the
 // landing swaps art without waiting for another render.
 

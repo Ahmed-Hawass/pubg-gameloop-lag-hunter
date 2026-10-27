@@ -1,4 +1,4 @@
-// eslint config — lint matches what CI runs: hooks correctness (the root
+// eslint config - lint matches what CI runs: hooks correctness (the root
 // cause class behind the summary-timer bug) plus baseline TS hygiene.
 //
 // NOTE on eslint-plugin-react-refresh/only-export-components: deliberately

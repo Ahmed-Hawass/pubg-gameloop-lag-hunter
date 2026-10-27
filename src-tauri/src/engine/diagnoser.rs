@@ -1,14 +1,14 @@
-// diagnoser.rs — engine events → user-facing diagnoses (English, plain language)
+// diagnoser.rs - engine events → user-facing diagnoses (English, plain language)
 // The UI never shows engine jargon; it shows these.
 
 use super::types::{iso_ms, Diagnosis, EngineEvent, Overall, Phase, Sample, Severity, UiState};
 
 /// How recent an event must be to count as live evidence for a card.
-/// Was a bare inline `5 * 60 * 1000` — now named, and every window reads it.
+/// Was a bare inline `5 * 60 * 1000` - now named, and every window reads it.
 const LIVE_WINDOW_MS: i64 = 5 * 60 * 1000;
 /// How far back the correlator looks for a cliff that could confirm a wake
 /// card. Must be ≥ LIVE_WINDOW_MS (a cliff can age out of the live window
-/// while the wake it confirmed is still open — the pairing survives here).
+/// while the wake it confirmed is still open - the pairing survives here).
 /// Checked at COMPILE time: the day someone tightens this below the live
 /// window, the build itself refuses (a test could be skipped; this cannot).
 const CORRELATION_WINDOW_MS: i64 = 15 * 60 * 1000;
@@ -113,13 +113,13 @@ pub fn diagnosis_copy(
 
 /// Recent events → FEW, CONFIRMED, root-cause diagnoses.
 ///
-/// Precision rules (learned from real sessions — one disk storm used to show
+/// Precision rules (learned from real sessions - one disk storm used to show
 /// three cards: disk busy + hard faults + CPU sat, all symptoms of one cause):
 /// 1. ROOT-CAUSE GROUPING: disk symptoms collapse into one "disk_wait" card
 ///    that mentions it drags the CPU along.
 /// 2. SUSTAINED WINDOW: a card only exists if its condition actually lasted
 ///    (start..end duration ≥ 3s, or ≥3 instant repeats within 60s). Brief
-///    blips live in the Activity feed only — cards mean "confirmed problem".
+///    blips live in the Activity feed only - cards mean "confirmed problem".
 /// 3. ACTIVE-ONLY: once a condition truly ends and stayed ended, its card
 ///    goes away (the UI keeps history in the feed and the report).
 fn diagnoses_from(events: &[EngineEvent], now_iso: &str) -> Vec<Diagnosis> {
@@ -128,19 +128,19 @@ fn diagnoses_from(events: &[EngineEvent], now_iso: &str) -> Vec<Diagnosis> {
     // ONE pass over the history builds every index the correlator needs:
     // the old shape ran a nested full scan (events × starts) for each of
     // the still-open / wake-window / churn-window questions on EVERY tick,
-    // inside the session lock — a 60-min paging session (thousands of
+    // inside the session lock - a 60-min paging session (thousands of
     // events, hundreds of Starts) burned millions of string compares per
     // second while stop()/status() waited on the same lock.
     //
     // kind → (last_end_ms, latest_start_ms): the still-open rescue asks
-    // "does ANY End of this kind come at/after this Start?" — the newest
+    // "does ANY End of this kind come at/after this Start?" - the newest
     // Start paired with the newest End answers it: a Start with a newer
     // End is closed, the newest Start without one is open.
     use std::collections::BTreeMap;
     let mut last_end_by_kind: BTreeMap<&str, i64> = BTreeMap::new();
     let mut latest_start_by_kind: BTreeMap<&str, i64> = BTreeMap::new();
     // per-kind open window list (start, matching end) for the correlation
-    // envelopes — matching End = the first End at/after the Start
+    // envelopes - matching End = the first End at/after the Start
     let mut wake_starts: Vec<i64> = Vec::new();
     let mut wake_ends: Vec<i64> = Vec::new();
     let mut churn_starts: Vec<i64> = Vec::new();
@@ -180,7 +180,7 @@ fn diagnoses_from(events: &[EngineEvent], now_iso: &str) -> Vec<Diagnosis> {
     let still_open = |ev: &EngineEvent, ev_ms: i64| -> bool {
         // numeric >=, not string >: two events inside the same millisecond
         // (a zero-duration condition closed in one tick's batch) must pair
-        // as closed — the strict string compare left the Start "open"
+        // as closed - the strict string compare left the Start "open"
         // forever. iso_ms values are also immune to the DST fall-back
         // window where lexicographic ISO ordering lies.
         ev.phase == Phase::Start
@@ -217,12 +217,12 @@ fn diagnoses_from(events: &[EngineEvent], now_iso: &str) -> Vec<Diagnosis> {
             continue;
         }
         let ev_ms = iso_ms(&ev.t).unwrap_or(0);
-        // OUTSIDE the live window — but a condition that is STILL OPEN is
+        // OUTSIDE the live window - but a condition that is STILL OPEN is
         // never stale: its Start keeps earning its card until the problem
         // actually ends. Skipping open Starts made long conditions
         // (mem_pressure open for 20 min) emit ONE Start, age it out of the
         // window after 5 min, and the card VANISHED while the problem was
-        // ongoing — Overall stayed "lag" with no explanatory card at all.
+        // ongoing - Overall stayed "lag" with no explanatory card at all.
         // The open/closed pairing below resolves this Start when its End
         // arrives (Ends are never skipped, whatever their age).
         if now_ms.saturating_sub(ev_ms) > LIVE_WINDOW_MS && !still_open(ev, ev_ms) {
@@ -273,7 +273,7 @@ fn diagnoses_from(events: &[EngineEvent], now_iso: &str) -> Vec<Diagnosis> {
     let mut out: Vec<Diagnosis> = Vec::new();
     // CORRELATION EVIDENCE: did a real activity collapse happen, and did it
     // happen DURING a wake it could explain? A cliff from BEFORE a wake
-    // started is not evidence for it — the old 15-minute window used to
+    // started is not evidence for it - the old 15-minute window used to
     // let a stall from 12 minutes prior "confirm" a wake card (false
     // correlation). Pairing is PER WINDOW: a cliff confirms a wake only if
     // it falls inside THAT wake's [start, end] envelope (an open wake
@@ -298,9 +298,9 @@ fn diagnoses_from(events: &[EngineEvent], now_iso: &str) -> Vec<Diagnosis> {
     // PAGING CORRELATION: a churn card must be backed by a cliff that fell
     // INSIDE a churn window (same direction as the wake rule: the evidence
     // must occur during the condition it explains). PER WINDOW, like the
-    // wake rule — the old first-start/last-end ENVELOPE counted a cliff in
+    // wake rule - the old first-start/last-end ENVELOPE counted a cliff in
     // the GAP between two churn windows as inside the churn. A churn with
-    // zero correlated stutters is background behavior — feed-only.
+    // zero correlated stutters is background behavior - feed-only.
     let churn_evidence = events.iter().any(|e| {
         if !e.kind.starts_with("gpu_activity_cliff") {
             return false;
@@ -317,15 +317,15 @@ fn diagnoses_from(events: &[EngineEvent], now_iso: &str) -> Vec<Diagnosis> {
     });
     for (key, (sustained_ms, _last, raw_sev)) in &buckets {
         if *sustained_ms < 3000 {
-            continue; // blip — feed-worthy, not card-worthy
+            continue; // blip - feed-worthy, not card-worthy
         }
         // a wake-up story without a measured freeze is an observation, not a
-        // confirmed problem — it stays in the feed only
+        // confirmed problem - it stays in the feed only
         if *key == "gpu_wake" && !stall_evidence {
             continue;
         }
         // churn without a correlated stutter is background paging, not a
-        // confirmed problem — the feed keeps the observation
+        // confirmed problem - the feed keeps the observation
         if *key == "paging_churn" && !churn_evidence {
             continue;
         }
@@ -369,12 +369,12 @@ fn diagnoses_from(events: &[EngineEvent], now_iso: &str) -> Vec<Diagnosis> {
 /// Final-session verdict from the FULL event history: the finished card
 /// must agree with the saved report it links to. The report maps every
 /// distinct warn/crit kind to a finding (no thresholds, no subordination,
-/// no live windows), so this mirrors exactly that rule — and the headline
+/// no live windows), so this mirrors exactly that rule - and the headline
 /// seconds are the sustained durations behind those same findings (End
 /// durations authoritative, instants ~1s, Starts paired by their End).
 /// Unknown engine kinds are skipped (no card, no seconds): the report keeps
 /// them as forensic rows, but a headline must never hinge on a kind no
-/// dictionary knows (only hand-planted files can contain one — our own
+/// dictionary knows (only hand-planted files can contain one - our own
 /// detector emits a closed kind set). Live cards keep their own stricter
 /// rules; this runs once, at finalize.
 pub fn final_verdict(events: &[EngineEvent], now_iso: &str) -> (Vec<Diagnosis>, u32) {
@@ -459,7 +459,7 @@ pub fn final_verdict(events: &[EngineEvent], now_iso: &str) -> (Vec<Diagnosis>, 
     (out, (total_ms.max(0) / 1000) as u32)
 }
 
-/// Everything `build_ui_state` needs, bundled — keeps the call site readable
+/// Everything `build_ui_state` needs, bundled - keeps the call site readable
 /// and clippy happy (too_many_arguments on the old 11-param form).
 pub struct UiStateInput<'a> {
     pub session: Option<&'a str>,
@@ -477,7 +477,7 @@ pub struct UiStateInput<'a> {
     pub auto_stop_sec: Option<u64>,
 }
 
-/// Build the complete UI state — the only payload the frontend receives.
+/// Build the complete UI state - the only payload the frontend receives.
 pub fn build_ui_state(inp: UiStateInput) -> UiState {
     let UiStateInput {
         session,
@@ -503,7 +503,7 @@ pub fn build_ui_state(inp: UiStateInput) -> UiState {
 
     let pct = |v: Option<f64>| -> Option<u8> { v.map(|x| x.clamp(0.0, 100.0) as u8) };
     // RAM bar: when avail ≥ the assumed total, the numbers are an
-    // implausible pair — the 8 GB fallback total (rig cache missing +
+    // implausible pair - the 8 GB fallback total (rig cache missing +
     // PowerShell unavailable) meeting a 32 GB machine's real reading.
     // Clamping painted the bar permanently 0% ("full"); None paints "--",
     // the honest no-data state. Events are unaffected (their floor clamps
@@ -704,7 +704,7 @@ mod tests {
     #[test]
     fn final_verdict_agrees_with_the_report_on_cpu_and_disk() {
         // the real contradictory session: cpu + disk evidence, zero spikes,
-        // zero cliffs — the live headline read 0 seconds over it while the
+        // zero cliffs - the live headline read 0 seconds over it while the
         // report carried two findings. The finished card must mirror the
         // report: both cards present, seconds from their sustained evidence.
         let events = vec![
@@ -832,7 +832,7 @@ mod tests {
     #[test]
     fn cliff_classification_is_frozen_at_emit_time() {
         // the drift bug: a plain gpu_activity_cliff (fired while the rest
-        // of the machine was HEALTHY — the detector checked at emit time)
+        // of the machine was HEALTHY - the detector checked at emit time)
         // must stay a scene_hitch even when the machine dips under load
         // MINUTES LATER. The old code re-derived the classification from
         // the latest sample and retroactively relabeled the event.
@@ -847,7 +847,7 @@ mod tests {
         // logic re-derived the classification from this data and called
         // the cliff "gpu_busy"; the kind is frozen at emit time, so this
         // sample shapes nothing. (Kept as documentation of the shape the
-        // old bug fed in — the assert proves it no longer matters.)
+        // old bug fed in - the assert proves it no longer matters.)
         let _loaded_now = Sample {
             disk_queue: Some(5.0),
             cpu_total: Some(96.0),
@@ -903,7 +903,7 @@ mod tests {
     fn zero_duration_start_end_same_ms_pairs_as_closed() {
         // the same-millisecond pairing bug: a condition opened and closed
         // within one tick's event batch (Start and End stamped the same
-        // ms — finish() stamps its Ends with one now_iso) read as
+        // ms - finish() stamps its Ends with one now_iso) read as
         // still-open under the strict string `>` compare and never let
         // the card expire. Numeric >= must pair them as closed.
         let events = vec![
@@ -922,7 +922,7 @@ mod tests {
                 Some(0.0),
             ),
         ];
-        // the End is 6 minutes old (outside the live window) — the Start
+        // the End is 6 minutes old (outside the live window) - the Start
         // must NOT be rescued as still-open, or the card lives forever
         let now = "2026-08-31T05:06:00.000Z";
         let d = diagnoses_from(&events, now);
@@ -936,7 +936,7 @@ mod tests {
     fn open_condition_keeps_its_card_beyond_the_window() {
         // the vanishing-card bug: a condition that STAYS open emits one
         // Start and nothing else. Six minutes in, the Start is older than
-        // the 5-minute live window — but the problem is ONGOING. The card
+        // the 5-minute live window - but the problem is ONGOING. The card
         // must stay; skipping open Starts made it vanish with Overall still
         // red and nothing explaining why.
         let events = vec![ev(
@@ -957,7 +957,7 @@ mod tests {
     #[test]
     fn closed_old_condition_still_expires() {
         // the flip side: an ENDED condition from before the window is
-        // really over — the still-open rescue must not resurrect history.
+        // really over - the still-open rescue must not resurrect history.
         // Start 10 min ago, End 9 min ago, nothing open now.
         let events = vec![
             ev(
@@ -985,7 +985,7 @@ mod tests {
 
     #[test]
     fn gpu_wake_without_stall_stays_in_feed() {
-        // sustained mem-idle evidence but ZERO measured freezes — the old
+        // sustained mem-idle evidence but ZERO measured freezes - the old
         // bug: a "visible hitch" card with no hitch ever recorded
         let events = vec![
             ev(
@@ -1014,7 +1014,7 @@ mod tests {
     #[test]
     fn gpu_wake_with_cliff_earns_card() {
         // same wake evidence, but a GPU activity cliff happened DURING the
-        // wake window — correlation confirms the hitch was real
+        // wake window - correlation confirms the hitch was real
         let events = vec![
             ev(
                 "gpu_mem_idle",
@@ -1049,7 +1049,7 @@ mod tests {
     #[test]
     fn cliff_before_wake_is_not_evidence_for_it() {
         // the false-correlation bug: a cliff at 04:55 used to "confirm" a
-        // wake that only started at 05:00 — an earlier collapse explains
+        // wake that only started at 05:00 - an earlier collapse explains
         // nothing about a later wake. The card must NOT appear.
         let events = vec![
             ev(
@@ -1085,10 +1085,10 @@ mod tests {
     #[test]
     fn cliff_after_an_older_wake_ended_is_not_evidence_for_a_newer_one() {
         // the envelope bug: wake #1 ended at 05:00:20, a NEW wake starts at
-        // 05:04, and a cliff lands at 05:05 — after the new wake began.
+        // 05:04, and a cliff lands at 05:05 - after the new wake began.
         // The old earliest-wake check compared against wake #1's start
         // only, so this cliff confirmed... whichever wake the card was
-        // for. The cliff IS inside wake #2's window, so the card stands —
+        // for. The cliff IS inside wake #2's window, so the card stands -
         // but the mirror case below (cliff in the GAP between wakes)
         // must not.
         let events = vec![
@@ -1132,7 +1132,7 @@ mod tests {
     #[test]
     fn cliff_in_the_gap_between_churn_windows_is_not_evidence() {
         // the churn envelope bug: churn #1 (05:00:00-05:00:30), a quiet
-        // gap, churn #2 opens at 05:04, and a cliff lands at 05:02 — in
+        // gap, churn #2 opens at 05:04, and a cliff lands at 05:02 - in
         // the GAP, before churn #2 even started. The old first-start/
         // last-end envelope spanned 05:00:00..(churn#2's end) and counted
         // this gap cliff as inside the churn. It explains nothing: no
@@ -1187,7 +1187,7 @@ mod tests {
     #[test]
     fn churn_without_stutter_stays_in_feed() {
         // minutes of sustained churn (duration ≥3s earns the bucket) but
-        // ZERO measured cliffs inside it — background reordering, not a
+        // ZERO measured cliffs inside it - background reordering, not a
         // confirmed problem. No card; the feed keeps the observation.
         let events = vec![
             ev(
@@ -1215,7 +1215,7 @@ mod tests {
 
     #[test]
     fn churn_with_cliff_inside_earns_card() {
-        // same churn window, but a GPU activity cliff fired mid-churn — the
+        // same churn window, but a GPU activity cliff fired mid-churn - the
         // temporal overlap is the correlation that upgrades the observation
         let events = vec![
             ev(
@@ -1251,7 +1251,7 @@ mod tests {
     #[test]
     fn churn_with_cliff_outside_stays_in_feed() {
         // churn window 05:00-05:00:40, but the cliff fired AFTER the churn
-        // ended — no overlap, no correlation, no card
+        // ended - no overlap, no correlation, no card
         let events = vec![
             ev(
                 "paging_churn",

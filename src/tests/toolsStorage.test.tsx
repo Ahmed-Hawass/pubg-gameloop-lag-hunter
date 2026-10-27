@@ -1,4 +1,4 @@
-// tests/toolsStorage.test.tsx — the Storage card contract: it kept only
+// tests/toolsStorage.test.tsx - the Storage card contract: it kept only
 // the Storage Sense switch (page file and sweep own their cards now),
 // its landing card badges the live sense state, the page carries the
 // general banner plus featured plus archive pattern like gaming, and

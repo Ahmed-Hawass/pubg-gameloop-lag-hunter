@@ -1,4 +1,4 @@
-// MonitorView.tsx — three states, one per phase of a scan. The user's
+// MonitorView.tsx - three states, one per phase of a scan. The user's
 // relationship to each is different, so the page answers a different
 // question in each:
 //
@@ -32,7 +32,7 @@ export function MonitorView(props: {
   /** the session whose summary was dismissed (never show it again) */
   dismissedSession: string | null;
   onDismissSummary: (session: string) => void;
-  /** PowerShell unavailable on this machine — limited mode */
+  /** PowerShell unavailable on this machine - limited mode */
   psLimited: boolean;
 }) {
   const { status, busy, durationSecs, onDurationChange, onToggle, onOpenReport, dismissedSession, onDismissSummary, psLimited } = props;
@@ -46,7 +46,7 @@ export function MonitorView(props: {
     if (secs === 600) return t.min10;
     if (secs === 1800) return t.min30;
     if (secs === 3600) return t.min60;
-    // a stored duration outside the presets (e.g. migrated settings) —
+    // a stored duration outside the presets (e.g. migrated settings) -
     // localized like every other duration, never a bare English suffix
     return t.minutesShort(Math.round(secs / 60));
   };
@@ -103,7 +103,7 @@ export function MonitorView(props: {
 }
 
 // ---------------------------------------------------------------------------
-// idle — one centered column: the session plan. The number leads, the pills
+// idle - one centered column: the session plan. The number leads, the pills
 // sit under the number they control, the 3-step path teaches the flow, the
 // button is the decision, and one tip row closes as a quiet footnote.
 // ---------------------------------------------------------------------------
@@ -161,7 +161,7 @@ function IdleState(props: {
           onClick={onToggle}
         >
           {/* lucide Play, filled: the whole app speaks lucide, so the hero
-              glyph does too — no bespoke SVG to maintain. fill rides the
+              glyph does too - no bespoke SVG to maintain. fill rides the
               button ink in both themes, stroke off. flip-rtl faces it
               with the reading direction (forward is left in Arabic). */}
           <Play size={20} fill="currentColor" stroke="none" aria-hidden="true" className="flip-rtl" />
@@ -179,7 +179,7 @@ function IdleState(props: {
 }
 
 // ---------------------------------------------------------------------------
-// running — the user is away. This screen's job is to send them back to the
+// running - the user is away. This screen's job is to send them back to the
 // game, not to entertain them: a clock they care about, an honest count, and
 // the one button that means something right now.
 // ---------------------------------------------------------------------------
@@ -219,12 +219,12 @@ function RunningState(props: {
       </div>
       {/* the live question this screen answers: "can I minimize this?"
           It lives here, not in idle, because this is where the window is
-          actually open and the doubt is real — idle can only promise it
+          actually open and the doubt is real - idle can only promise it
           in theory. */}
       <p className="run-note">{t.scanRunningNote}</p>
 
       {/* the three numbers the returning user actually wants, as one quiet
-          strip — no side column competing with the message */}
+          strip - no side column competing with the message */}
       <div className="run-rail">
         <div>
           <div className="run-k">{t.scanElapsed}</div>
@@ -244,7 +244,7 @@ function RunningState(props: {
         <div className="run-moments" role="status">{t.scanMoments(momentCount)}</div>
       ) : null}
 
-      {/* lucide Square, filled: the same fill-trick as the Play glyph —
+      {/* lucide Square, filled: the same fill-trick as the Play glyph -
           the whole app speaks lucide, so the stop mark does too. No
           bespoke SVG to maintain. */}
       <Button
@@ -259,7 +259,7 @@ function RunningState(props: {
 }
 
 // ---------------------------------------------------------------------------
-// result — the verdict. The state fills the whole card, never just an icon
+// result - the verdict. The state fills the whole card, never just an icon
 // edge (the rule commit 44bde31 set for every card in the app), and the
 // state quads are identical in both themes so this needs no light rules.
 // ---------------------------------------------------------------------------

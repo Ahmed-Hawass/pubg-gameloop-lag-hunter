@@ -1,4 +1,4 @@
-// tests/dialog.test.ts — the ONE modal surface contract: focus never
+// tests/dialog.test.ts - the ONE modal surface contract: focus never
 // leaves the dialog, Escape always dismisses, and only notices dismiss
 // on backdrop click (confirms need an explicit choice).
 

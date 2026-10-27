@@ -1,4 +1,4 @@
-// tests/checksLinks.test.tsx — the health cards are the deep-link
+// tests/checksLinks.test.tsx - the health cards are the deep-link
 // senders: power/DVR jump into Tools rows, page file into its editor.
 // Without the link callback the same buttons fall back to Windows.
 

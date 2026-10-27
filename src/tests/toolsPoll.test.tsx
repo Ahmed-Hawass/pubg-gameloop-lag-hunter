@@ -1,4 +1,4 @@
-// tests/toolsPoll.test.tsx — the Tools backstop contract: an external
+// tests/toolsPoll.test.tsx - the Tools backstop contract: an external
 // change while a details page sits open (GameLoop update, another tool,
 // policy) surfaces within a minute via a cheap re-read, skipped
 // mid-flip, off-tab, and while the document is hidden.

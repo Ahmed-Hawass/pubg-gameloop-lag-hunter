@@ -23,7 +23,7 @@ fn main() {
     // from Windows Update), the app would show a blank window. Detect it up
     // front with a plain filesystem probe (the runtime's install location,
     // per Microsoft's docs) and give the user an actionable answer.
-    // NOTE: no manual Win32 extern/linking here — an earlier registry-probe
+    // NOTE: no manual Win32 extern/linking here - an earlier registry-probe
     // version linked user32/advapi32 by hand and silently crashed the webview
     // creation on real machines.
     #[cfg(windows)]
@@ -58,7 +58,7 @@ fn main() {
 }
 
 /// Is the WebView2 runtime installed? Filesystem probe: the Evergreen runtime
-/// installs under "Microsoft\EdgeWebView\Application" — both Program Files
+/// installs under "Microsoft\EdgeWebView\Application" - both Program Files
 /// views for machine-wide installs, and the user's LOCALAPPDATA for
 /// per-user installs (common on non-admin accounts; the runtime setup
 /// falls back to per-user when elevation is unavailable). Each carries a

@@ -1,4 +1,4 @@
-// theme.ts — appearance resolution. Pure logic, no DOM: given the persisted
+// theme.ts - appearance resolution. Pure logic, no DOM: given the persisted
 // setting and the OS preference, decide the effective theme. The App shell
 // applies it via document.documentElement.dataset.theme (tokens.css reads it).
 

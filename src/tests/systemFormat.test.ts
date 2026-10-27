@@ -1,4 +1,4 @@
-// tests/systemFormat.test.ts — the System display math: CPU name
+// tests/systemFormat.test.ts - the System display math: CPU name
 // shortening, disk kind tags, and usage percents. Pure (no render),
 // so the card layout can change without these moving.
 import { describe, expect, it } from "vitest";

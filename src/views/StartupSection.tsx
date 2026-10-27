@@ -1,11 +1,11 @@
-// StartupSection.tsx — startup programs: one switch row per program that
+// StartupSection.tsx - startup programs: one switch row per program that
 // launches at sign-in. The switch mirrors the live Windows state (ON =
 // the overlay lets it run); flipping writes the overlay only, values are
 // never deleted, so every change reverses. Reads are cheap in-process
 // registry scans: mount, window-focus, and a slow backstop poll.
 // Shaped like the Tools sections (PageIntro header plus optional back
 // control) so a later move under Tools is a card plus a route, not a
-// redesign — today it rides its own sidebar tab with no trail.
+// redesign - today it rides its own sidebar tab with no trail.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AppWindow, CircleGauge, Shield } from "lucide-react";
@@ -20,7 +20,7 @@ import { useModalSignal, useYieldToAppDialog } from "./tools/useModalSignals";
 export function StartupSection(props: {
   active: boolean;
   /** back control from the shell, rendered at the header row end
-      (Tools move only — the standalone tab passes none) */
+      (Tools move only - the standalone tab passes none) */
   headerTrail?: ReactNode;
 }) {
   const { active, headerTrail } = props;
@@ -97,7 +97,7 @@ export function StartupSection(props: {
       return;
     }
     // an id that vanished mid-flight (deleted externally): resync silently
-    // first, then explain — the list, not the error, is the news
+    // first, then explain - the list, not the error, is the news
     if (raw.includes("STARTUP_UNKNOWN_ID")) {
       void load(true);
     }

@@ -1,6 +1,6 @@
-// settings.rs — the single user-preferences store (schema v3, atomic writes).
+// settings.rs - the single user-preferences store (schema v3, atomic writes).
 // Everything the user personalizes lives HERE: language, auto-stop.
-// Thresholds are NOT stored anymore — they're computed per machine each session.
+// Thresholds are NOT stored anymore - they're computed per machine each session.
 // Corruption policy: any unreadable file = defaults, silently. Never crash.
 
 use std::fs;
@@ -23,7 +23,7 @@ pub struct PendingRestart {
 #[serde(default)]
 pub struct Settings {
     pub version: u32,
-    /// legacy from v2 — ignored by the engine (thresholds are dynamic now),
+    /// legacy from v2 - ignored by the engine (thresholds are dynamic now),
     /// kept only so old files migrate without surprises.
     #[serde(skip_serializing)]
     pub sensitivity: String,
@@ -39,14 +39,14 @@ pub struct Settings {
     pub theme: String,
     /// sidebar collapsed (icons-only rail)
     pub sidebar_collapsed: bool,
-    /// first-run welcome screen done — never shown again after the first launch
+    /// first-run welcome screen done - never shown again after the first launch
     pub onboarding_done: bool,
-    /// the pre-scan advice ("close background apps") — shown ONCE EVER, the
+    /// the pre-scan advice ("close background apps") - shown ONCE EVER, the
     /// first time the app confirms the game is running; never again after
     /// the user dismisses it
     #[serde(default)]
     pub game_advice_done: bool,
-    /// the stay-in-game advice — shown ONCE EVER, the first time a RUNNING
+    /// the stay-in-game advice - shown ONCE EVER, the first time a RUNNING
     /// session measures the game window in the background; never again
     #[serde(default)]
     pub background_advice_done: bool,
@@ -99,7 +99,7 @@ pub struct Settings {
     /// involved); serde default keeps old files valid.
     #[serde(default)]
     pub pending_restart: Option<PendingRestart>,
-    /// schema-compat placeholder — recomputed per session, never read back
+    /// schema-compat placeholder - recomputed per session, never read back
     #[serde(skip_serializing)]
     pub thresholds: Thresholds,
 }
@@ -148,9 +148,9 @@ pub fn settings_path() -> PathBuf {
 }
 
 /// Load settings with migration:
-///   v2 file (no `language` key) → gains `language: "auto"` — nothing lost.
+///   v2 file (no `language` key) → gains `language: "auto"` - nothing lost.
 ///   v1 layout (bare Thresholds + prefs file) → merged into one v3 file.
-/// A bare-thresholds file parses as Settings via serde defaults — so detect the
+/// A bare-thresholds file parses as Settings via serde defaults - so detect the
 /// legacy layout by CONTENT (missing `sensitivity` key) before deciding.
 /// The migration write itself goes through `update()` below, so a user
 /// toggle landing in the same moment cannot be overwritten by our upgrade.
@@ -177,7 +177,7 @@ fn migration_kind(text: &str) -> MigrationKind {
     if let Ok(v) = serde_json::from_str::<serde_json::Value>(text) {
         let version = v.get("version").and_then(|x| x.as_u64()).unwrap_or(0);
         // New-format files (v3+: sensitivity/thresholds omitted via
-        // skip_serializing) are current by version alone — requiring the
+        // skip_serializing) are current by version alone - requiring the
         // legacy key here misclassified every file we write as Legacy and
         // reset all prefs on the next launch.
         if version >= SETTINGS_VERSION as u64 {
@@ -245,7 +245,7 @@ fn sanitize_settings(mut s: Settings) -> Settings {
 /// `update()` compute their starting state from, so a concurrent set_*
 /// and a first-boot migration can never act on two different pictures of
 /// the file. The bool says whether the legacy prefs file may be retired
-/// — but only AFTER the upgraded file has been successfully saved.
+/// - but only AFTER the upgraded file has been successfully saved.
 fn upgrade_text(text: &str) -> (Settings, bool) {
     match migration_kind(text) {
         MigrationKind::Current => (parse_settings_text(text), false),
@@ -262,7 +262,7 @@ fn upgrade_text(text: &str) -> (Settings, bool) {
             if let Ok(th) = serde_json::from_str::<Thresholds>(text) {
                 migrated.thresholds = th;
             }
-            // 2) sensitivity from prefs, if present — kept as a mute legacy value
+            // 2) sensitivity from prefs, if present - kept as a mute legacy value
             let mut retire = false;
             if let Ok(prefs_text) = fs::read_to_string(prefs_path()) {
                 retire = true;
@@ -332,7 +332,7 @@ pub fn normalize_language(lang: &str) -> String {
 }
 
 /// Theme values the UI can send. Unknown values mean "auto" (follow the
-/// OS) — the same rule the frontend's resolveTheme applies, so the two
+/// OS) - the same rule the frontend's resolveTheme applies, so the two
 /// sides can never disagree on a stored value.
 pub fn normalize_theme(theme: &str) -> String {
     match theme {
@@ -379,7 +379,7 @@ mod tests {
             MigrationKind::BumpV2
         );
         // new-format v3 (sensitivity/thresholds omitted by skip_serializing):
-        // current by version alone — this is what save() writes now
+        // current by version alone - this is what save() writes now
         assert_eq!(
             migration_kind(
                 r#"{"version":3,"auto_stop_minutes":10,"language":"ar","theme":"dark","sidebar_collapsed":true,"onboarding_done":true,"game_advice_done":true,"background_advice_done":true,"announced_update_version":null,"previous_power_guid":null,"pending_restart":null}"#
@@ -553,7 +553,7 @@ mod tests {
 
     #[test]
     fn old_settings_file_defaults_theme_to_auto() {
-        // settings.json written before the theme existed has no theme key —
+        // settings.json written before the theme existed has no theme key -
         // serde default follows the OS until the user picks one explicitly
         let old = serde_json::json!({
             "version": 3,
@@ -580,7 +580,7 @@ mod tests {
     #[test]
     fn pre_update_settings_file_parses_without_the_new_field() {
         // a settings.json written BEFORE the updater existed has no
-        // announced_update_version key — serde default keeps it None
+        // announced_update_version key - serde default keeps it None
         let old = serde_json::json!({
             "version": 3,
             "sensitivity": "standard",
@@ -604,7 +604,7 @@ mod tests {
             "thresholds": Thresholds::default()
         });
         let s: Settings = serde_json::from_value(v2).unwrap();
-        assert_eq!(s.language, "auto"); // defaulted — then persisted as v3 on load
+        assert_eq!(s.language, "auto"); // defaulted - then persisted as v3 on load
         assert_eq!(s.sensitivity, "high"); // preserved as legacy
     }
 

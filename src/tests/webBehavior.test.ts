@@ -1,4 +1,4 @@
-// webBehavior.test.ts — the browser-habit guard, as tests.
+// webBehavior.test.ts - the browser-habit guard, as tests.
 // The bug class this guards: a leaked browser shortcut (reload, devtools,
 // find, print, save) re-painting the WebView mid-session, an app key
 // (copy, arrows, plain typing) being swallowed, or a selection that can be
@@ -22,7 +22,7 @@ describe("isBrowserShortcut", () => {
     expect(isBrowserShortcut(ev("F12"))).toBe(true);
     expect(isBrowserShortcut(ev("R", { ctrl: true }))).toBe(true);
     expect(isBrowserShortcut(ev("I", { ctrl: true, shift: true }))).toBe(true);
-    // Ctrl+Shift+J is the devtools console — same class as Ctrl+Shift+I
+    // Ctrl+Shift+J is the devtools console - same class as Ctrl+Shift+I
     expect(isBrowserShortcut(ev("J", { ctrl: true, shift: true }))).toBe(true);
   });
 

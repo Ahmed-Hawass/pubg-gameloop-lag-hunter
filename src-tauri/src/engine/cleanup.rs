@@ -1,4 +1,4 @@
-// cleanup.rs — the Storage card's manual sweep: measure safe places,
+// cleanup.rs - the Storage card's manual sweep: measure safe places,
 // delete only what the user ticked, report measured freed bytes.
 //
 // Scope is deliberately narrow (the anti-CCleaner lesson). Quick holds
@@ -126,7 +126,7 @@ pub fn scan() -> CleanupScan {
 
 /// What one walk found: the readable sum, how many entries refused,
 /// and whether the number is partial. Denied entries still poison the
-/// EXACTNESS (never a short exact number — that is how a bin full of
+/// EXACTNESS (never a short exact number - that is how a bin full of
 /// denied WER subdirs once read as "almost empty"), but a partial sum
 /// with a "~" on screen beats a dead "--": the clean path already skips
 /// what it cannot touch, so a partial row stays actionable.

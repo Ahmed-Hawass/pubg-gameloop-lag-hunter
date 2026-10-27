@@ -1,4 +1,4 @@
-// WelcomeView.tsx — the two-slide first-run landing: what it finds,
+// WelcomeView.tsx - the two-slide first-run landing: what it finds,
 // then how it works around one real sample finding plus what it costs.
 // Shown ONCE (onboarding_done is persisted); never again after the first launch.
 
@@ -29,7 +29,7 @@ export function WelcomeView(props: { onDone: () => void }) {
     titleRef.current?.focus();
   }, [page]);
   /** rotating sample findings (visual demo only: static translated copy
-      cycling disk, cpu, gpu every few seconds — never live data) */
+      cycling disk, cpu, gpu every few seconds - never live data) */
   const [sample, setSample] = useState(0);
   const samples = ["disk_wait", "cpu_busy", "gpu_busy"] as const;
   const sampleSev = ["medium", "high", "high"] as const;
@@ -52,13 +52,13 @@ export function WelcomeView(props: { onDone: () => void }) {
 
   return (
     <div className="welcome">
-      {/* language switcher: a quiet globe in the bottom corner — one click
+      {/* language switcher: a quiet globe in the bottom corner - one click
           toggles en/ar and persists immediately. Icon-only on purpose: this
           control is used once in the app's lifetime, so it stays out of the
           CTA flow; the full segmented picker lives in Settings. */}
       <div className="welcome-lang">
         {/* the label names the OTHER language (the one a click switches
-            to) — from the locale files like every other string */}
+            to) - from the locale files like every other string */}
         <Tip text={lang === "ar" ? t.langEn : t.langAr}>
           <button
             className="focus-ring welcome-lang-btn"
@@ -70,7 +70,7 @@ export function WelcomeView(props: { onDone: () => void }) {
         </Tip>
       </div>
       {/* skip: bottom end-corner (the proceed side), language owns the
-          start corner — both logical, both mirror with RTL */}
+          start corner - both logical, both mirror with RTL */}
       {page === 0 ? (
         <button type="button" className="focus-ring-inset welcome-skip" onClick={props.onDone}>
           {t.welcomeSkip}
@@ -124,7 +124,7 @@ export function WelcomeView(props: { onDone: () => void }) {
 
           <div className="welcome-label">{t.welcomeSampleLabel}</div>
           {/* rotating samples: all three translated findings stacked in
-              one slot, only the active visible — the slot keeps the
+              one slot, only the active visible - the slot keeps the
               tallest height so rotating never moves the tiles below */}
           <div className="welcome-sample">
             {samples.map((key, i) => (

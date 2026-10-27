@@ -1,4 +1,4 @@
-// tests/toolsGaming.test.tsx — the gaming switches contract: rows mirror
+// tests/toolsGaming.test.tsx - the gaming switches contract: rows mirror
 // the live registry read, a flip writes the mapped value optimistically,
 // a verified write stays, an unverified one rolls back with a notice, and
 // a refused elevation ("cancelled") rolls back silently.
@@ -253,7 +253,7 @@ describe("ToolsView gaming switches", () => {
     await user.click(screen.getByText(en.toolGamingTweaks));
     await screen.findByText(en.tweakDvrTitle);
     // one shared row: header plus the back control at the inline end,
-    // never a lonely button row above — and the intro card rides BELOW
+    // never a lonely button row above - and the intro card rides BELOW
     // the row at full width, never squeezed beside the button
     const top = document.querySelector(".section-top");
     expect(top).toBeTruthy();

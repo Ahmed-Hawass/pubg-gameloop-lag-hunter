@@ -1,6 +1,6 @@
-// theme.test.ts — appearance resolution, as tests.
+// theme.test.ts - appearance resolution, as tests.
 // The bug class this guards: an unknown stored value (hand-edited settings,
-// older file) producing no theme — or "auto" ignoring the OS.
+// older file) producing no theme - or "auto" ignoring the OS.
 
 import { describe, expect, it } from "vitest";
 import { resolveTheme } from "../theme";

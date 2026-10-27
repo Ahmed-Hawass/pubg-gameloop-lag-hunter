@@ -1,4 +1,4 @@
-// lib.rs — Tauri app shell: commands (UI → engine) and events (engine → UI).
+// lib.rs - Tauri app shell: commands (UI → engine) and events (engine → UI).
 // The UI is a dumb display: it sends commands and receives pushes. No logic.
 
 pub mod engine;
@@ -14,7 +14,7 @@ use engine::types::{SessionStatus, StopReason, UiState};
 struct StatusPayload {
     status: SessionStatus,
     ui: Option<UiState>,
-    /// why the last session ended — the UI explains instead of staying silent
+    /// why the last session ended - the UI explains instead of staying silent
     #[serde(skip_serializing_if = "Option::is_none")]
     stop_reason: Option<StopReason>,
 }
@@ -30,7 +30,7 @@ fn ps_available() -> bool {
 }
 
 /// Idle watcher: polls for GameLoop so the UI's Start button reflects reality.
-/// NEVER exits on its own — after a session stops it keeps watching, so the
+/// NEVER exits on its own - after a session stops it keeps watching, so the
 /// button state can never go stale (the old version died after the first
 /// session and left the gate stuck). Spawned ONCE per process: a second
 /// invocation (StrictMode double-mount, any re-call) would stack a second
@@ -47,7 +47,7 @@ fn watch_gameloop(app: tauri::AppHandle) {
                     std::thread::sleep(Duration::from_secs(2));
                     continue;
                 };
-                // while a session runs, its own probe is the source of truth —
+                // while a session runs, its own probe is the source of truth -
                 // skip here, but remember "up" so the next idle check diffs cleanly
                 if eng.status() == SessionStatus::Running {
                     last = Some(true);
@@ -68,7 +68,7 @@ fn watch_gameloop(app: tauri::AppHandle) {
 
 // ---- system tabs (read-only queries) --------------------------------------
 // Every command that can take longer than a few milliseconds is ASYNC: Tauri
-// runs sync commands on the IPC dispatcher thread — one slow command froze
+// runs sync commands on the IPC dispatcher thread - one slow command froze
 // the whole window ("Not Responding") on HDD machines. Async commands run on
 // the async runtime; the UI stays alive no matter how slow the query.
 
@@ -81,7 +81,7 @@ async fn system_info() -> Result<engine::system::SystemInfo, String> {
 #[tauri::command]
 async fn top_processes(force: bool) -> Result<engine::system::TopProcesses, String> {
     let _t = engine::logging::timed("ipc: top_processes");
-    // first call on a run pays a PowerShell spawn — blocking pool, never the
+    // first call on a run pays a PowerShell spawn - blocking pool, never the
     // async runtime. force=true (manual refresh button) pays it every time
     // and warms the cache; the silent poll keeps using the cached path.
     if force {
@@ -113,7 +113,7 @@ async fn system_checks(force: bool) -> Result<engine::system::SystemChecks, Stri
 }
 
 /// End one app group by PIDs (Processes tab action): instant
-/// TerminateProcess per member plus a 2s re-read verify each — blocking
+/// TerminateProcess per member plus a 2s re-read verify each - blocking
 /// pool like every other slow path. A denied member refuses honestly
 /// (no silent elevation); only real failures after attempts are logged
 /// like every command failure.
@@ -131,7 +131,7 @@ async fn end_processes(pids: Vec<u32>) -> Result<(), String> {
 }
 
 /// Real program icons for PIDs (Processes tab artwork): one native
-/// extraction per unique exe path, cached by path — the poll never
+/// extraction per unique exe path, cached by path - the poll never
 /// extracts, the UI asks only for new PIDs. Misses stay absent (the UI
 /// keeps the glyph); small, fast, blocking pool like every probe.
 #[tauri::command]
@@ -143,7 +143,7 @@ async fn process_icons(pids: Vec<u32>) -> Vec<engine::icons::ProcessIcon> {
 }
 
 /// Startup programs, live from the registry + both Startup folders
-/// (in-process reads, milliseconds — no PowerShell spawn). Icons ride
+/// (in-process reads, milliseconds - no PowerShell spawn). Icons ride
 /// along resolved so exe paths never cross bare; the UI paints rows
 /// straight from this answer.
 #[tauri::command]
@@ -156,7 +156,7 @@ async fn startup_entries() -> Vec<engine::startup::StartupEntry> {
 }
 
 /// Flip one startup entry by id (enable/disable via the StartupApproved
-/// overlay only — values are never deleted, so every change reverses).
+/// overlay only - values are never deleted, so every change reverses).
 /// The id must match a freshly enumerated entry; anything else refuses
 /// before touching the registry. Returns the re-read list: the UI paints
 /// the verified truth, never its own guess.
@@ -293,7 +293,7 @@ async fn apply_pagefile_settings(
 /// Storage sweep scan: measures the three quick places (user temp, system
 /// temp, delivery cache) plus the sweep memory. Recycle Bin is deep-only
 /// because cleaning it is permanent. Read-only.
-/// Async: dir walks can take seconds on bloated temp folders — never the
+/// Async: dir walks can take seconds on bloated temp folders - never the
 /// IPC thread. Progress rides the channel (one event per category step);
 /// the final answer is the command's own return.
 #[tauri::command]
@@ -486,10 +486,10 @@ async fn session_start(
 ) -> Result<StatusPayload, String> {
     let _t = engine::logging::timed("ipc: session_start");
     // start() runs PowerShell probes (RAM/disks on cache miss, visibility,
-    // gpu clocks) + creates the session files — all blocking, all parked on
+    // gpu clocks) + creates the session files - all blocking, all parked on
     // the blocking pool so the async runtime (and the UI) never stall
     // No explicit duration (headless callers) falls back to the USER's own
-    // default from settings — never a second hardcoded number that can
+    // default from settings - never a second hardcoded number that can
     // drift from the 5-minute default the UI offers.
     let user_default =
         (engine::settings::load().auto_stop_minutes as u64 * 60).clamp(60, MAX_SESSION_SECS);
@@ -508,7 +508,7 @@ async fn session_start(
     // emulator probe + liveness guard + window-visibility probe: every ~5s
     // while running. If GameLoop dies mid-session, 3 consecutive misses
     // (~15s) stop the scan. The visibility probe (a transient PowerShell call)
-    // runs every OTHER cycle (~10s staleness) — GPU attribution never gets
+    // runs every OTHER cycle (~10s staleness) - GPU attribution never gets
     // stale enough to misread desktop activity as in-game.
     // Generation-gated: a quick restart spawns a new guard; THIS one notices
     // it's superseded and exits instead of running in parallel with it.
@@ -525,10 +525,10 @@ async fn session_start(
 async fn session_stop(app: tauri::AppHandle) -> Result<StatusPayload, String> {
     let _t = engine::logging::timed_with("ipc: session_stop", 3_000);
     // the stop path sleeps 600ms + reads the whole samples file back from
-    // disk — genuinely blocking work, parked on the blocking pool so the
+    // disk - genuinely blocking work, parked on the blocking pool so the
     // async runtime never stalls (the UI keeps breathing meanwhile).
     // Idempotent: a second Stop when already Finished returns the current
-    // state (Ok), never SESSION_SAVE_FAILED — only a real finalize error fails.
+    // state (Ok), never SESSION_SAVE_FAILED - only a real finalize error fails.
     let eng = session::init_global();
     let _report = tauri::async_runtime::spawn_blocking(move || eng.stop())
         .await
@@ -548,11 +548,11 @@ fn get_state() -> StatusPayload {
 #[tauri::command]
 async fn session_entries() -> Vec<engine::storage::SessionEntry> {
     let _t = engine::logging::timed("ipc: session_entries");
-    // hide the live session by the ENGINE's own id — it is the writer,
+    // hide the live session by the ENGINE's own id - it is the writer,
     // it knows what is being written right now (belt and suspenders over
     // the old file-age heuristic that broke at the first autosave)
     let live = session::init_global().live_session_id();
-    // a JoinError here means the blocking task itself panicked — THAT must
+    // a JoinError here means the blocking task itself panicked - THAT must
     // never surface as a silent "no sessions" list; log it loudly and only
     // then fall back to empty
     match tauri::async_runtime::spawn_blocking(move || {
@@ -591,7 +591,7 @@ async fn delete_session(id: String) -> Result<(), String> {
 }
 
 /// Delete every saved session except the live writer's directory (bulk
-/// cleanup). The ENGINE excludes the live session itself — the UI's
+/// cleanup). The ENGINE excludes the live session itself - the UI's
 /// exclude_id is honored as an EXTRA, but the running session can never be
 /// deleted even if the frontend passes nothing or the wrong id (a second
 /// lock the frontend can't lose). The engine serializes this against
@@ -619,7 +619,7 @@ fn log_err<T>(cmd: &str, res: &Result<T, String>) {
 }
 
 /// The sessions root itself (the Reports tab's "Open sessions folder").
-/// The ENGINE owns the path — the UI never derives it by string surgery
+/// The ENGINE owns the path - the UI never derives it by string surgery
 /// on a session path (which assumed a flat layout and would silently
 /// open the wrong folder the day the layout nests).
 #[tauri::command]
@@ -682,7 +682,7 @@ fn finish_onboarding() -> Result<(), String> {
     })
 }
 
-/// Mark the pre-scan advice ("close background apps") as seen — it shows once
+/// Mark the pre-scan advice ("close background apps") as seen - it shows once
 /// EVER, the first time the app confirms the game is running. The dismissal
 /// itself is the user's click; this only records it.
 #[tauri::command]
@@ -692,7 +692,7 @@ fn finish_game_advice() -> Result<(), String> {
     })
 }
 
-/// Mark the stay-in-game advice as seen — it shows once EVER, the first time
+/// Mark the stay-in-game advice as seen - it shows once EVER, the first time
 /// a running session measures the game window in the background.
 #[tauri::command]
 fn finish_background_advice() -> Result<(), String> {
@@ -701,7 +701,7 @@ fn finish_background_advice() -> Result<(), String> {
     })
 }
 
-/// Mark a one-shot page card dismissed — it never shows again on this
+/// Mark a one-shot page card dismissed - it never shows again on this
 /// machine. Recorded at dismiss time (the X click itself), never at show
 /// time: unlike the advice modals (any click dismisses), a card must
 /// survive until the user explicitly closes it. A repeated id is a
@@ -757,7 +757,7 @@ fn set_show_unsupported(show: bool) -> Result<bool, String> {
 // an explicit user click; verification against SHA256SUMS is mandatory.
 
 /// Ask GitHub whether a newer release exists. Ok(None) = nothing newer.
-/// The IPC thread never blocks — the HTTP call is parked on the blocking
+/// The IPC thread never blocks - the HTTP call is parked on the blocking
 /// pool (GitHub latency, offline machines, proxy timeouts).
 #[tauri::command]
 async fn check_update() -> Result<Option<engine::update::UpdateInfo>, String> {
@@ -798,7 +798,7 @@ fn announce_update(version: String) -> Result<(), String> {
 
 /// Download the update to `dest`, streaming progress over `on_event`.
 /// The channel carries Progress events; the final result arrives as the
-/// command's own return (Ok(path) / Err(reason)) — the UI updates its
+/// command's own return (Ok(path) / Err(reason)) - the UI updates its
 /// modal from both.
 ///
 /// `version` is a REQUEST, not a source of truth: the engine resolves the
@@ -814,7 +814,7 @@ async fn download_update(
     let _t = engine::logging::timed_with("ipc: download_update", 10_000);
     let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     // register the global cancel handle so app-exit / user-cancel can kill
-    // it — refused while another download is live (engine-side single-flight)
+    // it - refused while another download is live (engine-side single-flight)
     engine::update::register_cancel(cancel.clone())?;
     let res = tauri::async_runtime::spawn_blocking(move || {
         // the ENGINE resolves the release itself (inside its own
@@ -832,7 +832,7 @@ async fn download_update(
     .map_err(|e| format!("download task failed: {e}"))
     .and_then(|r| r);
     // a non-"cancelled" failure is LOGGED (a cancel is a user choice, not
-    // a failure worth a warn line) — but one quiet info line stays, or a
+    // a failure worth a warn line) - but one quiet info line stays, or a
     // declined prompt plus "nothing happens" is invisible in hindsight.
     if let Err(e) = &res {
         if e != "cancelled" {
@@ -842,7 +842,7 @@ async fn download_update(
         }
     }
     if res.is_err() {
-        // cancelled or failed — make sure no partial file survives
+        // cancelled or failed - make sure no partial file survives
         engine::update::cleanup_active_download();
     }
     res
@@ -868,7 +868,7 @@ async fn open_download_folder(path: String) -> Result<(), String> {
 
 #[tauri::command]
 fn open_path(path: &str, app: tauri::AppHandle) -> Result<(), String> {
-    // open files/folders with the shell default handler — via the official plugin.
+    // open files/folders with the shell default handler - via the official plugin.
     // NEVER build shell strings ourselves: no cmd /C, no injection surface.
     // Scope: only paths inside our own app-data sessions folder ever reach here
     // (session dirs + report.md files). Everything else is refused.
@@ -901,7 +901,7 @@ fn open_path_inner(path: &str, app: &tauri::AppHandle) -> Result<(), String> {
 }
 
 /// App version from the single source of truth (tauri.conf.json → Cargo.toml
-/// stays in sync with it via tauri-build). The UI asks us — never hardcodes.
+/// stays in sync with it via tauri-build). The UI asks us - never hardcodes.
 #[tauri::command]
 fn get_version() -> String {
     engine::VERSION.to_string()
@@ -921,7 +921,7 @@ fn tray_set_labels(open: String, scan: String, exit: String, app: tauri::AppHand
 }
 
 // The live tooltip (scan percent while running, the exit rule otherwise).
-// Throttled by the frontend — a tooltip per state tick would be an IPC flood.
+// Throttled by the frontend - a tooltip per state tick would be an IPC flood.
 #[tauri::command]
 fn tray_set_tooltip(text: String, app: tauri::AppHandle) {
     if let Err(e) = tray::set_tooltip(&app, &text) {
@@ -957,7 +957,7 @@ fn tray_set_active(active: bool, app: tauri::AppHandle) {
 
 /// Geometry saves ride window events (every pixel of a drag fires one):
 /// at most one settings write per interval, plus one forced write on
-/// quit — a crash between ticks loses seconds of geometry, never prefs.
+/// quit - a crash between ticks loses seconds of geometry, never prefs.
 static LAST_GEOM_SAVE: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
 const GEOM_SAVE_EVERY: std::time::Duration = std::time::Duration::from_secs(2);
 
@@ -1109,7 +1109,7 @@ fn log_frontend_info(message: String) -> Result<(), String> {
 }
 
 /// Hosts we ever open in the system browser. This is the REAL enforcement
-/// (checked here in Rust, before anything reaches the opener plugin) —
+/// (checked here in Rust, before anything reaches the opener plugin) -
 /// plugin capabilities only guard the JS-side command path, while this
 /// command is invoked from our own frontend anyway. Anything outside
 /// these hosts is refused, end of story.
@@ -1134,7 +1134,7 @@ fn open_url(url: &str, app: tauri::AppHandle) -> Result<(), String> {
     // open external links (repo, support, releases) in the system browser.
     // Enforced allowlist: same hosts the capability file lists, verified on
     // OUR side (Rust) because plugin capabilities only scope the JS command
-    // path — a Rust-side opener call is NOT constrained by them.
+    // path - a Rust-side opener call is NOT constrained by them.
     // Refusals are logged like every other command failure.
     let res = open_url_inner(url, &app);
     if let Err(e) = &res {
@@ -1199,7 +1199,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        // native save dialog for the update download (official plugin —
+        // native save dialog for the update download (official plugin -
         // never hand-rolled Win32 FFI, per the user32 lesson in sampler.rs)
         .plugin(tauri_plugin_dialog::init())
         // ONE instance only: a second launch focuses the existing window and exits.
@@ -1271,7 +1271,7 @@ pub fn run() {
             open_download_folder,
         ])
         .on_window_event(|window, event| {
-            // geometry memory: every move/resize records (throttled) — the
+            // geometry memory: every move/resize records (throttled) - the
             // snap overlay child window parks and hides constantly, so only
             // the main window's events count.
             if matches!(
@@ -1294,7 +1294,7 @@ pub fn run() {
                     // directly; Alt+F4 is intercepted by the frontend gate)
                     // is a HIDE: the app lives in the notification area, and
                     // a half-hour scan must survive the user dismissing the
-                    // window. Nothing destructive runs on this path — the
+                    // window. Nothing destructive runs on this path - the
                     // safety net below belongs to a real quit only.
                     api.prevent_close();
                     let _ = window.hide();
@@ -1303,10 +1303,10 @@ pub fn run() {
                 }
                 // graceful exit: a running session finalizes its files before the app dies
                 // an in-flight update download is cancelled and its partial
-                // file removed — nothing half-written outlives the app
+                // file removed - nothing half-written outlives the app
                 // last geometry wins: the throttled event saves may lag a
                 // fresh drag by up to GEOM_SAVE_EVERY, so quit writes once,
-                // unconditionally — the window still exists here.
+                // unconditionally - the window still exists here.
                 record_window_geometry(window, true);
                 engine::update::cancel_active();
                 if let Some(eng) = session::global() {
@@ -1319,7 +1319,7 @@ pub fn run() {
         })
         .setup(|_app| {
             use tauri::Manager;
-            // boot timing: the whole freeze investigation starts here —
+            // boot timing: the whole freeze investigation starts here -
             // "app ready in Xms" tells us at a glance whether a machine
             // had a slow launch, before reading anything else
             let boot = std::time::Instant::now();
@@ -1330,7 +1330,7 @@ pub fn run() {
             engine::logging::info(&format!("app version: {}", engine::VERSION));
             // boot environment snapshot (one line per launch): the rig line
             // below covers OS/RAM/disks, but TEMP resolvability and the
-            // pagefile read never appear anywhere — and both have failed
+            // pagefile read never appear anywhere - and both have failed
             // silently on real machines. Cheap sync reads only.
             {
                 let temp_ok = std::env::var_os("TEMP")
@@ -1360,7 +1360,7 @@ pub fn run() {
 
             // remembered geometry wins over the config default: restore
             // size/position/maximized when the user customized before,
-            // center the default window otherwise — but do NOT show it yet.
+            // center the default window otherwise - but do NOT show it yet.
             // The frontend reveals the window itself on first paint (see
             // main.tsx). Showing here would put a dark empty window on
             // screen while the bundle parses and the IPC gates resolve.
@@ -1377,7 +1377,7 @@ pub fn run() {
 
             // Safety net for the frontend-driven show: if the UI never
             // reports first paint (a crash before React mounts), the window
-            // would stay invisible forever — worse than the old dark void.
+            // would stay invisible forever - worse than the old dark void.
             // show() is idempotent, so a late safety net never harms a
             // window the frontend already revealed.
             let guard = _app.handle().clone();
@@ -1393,13 +1393,13 @@ pub fn run() {
             spawn_state_pusher(handle);
 
             // the notification-area icon: the app's second face. Built here
-            // (before the window is even shown) with empty labels — the
+            // (before the window is even shown) with empty labels - the
             // frontend pushes the localized text the moment it mounts.
             tray::build(_app.handle());
 
             // Warm the system caches ASYNC (never on the setup thread):
             // rig info on a first machine run pays the PowerShell hardware
-            // inventory (Get-PhysicalDisk: 20+s on HDD machines — the original
+            // inventory (Get-PhysicalDisk: 20+s on HDD machines - the original
             // "Not Responding" bug). The async runtime keeps the UI alive
             // while it happens; afterwards the result lives in the disk
             // cache and every later launch reads it in microseconds.

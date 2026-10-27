@@ -1,4 +1,4 @@
-// bridge.ts — typed Tauri bindings. The ONLY file that talks to the backend.
+// bridge.ts - typed Tauri bindings. The ONLY file that talks to the backend.
 // All types mirror engine/types.rs exactly.
 
 import { listen } from "@tauri-apps/api/event";
@@ -14,11 +14,11 @@ export function notifyFeatureStateChanged(): void {
 
 // ---- types mirroring Rust ------------------------------------------------
 
-/** event severity — mirrors engine types.rs Severity (as_str) */
+/** event severity - mirrors engine types.rs Severity (as_str) */
 export type Severity = "ok" | "warn" | "crit";
 
 /**
- * diagnosis-card severity — mirrors the Diagnosis/FriendlyFinding severity
+ * diagnosis-card severity - mirrors the Diagnosis/FriendlyFinding severity
  * in types.rs ("high" | "medium" | "low"). A DIFFERENT vocabulary from
  * Severity on purpose: events say how bad a measurement is, cards say how
  * much the user should care. Do not merge them.
@@ -51,7 +51,7 @@ export interface History {
 
 export interface FeedEntry {
   phase: "start" | "end" | "instant";
-  /** machine event kind — the UI translates it (e.g. "disk_queue") */
+  /** machine event kind - the UI translates it (e.g. "disk_queue") */
   kind: string;
   sev: Severity;
   /** clock time HH:MM:SS from the sample */
@@ -91,7 +91,7 @@ export type SessionStatus = "idle" | "running" | "stopping" | "finished";
 export interface StatusPayload {
   status: SessionStatus;
   ui: UiState | null;
-  /** why the last session ended — present when a session just finished */
+  /** why the last session ended - present when a session just finished */
   stop_reason?: StopReason;
 }
 
@@ -125,7 +125,7 @@ async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T
 }
 
 // ---- window + dialog bindings (the app's own window chrome, not engine
-// commands — but the same rule applies: bridge.ts is the ONLY file that
+// commands - but the same rule applies: bridge.ts is the ONLY file that
 // talks to Tauri, so these wrappers exist here for every consumer) -------
 
 /** Reveal the main window (called by main.tsx on first paint). */
@@ -207,7 +207,7 @@ export async function syncSnapOverlay(rect: SnapOverlayRect | null): Promise<voi
 
 /** Overlay mouse reports (enter/leave/click): the native hit target owns
     the mouse over the maximize button, so the button's own :hover cannot
-    fire — the shell mirrors the highlight from here instead, and a click
+    fire - the shell mirrors the highlight from here instead, and a click
     runs the same toggle as the button itself. */
 export async function onSnapOverlay(
   cb: (kind: "enter" | "leave" | "click") => void,
@@ -360,7 +360,7 @@ export const api = {
     invoke<StartupEntry[]>("set_startup_enabled_admin", { id, enabled }),
   systemChecks: (force?: boolean) =>
     invoke<SystemChecks>("system_checks", { force: force ?? false }),
-  /** the Tools tab's switches only (microseconds, in-process) — the
+  /** the Tools tab's switches only (microseconds, in-process) - the
       full systemChecks batch is never paid for a page that displays none
       of its rows */
   tweakStates: () => invoke<TweakStates>("tweak_states"),
@@ -575,7 +575,7 @@ export interface SystemChecks {
   storage_sense: boolean | null;
 }
 
-/** Visibility of a Tools row whose availability depends on the machine —
+/** Visibility of a Tools row whose availability depends on the machine -
     mirrors RowState in engine/system.rs. `disabled_gameloop_not_found`
     renders greyed with a translated reason (fixable by the user);
     `locked_policy` renders greyed with a translated reason (owned by
@@ -606,7 +606,7 @@ export interface TweakStates {
       default, precision on) */
   mouse_accel_off: boolean;
   /** windowed-games optimization state (Win11+ only); None = unsupported
-      build (row hides — there is no such Settings toggle to mirror there) */
+      build (row hides - there is no such Settings toggle to mirror there) */
   windowed_game_opt: boolean | null;
   /** High Performance row state: on/off/disabled-with-reason/hidden,
       same contract as the per-exe rows */
@@ -617,7 +617,7 @@ export interface TweakStates {
   memory_integrity: RowState;
   /** one-time client-update notice: the GameLoop build changed since the
       last Tools read (path-keyed GPU/FSO prefs orphan on client updates).
-      The engine persists on the notifying read — later reads stay quiet. */
+      The engine persists on the notifying read - later reads stay quiet. */
   emulator_updated: boolean;
   /** detected GameLoop client version ("7.0.19.05"), "" when unknown */
   emulator_version: string;
@@ -684,17 +684,17 @@ export type CleanupProgress = {
   total: number;
 };
 
-// ---- settings (persisted user preferences — schema v3) --------------------
+// ---- settings (persisted user preferences - schema v3) --------------------
 
 export interface Settings {
   version: number;
-  /** legacy from v2 — ignored by the engine */
+  /** legacy from v2 - ignored by the engine */
   sensitivity: string;
   /** default auto-stop in minutes (5..=120) */
   auto_stop_minutes: number;
-  /** "auto" | "en" | "ar" — "auto" follows the OS at launch */
+  /** "auto" | "en" | "ar" - "auto" follows the OS at launch */
   language: string;
-  /** "dark" | "light" | "auto" — "auto" follows the OS theme */
+  /** "dark" | "light" | "auto" - "auto" follows the OS theme */
   theme: string;
   sidebar_collapsed: boolean;
   /** first-run welcome screen completed */
@@ -720,7 +720,7 @@ export interface SessionEntry {
   duration_sec: number;
   samples: number;
   lag_spikes: number;
-  /** honest outcome — mirrors storage.rs honest_outcome() */
+  /** honest outcome - mirrors storage.rs honest_outcome() */
   outcome: Outcome;
 }
 
@@ -754,7 +754,7 @@ export interface FriendlyReport {
   duration_sec: number;
   samples: number;
   lag_spikes: number;
-  /** honest outcome — mirrors storage.rs honest_outcome() */
+  /** honest outcome - mirrors storage.rs honest_outcome() */
   outcome: Outcome;
   highlights: HighlightEntry[];
   /** metric facts: machine keys + raw numbers, the UI composes the
@@ -795,7 +795,7 @@ export type DownloadEvent =
 // ---- tweaks (backend engine/tweaks.rs) ------------------------------
 
 /** result of a write: what was there, what was written, and whether
-    a fresh re-read confirms it — verified == false is a failure, never ok */
+    a fresh re-read confirms it - verified == false is a failure, never ok */
 export interface TweakResult {
   id: string;
   previous: number | null;

@@ -1,4 +1,4 @@
-// tests/modalEvents.test.tsx — the typed modal-surface signals: helpers
+// tests/modalEvents.test.tsx - the typed modal-surface signals: helpers
 // dispatch the exact event names listeners subscribe to (a renamed
 // signal breaks the build instead of going silent), and Hint wires its
 // bubble to assistive tech while it is open.

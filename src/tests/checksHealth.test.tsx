@@ -1,4 +1,4 @@
-// tests/checksHealth.test.tsx — the summary banner contract: one-glance
+// tests/checksHealth.test.tsx - the summary banner contract: one-glance
 // verdict derived from the five checks (zero backend cost), featured
 // warnings that REPEAT the archive cards (never replace them), and an
 // archive that keeps every open button (no functional regression).

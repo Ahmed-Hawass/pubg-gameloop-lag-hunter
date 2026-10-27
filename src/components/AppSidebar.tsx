@@ -1,4 +1,4 @@
-// AppSidebar.tsx — the shell's tab rail, presentational only. App owns
+// AppSidebar.tsx - the shell's tab rail, presentational only. App owns
 // every piece of state (view, collapsed, update dot); this renders the
 // nav and reports clicks back. Extracted from App without behavior
 // change so the shell stays readable as advice and dialog logic grows.
@@ -66,13 +66,13 @@ export function AppSidebar(props: {
           <Info size={17} />
           {!collapsed ? <span>{t.about}</span> : null}
           {/* the update dot: hidden while About itself is open
-              (the heading dot carries the signal there — never
+              (the heading dot carries the signal there - never
               two yellows for one update) */}
           {updateInfo && view !== "about" ? (
             <span
               className="sb-dot"
               // role+label: an aria-label on a plain span is invisible to
-              // assistive tech — status announces it politely
+              // assistive tech - status announces it politely
               role="status"
               aria-label={t.updateAvailableTitle}
             />
@@ -83,7 +83,7 @@ export function AppSidebar(props: {
       {/* spacer pushes the collapse control to the sidebar's floor */}
       <div className="sb-spacer" />
 
-      {/* collapse control — pinned at the very bottom of the sidebar:
+      {/* collapse control - pinned at the very bottom of the sidebar:
           flips direction when collapsed; no tooltip while
           expanded (the visible label says it already) */}
       <Tip text={collapsed ? t.expandMenu : ""}>

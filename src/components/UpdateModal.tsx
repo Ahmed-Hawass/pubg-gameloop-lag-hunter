@@ -1,10 +1,10 @@
-// UpdateModal.tsx — the update dialog: offer → download (progress, cancellable)
+// UpdateModal.tsx - the update dialog: offer → download (progress, cancellable)
 // → verified success (open folder) → failure (retry). Four states, one surface.
 // Own overlay + trap (a second structural root beside Dialog); the App shows
 // only one visible surface at a time via `suspended`. Offer pins the dialog
 // (no click-outside) and autofocuses Download: a deliberate exception to the
 // safe-side rule, the offer IS the point here, not a destructive confirm.
-// Scope contract (engine/update.rs): no self-replace, no restart — the most
+// Scope contract (engine/update.rs): no self-replace, no restart - the most
 // this modal does is put a VERIFIED file next to the user and open its folder.
 
 import { useEffect, useId, useRef, useState } from "react";
@@ -36,7 +36,7 @@ export function UpdateModal(props: {
   const { info, onClose, onDownloadingChange, suspended } = props;
   const { t, lang } = useLang();
   // true while the offer's Download action is in flight (the OS save
-  // dialog does not block the WebView — without the gate a second click
+  // dialog does not block the WebView - without the gate a second click
   // opened a second dialog and raced two downloads)
   const [phase, setPhase] = useState<Phase>({ kind: "offer" });
   const [offerBusy, setOfferBusy] = useState(false);
@@ -46,7 +46,7 @@ export function UpdateModal(props: {
   const [actionError, setActionError] = useState<string | null>(null);
   // closes exactly once: Escape-during-download closes the modal, then the
   // cancelled download's promise rejects LATER and would call onClose again
-  // (on an unmounted component) — the ref keeps the second call a no-op
+  // (on an unmounted component) - the ref keeps the second call a no-op
   const closedRef = useRef(false);
   // "a download is in flight" lives in a REF, not in the phase: the unmount
   // cleanup must cancel only a download that is still running, and a phase
@@ -66,7 +66,7 @@ export function UpdateModal(props: {
 
   // focus restore: the modal autofocuses a button, and the element that
   // opened it must get the focus back when the modal goes away (the
-  // WAI-ARIA dialog pattern) — otherwise the next Tab restarts from the
+  // WAI-ARIA dialog pattern) - otherwise the next Tab restarts from the
   // top of the document.
   //
   // The opener is captured in a lazy state initializer, NOT in an effect:
@@ -83,7 +83,7 @@ export function UpdateModal(props: {
   }, [opener]);
 
   // Escape closes the offer; while downloading it CANCELS (closing the modal
-  // mid-download must never leave an orphaned stream — cancel kills it).
+  // mid-download must never leave an orphaned stream - cancel kills it).
   // Suspended (under the exit confirm) the modal owns no keys: Escape
   // belongs to the confirm alone, or it would cancel the download behind it.
   useEffect(() => {
@@ -147,7 +147,7 @@ export function UpdateModal(props: {
   // UNMOUNT mid-download = the same orphan the Escape path guards against:
   // App can swap this modal out for the advice/error dialog while the
   // stream runs (gameloop_closed push, a one-shot advice). The component
-  // dies, but the engine-side download keeps streaming — cancel it here,
+  // dies, but the engine-side download keeps streaming - cancel it here,
   // exactly like Escape does. App-level re-mounts start a fresh offer.
   //
   // The flag is the REF, not the phase: this cleanup also runs on a phase
@@ -181,10 +181,10 @@ export function UpdateModal(props: {
         defaultPath: info.asset_name,
         filters: [{ name: t.updateExeFilter, extensions: ["exe"] }],
       });
-      if (!dest) return; // save dialog cancelled — back to the offer state
+      if (!dest) return; // save dialog cancelled - back to the offer state
       // the modal may have been closed (Escape) while the OS dialog was
       // up: starting a download with no attached UI would orphan the
-      // stream — same guard the failure branch uses
+      // stream - same guard the failure branch uses
       if (closedRef.current) return;
 
       setPhase({ kind: "downloading", pct: 0, mb: formatSweepBytes(0) });
@@ -198,7 +198,7 @@ export function UpdateModal(props: {
             mb: formatSweepBytes(ev.downloaded),
           });
         }
-        // done/failed also arrive via the command's own return — handled below
+        // done/failed also arrive via the command's own return - handled below
       });
       downloadingRef.current = false;
       setPhase({ kind: "done", path: finalPath });
@@ -206,10 +206,10 @@ export function UpdateModal(props: {
       downloadingRef.current = false;
       const reason = typeof e === "string" ? e : String(e);
       // exact match, not a substring: the backend rejects a cancelled
-      // download with precisely "cancelled" — a real failure message that
+      // download with precisely "cancelled" - a real failure message that
       // merely CONTAINS the word must still land on the error card
       if (reason === "cancelled") {
-        close(); // user cancelled — treat as a clean close, no error card
+        close(); // user cancelled - treat as a clean close, no error card
         return;
       }
       if (!closedRef.current) {
@@ -218,7 +218,7 @@ export function UpdateModal(props: {
     } finally {
       // the busy gate covers the whole offer→save-dialog→download handoff;
       // once a phase transition happened (downloading/done/failed) the
-      // button is gone anyway — only a cancelled save dialog lands back on
+      // button is gone anyway - only a cancelled save dialog lands back on
       // the offer, and it re-opens the gate here
       setOfferBusy(false);
     }
@@ -258,7 +258,7 @@ export function UpdateModal(props: {
   if (suspended) return null;
 
   let title = t.updateAvailableTitle;
-  // declared with a definite null and reassigned in every branch below —
+  // declared with a definite null and reassigned in every branch below -
   // the initializers exist for type widening, not as values anyone reads
   let actions: React.ReactNode;
   let body: React.ReactNode;
@@ -275,7 +275,7 @@ export function UpdateModal(props: {
           v{info.version}
         </div>
         <div className="um-notes-label">{t.updateNotesLabel}</div>
-        {/* bullets are engine-bounded plain text from notes.json — never HTML */}
+        {/* bullets are engine-bounded plain text from notes.json - never HTML */}
         {notes.length > 0 ? (
           <ul className="um-notes">
             {notes.map((line, i) => (

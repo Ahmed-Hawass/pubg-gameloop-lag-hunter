@@ -1,19 +1,19 @@
-// tweaks.rs — user-initiated WRITES for the Tools tab. Contract per tweak:
+// tweaks.rs - user-initiated WRITES for the Tools tab. Contract per tweak:
 // read live, write the explicit requested state, verify by re-reading, audit
 // log. Reads stay in system.rs; only writes live here.
 //
 // Model (matches the mature tweak tools): a switch MIRRORS THE LIVE RESULT
 // of its named action ("Turn off X": ON = X is actually off right now, no
-// matter who turned it off — us, the user, or the factory). Flips write the
+// matter who turned it off - us, the user, or the factory). Flips write the
 // explicit opposite state; there is no "revert to our backup" for binary
 // tweaks. Windows is the single source of truth, so manual changes outside
 // the app are picked up by the next fresh read. The backup/restore idea is
 // deliberately NOT here: it only earns its place for multi-state tweaks
 // (e.g. a power plan, where "off" must mean "the previous plan") and will be
-// built with the tweak that needs it — never before.
+// built with the tweak that needs it - never before.
 //
 // Architecture rule (applies repo-wide): ANY registry access goes through
-// winreg, in-process — never a PowerShell spawn, never string-built scripts.
+// winreg, in-process - never a PowerShell spawn, never string-built scripts.
 // A flip is now milliseconds: open key, read/write DWORD, re-read to verify.
 // No shell means no quoting traps (the `.'01'` bug class is structurally
 // impossible now) and access errors come back as typed Results instead of
@@ -65,7 +65,7 @@ pub const PAGEFILE_SETTINGS_ID: &str = "pagefile-settings";
 /// HKLM\SYSTEM needs admin: reads stay unprivileged, writes go elevated
 /// like the power plan (one UAC per flip, same silent-cancel contract).
 pub const MEMORY_INTEGRITY_ID: &str = "memoryintegrity";
-/// The dialog's own floor ("Minimum allowed: 16 MB" on real Windows —
+/// The dialog's own floor ("Minimum allowed: 16 MB" on real Windows -
 /// ReactOS sources say 2 MB, the shipping dialog says 16; trust the ship).
 pub const PAGEFILE_MIN_MB: u32 = 16;
 /// Our stutter floor for page files (diagnosed on real 8GB machines):
@@ -73,7 +73,7 @@ pub const PAGEFILE_MIN_MB: u32 = 16;
 pub const PAGEFILE_WARN_FLOOR_MB: u32 = 8192;
 
 /// Registry homes shared with the read side (system.rs): ONE definition
-/// per key path — the lightweight tweak_states read and these writes must
+/// per key path - the lightweight tweak_states read and these writes must
 /// never drift apart on where a tweak lives.
 pub(crate) const GAMEBAR_SUBKEY: &str = r"SOFTWARE\Microsoft\GameBar";
 pub(crate) const GAMEMODE_ALLOW: &str = "AllowAutoGameMode";
@@ -88,7 +88,7 @@ pub(crate) const FSO_FLAG: &str = "DISABLEDXMAXIMIZEDWINDOWEDMODE";
 pub(crate) const GPU_PREF_SUBKEY: &str = r"SOFTWARE\Microsoft\DirectX\UserGpuPreferences";
 /// The windowed-games optimization lives in the SAME store (verified
 /// live: ON writes `SwapEffectUpgradeEnable=1;`, OFF writes `=0`, never
-/// deletes) — one more reason the global DirectX preference store, not
+/// deletes) - one more reason the global DirectX preference store, not
 /// GameConfigStore, is where this feature is read and written.
 pub(crate) const WGC_SETTINGS_NAME: &str = "DirectXUserGlobalSettings";
 pub(crate) const WGC_TOKEN: &str = "SwapEffectUpgradeEnable";
@@ -121,7 +121,7 @@ pub struct TweakResult {
 }
 
 /// Live DWORD read from an HKCU subkey. Ok(None) = value does not exist.
-/// Errors (missing KEY, access denied) travel as Err — a probe failure is
+/// Errors (missing KEY, access denied) travel as Err - a probe failure is
 /// never silently conflated with "value missing" (that conflation is what
 /// the old empty-output PowerShell read got wrong).
 fn read_dword(subkey: &str, name: &str) -> Result<Option<u32>, String> {
@@ -139,7 +139,7 @@ fn read_dword(subkey: &str, name: &str) -> Result<Option<u32>, String> {
 
 /// Write a DWORD to an HKCU subkey, creating the VALUE if absent (same
 /// semantics as the Settings toggle itself). The value is always our own
-/// validated constant — never user input.
+/// validated constant - never user input.
 fn write_dword(subkey: &str, name: &str, value: u32) -> Result<(), String> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let (key, _) = hkcu
@@ -151,7 +151,7 @@ fn write_dword(subkey: &str, name: &str, value: u32) -> Result<(), String> {
 
 /// Write a string value to an HKCU subkey, creating the KEY if absent
 /// (same semantics as write_dword: mirrors what Settings itself does).
-/// The value is always constructed by our own pure builders — never raw
+/// The value is always constructed by our own pure builders - never raw
 /// user input.
 fn write_string(subkey: &str, name: &str, value: &str) -> Result<(), String> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
@@ -166,9 +166,9 @@ fn write_string(subkey: &str, name: &str, value: &str) -> Result<(), String> {
 /// Delete a registry VALUE, succeeding when there is nothing to delete
 /// (idempotent revert: turning a tweak OFF removes our token/value, and
 /// "already absent" is the desired end state, not an error). A missing
-/// KEY is likewise fine — but callers that must NOT create feature keys
+/// KEY is likewise fine - but callers that must NOT create feature keys
 /// a build never had (Storage Sense policy) keep their own refusal first.
-/// NOTE: the handle opens with write access — deleting through a
+/// NOTE: the handle opens with write access - deleting through a
 /// read-only handle is os error 5, the same lesson as the SS write path.
 fn delete_value(subkey: &str, name: &str) -> Result<(), String> {
     use std::io::ErrorKind::NotFound;
@@ -226,7 +226,7 @@ pub fn set_dvr(value: u32) -> Result<TweakResult, String> {
 }
 
 /// Set Storage Sense to `value` (1 = on, 0 = off) and verify by re-reading.
-/// Writing is allowed whenever the policy KEY EXISTS — even at value 0
+/// Writing is allowed whenever the policy KEY EXISTS - even at value 0
 /// (off), because Windows itself represents "off" as 0, never as a deleted
 /// key (verified live: Settings zeroes `01`, it never deletes the key).
 /// Only a truly missing key (feature not on this build) refuses, and that
@@ -241,9 +241,9 @@ pub fn set_storage_sense(value: u32) -> Result<TweakResult, String> {
     // open_subkey is KEY_READ: enough for the availability gate and the
     // current-value read; the WRITE below opens its own handle with
     // write access (os error 5 "Access is denied" is what writing through
-    // the read-only handle produced — verified live on Win11).
+    // the read-only handle produced - verified live on Win11).
     let key = hkcu.open_subkey(SS_SUBKEY).map_err(|_| {
-        // key truly missing: Storage Sense is not on this build — do not
+        // key truly missing: Storage Sense is not on this build - do not
         // create a policy key a Windows build never had
         super::logging::warn("tweak storagesense refused: policy key missing on this build");
         "Storage Sense is not available on this system".to_string()
@@ -253,7 +253,7 @@ pub fn set_storage_sense(value: u32) -> Result<TweakResult, String> {
         Err(ref e) if e.kind() == std::io::ErrorKind::NotFound => None,
         Err(e) => return Err(format!("cannot read {SS_SUBKEY}\\{SS_NAME}: {e}")),
     };
-    // write handle: open with KEY_SET_VALUE (the KEY exists — create_subkey
+    // write handle: open with KEY_SET_VALUE (the KEY exists - create_subkey
     // would also work, but this is the precise least privilege for the job)
     let write_key = hkcu
         .open_subkey_with_flags(SS_SUBKEY, winreg::enums::KEY_SET_VALUE)
@@ -306,14 +306,14 @@ pub fn set_game_mode(value: u32) -> Result<TweakResult, String> {
 /// re-reading. Anything but 0/1 is refused before anything runs. Paths
 /// are resolved fresh at write time (never cached from the read): an exe
 /// installed between the read and the flip is covered, a removed one is
-/// simply skipped by the resolver. Zero resolved exes refuses — writing
+/// simply skipped by the resolver. Zero resolved exes refuses - writing
 /// blind is worse than refusing loudly.
 pub fn set_gpu_pref(value: u32) -> Result<TweakResult, String> {
     if value > 1 {
         return Err("gpupref value must be 0 or 1".into());
     }
     // same floor as the read side: pre-1803 builds ignore the preference
-    // value while our re-read would still "verify" — a manufactured
+    // value while our re-read would still "verify" - a manufactured
     // success. The row hides there; a direct call is refused just as loudly.
     if !super::system::gpu_pref_supported(super::system::windows_build_number()) {
         super::logging::warn("tweak gpupref refused: unsupported Windows build");
@@ -352,7 +352,7 @@ pub fn set_gpu_pref(value: u32) -> Result<TweakResult, String> {
     ));
     Ok(TweakResult {
         id: GPUPREF_ID.into(),
-        previous: None, // aggregate write over several exes — no single "before"
+        previous: None, // aggregate write over several exes - no single "before"
         value,
         verified,
     })
@@ -395,7 +395,7 @@ pub fn set_fso(value: u32) -> Result<TweakResult, String> {
     ));
     Ok(TweakResult {
         id: FSO_ID.into(),
-        previous: None, // aggregate write over several exes — no single "before"
+        previous: None, // aggregate write over several exes - no single "before"
         value,
         verified,
     })
@@ -506,7 +506,7 @@ fn hklm_dword(subkey: &str, name: &str) -> Option<u32> {
 /// admin). Creates the scenario key when absent (a machine that never
 /// configured HVCI has no key at all), writes the explicit state, and
 /// verifies by re-reading the CONFIG (the live state only follows after
-/// a reboot — the UI names that wait instead of claiming success).
+/// a reboot - the UI names that wait instead of claiming success).
 fn set_memory_integrity(value: u32) -> Result<TweakResult, String> {
     if value > 1 {
         return Err("memoryintegrity value must be 0 or 1".into());
@@ -570,7 +570,7 @@ pub fn set_tweak(id: &str, value: u32) -> Result<TweakResult, String> {
 /// passes through verbatim for the UI's silent rollback.
 ///
 /// Ownership rule: the PARENT stores the previous plan (settings.json is
-/// the USER's file — an elevated child writing it would leave an
+/// the USER's file - an elevated child writing it would leave an
 /// admin-owned file future unprivileged writes cannot touch). The child
 /// touches power schemes only, never settings.
 fn set_tweak_elevated(id: &str, value: u32) -> Result<TweakResult, String> {
@@ -596,7 +596,7 @@ fn set_tweak_elevated_powerplan(value: u32) -> Result<TweakResult, String> {
     };
     if on {
         // remember where OFF returns to (latest intent wins); skipped when
-        // already on a performance plan — there is nothing to return to.
+        // already on a performance plan - there is nothing to return to.
         // GUID-first check (names lie across locales); the previous plan
         // is whatever is active now, however the user got there.
         if let Some(ref prev) = previous {
@@ -612,7 +612,7 @@ fn set_tweak_elevated_powerplan(value: u32) -> Result<TweakResult, String> {
     super::elevate::map_exit_code(code)?;
     // verify by re-read, parent side: the child wrote, we confirm. ON
     // means ANY performance plan active (builtin, pre-existing custom, or
-    // just created — creation mints fresh GUIDs, so exact matching would
+    // just created - creation mints fresh GUIDs, so exact matching would
     // lie); OFF means exactly the restore target we chose.
     let verified = if on {
         let (guid, name) = super::system::power_active_scheme();
@@ -642,7 +642,7 @@ fn set_tweak_elevated_powerplan(value: u32) -> Result<TweakResult, String> {
     })
 }
 
-/// One powercfg call with fixed args (native exe, NO_WINDOW, no shell —
+/// One powercfg call with fixed args (native exe, NO_WINDOW, no shell -
 /// the same discipline as the panel opener; PowerShell never enters the
 /// write path). Reads need no elevation; writes run elevated (child).
 fn powercfg(args: &[&str]) -> Result<String, String> {
@@ -677,7 +677,7 @@ fn power_restore_target(stored: Option<&str>, list: &[String]) -> String {
 
 /// What ON needs: an existing performance plan's guid, or a fresh
 /// creation. Pure decision (tested): duplicatescheme mints a NEW guid on
-/// every run, so "builtin in list" can never be the presence check — a
+/// every run, so "builtin in list" can never be the presence check - a
 /// custom duplicate would re-create forever (live-proven litter).
 enum PowerEnableTarget {
     Existing(String),
@@ -696,7 +696,7 @@ fn power_enable_target(list: &[(String, String)]) -> PowerEnableTarget {
         .find(|(g, n)| super::system::is_performance_plan(n, g))
     {
         // a custom High Performance (user or OEM duplicate): activate it,
-        // create nothing — its settings are the user's own
+        // create nothing - its settings are the user's own
         return PowerEnableTarget::Existing(g.clone());
     }
     PowerEnableTarget::Create
@@ -936,7 +936,7 @@ fn write_pagefile_raw(valid: &ValidatedPagefileApply) -> Result<(), String> {
 /// Pure list rebuild shared by the writer (and its tests): drop the
 /// selected drive's old entries, drop empty lines, preserve everything
 /// else byte-for-byte (other drives, the legacy `?:` marker), then add
-/// the selected drive's new line — unless off, which just drops.
+/// the selected drive's new line - unless off, which just drops.
 /// The empty-line drop is the healer: Windows reads "" as the list
 /// terminator and stops, so a stale empty amputates every entry after
 /// it (a poisoned list reads as off and boots a temporary file); every
@@ -1188,7 +1188,7 @@ mod tests {
     // NOTE: read/write paths are REAL registry access (HKCU), so unit tests
     // do not touch them (CI registries stay clean); the write path is
     // verified live on a real machine. What IS unit-testable: the refusal
-    // contract — validation must fire before any registry access.
+    // contract - validation must fire before any registry access.
 
     #[test]
     fn dvr_set_rejects_bad_values_without_side_effects() {
@@ -1222,7 +1222,7 @@ mod tests {
     #[test]
     fn every_known_id_dispatches_to_its_own_validator() {
         // an out-of-range value must fail VALIDATION (proving the id
-        // reached its own setter), never "unknown tweak" — that exact gap
+        // reached its own setter), never "unknown tweak" - that exact gap
         // once shipped a row whose every flip failed in the UI, and the
         // bad-value test above could not see it (both paths are Err).
         // No registry access happens: validation fires first, like above.
@@ -1440,7 +1440,7 @@ mod tests {
     fn pagefile_rebuild_heals_and_preserves() {
         use super::PagefileRequestMode;
         // the poisoned list from the live incident: a stale empty first
-        // (Windows stops there), then the intended entry — a rewrite
+        // (Windows stops there), then the intended entry - a rewrite
         // drops the empty and keeps the intent, healing the list
         let healed = rebuild_pagefile_entries(
             vec!["".into(), "C:\\pagefile.sys 16384 49152".into()],

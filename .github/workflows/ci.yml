@@ -36,7 +36,7 @@ jobs:
 
       - run: npm ci
 
-      # hooks correctness (stale closures, missing deps) — the class of
+      # hooks correctness (stale closures, missing deps) - the class of
       # bug the summary-timer shipped with; tsc cannot see it
       - name: Lint (eslint + react-hooks)
         run: npm run lint
@@ -112,7 +112,7 @@ jobs:
         with:
           node-version: 22
 
-      # The version lives in FOUR places (package.json, tauri.conf.json —
+      # The version lives in FOUR places (package.json, tauri.conf.json -
       # twice: version + mainBinaryName, Cargo.toml, CHANGELOG.md) and the
       # release exe's file NAME carries it too. A drifted bump publishes an
       # updater that can never find its own asset. This gate fails the PR

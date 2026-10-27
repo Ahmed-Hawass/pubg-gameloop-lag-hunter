@@ -1,4 +1,4 @@
-// tray.test.ts — the tray's two decisions, as tests.
+// tray.test.ts - the tray's two decisions, as tests.
 // The native surface is Rust's (tray.rs); this pins the frontend-owned part:
 // WHEN the tooltip changes, and whether Quick scan starts or only shows.
 

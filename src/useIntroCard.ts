@@ -1,4 +1,4 @@
-// useIntroCard.ts — one-shot page guidance gating: shown until the user
+// useIntroCard.ts - one-shot page guidance gating: shown until the user
 // presses X, then never again on this machine. Recorded at DISMISS time
 // (unlike the advice modals, which record at show because any click
 // dismisses them): a card must survive until the explicit close. The
@@ -11,7 +11,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "./bridge";
 
 /** local signal: the dismissal list changed elsewhere (the Settings
-    reset action) — mounted sections re-read instead of waiting for a
+    reset action) - mounted sections re-read instead of waiting for a
     remount that never comes (views stay alive across tab switches).
     Same local-event family as the feature-state signal. */
 export const INTRO_CARDS_EVENT = "laghunter:intro-cards-changed";

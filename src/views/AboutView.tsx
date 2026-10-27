@@ -1,7 +1,7 @@
-// AboutView.tsx — what the tool is, what it costs the machine, version,
+// AboutView.tsx - what the tool is, what it costs the machine, version,
 // updates from GitHub, and a way to support the developer.
 // Visual rule: three consistent blocks (identity → cost → updates) and a
-// quiet footer — no extra elements, one rhythm.
+// quiet footer - no extra elements, one rhythm.
 // The update check lives in the ENGINE (Rust): the manual button asks the
 // same backend command the startup check uses, then opens the SAME modal
 // (manual checks ignore the once-per-version announcement on purpose).
@@ -22,7 +22,7 @@ const SUPPORT_URL = "https://paypal.me/ahmedhawass";
 const IMPACT_ICONS = [Cpu, MemoryStick, HardDrive, ShieldCheck, ToggleRight];
 
 export function AboutView(props: {
-  /** the startup check's result — dot + "download" affordance when set */
+  /** the startup check's result - dot + "download" affordance when set */
   updateInfo: UpdateInfo | null;
   /** the running version, ASKED ONCE by App and handed down (the old
       shape paid the IPC twice: TitleBar and AboutView each asked) */
@@ -31,7 +31,7 @@ export function AboutView(props: {
   /**
    * Manual check found a newer version the startup check MISSED (e.g. the
    * app booted offline and the network came back after). App stores it
-   * into its updateInfo state so the modal has something real to show —
+   * into its updateInfo state so the modal has something real to show -
    * the old flow opened the modal conditioned on the STALE startup result
    * (null) and a silent nothing happened despite a successful check.
    */
@@ -46,10 +46,10 @@ export function AboutView(props: {
   // exactly like one that does nothing
   const { notice, onFailure, clear } = useActionFailure(t);
 
-  // the startup check already knows — the dot shows immediately
+  // the startup check already knows - the dot shows immediately
   useEffect(() => {
     if (updateInfo) {
-      setResult(null); // not "latest" — there IS something newer
+      setResult(null); // not "latest" - there IS something newer
     }
   }, [updateInfo]);
 
@@ -77,7 +77,7 @@ export function AboutView(props: {
 
   return (
     <div className="about">
-      {/* block 1: identity — icon, name, version, one honest sentence */}
+      {/* block 1: identity - icon, name, version, one honest sentence */}
       <div className="card about-card about-identity">
         <img className="about-mark-img" src={appIcon} alt="" width={44} height={44} draggable={false} />
         <div className="about-id-text">
@@ -87,7 +87,7 @@ export function AboutView(props: {
         <p className="about-what">{t.aboutWhat}</p>
       </div>
 
-      {/* block 2: cost — the five honest numbers as icon rows on an
+      {/* block 2: cost - the five honest numbers as icon rows on an
           inset divider list (same language as the sweep results) */}
       <div className="card about-card">
         <h3 className="about-h">
@@ -109,7 +109,7 @@ export function AboutView(props: {
         </ul>
       </div>
 
-      {/* block 3: updates — the dot sits on the heading when a newer
+      {/* block 3: updates - the dot sits on the heading when a newer
           release exists; it is not dismissible and matches the sidebar's */}
       <div className="card about-card">
         <h3 className="about-h">
@@ -146,7 +146,7 @@ export function AboutView(props: {
         </div>
       </div>
 
-      {/* footer: links + signature — same row, quiet */}
+      {/* footer: links + signature - same row, quiet */}
       <div className="about-footer">
         <Button
           label={t.aboutGitHub}

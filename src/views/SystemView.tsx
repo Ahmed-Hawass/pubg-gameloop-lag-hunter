@@ -1,4 +1,4 @@
-// SystemView.tsx — the gamer's rig page: spec cards headline one number
+// SystemView.tsx - the gamer's rig page: spec cards headline one number
 // each (max boost, VRAM, refresh), storage rows carry free space and a
 // usage meter, then device and system, one copy-all button. Every
 // missing value renders "--", never a guess; the copy sheet reuses the
@@ -103,7 +103,7 @@ export function SystemView() {
 
   // first data. A transient PowerShell failure used to leave this tab
   // dead until app restart (single mount-time fetch, keep-alive tab, no
-  // retry path) — now the error state carries a retry button and a
+  // retry path) - now the error state carries a retry button and a
   // window-focus re-read.
   useEffect(() => {
     void load();
@@ -118,7 +118,7 @@ export function SystemView() {
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
     // load re-resolves the fresh locale through its closure on every
-    // focus fire — its identity is not part of the subscription contract
+    // focus fire - its identity is not part of the subscription contract
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [error]);
 

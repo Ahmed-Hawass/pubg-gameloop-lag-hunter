@@ -1,4 +1,4 @@
-// types.rs — the single data model shared by sampler, detector, diagnoser, UI state
+// types.rs - the single data model shared by sampler, detector, diagnoser, UI state
 // This is the contract. Everything speaks these types.
 
 use serde::{Deserialize, Serialize};
@@ -25,7 +25,7 @@ pub struct Sample {
     /// Emulator processes snapshot (periodic)
     pub emu: Vec<ProcInfo>,
     /// Is the game window VISIBLE (not minimized)? None = not probed yet.
-    /// GPU rules are muted while the window is in the background — otherwise
+    /// GPU rules are muted while the window is in the background - otherwise
     /// desktop activity (browser, video) masquerades as in-game GPU events.
     #[serde(default)]
     pub game_visible: Option<bool>,
@@ -100,7 +100,7 @@ impl Severity {
 impl Thresholds {
     /// Shared "everything else looks healthy" gate for GPU-cliff
     /// classification. ONE definition: the detector (emit-time event kind)
-    /// and the diagnoser (display-time card) must agree — with two copies the
+    /// and the diagnoser (display-time card) must agree - with two copies the
     /// detector checked disk+CPU+RAM while the diagnoser checked disk+CPU
     /// only, so a collapse under RAM pressure was recorded `loaded` yet
     /// displayed as a harmless scene hitch.
@@ -110,7 +110,7 @@ impl Thresholds {
     /// machine's avail_mem_floor_mb (a 64GB machine's floor is 4096MB, so
     /// a static 2048MB read "healthy" while mem_pressure was open).
     /// Missing counters abstain as healthy: without evidence we never blame
-    /// load (a missing counter is a blind sensor, not a loaded machine —
+    /// load (a missing counter is a blind sensor, not a loaded machine -
     /// GPU-less and localized-Windows machines would otherwise manufacture
     /// `gpu_busy` cards out of thin air).
     pub fn others_ok(
@@ -154,7 +154,7 @@ pub(crate) fn iso_ms(iso: &str) -> Option<i64> {
 }
 
 // ---------------------------------------------------------------------------
-// Diagnosis — the simplified, user-facing layer (translated from EngineEvents)
+// Diagnosis - the simplified, user-facing layer (translated from EngineEvents)
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -183,7 +183,7 @@ pub enum Overall {
 }
 
 // ---------------------------------------------------------------------------
-// UI state — the ONLY thing the frontend consumes. Pushed via events.
+// UI state - the ONLY thing the frontend consumes. Pushed via events.
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -198,7 +198,7 @@ pub struct UiState {
     pub game_visible: Option<bool>,
     pub overall: Overall,
     pub lag_count: u32,
-    /// Distinct problem kinds recorded this session — the same unit the
+    /// Distinct problem kinds recorded this session - the same unit the
     /// report keeps and the reports list counts as "issues". Cumulative:
     /// trimming windows never un-counts one. The live moments badge and the
     /// finished verdict both read this, so running and result always agree.
@@ -244,7 +244,7 @@ pub struct History {
 pub struct FeedEntry {
     /// "start" | "end" | "instant"
     pub phase: String,
-    /// machine event kind — the UI owns the translation (e.g. "disk_queue")
+    /// machine event kind - the UI owns the translation (e.g. "disk_queue")
     pub kind: String,
     pub sev: String,
     /// clock time HH:MM:SS from the sample
@@ -271,7 +271,7 @@ pub enum SessionStatus {
     Finished,
 }
 
-/// Why a session ended — the UI explains instead of staying silent.
+/// Why a session ended - the UI explains instead of staying silent.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum StopReason {
@@ -279,12 +279,12 @@ pub enum StopReason {
     Manual,
     /// the auto-stop timer expired
     AutoStop,
-    /// GameLoop's process died mid-session — report saved, nothing to watch
+    /// GameLoop's process died mid-session - report saved, nothing to watch
     GameLoopClosed,
 }
 
 // ---------------------------------------------------------------------------
-// Thresholds — computed per machine at session start. Nothing static touches
+// Thresholds - computed per machine at session start. Nothing static touches
 // different hardware the same way: RAM-bound limits scale with installed RAM,
 // disk limits scale with physical disk count. Ratios stay ratios.
 // ---------------------------------------------------------------------------
@@ -350,7 +350,7 @@ impl Thresholds {
         // 32GB machine → ~2GB (matches the diagnosis that found the real bug)
         let avail_mem_floor_mb = (p.total_mem_mb * 0.06).clamp(1024.0, 4096.0);
 
-        // Hard faults: paging storms scale inversely with RAM headroom —
+        // Hard faults: paging storms scale inversely with RAM headroom -
         // smaller machines hit pressure sooner, so the bar sits lower.
         let hard_faults_per_sec = if p.total_mem_mb < 8192.0 {
             200.0

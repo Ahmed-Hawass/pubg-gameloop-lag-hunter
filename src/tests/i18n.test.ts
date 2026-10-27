@@ -1,4 +1,4 @@
-// tests/i18n.test.ts — the OS locale mapping is pure logic: every
+// tests/i18n.test.ts - the OS locale mapping is pure logic: every
 // Windows Arabic variant resolves to Arabic, everything else to English.
 
 import { describe, expect, it, vi } from "vitest";

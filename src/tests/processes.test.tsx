@@ -1,4 +1,4 @@
-// tests/processes.test.tsx — the processes contract: one actionable apps
+// tests/processes.test.tsx - the processes contract: one actionable apps
 // list, measured on resident memory only (the engine sends no CPU and no
 // totals), each row names its RAM under its name, user apps versus system
 // tasks from the engine's own grouping (never guessed in the UI).

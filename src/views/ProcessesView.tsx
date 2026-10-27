@@ -1,4 +1,4 @@
-// ProcessesView.tsx — who is eating the machine (the game is never a suspect).
+// ProcessesView.tsx - who is eating the machine (the game is never a suspect).
 // One actionable apps list: name over a muted RAM line per row, heaviest
 // first, so the page reads as a decision ("close what you do not need")
 // with the number that justifies it. No totals card. System tasks stay
@@ -53,7 +53,7 @@ export function ProcessesView(props: { active: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // live while this tab is the active one — paused otherwise, and while
+  // live while this tab is the active one - paused otherwise, and while
   // the document is hidden (minimized window keeps polling otherwise).
   // Wiring lives in one hook; the silent body keeps its own busy guard.
   useIntervalTick(active, LIVE_INTERVAL_MS, () => void load(true));
@@ -165,7 +165,7 @@ export function ProcessesView(props: { active: boolean }) {
         cardBody={t.introProcessesBody}
       />
       {/* a LOAD failure is a page state with a manual retry (the silent
-          2s poll keeps running underneath) — never a modal, never an
+          2s poll keeps running underneath) - never a modal, never an
           inline red line: the one-modal surface stays for action failures */}
       {error ? (
         <>

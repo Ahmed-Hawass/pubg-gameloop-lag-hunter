@@ -1,4 +1,4 @@
-// useModalSignals.ts — the two global modal-surface signals every Tools
+// useModalSignals.ts - the two global modal-surface signals every Tools
 // section shares: announce our dialogs so parked tooltips hide, and yield
 // our dialogs when the app-level dialog opens (one overlay at a time).
 

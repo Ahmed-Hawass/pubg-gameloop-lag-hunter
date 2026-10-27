@@ -1,4 +1,4 @@
-// sections.tsx — shared page-section shapes: the one-glance verdict
+// sections.tsx - shared page-section shapes: the one-glance verdict
 // banner and the featured-plus-archive list shared by Checks, Gaming,
 // and Storage, plus the one-shot page intro (standing header row with
 // an optional back control, one-shot card below it at full width).
@@ -88,7 +88,7 @@ export const LINK_HIGHLIGHT_MS = 2200;
     headerTrail; the row keeps the header, the card keeps the width.
     Mount-timing contract: use only where no early return precedes it
     (the hook must fire on mount, not one tick after the data lands, or
-    the card pops in late — ChecksView keeps its own top-level call for
+    the card pops in late - ChecksView keeps its own top-level call for
     this reason). Title plus body, no icon: headers went plain text
     everywhere. */
 export function PageIntro(props: {
@@ -98,7 +98,7 @@ export function PageIntro(props: {
   cardTitle: string;
   cardBody: string;
   /** back control: rides the header row at the inline end (Tools
-      sections only — pages without one render the header alone) */
+      sections only - pages without one render the header alone) */
   headerTrail?: ReactNode;
 }) {
   const { id, headerTitle, headerSub, cardTitle, cardBody, headerTrail } = props;

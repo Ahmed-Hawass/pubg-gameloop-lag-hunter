@@ -1,4 +1,4 @@
-// tests/reports.test.tsx — the saved-sessions contract: rows open their
+// tests/reports.test.tsx - the saved-sessions contract: rows open their
 // reports, deep-links resolve (or say so), deletion is always confirmed
 // and reported back, and a failed list is a page state, never a modal.
 

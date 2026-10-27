@@ -1,8 +1,8 @@
-// laghunter-cli — the user-facing console companion to the GUI app.
+// laghunter-cli - the user-facing console companion to the GUI app.
 // Same release, same engine, own binary: a console subsystem is REQUIRED
 // because the GUI exe is windows-subsystem (its stdout never reaches a
 // parent terminal in release builds). No window, no WebView2 needed, no
-// admin needed — scanning only, by design. Writes go through the exact
+// admin needed - scanning only, by design. Writes go through the exact
 // same engine paths as the GUI (same sessions dir, same reports), so a
 // CLI scan shows up in the Reports tab and vice versa.
 //
@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 // ---- FIGlet-style banner (block capitals, built from a letter table so
-// every row aligns by construction — the test pins equal row widths) ----
+// every row aligns by construction - the test pins equal row widths) ----
 
 const LETTERS: [(char, [&str; 5]); 8] = [
     ('L', ["#    ", "#    ", "#    ", "#    ", "#####"]),
@@ -184,7 +184,7 @@ fn parse_args(args: &[String]) -> Result<Command, String> {
 }
 
 fn usage() -> &'static str {
-    "laghunter — headless lag scans for PUBG Mobile on GameLoop\n\
+    "laghunter - headless lag scans for PUBG Mobile on GameLoop\n\
      \n\
      Usage:\n  \
      laghunter scan [minutes]   run a scan (default 5, 1..60)\n  \
@@ -288,7 +288,7 @@ fn cmd_report(id: &str, json: bool) -> i32 {
                 }
                 return 0;
             }
-            println!("== {} — {} ==", r.id, r.date);
+            println!("== {} - {} ==", r.id, r.date);
             println!(
                 "{} min, {} samples, {} lag spike(s): {}",
                 r.duration_sec / 60,
@@ -378,7 +378,7 @@ fn cmd_scan(minutes: u64, quiet: bool, no_color: bool) -> i32 {
     // without them a closed game never stops a headless scan and snapshots rot
     session::spawn_session_guards(gen, || {});
     if !quiet {
-        println!("measuring — play normally, minimizing pauses GPU monitoring");
+        println!("measuring - play normally, minimizing pauses GPU monitoring");
     }
 
     // Ctrl+C stops the scan AND finalizes: a partial report beats no report.
@@ -434,7 +434,7 @@ fn cmd_scan(minutes: u64, quiet: bool, no_color: bool) -> i32 {
     if !quiet {
         match eng.stop_reason() {
             Some(lag_hunter_lib::engine::types::StopReason::GameLoopClosed) => {
-                println!("ended early: the game closed mid-scan — report saved");
+                println!("ended early: the game closed mid-scan - report saved");
             }
             Some(lag_hunter_lib::engine::types::StopReason::AutoStop) => {
                 println!("ended: auto-stop time reached");
@@ -455,7 +455,7 @@ fn cmd_scan(minutes: u64, quiet: bool, no_color: bool) -> i32 {
         eprintln!(
             "{}",
             paint(
-                "no samples flowed — see %LOCALAPPDATA%\\LagHunter\\logs",
+                "no samples flowed - see %LOCALAPPDATA%\\LagHunter\\logs",
                 "31;1",
                 color
             )

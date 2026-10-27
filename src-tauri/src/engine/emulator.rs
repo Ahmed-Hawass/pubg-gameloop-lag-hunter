@@ -1,4 +1,4 @@
-// emulator.rs — GameLoop integration profiles: one card per client generation.
+// emulator.rs - GameLoop integration profiles: one card per client generation.
 //
 // Why profiles, not one list: the v6 (AOW/TxGameAssistant) and v7 (Androws)
 // clients differ in process family, registry home, install layout, exe
@@ -68,7 +68,7 @@ pub const V7: EmulatorProfile = EmulatorProfile {
 
 /// Union of every known family: the tasklist scan, the visibility probe
 /// filter, and the top-process exclusion all share it (ONE list, same rule
-/// as the sampler's matcher — names can never drift apart).
+/// as the sampler's matcher - names can never drift apart).
 pub fn all_proc_names() -> Vec<&'static str> {
     let mut out: Vec<&'static str> = Vec::new();
     for p in V6.proc_names.iter().chain(V7.proc_names.iter()) {
@@ -92,7 +92,7 @@ pub fn is_unknown_hint(name: &str) -> bool {
 }
 
 /// Registry evidence, read once per detection (all winreg, in-process,
-/// fail-soft — a probe failure must never fake a version).
+/// fail-soft - a probe failure must never fake a version).
 pub struct RegistrySnapshot {
     /// v7 marketing version, e.g. "7.0.19.05" (None = key missing)
     pub v7_version: Option<String>,
@@ -176,7 +176,7 @@ pub fn read_snapshot() -> RegistrySnapshot {
 
 /// Is a game active inside the v7 VM, given a fresh emulator snapshot?
 /// Some(running) only when the snapshot holds v7-family processes (then
-/// the VM's own app counter decides — closing the game leaves every
+/// the VM's own app counter decides - closing the game leaves every
 /// process up); None when no v7 process is present, meaning "not a v7
 /// world, keep whatever verdict the caller already had" (v6 needs no key).
 pub fn v7_game_active(latest: &[super::types::ProcInfo]) -> Option<bool> {
@@ -216,7 +216,7 @@ fn parse_running_apps(text: &str) -> Vec<String> {
         .filter(|s| !s.is_empty())
         .collect::<Vec<_>>();
     if count > 0 && names.is_empty() {
-        // count without names: SOMETHING runs, just unnamed — never read
+        // count without names: SOMETHING runs, just unnamed - never read
         // an honest counter as idle
         return vec!["unknown".into()];
     }
@@ -229,7 +229,7 @@ pub enum Detected {
     /// nothing GameLoop at all: client absent or fully idle-unknown
     Absent,
     /// v6 family running: an aow-family process MEANS the game
-    /// (the old runtime is per game — the looseness below is history)
+    /// (the old runtime is per game - the looseness below is history)
     V6Game,
     /// v7 client running AND at least one game inside the VM
     V7Game { version: Option<String> },
@@ -277,8 +277,8 @@ pub fn detect(running: &[String], reg: &RegistrySnapshot) -> Detected {
         return Detected::Unknown;
     }
     // static install evidence alone (Uninstall entries persist whether
-    // the client runs or not) means installed-but-closed — or a past
-    // install — so it routes to Absent ("not running"), never Unknown.
+    // the client runs or not) means installed-but-closed - or a past
+    // install - so it routes to Absent ("not running"), never Unknown.
     // The exe resolver below still uses these dirs; only the verdict
     // ignores them. A fully renamed future client whose processes shed
     // every known stem would also read Absent here (same action for the
@@ -288,7 +288,7 @@ pub fn detect(running: &[String], reg: &RegistrySnapshot) -> Detected {
 }
 
 /// One-line evidence summary for the start gate log: counts plus the
-/// matched family and the verdict — never other apps' process names
+/// matched family and the verdict - never other apps' process names
 /// (privacy: the full tasklist must not land in our logs). Pure, so the
 /// shapes stay pinned by tests below.
 pub fn presence_evidence_summary(names: &[String], reg: &RegistrySnapshot) -> String {
@@ -320,7 +320,7 @@ pub fn log_presence_evidence() {
 
 /// Any install evidence at all: separates "installed but closed" from
 /// "never installed", and a mid-boot transient (helper up, family not yet)
-/// from a truly foreign build — using only existence-validated reads.
+/// from a truly foreign build - using only existence-validated reads.
 /// v7/v6 installs arrive validated; Uninstall entries do not (only the
 /// resolver checks them), so this validates those here: a stale entry
 /// pointing at a deleted dir proves nothing installed.
@@ -333,7 +333,7 @@ pub fn has_install_evidence(reg: &RegistrySnapshot) -> bool {
 
 /// Install roots for the exe resolver, strongest evidence first:
 /// live Uninstall dirs (any build), v7 direct, v6 subkeys, stocks.
-/// All existence-validated — a stale key to a deleted dir contributes
+/// All existence-validated - a stale key to a deleted dir contributes
 /// nothing (downgrade leftovers are real).
 pub fn resolve_roots(reg: &RegistrySnapshot) -> Vec<PathBuf> {
     let mut roots: Vec<PathBuf> = Vec::new();
@@ -376,7 +376,7 @@ pub fn resolve_roots(reg: &RegistrySnapshot) -> Vec<PathBuf> {
 
 /// Candidate exe paths under the roots: the exe itself, the legacy ui\
 /// layout, the Application dir, and each versioned Application\<build>
-/// subdir (client updates bump the build number — a fixed path would rot
+/// subdir (client updates bump the build number - a fixed path would rot
 /// every release). Pure over (roots, exes, versioned dir names) so the
 /// shape is unit-tested; the filesystem walk stays at the call site.
 pub fn candidate_paths(
@@ -672,6 +672,6 @@ mod tests {
             &["a.exe"],
             &[vec![], vec![]],
         );
-        assert_eq!(dup.len(), 3); // root, ui, Application — not doubled
+        assert_eq!(dup.len(), 3); // root, ui, Application - not doubled
     }
 }

@@ -1,4 +1,4 @@
-// App.tsx — shell: custom title bar + collapsible sidebar + all views.
+// App.tsx - shell: custom title bar + collapsible sidebar + all views.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -62,7 +62,7 @@ export default function App() {
   const [view, setView] = useState<View>("monitor");
   const [reportOpenId, setReportOpenId] = useState<string | null>(null);
   /** Tools deep-link target row id (the health DVR card jumps to its row):
-      one-shot, cleared by ToolsView once the landing finishes — the same
+      one-shot, cleared by ToolsView once the landing finishes - the same
       contract as reportOpenId above */
   const [toolOpenId, setToolOpenId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<boolean | null>(null); // null = loading saved pref
@@ -72,7 +72,7 @@ export default function App() {
       time the app confirms the game is running; null = still loading */
   const [gameAdviceDone, setGameAdviceDone] = useState<boolean | null>(null);
   /** the pre-scan advice dialog is up (defers the update modal like the
-      first-run advice does — one modal surface at a time) */
+      first-run advice does - one modal surface at a time) */
   const [gameAdviceUp, setGameAdviceUp] = useState(false);
   /** stay-in-game advice: shows ONCE EVER, the first time a RUNNING session
       measures the game window in the background; null = still loading */
@@ -88,10 +88,10 @@ export default function App() {
   /** whether onboarding was ALREADY done when the app loaded (distinguishes
       "just finished the welcome" from "finished it last year") */
   const wasOnboardedRef = useRef(false);
-  /** the session whose summary the user dismissed — App-level so tab
+  /** the session whose summary the user dismissed - App-level so tab
       switches (which unmount MonitorView) can never resurrect it */
   const [dismissedSession, setDismissedSession] = useState<string | null>(null);
-  /** sessions deleted from Reports (single or bulk) — the Monitor must
+  /** sessions deleted from Reports (single or bulk) - the Monitor must
       never show a finished state for one of them */
   const [deletedSessions, setDeletedSessions] = useState<string[]>([]);
   const markDeleted = (ids: string[]) =>
@@ -100,7 +100,7 @@ export default function App() {
       replaced by the About tab's manual check when that finds one first) */
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   /** the running version, ASKED ONCE from the engine (tauri.conf.json's
-      single source of truth) and handed to both consumers — the old
+      single source of truth) and handed to both consumers - the old
       shape paid the IPC twice (TitleBar + AboutView each asked) */
   const [appVersion, setAppVersion] = useState<string>("");
   /** the update modal: shown at startup (once per version) or via manual check */
@@ -108,14 +108,14 @@ export default function App() {
   /** exit confirm: owned by the gate hook (X names in-flight work) */
   const { exitConfirm, setExitConfirm, onDownloadActivity, onCleaningActivity, requestExit } =
     useExitGate(status);
-  /** first-run advice is up RIGHT NOW — derived from the live dialog state,
+  /** first-run advice is up RIGHT NOW - derived from the live dialog state,
       never a sticky flag: the update modal and the one-shot advices defer
       while this dialog is on screen, and stop deferring the moment it is
       dismissed (a sticky boolean once deferred them for the whole launch) */
   const firstRunAdviceUp = dialogKey === "first_run_advice";
-  /** theme setting ("auto" follows the OS — also the default for a fresh
+  /** theme setting ("auto" follows the OS - also the default for a fresh
       install); the resolved value drives
-      document.documentElement.dataset.theme — single source of truth,
+      document.documentElement.dataset.theme - single source of truth,
       SettingsView only sends changes through onThemeChange below */
   const [themeSetting, setThemeSetting] = useState<ThemeSetting>("auto");
   /** interface zoom percent (fixed ladder in useUiZoom): owned here like
@@ -128,7 +128,7 @@ export default function App() {
   const [showUnsupported, setShowUnsupported] = useState(false);
 
   // zoom shortcuts (browser convention, VS Code included): Ctrl+= in,
-  // Ctrl+- out, Ctrl+0 reset. Arabic layouts remap these keys — the
+  // Ctrl+- out, Ctrl+0 reset. Arabic layouts remap these keys - the
   // pills in Settings stay the layout-free path, like every control.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -152,7 +152,7 @@ export default function App() {
   // confirms): the backend cannot tell Alt+F4 apart from the taskbar close
   // button, so the split lives here where the keystroke is visible. X and
   // the taskbar button keep hiding. If the WebView ever swallows this
-  // keystroke, the close falls back to a plain hide — never a quit.
+  // keystroke, the close falls back to a plain hide - never a quit.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.altKey && e.key === "F4") {
@@ -199,10 +199,10 @@ export default function App() {
       showSettingsError(error);
     });
   };
-  /** PowerShell probe result — true = limited mode banner on the monitor */
+  /** PowerShell probe result - true = limited mode banner on the monitor */
   const [psLimited, setPsLimited] = useState(false);
 
-  // quiet startup update check — the ENGINE does the asking (Rust, blocking
+  // quiet startup update check - the ENGINE does the asking (Rust, blocking
   // pool, allowlisted hosts). The UI only decides whether to show the modal.
   useEffect(() => {
     let cancelled = false;
@@ -212,7 +212,7 @@ export default function App() {
         if (cancelled || !info) return;
         setUpdateInfo(info);
       })
-      .catch(() => {}); // offline/unavailable — silence, exactly like today
+      .catch(() => {}); // offline/unavailable - silence, exactly like today
     return () => {
       cancelled = true;
     };
@@ -231,7 +231,7 @@ export default function App() {
   }, []);
 
   // the once-per-version rule (pure logic in updateFlow.ts). Gated by
-  // onboardingDone: a FIRST-RUN user must never meet the update modal —
+  // onboardingDone: a FIRST-RUN user must never meet the update modal -
   // not over the welcome screen, not over the advice dialog that follows
   // it. The version is announced only when the modal truly shows.
   useEffect(() => {
@@ -254,10 +254,10 @@ export default function App() {
   }, [updateInfo, firstRunAdviceUp, gameAdviceUp, backgroundAdviceUp, onboardingDone, openUpdateModal]);
 
   // state pushes land here (live + final): a finished session caused by
-  // GameLoop dying gets its explanation dialog — once per app launch, never
+  // GameLoop dying gets its explanation dialog - once per app launch, never
   // for manual stops or the auto-stop timer (those need no apology).
   // Kept fresh through a ref: the engine-state subscription is registered
-  // ONCE below, but reads the latest handler — so `t` and the once-per-
+  // ONCE below, but reads the latest handler - so `t` and the once-per-
   // launch flag can never go stale (language switch mid-session included).
   const handleStateRef = useRef<(p: StatusPayload) => void>(() => {});
   const handleState = (payload: StatusPayload) => {
@@ -307,7 +307,7 @@ export default function App() {
         setBackgroundAdviceDone(s.background_advice_done);
         const th = s.theme;
         // anything the backend doesn't recognize falls back to "auto"
-        // (follow the OS) — the same rule normalize_theme applies in Rust
+        // (follow the OS) - the same rule normalize_theme applies in Rust
         setThemeSetting(th === "light" || th === "dark" ? th : "auto");
         // remember: was onboarding ALREADY done before this launch?
         if (s.onboarding_done) wasOnboardedRef.current = true;
@@ -333,7 +333,7 @@ export default function App() {
       .catch(() => setAppVersion(""));
     // start the engine's idle GameLoop watcher. Its `engine://gameloop`
     // events have no UI consumer yet (the Start button stays pressable and
-    // the engine gate answers on press) — but the WATCHER itself must run:
+    // the engine gate answers on press) - but the WATCHER itself must run:
     // it keeps the session-start gate's emulator snapshot warm.
     void api.watchGameloop().catch(() => {});
     return () => {
@@ -355,7 +355,7 @@ export default function App() {
   };
 
   const toggleSidebar = () => {
-    if (collapsed == null) return; // settings still loading — nothing to flip
+    if (collapsed == null) return; // settings still loading - nothing to flip
     const previous = collapsed;
     const next = !collapsed;
     setCollapsed(next);
@@ -381,7 +381,7 @@ export default function App() {
       const raw = typeof e === "string" ? e : String(e);
       if (raw.includes("SESSION_STOPPED_DURING_START")) {
         // the user stopped mid-startup: the stop already won and the start
-        // correctly aborted, so there is nothing to report — refresh the
+        // correctly aborted, so there is nothing to report - refresh the
         // snapshot quietly instead of crying wolf with an error dialog
         await api
           .getState()
@@ -434,7 +434,7 @@ export default function App() {
   // blocks Start; defers behind other one-shot dialogs; persisted at show
   // (closing mid-dialog must not resurrect it) rather than at close.
   const wasRunningRef = useRef(false);
-  /** the window was seen VISIBLE at least once in the current session —
+  /** the window was seen VISIBLE at least once in the current session -
       the background advice only fires on a visible→background TRANSITION,
       never on the starting state (pressing Start from an already-minimized
       game is expected, not a behavior worth nagging about) */
@@ -475,7 +475,7 @@ export default function App() {
     }
     if (status.ui?.game_visible === true) {
       sawVisibleRef.current = true;
-      return; // visible now — nothing to warn about
+      return; // visible now - nothing to warn about
     }
     if (
       status.ui?.game_visible !== false ||
@@ -706,7 +706,7 @@ export default function App() {
       <div className="shell-body">
         {/* null = settings still loading (IPC round-trip): show NOTHING
             decisive. The old bug rendered the main UI immediately, then
-            swapped in the welcome screen seconds later — a flash of the
+            swapped in the welcome screen seconds later - a flash of the
             full app on every first run. */}
         {onboardingDone == null ? null : onboardingDone === false ? (
           <main className="content">
@@ -719,7 +719,7 @@ export default function App() {
           </main>
         ) : (
           <>
-            {/* collapsed == null: settings still in flight — render nothing
+            {/* collapsed == null: settings still in flight - render nothing
                 decisive (same pattern as onboarding above), so a saved-
                 collapsed sidebar never flashes expanded on launch and vice
                 versa. The frames are too short to read as a layout jump. */}
@@ -749,7 +749,7 @@ export default function App() {
               {/* every view mounts ONCE and stays alive; switching only flips
                   CSS visibility. Data-carrying tabs (system/processes/checks)
                   keep their state and never re-pay a PowerShell spawn per
-                  visit — the engine's TTL cache handles freshness. */}
+                  visit - the engine's TTL cache handles freshness. */}
               <div className={view === "monitor" ? "" : "is-hidden-view"}>
                 <MonitorView
                   status={effectiveStatus}
@@ -821,7 +821,7 @@ export default function App() {
         )}
       </div>
 
-      {/* the ONE modal surface — no toast system anywhere in the app.
+      {/* the ONE modal surface - no toast system anywhere in the app.
           Order matters: the exit confirm wins while up (the advice/error
           dialog is stateless, so hiding it is safe and it returns on
           Stay); the update modal stays mounted but suspended so a live
@@ -855,7 +855,7 @@ export default function App() {
           onClose={() => {
             // the one-forever advice dialogs were already persisted AT SHOW
             // (closing the app with the dialog open must not resurrect them
-            // next launch) — closing only clears the modal surface here.
+            // next launch) - closing only clears the modal surface here.
             // Reset by the FLAG, not by the current dialog value: a
             // gameloop_closed push can overwrite the dialog key while an advice
             // dialog is up, and a value-matched reset would leave the flag

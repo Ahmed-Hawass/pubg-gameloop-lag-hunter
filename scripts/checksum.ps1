@@ -1,4 +1,4 @@
-# checksum.ps1 — release checksums for the shipped exes.
+# checksum.ps1 - release checksums for the shipped exes.
 # Reads the GUI exe name from src-tauri/tauri.conf.json (never hardcoded,
 # so it can't drift from the real binary name across versions) plus the
 # stable CLI companion name, hashes both, and writes SHA256SUMS.txt next
@@ -7,7 +7,7 @@
 #     <UPPERCASE_HASH> *<filename><CRLF>
 # (GNU-style lines: hash, one space, asterisk, file name. The updater
 # looks its own asset up by exact name, so extra lines are ignored.)
-# Fails loudly — never writes a wrong or empty sums file.
+# Fails loudly - never writes a wrong or empty sums file.
 
 $ErrorActionPreference = "Stop"
 

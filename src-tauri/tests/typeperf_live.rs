@@ -73,7 +73,7 @@ fn typeperf_produces_samples_live() {
 /// Live check of the localized-Windows fallback path: the Get-Counter
 /// emitter must produce parseable `path=value` lines with all six metrics.
 /// This is what runs when typeperf rejects English counter names
-/// (Arabic Windows) — so it must work everywhere, not just here.
+/// (Arabic Windows) - so it must work everywhere, not just here.
 #[test]
 #[cfg(windows)]
 fn get_counter_emitter_produces_lines_live() {
@@ -99,7 +99,7 @@ $c = Get-Counter -Counter $paths -SampleInterval 1 -MaxSamples 1 -ErrorAction St
     let line = String::from_utf8_lossy(&out.stdout);
     let line = line.trim();
     assert!(!line.is_empty(), "emitter produced no output");
-    // the emitter joins pairs with ',' — but a comma-DECIMAL culture puts
+    // the emitter joins pairs with ',' - but a comma-DECIMAL culture puts
     // a bare ',' inside values too, so pair boundaries are ",\" (every
     // pair starts with a backslash path), the same split production uses.
     // A bare ',' split counted 12 pairs on de-DE and passed vacuously.

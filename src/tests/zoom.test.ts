@@ -1,4 +1,4 @@
-// tests/zoom.test.ts — the fixed zoom ladder: every UI surface (pills,
+// tests/zoom.test.ts - the fixed zoom ladder: every UI surface (pills,
 // shortcuts, stored values) speaks these steps, so no surface can
 // invent an off-ladder value. Nearest wins, first step wins ties.
 

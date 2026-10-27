@@ -1,4 +1,4 @@
-// tests/focusRing.test.ts — keyboard focus has exactly one home: the
+// tests/focusRing.test.ts - keyboard focus has exactly one home: the
 // focus block in src/styles/components.css. Any other stylesheet growing
 // a :focus-visible rule re-opens the bespoke-rings era, so this pins the
 // single-source rule from AGENTS.md.

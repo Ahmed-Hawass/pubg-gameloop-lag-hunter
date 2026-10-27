@@ -1,4 +1,4 @@
-/* MonitorView — one state per phase of a scan. The page itself is the
+/* MonitorView - one state per phase of a scan. The page itself is the
    state: each state owns the layout, so nothing is rendered and hidden. */
 .monitor {
   display: flex;
@@ -13,7 +13,7 @@
 /* controls row: normal rounded-rect Start + duration + clock */
 /* event-log toggle: full-width quiet button (same ghost materials as
    row actions); the chevron turns with the expanded state. Reports owns
-   the toggle now — Monitor has no live log to collapse. Flat like every
+   the toggle now - Monitor has no live log to collapse. Flat like every
    button: fill shifts, no border appears. */
 .feed-toggle {
   display: flex;
@@ -62,7 +62,7 @@
 }
 
 /* ===========================================================================
-   MONITOR — three states.
+   MONITOR - three states.
    idle: the user is standing here and deciding.
    run:  the user is away; the screen sends them back to the game.
    result: the user came back; one verdict, read in two seconds.
@@ -87,7 +87,7 @@
 }
 /* the plan: the number leads at display size, the pills sit under the
    number they control, the 3-step path teaches the flow. No decorative
-   motif — every pixel here carries meaning. */
+   motif - every pixel here carries meaning. */
 .plan-kicker {
   font-size: 10.5px;
   font-weight: 700;
@@ -192,7 +192,7 @@
   margin: 0;
 }
 /* the tips: a quiet footnote under the button, not a panel. Two rows under
-   a hairline, left-aligned inside a centered narrow block — a footnote
+   a hairline, left-aligned inside a centered narrow block - a footnote
    must not compete with the decision above it. */
 .plan-tips {
   margin-top: 26px;
@@ -211,7 +211,7 @@
   padding: 5px 0;
 }
 /* the single remaining tip is an action (close your apps), so its disc is
-   the filled success tone carrying the button ink — the same filled-disc
+   the filled success tone carrying the button ink - the same filled-disc
    language as the step markers above */
 .tip-disc {
   flex: none;
@@ -254,7 +254,7 @@ html[dir="rtl"] .tip-disc svg {
 }
 /* the radar: dashed rings plus one conic sweep arm. Everything animated is
    transform or opacity, so the compositor handles it without layout or
-   paint — this is what makes it safe on a machine that is also running a
+   paint - this is what makes it safe on a machine that is also running a
    game. No filter, no blur, no animated box-shadow. */
 .run-radar {
   position: relative;

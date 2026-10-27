@@ -1,4 +1,4 @@
-// tests/monitor.test.tsx — the Monitor contract across its three states.
+// tests/monitor.test.tsx - the Monitor contract across its three states.
 // The page answers a different question per phase of a scan, so each state
 // is pinned separately: the decision screen, the away screen, and the verdict.
 //
@@ -70,7 +70,7 @@ function open(status: StatusPayload, over: Partial<React.ComponentProps<typeof M
   return { onToggle, onDurationChange, onOpenReport, onDismissSummary };
 }
 
-describe("MonitorView — idle state", () => {
+describe("MonitorView - idle state", () => {
   it("offers Start and the duration pills, and explains itself", async () => {
     const user = userEvent.setup();
     const { onToggle, onDurationChange } = open({ status: "idle", ui: null });
@@ -142,13 +142,13 @@ describe("MonitorView — idle state", () => {
   });
 });
 
-describe("MonitorView — running state", () => {
+describe("MonitorView - running state", () => {
   it("sends the user back to the game and shows the clock", () => {
     open({ status: "running", ui });
     expect(screen.getByText(en.scanRunningTitle)).toBeTruthy();
     expect(screen.getByText(en.scanRunningBody)).toBeTruthy();
     // the minimize reassurance lives here, where the window is actually
-    // open — idle can only promise it in theory
+    // open - idle can only promise it in theory
     expect(screen.getByText(en.scanRunningNote)).toBeTruthy();
     // the two numbers the returning user actually wants
     expect(screen.getByText("01:05")).toBeTruthy();
@@ -182,7 +182,7 @@ describe("MonitorView — running state", () => {
   });
 });
 
-describe("MonitorView — result state", () => {
+describe("MonitorView - result state", () => {
   it("states the verdict and opens the report", async () => {
     const user = userEvent.setup();
     const { onOpenReport } = open({ status: "finished", ui });

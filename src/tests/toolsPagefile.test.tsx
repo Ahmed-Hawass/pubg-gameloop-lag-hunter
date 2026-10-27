@@ -1,4 +1,4 @@
-// tests/toolsPagefile.test.tsx — the page file editor contract: a failed
+// tests/toolsPagefile.test.tsx - the page file editor contract: a failed
 // read shows an inline honest error (never a guessed editor), the strip
 // names the committed sizes in manual mode (silent on automatic), and a
 // custom request passes through validate (warning pauses on a confirm)

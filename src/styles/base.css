@@ -1,4 +1,4 @@
-/* base — reset, page shell and app-wide helpers. Lives right after the
+/* base - reset, page shell and app-wide helpers. Lives right after the
    tokens so every stylesheet below resolves against it; component theme
    overrides live next to their components, not here. */
 
@@ -29,7 +29,7 @@ body {
   font-variant-numeric: tabular-nums;
 }
 /* reduced motion: spinners freeze (they signal waiting, never progress),
-   and the update-dot halo holds still (the static ring stays — the
+   and the update-dot halo holds still (the static ring stays - the
    signal itself must never vanish). !important because base loads
    before the rules that arm animations. */
 @media (prefers-reduced-motion: reduce) {
@@ -42,7 +42,7 @@ body {
 }
 /* selectable text: the app disables selection globally (kiosk-like
    shell), but error lines, report content, notes, hints, and inputs must
-   copy — these re-enable it, and webBehavior's selectstart guard enforces
+   copy - these re-enable it, and webBehavior's selectstart guard enforces
    exactly this list (it reads the computed value), so a surface added
    here starts working without a JS change. Nothing else re-enables it. */
 input,

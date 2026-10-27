@@ -1,4 +1,4 @@
-// locales.test.ts — the locale type bond, as a test.
+// locales.test.ts - the locale type bond, as a test.
 // The `ar: Locale` typing already makes key drift a BUILD error; this test
 // catches it even in editor-less contexts (and keeps the two files honest
 // about nested structure, not just top-level keys).
@@ -49,7 +49,7 @@ describe("locale parity", () => {
   it("ar's arrays match en's arrays path-for-path and length-for-length", () => {
     // content itself is TRANSLATED, so only the shape can be pinned: same
     // array paths, same item counts (an ar list that silently shipped 4
-    // items against en's 5 passed the key test untouched — arrays are
+    // items against en's 5 passed the key test untouched - arrays are
     // leaves there). Per-item emptiness is checked too: a dropped
     // translation must not hide behind an empty-string placeholder.
     const enArrays = arrayPaths(en as unknown as Record<string, unknown>);

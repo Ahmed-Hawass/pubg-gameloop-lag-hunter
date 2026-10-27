@@ -1,6 +1,6 @@
-// components.tsx — design system building blocks, monochrome + signal green.
-// Every screen is assembled ONLY from these. No placeholders — data-driven only.
-// ALL icons come from lucide-react — zero hand-drawn SVGs anywhere.
+// components.tsx - design system building blocks, monochrome + signal green.
+// Every screen is assembled ONLY from these. No placeholders - data-driven only.
+// ALL icons come from lucide-react - zero hand-drawn SVGs anywhere.
 
 import { useEffect, useId, useState, useRef, cloneElement, isValidElement, type FocusEvent as ReactFocusEvent, type ReactElement, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -34,7 +34,7 @@ export function diagnosisIcon(key: string): ReactNode {
 }
 
 // ---------------------------------------------------------------------------
-// Button — every action in the app
+// Button - every action in the app
 // ---------------------------------------------------------------------------
 export function Button(props: {
   label: string;
@@ -65,7 +65,7 @@ export function Button(props: {
   );
 }
 
-/** mm:ss clock format — the ONE duration formatter for the live session
+/** mm:ss clock format - the ONE duration formatter for the live session
  *  (Report rows use their own "Xm Ys" shape in ReportsView). */
 export function fmtDur(sec: number) {
   const m = String(Math.floor(sec / 60)).padStart(2, "0");
@@ -74,7 +74,7 @@ export function fmtDur(sec: number) {
 }
 
 // ---------------------------------------------------------------------------
-// NoteCard — one diagnosis: title / explanation / fix in a solid
+// NoteCard - one diagnosis: title / explanation / fix in a solid
 // highlighter fill (severity icon + card ink; the fix rides a white
 // inset box). Used by the monitor diagnoses and the report findings.
 // ---------------------------------------------------------------------------
@@ -82,7 +82,7 @@ export function NoteCard(props: {
   title: string;
   simple: string;
   fix: string;
-  /** card severity ("high" | "medium" | "low") — drives the fill + icon */
+  /** card severity ("high" | "medium" | "low") - drives the fill + icon */
   severity: CardSeverity;
   /** localized "Fix:" prefix for the fix block (e.g. "الحل:") */
   fixLabel: string;
@@ -108,7 +108,7 @@ export function NoteCard(props: {
 }
 
 // ---------------------------------------------------------------------------
-// EmptyState — friendly nothing-yet (data-driven, never fake). The
+// EmptyState - friendly nothing-yet (data-driven, never fake). The
 // loading moment reuses the same panel with a spinning glyph
 // (spin=true): one specimen everywhere, titles stay per-tab copy.
 // ---------------------------------------------------------------------------
@@ -124,7 +124,7 @@ export function EmptyState(props: { icon: ReactNode; title: string; hint: string
 }
 
 // ---------------------------------------------------------------------------
-// IntroCard — one-shot page guidance for new users: what lives on this
+// IntroCard - one-shot page guidance for new users: what lives on this
 // page and what to do first (never option mechanics: those stay behind
 // each row's (?) button). Title plus body, no icon anywhere (page
 // headers went plain text everywhere, so a tile here would reintroduce
@@ -160,9 +160,9 @@ export function IntroCard(props: {
 }
 
 // ---------------------------------------------------------------------------
-// Dialog — the one VISIBLE modal surface for anything that needs the
+// Dialog - the one VISIBLE modal surface for anything that needs the
 // user's eyes: errors, confirmations, notices. (Structurally there are
-// two roots — this plus UpdateModal's own overlay with its own trap —
+// two roots - this plus UpdateModal's own overlay with its own trap -
 // kept to one visible surface by yielding: only one ever shows.)
 // Replaces every toast system. Native-window feel: centered, dimmed
 // backdrop, Escape to dismiss, click-outside for notices.
@@ -192,7 +192,7 @@ export function Dialog(
   const boxRef = useRef<HTMLDivElement>(null);
   // focus restore: the dialog autofocuses a button, and the element that
   // opened it must get the focus back when the dialog goes away (the
-  // WAI-ARIA dialog pattern) — otherwise the next Tab restarts from the
+  // WAI-ARIA dialog pattern) - otherwise the next Tab restarts from the
   // top of the document.
   //
   // The opener is captured in a lazy state initializer, NOT in an effect:
@@ -286,14 +286,14 @@ export function Dialog(
 }
 
 // ---------------------------------------------------------------------------
-// useAnchoredTooltip — the ONE tooltip-positioning brain. Tip /
+// useAnchoredTooltip - the ONE tooltip-positioning brain. Tip /
 // Hint all render through it: the same estimated-width clamp, the same
 // bottom-anchored portal. A positioning fix lands everywhere at once.
 // ---------------------------------------------------------------------------
 /**
  * Global signal: App dispatches it whenever the single modal surface opens
  * (dialog or update modal). A dialog mounting under a parked cursor
- * never fires mouseleave — without this the bubble stuck above the modal
+ * never fires mouseleave - without this the bubble stuck above the modal
  * (and stayed after it closed) until the user hovered the trigger again.
  */
 export const MODAL_OPEN_EVENT = "laghunter:modal-open";
@@ -382,10 +382,10 @@ function useAnchoredTooltip(ref: React.RefObject<HTMLElement | null>, text: stri
   }, [text]);
 
   // belt-and-suspenders: mouseleave/blur alone stick the bubble whenever a
-  // hover ends WITHOUT pointer movement — a modal mounting under a parked
+  // hover ends WITHOUT pointer movement - a modal mounting under a parked
   // cursor, the window losing focus (Alt+Tab), or wheel-scroll detaching
   // the trigger. Each of these means "no longer hovering", so all hide.
-  // (Press hides too — native tooltips vanish on press as well.)
+  // (Press hides too - native tooltips vanish on press as well.)
   useEffect(() => {
     const hideAll = () => setAnchor(null);
     const onKey = (e: KeyboardEvent) => {
@@ -446,7 +446,7 @@ function TooltipBubble(props: {
 }
 
 // ---------------------------------------------------------------------------
-// Tip — wraps ANY element with the app's portaled tooltip. One tooltip
+// Tip - wraps ANY element with the app's portaled tooltip. One tooltip
 // system for the whole app: hover/focus shows a themed, un-clippable bubble.
 // Usage: <Tip text="..."><button/></Tip>
 // ---------------------------------------------------------------------------
@@ -483,9 +483,9 @@ export function Tip(props: { text: string; children: ReactNode }) {
 }
 
 // ---------------------------------------------------------------------------
-// Hint — a real button with a custom tooltip, portaled to the page root so
+// Hint - a real button with a custom tooltip, portaled to the page root so
 // NO ancestor (overflow, transform, z-index) can ever clip or hide it.
-// No OS/browser tooltips, no help-cursor question mark — ours looks native.
+// No OS/browser tooltips, no help-cursor question mark - ours looks native.
 // ---------------------------------------------------------------------------
 export function Hint(props: { text: string }) {
   const { text } = props;

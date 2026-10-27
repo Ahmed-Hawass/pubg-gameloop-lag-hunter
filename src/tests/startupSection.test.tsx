@@ -1,4 +1,4 @@
-// tests/startupSection.test.tsx — the startup programs contract: rows
+// tests/startupSection.test.tsx - the startup programs contract: rows
 // mirror the live registry read with Task Manager wording (one state
 // button per row: its text is the state, its accessible name the
 // action), enabling names the program and its cost first (the additive

@@ -1,4 +1,4 @@
-// useIntervalTick.ts — the one shared poll wiring: interval plus
+// useIntervalTick.ts - the one shared poll wiring: interval plus
 // off-tab plus hidden-document skip plus cleanup. The tick BODY stays
 // with the caller (every load owns its own silent/force and busy
 // contract); a ref carries the latest closure so the timer neither

@@ -1,4 +1,4 @@
-// tests/appSidebar.test.tsx — the shell rail contract: tabs report
+// tests/appSidebar.test.tsx - the shell rail contract: tabs report
 // clicks back (the shell clears deep-links), the active tab announces
 // itself, and the collapse control flips.
 

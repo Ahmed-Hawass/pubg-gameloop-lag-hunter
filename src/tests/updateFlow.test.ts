@@ -1,4 +1,4 @@
-// updateFlow.test.ts — the once-per-version rule, as tests.
+// updateFlow.test.ts - the once-per-version rule, as tests.
 // The bug class this guards: a nagging modal (showing every launch) or a
 // silent miss (never showing a new version).
 
@@ -39,7 +39,7 @@ describe("shouldShowUpdateModal", () => {
 
   it("matches announced versions case-insensitively", () => {
     // the comparison is case-insensitive on the WHOLE version string
-    // ("V1.3.0" vs a stored "v1.3.0") — a case-only difference must not
+    // ("V1.3.0" vs a stored "v1.3.0") - a case-only difference must not
     // re-announce. The old test compared two identical strings and
     // proved nothing about the comparison itself.
     expect(

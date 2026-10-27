@@ -1,4 +1,4 @@
-// useExitGate.ts — the exit gate, asked from the tray's Exit item only
+// useExitGate.ts - the exit gate, asked from the tray's Exit item only
 // (the X button hides to the tray and never quits). Quiet work quits
 // straight away, a running scan, an active download, or a running cleanup
 // names itself in one confirm instead. Extracted from App without behavior

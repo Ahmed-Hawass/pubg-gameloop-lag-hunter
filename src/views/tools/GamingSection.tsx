@@ -1,4 +1,4 @@
-// GamingSection.tsx — the gaming details page: eight live-mirrored
+// GamingSection.tsx - the gaming details page: eight live-mirrored
 // switches. Owns its switch family (useTweaks), its reads, and its
 // deep-link landing; the parent only routes which page shows.
 
@@ -122,7 +122,7 @@ export function GamingSection(props: {
   if (!tweaks.ready || tweaks.loadError) {
     // details wait for a real read: a dead shell must never show, and a
     // FAILED read surfaces as an honest error instead of an eternal
-    // "Loading..." — the window-focus retry is the rescue
+    // "Loading..." - the window-focus retry is the rescue
     const failed = tweaks.loadError !== null;
     return (
       <div className="check-list">
@@ -151,7 +151,7 @@ export function GamingSection(props: {
   type TweakRow = { id: string; off: boolean; el: ReactNode };
   const rows: TweakRow[] = [];
   /** rows this Windows cannot run: rendered greyed in the archive only
-      (never banner, never featured — attention stays actionable),
+      (never banner, never featured - attention stays actionable),
       only under the show-unsupported preference, each with the exact
       cause the engine named (an unknown cause stays hidden: a row that
       cannot explain itself must not render). No effect line: a timing
@@ -460,7 +460,7 @@ export function GamingSection(props: {
       {/* featured off-rows: the same rows as the archive below,
           repeated deliberately (summary + archive, not instead of it) */}
       {/* hidden until read: a feature the Windows build lacks stays
-          hidden — a dead switch must never be shown */}
+          hidden - a dead switch must never be shown */}
       <SummaryArchive
         warnTitle={t.checkWarnBadge}
         archiveTitle={t.tweakAllTweaks}

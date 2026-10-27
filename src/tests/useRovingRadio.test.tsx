@@ -1,4 +1,4 @@
-// tests/useRovingRadio.test.tsx — the radio-group keyboard contract the
+// tests/useRovingRadio.test.tsx - the radio-group keyboard contract the
 // hand-rolled pills share: one tab stop, arrows select, Home/End jump, and
 // RTL flips only the horizontal arrows.
 import { describe, expect, it } from "vitest";

@@ -1,4 +1,4 @@
-// detector.rs — fingerprint matching: raw samples → engine events
+// detector.rs - fingerprint matching: raw samples → engine events
 // Every "lag story" we diagnosed on real hardware lives here as a rule.
 
 use std::collections::HashMap;
@@ -8,14 +8,14 @@ use super::types::{EngineEvent, Phase, Sample, Severity, Thresholds};
 /// Stateful detector: feed samples, get events. Hysteresis per condition key.
 pub struct Detector {
     th: Thresholds,
-    /// theoretical max core clock (nvidia-smi) — the gpu_clock_low ratio
+    /// theoretical max core clock (nvidia-smi) - the gpu_clock_low ratio
     /// compares against it. The theoretical max MEMORY clock is
     /// deliberately absent: gpu_mem_idle compares against the highest
     /// mclk OBSERVED this session (some drivers never reach the
     /// theoretical max; comparing against it fired 12 phantom cards per
     /// session on a Quadro), so the queried value was dead on arrival.
     gpu_max_gr: Option<f64>,
-    /// highest mclk actually observed this session — gpu_mem_idle compares
+    /// highest mclk actually observed this session - gpu_mem_idle compares
     /// against THIS, not the theoretical max (which some drivers never reach;
     /// comparing against it fired 12 phantom cards per session on a Quadro)
     gpu_observed_max_mclk: Option<f64>,
@@ -24,7 +24,7 @@ pub struct Detector {
     /// last samples for spike logic
     prev_sm: Option<f64>,
     spike_acc: u32,
-    /// true after this collapse emitted its (single) event — one per cliff
+    /// true after this collapse emitted its (single) event - one per cliff
     cliff_fired: bool,
     /// consecutive sustained-churn ticks (paging_churn evidence)
     churn_acc: u32,
@@ -37,7 +37,7 @@ pub struct Detector {
 }
 
 /// The SM average (over ~60s) that separates "real rendering" from a static
-/// screen (lobby, result screen). Below it, GPU rules stay silent — a lobby
+/// screen (lobby, result screen). Below it, GPU rules stay silent - a lobby
 /// is not a match, and desktop/browser activity is not the game.
 /// This is the FLOOR for the learned baseline: a game whose rendering sits
 /// above it learns its own activity level (e.g. 15-20% on an emulator GPU),
@@ -51,7 +51,7 @@ const SM_ACTIVITY_FLOOR: f64 = 15.0;
 /// minutes of real play evaluated against the static floor instead of the
 /// machine's own level.
 const SM_BASELINE_WARMUP_TICKS: usize = 10;
-/// The playing gate accepts a healthy SHARE of the learned baseline — during
+/// The playing gate accepts a healthy SHARE of the learned baseline - during
 /// a real stutter the rolling average sags, and a strict-equality gate would
 /// silence the engine exactly when it must listen. 60% = clearly active.
 const ACTIVITY_GATE_RATIO: f64 = 0.60;
@@ -100,11 +100,11 @@ impl Detector {
     /// Feed one sample; returns events emitted by this tick.
     pub fn feed(&mut self, s: &Sample) -> Vec<EngineEvent> {
         let mut evs = Vec::new();
-        // the playing gate is decided FIRST, on the PAST history — before
+        // the playing gate is decided FIRST, on the PAST history - before
         // this tick's activity enters it. A collapsing tick must not mute
         // the very rule that measures the collapse (feedback loop).
         let playing = self.playing(s);
-        // activity history: only counts while the window is visible — an
+        // activity history: only counts while the window is visible - an
         // invisible window renders nothing meaningful
         if s.game_visible != Some(false) {
             if let Some(sm) = s.gpu.as_ref().and_then(|g| g.sm_pct) {
@@ -115,7 +115,7 @@ impl Detector {
                 }
             }
         }
-        // track the highest memory clock actually seen while visible — the
+        // track the highest memory clock actually seen while visible - the
         // gpu_mem_idle rule compares against THIS (theoretical maxima are
         // driver fiction on some cards and produced endless phantom cards)
         if s.game_visible != Some(false) {
@@ -145,7 +145,7 @@ impl Detector {
 
     /// Sustained processor-performance cliff (the "spike" fingerprint): a
     /// loaded CPU (>= proc_perf_load_gate) running well under its nominal
-    /// speed for several consecutive seconds. Pure CPU-side evidence —
+    /// speed for several consecutive seconds. Pure CPU-side evidence -
     /// runs on EVERY machine, GPU or not: it used to live at the bottom
     /// of the GPU cliff path, so AMD/Intel machines (no dmon feed, no GPU
     /// sample) could never reach it and the fingerprint was dead for them.
@@ -182,12 +182,12 @@ impl Detector {
     /// Is the user actually PLAYING? Two gates, both required:
     /// 1. the game window is VISIBLE (None = not probed yet → conservative:
     ///    no GPU cards, because we cannot attribute desktop GPU activity)
-    /// 2. sustained rendering activity — recent SM average at a healthy
+    /// 2. sustained rendering activity - recent SM average at a healthy
     ///    share of the learned baseline. A lobby/result screen with the
     ///    window open is "alive process, no match".
     ///
     /// The share (not equality) matters: mid-cliff the average sags while
-    /// the learned median holds — a strict avg>=baseline gate would mute
+    /// the learned median holds - a strict avg>=baseline gate would mute
     /// cliff detection halfway through the very stutter we exist to catch.
     fn playing(&self, s: &Sample) -> bool {
         if s.game_visible != Some(true) {
@@ -202,7 +202,7 @@ impl Detector {
     }
 
     /// The machine's own QUIET level: the lower quartile (P25) of visible SM
-    /// history once warm. Games are BIMODAL — combat renders at 40-50% while
+    /// history once warm. Games are BIMODAL - combat renders at 40-50% while
     /// roaming/looting sits at 13-16% on the same machine (session #4: 1300
     /// ticks in the quiet band, 310 in the combat band). A median baseline
     /// rides between the two modes and misreads every mode TRANSITION as a
@@ -281,7 +281,7 @@ impl Detector {
             (true, true) => {
                 // ESCALATION: the condition is still open and got WORSE
                 // (warn crossed into crit). The card must not stay frozen
-                // at the severity it happened to open with — a saturation
+                // at the severity it happened to open with - a saturation
                 // that opened at 86% then pegged 99% is a high card, not
                 // medium. The diagnoser keeps the WORST event severity.
                 if let Some((_since, open_sev)) = self.active.get_mut(key) {
@@ -290,7 +290,7 @@ impl Detector {
                         evs.push(EngineEvent {
                             kind: key.to_string(),
                             // Instant: not a new condition, an upgrade of
-                            // the open one — no Start/End pair to close
+                            // the open one - no Start/End pair to close
                             phase: Phase::Instant,
                             severity: Severity::Crit,
                             t: t.to_string(),
@@ -301,7 +301,7 @@ impl Detector {
                 }
             }
             (false, true) => {
-                // same shape as finish() — remove returns the map entry, and
+                // same shape as finish() - remove returns the map entry, and
                 // a missing key here would be a logic bug, not a panic case
                 if let Some((since, _)) = self.active.remove(key) {
                     let dur = (now_ms() - since) as f64 / 1000.0;
@@ -366,7 +366,7 @@ impl Detector {
         };
         self.condition("mem_pressure", sev, active, detail, &s.t, evs);
 
-        // Hard faults: instant events when spiking — but NOT while the
+        // Hard faults: instant events when spiking - but NOT while the
         // churn or disk-queue condition is already open describing the
         // same storm. A 10-minute sustained storm used to emit ~600
         // near-identical instants (one per tick), polluting events.json,
@@ -391,18 +391,18 @@ impl Detector {
             }
         }
 
-        // PAGING CHURN — the observed-but-unclassified pattern from two real
+        // PAGING CHURN - the observed-but-unclassified pattern from two real
         // sessions: sustained hard faults (300-1900/s) with a FLAT disk
         // queue (~0) and plenty of free RAM (20 GB free of 32). That shape
         // is NOT memory pressure (nothing is starved) and NOT a disk storm
         // (nothing is queued): it is the memory manager trimming game
         // working sets to standby and the game faulting them back in. The
-        // old engine had no bucket for this — if it ever earned a card, it
+        // old engine had no bucket for this - if it ever earned a card, it
         // would have been mislabeled "disk_wait / memory pressure". This
         // rule is an OBSERVATION with its own honest name; the diagnoser
         // decides (correlation rules) whether it explains a stutter.
         // Sustained-churn gate: 3+ consecutive ticks above the hard-fault
-        // threshold, while queue and RAM stay healthy — one noisy tick is
+        // threshold, while queue and RAM stay healthy - one noisy tick is
         // the existing instant event, not churn.
         let churning_now = match (s.pages_in, s.disk_queue) {
             (Some(pi), Some(q)) => {
@@ -410,7 +410,7 @@ impl Detector {
                     && q < self.th.disk_queue_len
                     && avail >= self.th.avail_mem_floor_mb
             }
-            // missing paging counters: no evidence either way — do not open,
+            // missing paging counters: no evidence either way - do not open,
             // but an already-open window still needs its chance to close
             _ => false,
         };
@@ -486,7 +486,7 @@ impl Detector {
 
         // GPU rules are only meaningful in real play. Minimized window or a
         // static screen (lobby) → the dGPU's clock drops are driver behavior,
-        // not the user's problem — silence instead of phantom cards.
+        // not the user's problem - silence instead of phantom cards.
         if !playing {
             return;
         }
@@ -528,16 +528,16 @@ impl Detector {
 
         // GPU memory wake: low mclk while ACTUALLY RENDERING → hitch on
         // transition. The reference clock is the highest mclk OBSERVED this
-        // session (fed in feed()), not the theoretical max — drivers on some
+        // session (fed in feed()), not the theoretical max - drivers on some
         // cards never come near the queried max, and comparing against it
         // produced endless phantom "wake" cards (12 per session on a Quadro
         // M2000M whose mclk sits at ~849 of a nominal 2505).
         // "Actually rendering" = the playing gate (learned baseline) AND a
-        // tick at a healthy share of that baseline — a static sm>25 floor
+        // tick at a healthy share of that baseline - a static sm>25 floor
         // would blind the rule on emulator GPUs whose normal is ~16%, while
         // an absolute-free check would let light scenes (menus, 10% of a 50%
         // baseline) masquerade as rendering.
-        // Before any mclk was observed (warmup) the rule stays silent — an
+        // Before any mclk was observed (warmup) the rule stays silent - an
         // event with zero reference would be fabricated evidence.
         if let (Some(mclk), Some(max)) = (g.mclk, self.gpu_observed_max_mclk) {
             if max > 0.0 {
@@ -556,12 +556,12 @@ impl Detector {
         }
     }
 
-    /// The killer fingerprint — now honest about what it measures: a sharp
+    /// The killer fingerprint - now honest about what it measures: a sharp
     /// drop in GPU activity to a DEEP CRATER, relative to the machine's own
     /// learned quiet-level baseline. We do not measure frame time; the event
     /// is named for the measurement (an activity cliff), not for a claim.
     /// Both axes must agree: under CLIFF_DEEP_RATIO of baseline AND under
-    /// CLIFF_DEEP_ABS — the relative axis alone misfires on mode
+    /// CLIFF_DEEP_ABS - the relative axis alone misfires on mode
     /// transitions (12-15% quiet band vs a 40s combat-flavored baseline),
     /// the absolute axis alone misfires on light scenes of low-baseline
     /// GPUs. One event per collapse: continuation ticks never re-emit.
@@ -593,7 +593,7 @@ impl Detector {
             // ONE event per collapse: the first qualifying tick emits, later
             // ticks of the same crater are continuation, not new events
             if !self.cliff_fired {
-                // shared gate (Thresholds::others_ok) — the machine-tuned
+                // shared gate (Thresholds::others_ok) - the machine-tuned
                 // rule the diagnoser agrees with, applied to THIS sample:
                 // the classification is decided HERE, at emit time, and the
                 // event kind carries it. Nothing downstream re-derives it
@@ -682,7 +682,7 @@ mod tests {
     #[test]
     fn others_ok_gate_agrees_on_ram_pressure() {
         // the shared gate (Thresholds::others_ok), machine-tuned: the bars
-        // are the session's own thresholds, not static numbers — detector
+        // are the session's own thresholds, not static numbers - detector
         // and diagnoser must classify the same collapse the same way.
         // Default thresholds: queue < 2.0, cpu < 85, avail > 2048.
         let th = Thresholds::default();
@@ -690,7 +690,7 @@ mod tests {
         assert!(!th.others_ok(Some(0.1), Some(50.0), Some(1024.0))); // RAM pressure
         assert!(!th.others_ok(Some(2.0), Some(50.0), Some(4096.0))); // disk load
         assert!(!th.others_ok(Some(0.1), Some(95.0), Some(4096.0))); // cpu load
-                                                                     // missing counters abstain as healthy — never blame load blind
+                                                                     // missing counters abstain as healthy - never blame load blind
         assert!(th.others_ok(None, None, None));
     }
 
@@ -712,9 +712,9 @@ mod tests {
             total_mem_mb: 65_536.0,
             disk_count: 1,
         });
-        // 6 GB free on a 64 GB machine: above its own floor (~4 GB) — healthy
+        // 6 GB free on a 64 GB machine: above its own floor (~4 GB) - healthy
         assert!(big_ram.others_ok(Some(0.1), Some(50.0), Some(6000.0)));
-        // 3 GB free on the same machine: UNDER its floor — loaded, even
+        // 3 GB free on the same machine: UNDER its floor - loaded, even
         // though a static 2048 bar would have read it healthy
         assert!(!big_ram.others_ok(Some(0.1), Some(50.0), Some(3000.0)));
     }
@@ -832,7 +832,7 @@ mod tests {
     #[test]
     fn spike_fires_without_any_gpu_sample() {
         // the AMD/Intel machine: no dmon feed, s.gpu is None. The spike
-        // fingerprint is pure CPU evidence and MUST still fire — it used to
+        // fingerprint is pure CPU evidence and MUST still fire - it used to
         // sit behind the GPU early-return and was dead for these machines.
         let mut d = Detector::new(Thresholds::default());
         for i in 0..(d.th.spike_sustained_sec - 1) {
@@ -922,7 +922,7 @@ mod tests {
     #[test]
     fn churn_under_real_pressure_is_not_churn() {
         // the guard: high faults + LOW available RAM = classic mem_pressure
-        // territory — the churn rule must stay silent so the story stays
+        // territory - the churn rule must stay silent so the story stays
         // "memory shortage", not "background reordering"
         let mut d = Detector::new(Thresholds::default());
         for _ in 0..5 {
@@ -936,7 +936,7 @@ mod tests {
 
     #[test]
     fn churn_with_busy_disk_is_not_churn() {
-        // the other guard: faults + a LOADED queue = a disk storm — again,
+        // the other guard: faults + a LOADED queue = a disk storm - again,
         // disk_wait owns that story; churn must not speak over it
         let mut d = Detector::new(Thresholds::default());
         for _ in 0..5 {
@@ -984,7 +984,7 @@ mod tests {
         assert!(e1
             .iter()
             .any(|e| e.kind == "gpu_activity_cliff" && e.severity == Severity::Crit));
-        let e2 = d.feed(&live_sample(4.0)); // tick 2 — no duplicate event
+        let e2 = d.feed(&live_sample(4.0)); // tick 2 - no duplicate event
         assert_eq!(
             e2.iter()
                 .filter(|e| e.kind.starts_with("gpu_activity_cliff"))
@@ -1013,11 +1013,11 @@ mod tests {
         // session #4's FALSE pattern (16 times in one match): combat at
         // 40-50% ends, SM settles into the 12-15% roaming band. The quiet
         // band is ABOVE the deep floor (40% of a 40% quiet level = 16) and
-        // above the absolute axis (10) — a mode transition, never a crater.
+        // above the absolute axis (10) - a mode transition, never a crater.
         // No number of consecutive quiet ticks may fire a cliff.
         let mut d = Detector::new(Thresholds::default());
         // build a mixed history like a real match: quiet ticks dominate,
-        // combat bursts ride on top — P25 latches onto the quiet band (40)
+        // combat bursts ride on top - P25 latches onto the quiet band (40)
         let quiet = 40.0;
         for i in 0..40 {
             let s = if i % 4 == 0 {
@@ -1041,7 +1041,7 @@ mod tests {
     fn light_scene_dip_on_low_baseline_gpu_is_not_a_cliff() {
         // a light scene (menus, map) at 8-9% on a GPU whose quiet level is
         // 16: under the absolute axis (10) but ABOVE 40% of the baseline
-        // (6.4) — the relative axis rejects it; light scenes are not craters
+        // (6.4) - the relative axis rejects it; light scenes are not craters
         let mut d = Detector::new(Thresholds::default());
         warm_baseline(&mut d, 16.0);
         d.feed(&live_sample(16.0));
@@ -1055,7 +1055,7 @@ mod tests {
     #[test]
     fn burst_then_baseline_is_not_a_cliff() {
         // session #1's FALSE pattern: a 47% burst ends, SM returns to the
-        // 14% baseline. The return is NOT a collapse — no cliff may fire.
+        // 14% baseline. The return is NOT a collapse - no cliff may fire.
         let mut d = Detector::new(Thresholds::default());
         warm_baseline(&mut d, 14.0); // the machine's normal
         d.feed(&live_sample(47.0)); // burst (e.g. plane drop)
@@ -1069,7 +1069,7 @@ mod tests {
     #[test]
     fn shallow_noise_dip_near_floor_is_not_a_cliff() {
         // a dip hovering just under the cliff floor that recovers: sampling
-        // noise at 1 Hz — neither deep enough alone nor sustained
+        // noise at 1 Hz - neither deep enough alone nor sustained
         let mut d = Detector::new(Thresholds::default());
         warm_baseline(&mut d, 40.0); // floor = 14, deep = 10
 
@@ -1099,10 +1099,10 @@ mod tests {
     #[test]
     fn gpu_mem_idle_uses_observed_max_not_theoretical() {
         // the Quadro case: theoretical mem max 2505 MHz, but the card's
-        // real in-game mclk is ~849-1110. mclk 800 must NOT be "idle" —
+        // real in-game mclk is ~849-1110. mclk 800 must NOT be "idle" -
         // it's within normal for this card (old rule: 12 phantom cards).
         let mut d = Detector::new(Thresholds::default());
-        d.set_gpu_max(1137.0, 2505.0); // theoretical — must be ignored now
+        d.set_gpu_max(1137.0, 2505.0); // theoretical - must be ignored now
         warm_baseline(&mut d, 40.0);
         // observed max becomes 1110 (fed via live samples)
         for _ in 0..3 {
@@ -1118,7 +1118,7 @@ mod tests {
     #[test]
     fn gpu_mem_idle_fires_on_true_idle_after_warmup() {
         // the REAL wake pattern: card ran at 1110, then dropped to 405
-        // (desktop idle level) while rendering — a genuine power-state event
+        // (desktop idle level) while rendering - a genuine power-state event
         let mut d = Detector::new(Thresholds::default());
         warm_baseline(&mut d, 40.0);
         for _ in 0..3 {
@@ -1137,7 +1137,7 @@ mod tests {
         let e = d.feed(&live_sample_mclk(40.0, 300.0));
         assert!(
             !e.iter().any(|e| e.kind == "gpu_mem_idle"),
-            "no observed clock yet — silence is the honest answer"
+            "no observed clock yet - silence is the honest answer"
         );
     }
 
@@ -1204,11 +1204,11 @@ mod tests {
         bg.game_visible = Some(false);
         d.feed(&bg);
         d.feed(&bg);
-        // back in the game: SM returns — must NOT read as a "cliff recovery"
+        // back in the game: SM returns - must NOT read as a "cliff recovery"
         let e = d.feed(&live_sample(50.0));
         assert!(
             !e.iter().any(|e| e.kind.starts_with("gpu_activity_cliff")),
-            "baseline resets on pause — the return is not a cliff"
+            "baseline resets on pause - the return is not a cliff"
         );
     }
 
@@ -1219,7 +1219,7 @@ mod tests {
         for _ in 0..3 {
             d.feed(&live_sample_mclk(50.0, 1110.0)); // observed max: 1110
         }
-        // one light scene tick with idle clocks and SM 10% — menus territory
+        // one light scene tick with idle clocks and SM 10% - menus territory
         let e = d.feed(&live_sample_mclk(10.0, 405.0));
         assert!(
             !e.iter().any(|e| e.kind == "gpu_mem_idle"),
@@ -1230,11 +1230,11 @@ mod tests {
     #[test]
     fn learned_baseline_adapts_to_low_smgpu() {
         // an emulator GPU that renders at 16%: after warmup the baseline is
-        // 16 (not the static floor 15) and the playing gate accepts it —
+        // 16 (not the static floor 15) and the playing gate accepts it -
         // the machine whose normal sits at the old static threshold
         let mut d = Detector::new(Thresholds::default());
         warm_baseline(&mut d, 16.0);
-        // feed one more tick: gate must say "playing" (no GPU mute) — check
+        // feed one more tick: gate must say "playing" (no GPU mute) - check
         // indirectly: a true mem-idle event (405 vs observed 1110, SM 40)
         // fires only when playing; at 16% baseline the gate must accept it
         for _ in 0..3 {

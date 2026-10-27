@@ -1,7 +1,7 @@
-/* design tokens — monochrome + signal green */
+/* design tokens - monochrome + signal green */
 :root {
   color-scheme: dark;
-  /* surfaces — ONE plane: the shell is a single surface split by borders.
+  /* surfaces - ONE plane: the shell is a single surface split by borders.
      Soft dark, deliberately NOT pure black: lifted surfaces keep depth
      without the harsh AMOLED contrast. */
   --bg: #141613;
@@ -10,7 +10,7 @@
   /* border */
   --border: #383d38;
   --border-2: #484e48;
-  /* signal — monochrome + signal green: the brand fills buttons, pills,
+  /* signal - monochrome + signal green: the brand fills buttons, pills,
      and on-switches (dark text on it); dims tint tracks, tiles, rings */
   --primary: #53fc18;
   --primary-dim: rgba(83, 252, 24, 0.1);
@@ -22,7 +22,7 @@
      components.css (explicit #ff5a52 / #d92d20 per review: values
      track --danger, but the utility is the single place that names
      them, never a second token to drift) */
-  /* state quads — pale solid bg + dark ink (identical in both themes, so
+  /* state quads - pale solid bg + dark ink (identical in both themes, so
      the pair reads on either): cards, banners, and badges only. Rule:
      state text rides its bg-* with its text-* ink; text on plain
      surfaces keeps the vivid signal colors below. */
@@ -49,11 +49,11 @@
   /* fix-box ink: the white answer box is white in both themes, so its
      ink stays dark cocoa in both (never a theme text token) */
   --ink-fix: #4d3d0c;
-  /* hover — LIGHT, not green: the accent belongs to states, not to passing hovers */
+  /* hover - LIGHT, not green: the accent belongs to states, not to passing hovers */
   --hover-bg: #343a34;
   --hover-text: #edefec;
   --hover-border: #4a504a;
-  /* ring around the sidebar update dot — the base background (was --bg-1,
+  /* ring around the sidebar update dot - the base background (was --bg-1,
      an undefined token: the dot's ring silently vanished) */
   --bg-1: #141613;
   /* inset panel background (update modal notes + progress track) */
@@ -62,16 +62,16 @@
   --text-1: #edefec;
   --text-2: #8c948d;
   --text-3: #5a605a;
-  /* type — Google Sans covers latin; "Google Sans Arabic" (Cairo) covers the
-     Arabic codepoints via unicode-range — one stack, both scripts, inlined.
+  /* type - Google Sans covers latin; "Google Sans Arabic" (Cairo) covers the
+     Arabic codepoints via unicode-range - one stack, both scripts, inlined.
      Numerals ride this stack too (tabular figures where the face has
      them); no second family anywhere. */
   --font-ui: "Google Sans", "Google Sans Arabic", "Segoe UI", system-ui, sans-serif;
-  /* hover lifts for filled actions — direction differs per theme (lighten on
+  /* hover lifts for filled actions - direction differs per theme (lighten on
      dark, deepen on light), so they are tokens, not literals */
   --primary-hover: #6aff3a;
   --danger-hover: #ff6f68;
-  /* radar sweep alpha stops — an alpha of the dark neon green is invisible
+  /* radar sweep alpha stops - an alpha of the dark neon green is invisible
      on the light paper background, so the stops are tokens per theme and the
      conic gradient never hardcodes the signal colour */
   --sweep-far: rgba(83, 252, 24, 0.05);
@@ -101,7 +101,7 @@
   --warn: #8a5f00;
   --warn-dim: rgba(138, 95, 0, 0.14);
   --danger: #d92d20;
-  /* state quads — light pairs: pale solid bg + dark ink (the finding
+  /* state quads - light pairs: pale solid bg + dark ink (the finding
      card as rendered). Fills stay vivid for dots and bars. */
   --bg-success: #b9e3b4;
   --text-success: #0d3f14;

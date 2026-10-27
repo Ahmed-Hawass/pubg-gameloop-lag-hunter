@@ -1,6 +1,6 @@
 /* System / Processes / Checks / About tabs + the gaming scan button */
 
-/* Session duration — the same segmented control as the language, theme and
+/* Session duration - the same segmented control as the language, theme and
    zoom switches in Settings (same track, same pill, same materials), so
    the two surfaces read as one app. flex + flex:1, not a grid: the pills
    share the row equally in both languages, so "5 min" and "5 دقائق" occupy
@@ -120,7 +120,7 @@
   flex: none;
   transition: transform 0.2s var(--ease);
 }
-/* icon nudge on card hover — the same micro-interaction as the metric
+/* icon nudge on card hover - the same micro-interaction as the metric
    cards and buttons (expressive, no lift: these cards are display-only
    and must never promise a click) */
 .spec-card:hover .spec-head svg {
@@ -306,7 +306,7 @@
 }
 /* end-task action on app rows: the shared ghost row-action materials
    (same family as the session delete), neutral hover like every
-   quiet control — the danger lives only in the confirm dialog.
+   quiet control - the danger lives only in the confirm dialog.
    Footprint matches the tool buttons (.btn-md): the same 10px corner
    and 13px bold label, so the row action reads as a real button */
 .proc-end {
@@ -330,7 +330,7 @@
 /* startup enable action: same footprint as the end-task button above
    (one metrics source for both would couple two tabs: duplicated on
    purpose, three lines), but the hover stays neutral like every quiet
-   control — enabling is not destructive, so it never borrows the red */
+   control - enabling is not destructive, so it never borrows the red */
 .startup-act {
   flex: none;
   padding: 8px 16px;
@@ -362,7 +362,7 @@
   color: var(--danger);
 }
 /* real program artwork: bare, no tile (the tile stays for glyphs
-   only) — same footprint as the tile so rows never shift on resolve */
+   only) - same footprint as the tile so rows never shift on resolve */
 .proc-art {
   display: flex;
   align-items: center;
@@ -458,7 +458,7 @@
   padding: 7px 12px;
 }
 /* summary banner: solid highlighter fills (same language as the
-   diagnosis cards) — title and sub both in the card ink. */
+   diagnosis cards) - title and sub both in the card ink. */
 .health-banner {
   display: flex;
   align-items: center;
@@ -524,7 +524,7 @@
   }
 }
 /* section top row: the standing header plus the back control at the
-   inline end, opposite the title — one row instead of a lonely button
+   inline end, opposite the title - one row instead of a lonely button
    row above. The one-shot card rides BELOW this row at full width
    (inside the row it would squeeze beside the button). Logical flow
    mirrors it in RTL for free. */
@@ -765,7 +765,7 @@
 
 /* plain page header (icon + title + desc, never a card, never
    collapsible): the shell back button above already says where this
-   lives — same pattern as the Sessions title row */
+   lives - same pattern as the Sessions title row */
 .page-head {
   display: flex;
   align-items: center;
@@ -950,7 +950,7 @@
   background: var(--primary-dim);
   color: var(--primary);
 }
-/* disabled-with-reason row: greyed but legible — the row teaches (the
+/* disabled-with-reason row: greyed but legible - the row teaches (the
    reason line underneath) instead of acting; the switch itself is inert
    via the native disabled state above */
 .switch-row.is-disabled {
@@ -1109,7 +1109,7 @@
   letter-spacing: 0.08em;
   color: var(--text-3);
   font-weight: 700;
-  /* the dot beside the Updates heading can sit on any .about-h — position
+  /* the dot beside the Updates heading can sit on any .about-h - position
      relative lets .about-dot anchor to it */
   position: relative;
 }
@@ -1131,7 +1131,7 @@
   gap: 8px;
   flex-wrap: wrap;
 }
-/* the dot beside the Updates heading — mirrors the sidebar's About dot:
+/* the dot beside the Updates heading - mirrors the sidebar's About dot:
    warn-yellow like the "new version" copy, never green. Same 9px size
    and halo pulse as the other two update signals. */
 .about-dot {
@@ -1175,7 +1175,7 @@
   padding: 4px 2px 0;
 }
 /* footer links ride the standard ghost Button; the support one keeps its
-   warm accent on hover (ink only — flat like every button) */
+   warm accent on hover (ink only - flat like every button) */
 .about-support:hover {
   color: var(--warn);
 }
@@ -1238,10 +1238,10 @@
   font-weight: 700;
 }
 
-/* language: a segmented row — the same control as the duration pills.
+/* language: a segmented row - the same control as the duration pills.
    Filled green on the active segment, the app's one selection language.
    Full-width with equal segments: the language and theme rows (3 pills
-   each) render identical pills — fit-content sized each row to its own
+   each) render identical pills - fit-content sized each row to its own
    labels ("English"/"العربية" vs "داكن"/"فاتح") and the rows mismatched. */
 .lang-segment {
   display: flex;
@@ -1250,7 +1250,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 3px;
-  /* full row width would stretch the 3 pills across the whole page —
+  /* full row width would stretch the 3 pills across the whole page -
      capped so the control stays a compact switch while both rows
      (language + theme) keep identical pills */
   width: 100%;

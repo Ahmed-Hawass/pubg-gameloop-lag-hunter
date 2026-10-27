@@ -1,15 +1,15 @@
-// logging.rs — the technical log: the tool's flight recorder.
+// logging.rs - the technical log: the tool's flight recorder.
 // One rotating file per day, INFO for operations, WARN for degradations,
-// ERROR always. 7-day retention. For US debugging user reports — never UI.
+// ERROR always. 7-day retention. For US debugging user reports - never UI.
 //
 // Coverage contract (the "what happened at the user's machine" promise):
-//   * boot timing      — app start → ready, per-step durations
-//   * panics           — the hook fires even with panic=abort (last chance)
-//   * sampler health   — every streaming source logs spawn + first sample
-//   * session lifecycle — start gate, timings, stop reason, sample counts
-//   * slow IPC         — commands slower than their threshold (2s default)
+//   * boot timing      - app start → ready, per-step durations
+//   * panics           - the hook fires even with panic=abort (last chance)
+//   * sampler health   - every streaming source logs spawn + first sample
+//   * session lifecycle - start gate, timings, stop reason, sample counts
+//   * slow IPC         - commands slower than their threshold (2s default)
 //                        log one WARN line; fast ones stay silent
-//   * rig profile      — one line at boot: RAM/disks/GPU counters/PS state
+//   * rig profile      - one line at boot: RAM/disks/GPU counters/PS state
 //
 // Volume contract (silence is normal, records are exceptions): routine
 // fast operations write NOTHING, so a tab left open all day cannot bury
@@ -17,7 +17,7 @@
 // cap backs this up; WARN/ERROR/PANIC always get through.
 //
 // Writer rule: normal writes serialize under LOG_LOCK (a slow-path file
-// append — fast callers never do I/O inline beyond the mutex handoff),
+// append - fast callers never do I/O inline beyond the mutex handoff),
 // and a logging failure is swallowed, never propagated (fail-soft, like
 // the rest of the engine). Only the panic hook is truly lock-free: it
 // bypasses LOG_LOCK with a direct write because the panic may originate
@@ -114,7 +114,7 @@ pub fn error(msg: &str) {
 }
 
 // ---------------------------------------------------------------------------
-// Timed operations — "how long did X take" as a one-liner
+// Timed operations - "how long did X take" as a one-liner
 // ---------------------------------------------------------------------------
 
 /// Log an operation's duration in the classic "op: 123ms" shape.
@@ -126,11 +126,11 @@ pub fn perf(op: &str, elapsed_ms: u128) {
 /// A guard that logs its operation's total duration when dropped.
 /// Usage: `let _t = logging::timed("settings load");`
 /// The guard is must_use so a forgotten binding is a compile error.
-#[must_use = "the timing is logged on Drop — bind it to a variable"]
+#[must_use = "the timing is logged on Drop - bind it to a variable"]
 pub struct TimerGuard {
     op: &'static str,
     started: Instant,
-    /// warn above this threshold instead of info — slow ops stand out
+    /// warn above this threshold instead of info - slow ops stand out
     warn_above_ms: u128,
 }
 
@@ -160,7 +160,7 @@ impl Drop for TimerGuard {
 }
 
 /// Start a named timer; the duration is logged when the binding drops.
-/// The default warn threshold is 2s — anything slower is a freeze suspect.
+/// The default warn threshold is 2s - anything slower is a freeze suspect.
 pub fn timed(op: &'static str) -> TimerGuard {
     TimerGuard::new(op, 2_000)
 }
@@ -171,11 +171,11 @@ pub fn timed_with(op: &'static str, warn_above_ms: u128) -> TimerGuard {
 }
 
 // ---------------------------------------------------------------------------
-// Panic hook — the last words of a dying process
+// Panic hook - the last words of a dying process
 // ---------------------------------------------------------------------------
 
 /// Install the panic hook. MUST run before any thread spawns: with
-/// `panic = "abort"` there are no Drop handlers and no unwinding — the hook
+/// `panic = "abort"` there are no Drop handlers and no unwinding - the hook
 /// is the single chance to record WHY the app died on the user's machine.
 /// Note the writer here must be lock-free: the panic may originate while
 /// another thread holds the log mutex (a poisoned lock would eat the record).
@@ -201,7 +201,7 @@ pub fn init_panic_hook() {
     }));
 }
 
-/// Delete log files older than 7 days — called once at app start.
+/// Delete log files older than 7 days - called once at app start.
 pub fn cleanup_old_logs() {
     cleanup_old_logs_in(&logs_dir());
 }

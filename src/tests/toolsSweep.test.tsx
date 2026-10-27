@@ -1,4 +1,4 @@
-// tests/toolsSweep.test.tsx — the storage sweep contract: the page opens
+// tests/toolsSweep.test.tsx - the storage sweep contract: the page opens
 // under a plain header (title plus desc, like virtual memory) with the
 // sweep memory lined below it (last run plus last-30-days, or the never
 // line), the landing card shows the last run without a badge, scan runs
@@ -62,7 +62,7 @@ async function openSweep(
   );
   await user.click(screen.getByText(en.toolCleanup));
   // the page opens on the idle hero (spot art, no collapse, no read
-  // to wait for — the standing header is always up, the intro card
+  // to wait for - the standing header is always up, the intro card
   // below it until dismissed, so assert structure, not either text)
   await waitFor(() => {
     expect(document.querySelector(".page-head")).toBeTruthy();

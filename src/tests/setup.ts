@@ -1,4 +1,4 @@
-// tests/setup.ts — jsdom gaps the app never meets in Tauri/WebView2.
+// tests/setup.ts - jsdom gaps the app never meets in Tauri/WebView2.
 // Runs once before the suite (see test.setupFiles in vite.config.ts).
 import { afterEach } from "vitest";
 import { cleanup } from "@testing-library/react";

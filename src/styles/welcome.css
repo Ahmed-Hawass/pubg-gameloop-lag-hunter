@@ -1,4 +1,4 @@
-/* WelcomeView — the three-slide first-run landing.
+/* WelcomeView - the three-slide first-run landing.
    Same identity as the app: dark plane, signal green, one CTA per slide. */
 .welcome {
   position: relative;
@@ -15,7 +15,7 @@
 }
 
 /* language switcher: pinned to the bottom corner at the reading
-   START (skip owns the end corner now) — logical inset, so both
+   START (skip owns the end corner now) - logical inset, so both
    buttons mirror with the direction automatically */
 .welcome-lang {
   /* fixed to the WINDOW corner, not the centered column: absolute here
@@ -28,7 +28,7 @@
 }
 
 /* quiet utility icon, not a CTA: transparent until hover, same language
-   as the Hint pattern (text-3 → text-2). No border, no label — the tooltip
+   as the Hint pattern (text-3 → text-2). No border, no label - the tooltip
    carries the target language name. */
 .welcome-lang-btn {
   display: inline-flex;
@@ -131,7 +131,7 @@
   line-height: 1.5;
 }
 /* slide 2 sample: all three findings stacked in one grid cell, only
-   the active one visible — the slot keeps the tallest height forever,
+   the active one visible - the slot keeps the tallest height forever,
    so rotating never shifts the tiles below */
 .welcome-sample {
   display: grid;
@@ -196,7 +196,7 @@
   width: 100%;
 }
 /* skip: bottom corner at the reading END (the proceed side in both
-   directions) — logical inset mirrors with RTL, same as language */
+   directions) - logical inset mirrors with RTL, same as language */
 .welcome-skip {
   position: fixed;
   bottom: 16px;
@@ -219,7 +219,7 @@
   justify-content: center;
 }
 /* standalone-CTA spacing only (inside the nav row the buttons align
-   on their own — the margin pushed Next 6px below Back) */
+   on their own - the margin pushed Next 6px below Back) */
 .welcome > .welcome-cta {
   margin-top: 6px;
 }

@@ -1,4 +1,4 @@
-// icons.rs — real program artwork for Top Processes rows.
+// icons.rs - real program artwork for Top Processes rows.
 //
 // One extraction per unique exe path (cached by path, like display
 // names): the poll never extracts, the UI asks only for new PIDs and
@@ -15,7 +15,7 @@ use std::sync::Mutex;
 
 /// One resolved icon: the PID it was asked for plus the paintable URL.
 /// PIDs (numbers) cross the bridge, never paths (paths can contain the
-/// user name — the same rule as the top-process rows themselves).
+/// user name - the same rule as the top-process rows themselves).
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ProcessIcon {
     pub pid: u32,

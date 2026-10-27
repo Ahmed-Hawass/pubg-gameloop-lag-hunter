@@ -17,7 +17,7 @@
   letter-spacing: -0.01em;
 }
 
-/* back button — shared .back-btn primitive, nothing page-specific left */
+/* back button - shared .back-btn primitive, nothing page-specific left */
 /* reader back row mirrors the Tools header row: the button rides the
    inline end (justify-content follows the reading direction, so RTL
    mirrors for free), opposite where a title would sit */
@@ -26,7 +26,7 @@
   justify-content: flex-end;
 }
 
-/* report header — surface comes from .card, layout only below */
+/* report header - surface comes from .card, layout only below */
 .report-head {
   display: flex;
   align-items: center;
@@ -118,7 +118,7 @@
 }
 
 /* bottom action row (folder + delete-all): same ghost family, danger for
-   the destructive one — the row itself carries the list alignment */
+   the destructive one - the row itself carries the list alignment */
 .reports-actions {
   display: flex;
   gap: 8px;
@@ -126,13 +126,13 @@
   align-self: flex-start;
 }
 /* delete-all keeps the ghost fill of its neighbor; only the ink turns
-   red on hover — same language as the row delete buttons
+   red on hover - same language as the row delete buttons
    (sl-act-danger). Flat: no border in either state. */
 .btn.reports-delete-all:hover:not(:disabled) {
   color: var(--danger);
 }
 
-/* session row actions (delete only — folder is global now) */
+/* session row actions (delete only - folder is global now) */
 .sl-actions {
   display: flex;
   gap: 6px;
@@ -170,7 +170,7 @@
   overflow: hidden;
   /* never shrink below the rows: as a flex item with clipped overflow
      the automatic minimum is zero, so a long list absorbed all the
-     shrink instead of the page — bottom rows rendered cut with a dead
+     shrink instead of the page - bottom rows rendered cut with a dead
      wheel and no scrollbar while the actions below stayed visible.
      flex:none pins it to content height and the page scrolls instead. */
   flex: none;

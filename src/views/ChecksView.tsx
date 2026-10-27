@@ -1,4 +1,4 @@
-// ChecksView.tsx — read-only environment checks + "take me there" buttons.
+// ChecksView.tsx - read-only environment checks + "take me there" buttons.
 // Gently live: power plan / pagefile / battery state can change while the
 // user is on this tab (unplugging the charger is the classic case).
 
@@ -37,7 +37,7 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
   const busyRef = useRef(false);
   // one pending slot for a manual press that lands mid-query: instead of
   // swallowing the click silently, the button spins immediately and the
-  // press runs right after the in-flight query finishes — one click suffices
+  // press runs right after the in-flight query finishes - one click suffices
   const pendingManualRef = useRef(false);
   /** background-note dialog behind a card's (?) button (null = closed).
       Same unified Dialog as everywhere: one modal surface, yields to the
@@ -117,7 +117,7 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
-  // a dialog mounting under a parked cursor never fires mouseleave — tell
+  // a dialog mounting under a parked cursor never fires mouseleave - tell
   // every tooltip to hide the moment ours opens (same signal as the shell)
   useEffect(() => {
     if (hint) {
@@ -267,7 +267,7 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
           } satisfies CheckItem,
         ]
       : []),
-    // charger lives on laptops only — hidden on desktops, never a
+    // charger lives on laptops only - hidden on desktops, never a
     // placeholder row
     ...(checks.laptop
       ? [
@@ -327,7 +327,7 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
           el: <CheckCard item={item} openLabel={openLabel} onHint={setHint} />,
         }))}
       />
-      {/* background note behind a card's (?) button — the one unified
+      {/* background note behind a card's (?) button - the one unified
           Dialog, notice only */}
       {hint ? (
         <Dialog
@@ -355,7 +355,7 @@ export function ChecksView(props: { active: boolean; onOpenTool?: (id: string) =
 
 /** one health card: a single compact row (glyph, name, state, badge,
     background note behind the (?) button). The open shortcut renders
-    on problem cards only — a healthy card has nowhere to send anyone.
+    on problem cards only - a healthy card has nowhere to send anyone.
     Featured warnings and archive rows share this card, so the rule can
     never drift between summary and list. */
 function CheckCard(props: {
