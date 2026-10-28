@@ -254,6 +254,13 @@
   padding: 16px 20px 20px;
 }
 
+.game-loop-warning {
+  flex: none;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto 12px;
+}
+
 /* ---- keep-alive view switching: all tabs stay mounted, only the active
    one is displayed. Views render wrapped in divs, so every page selector
    below reaches through the wrapper (`.content > div > ...`); every view

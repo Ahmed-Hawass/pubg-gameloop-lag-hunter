@@ -14,6 +14,33 @@ use super::types::{
     UiState,
 };
 
+pub(super) fn start_gate_error(
+    presence: sampler::Presence,
+    installation: super::emulator::InstallationStatus,
+) -> Option<&'static str> {
+    match presence {
+        sampler::Presence::GameRunning => None,
+        sampler::Presence::ClientIdle => Some("GAMELOOP_NOT_RUNNING"),
+        sampler::Presence::UnknownVersion
+            if installation == super::emulator::InstallationStatus::Installed =>
+        {
+            Some("GAMELOOP_NOT_RUNNING")
+        }
+        sampler::Presence::UnknownVersion => Some("EMULATOR_UNKNOWN"),
+        sampler::Presence::Absent
+            if installation == super::emulator::InstallationStatus::Installed =>
+        {
+            Some("GAMELOOP_NOT_RUNNING")
+        }
+        sampler::Presence::Absent
+            if installation == super::emulator::InstallationStatus::NotInstalled =>
+        {
+            Some("GAMELOOP_NOT_INSTALLED")
+        }
+        sampler::Presence::Absent => Some("GAMELOOP_INSTALL_STATUS_UNKNOWN"),
+    }
+}
+
 /// Shared session state owned by the engine, locked by commands.
 pub struct Engine {
     state: Mutex<SessionInner>,
@@ -235,43 +262,21 @@ impl Engine {
             }
         }
 
-        // GATE: no game, no scan. The numbers only mean something in-game.
-        // v6: an emulator process IS the game (per-game runtime). v7: the
-        // client idles with no game, so RunningAppInfo decides. Install
-        // evidence (read again here: the blocked path is rare and
-        // user-initiated) separates the honest answers below.
-        match sampler::presence() {
-            sampler::Presence::GameRunning => {}
-            sampler::Presence::UnknownVersion => {
-                super::logging::info("start blocked: unrecognized emulator build");
-                super::emulator::log_presence_evidence();
-                // a helper up with no family yet (client boot/update window)
-                // is a transient, not a foreign build, when something is
-                // genuinely installed: say "start the game", keep the
-                // evidence line above for either case
-                if super::emulator::has_install_evidence(&super::emulator::read_snapshot()) {
-                    super::logging::info(
-                        "start blocked: transient unknown, install evidence present",
-                    );
-                    return Err("GAMELOOP_NOT_RUNNING".into());
-                }
-                return Err("EMULATOR_UNKNOWN".into());
+        // GATE: no game, no scan. Each result and diagnostic line must be
+        // based on the same tasklist and registry snapshot.
+        let detection = match sampler::start_detection_snapshot() {
+            Ok(snapshot) => snapshot,
+            Err(error) => {
+                super::logging::error(&format!(
+                    "start blocked: GameLoop detection failed: {error}"
+                ));
+                return Err(format!("GAMELOOP_DETECTION_FAILED: {error}"));
             }
-            sampler::Presence::ClientIdle => {
-                super::logging::info("start blocked: game not running in GameLoop");
-                super::emulator::log_presence_evidence();
-                return Err("GAMELOOP_NOT_RUNNING".into());
-            }
-            sampler::Presence::Absent => {
-                super::logging::info("start blocked: no emulator evidence at all");
-                super::emulator::log_presence_evidence();
-                // installed-but-closed still means "start the game"; only a
-                // box with nothing installed anywhere earns its own key
-                if super::emulator::has_install_evidence(&super::emulator::read_snapshot()) {
-                    return Err("GAMELOOP_NOT_RUNNING".into());
-                }
-                return Err("GAMELOOP_NOT_INSTALLED".into());
-            }
+        };
+        if let Some(code) = start_gate_error(detection.presence, detection.installation) {
+            super::logging::info(&format!("start blocked: {code}"));
+            super::logging::info(&detection.evidence);
+            return Err(code.into());
         }
 
         // machine profile per session → dynamic thresholds. RAM + disk count
@@ -1148,6 +1153,38 @@ impl Engine {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn start_gate_uses_one_detection_result_for_each_message() {
+        use super::super::emulator::InstallationStatus::*;
+        use sampler::Presence::*;
+
+        assert_eq!(start_gate_error(GameRunning, NotInstalled), None);
+        assert_eq!(
+            start_gate_error(ClientIdle, Installed),
+            Some("GAMELOOP_NOT_RUNNING")
+        );
+        assert_eq!(
+            start_gate_error(UnknownVersion, NotInstalled),
+            Some("EMULATOR_UNKNOWN")
+        );
+        assert_eq!(
+            start_gate_error(UnknownVersion, Installed),
+            Some("GAMELOOP_NOT_RUNNING")
+        );
+        assert_eq!(
+            start_gate_error(Absent, NotInstalled),
+            Some("GAMELOOP_NOT_INSTALLED")
+        );
+        assert_eq!(
+            start_gate_error(Absent, Installed),
+            Some("GAMELOOP_NOT_RUNNING")
+        );
+        assert_eq!(
+            start_gate_error(Absent, Unknown),
+            Some("GAMELOOP_INSTALL_STATUS_UNKNOWN")
+        );
+    }
 
     /// The thresholds are derived from these two readings, so a broken
     /// probe would silently change every diagnosis (a RAM floor of the

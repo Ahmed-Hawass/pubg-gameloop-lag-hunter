@@ -80,6 +80,10 @@ export const en = {
   // ---- error codes from the backend ----
   errors: {
     GAMELOOP_NOT_RUNNING: "PUBG Mobile isn't running in GameLoop. Start the game first.",
+    GAMELOOP_DETECTION_FAILED:
+      "Lag Hunter couldn't check GameLoop's status. Check that Windows can read running apps, then try again.",
+    GAMELOOP_INSTALL_STATUS_UNKNOWN:
+      "Lag Hunter couldn't confirm whether GameLoop is installed. Check its installation or try again.",
     /** no install evidence anywhere: GameLoop was never installed here,
         so "start the game" would be the wrong advice */
     GAMELOOP_NOT_INSTALLED:
@@ -524,6 +528,9 @@ export const en = {
   tweakHvciLockedReason: "Controlled by your administrator or UEFI lock and can't be changed from here.",
   showUnsupportedLink: "Show unavailable options",
   tweakFailed: "The change couldn't be verified, so it wasn't applied.",
+  introGameLoopMissingTitle: "GameLoop wasn't found on this PC",
+  introGameLoopMissingBody:
+    "Some features, like game lag diagnosis and options that need GameLoop, won't work until it is installed.",
   /** storage sweep: scan four safe places, delete only the ticked ones */
   cleanupTitle: "Clean temporary files",
   introCleanupTitle: "You decide what gets deleted",

@@ -12,10 +12,12 @@ import { en } from "../locales/en";
 import App from "../App";
 import type { StatusPayload, UiState } from "../bridge";
 import { settings, systemInfo } from "./fixtures";
+import { INTRO_CARDS_EVENT } from "../useIntroCard";
 
 const apiMock = vi.hoisted(() => ({
   getState: vi.fn(),
   getSettings: vi.fn(),
+  gameLoopInstallationStatus: vi.fn(),
   psAvailable: vi.fn(),
   getVersion: vi.fn(),
   watchGameloop: vi.fn(),
@@ -35,6 +37,7 @@ const apiMock = vi.hoisted(() => ({
   finishOnboarding: vi.fn(),
   finishGameAdvice: vi.fn(),
   finishBackgroundAdvice: vi.fn(),
+  logFrontendError: vi.fn(),
   clockHour12: vi.fn(),
   dismissIntroCard: vi.fn(),
   setUiZoom: vi.fn(),
@@ -57,6 +60,7 @@ vi.mock("../bridge", () => ({
   revealWindow: vi.fn().mockResolvedValue(undefined),
   setTrayActive: vi.fn().mockResolvedValue(undefined),
   logFrontendInfo: vi.fn().mockResolvedValue(undefined),
+  logFrontendError: vi.fn().mockResolvedValue(undefined),
   onEngineState: vi.fn((cb: (ev: { payload: StatusPayload }) => void) => {
     enginePush = cb;
     return Promise.resolve(() => {});
@@ -108,14 +112,23 @@ const idleUi: UiState = {
   emulator: null,
 };
 
-function boot(options: { advice?: "game" | "background" | "done"; onboarding?: boolean }) {
-  const { advice = "done", onboarding = true } = options;
+function boot(options: {
+  advice?: "game" | "background" | "done";
+  onboarding?: boolean;
+  dismissedCards?: string[];
+  installCheck?: Promise<"installed" | "not_installed" | "unknown">;
+}) {
+  const { advice = "done", onboarding = true, dismissedCards = [], installCheck } = options;
   apiMock.getState.mockResolvedValue({ status: "idle", ui: null });
+  apiMock.gameLoopInstallationStatus.mockClear();
+  if (installCheck) apiMock.gameLoopInstallationStatus.mockReturnValue(installCheck);
+  else apiMock.gameLoopInstallationStatus.mockResolvedValue("installed");
   apiMock.getSettings.mockResolvedValue(
     settings({
       onboarding_done: onboarding,
       game_advice_done: advice !== "game",
       background_advice_done: advice !== "background",
+      dismissed_cards: dismissedCards,
     }),
   );
   apiMock.psAvailable.mockResolvedValue(true);
@@ -135,6 +148,7 @@ function boot(options: { advice?: "game" | "background" | "done"; onboarding?: b
   apiMock.finishGameAdvice.mockResolvedValue(undefined);
   apiMock.finishBackgroundAdvice.mockResolvedValue(undefined);
   apiMock.finishOnboarding.mockResolvedValue(undefined);
+  apiMock.dismissIntroCard.mockResolvedValue(undefined);
   render(React.createElement(App));
 }
 
@@ -144,6 +158,57 @@ const running = (ui: Partial<UiState>): StatusPayload => ({
 });
 
 describe("App one-shot advice", () => {
+  it("shows the GameLoop notice only after a negative install check", async () => {
+    let resolveInstall!: (installation: "installed" | "not_installed" | "unknown") => void;
+    const installCheck = new Promise<"installed" | "not_installed" | "unknown">((resolve) => {
+      resolveInstall = resolve;
+    });
+    boot({ installCheck });
+    await screen.findByText(en.scanIdleStart);
+    expect(screen.queryByText(en.introGameLoopMissingTitle)).toBeNull();
+
+    await act(async () => {
+      resolveInstall("not_installed");
+    });
+    await screen.findByText(en.introGameLoopMissingTitle);
+    expect(apiMock.gameLoopInstallationStatus).toHaveBeenCalledOnce();
+  });
+
+  it("does not claim GameLoop is absent when the install check is inconclusive", async () => {
+    boot({ installCheck: Promise.resolve("unknown") });
+    await screen.findByText(en.scanIdleStart);
+    expect(screen.queryByText(en.introGameLoopMissingTitle)).toBeNull();
+  });
+
+  it("keeps the notice hidden when GameLoop is installed", async () => {
+    boot({});
+    await screen.findByText(en.scanIdleStart);
+    expect(screen.queryByText(en.introGameLoopMissingTitle)).toBeNull();
+  });
+
+  it("keeps the notice hidden when it was dismissed earlier", async () => {
+    boot({ dismissedCards: ["gameloop-not-installed"] });
+    await screen.findByText(en.scanIdleStart);
+    expect(screen.queryByText(en.introGameLoopMissingTitle)).toBeNull();
+  });
+
+  it("persists dismissal and shows the notice again after intro cards are reset", async () => {
+    const user = userEvent.setup();
+    boot({ installCheck: Promise.resolve("not_installed") });
+    await screen.findByText(en.introGameLoopMissingTitle);
+
+    await user.click(screen.getByRole("button", { name: en.dialog.dismiss }));
+    await waitFor(() => {
+      expect(apiMock.dismissIntroCard).toHaveBeenCalledWith("gameloop-not-installed");
+    });
+    expect(screen.queryByText(en.introGameLoopMissingTitle)).toBeNull();
+
+    act(() => {
+      window.dispatchEvent(new Event(INTRO_CARDS_EVENT));
+    });
+    await screen.findByText(en.introGameLoopMissingTitle);
+  });
+
   it("pre-scan tip fires on the first real start and persists at show", async () => {
     boot({ advice: "game" });
     await screen.findByText(en.scanIdleStart);

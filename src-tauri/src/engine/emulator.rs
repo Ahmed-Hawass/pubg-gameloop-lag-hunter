@@ -103,63 +103,115 @@ pub struct RegistrySnapshot {
     /// install dirs from Uninstall entries (HKLM + HKCU), version-agnostic:
     /// DisplayIcon points at the live Application dir whatever the build
     pub uninstall_dirs: Vec<String>,
+    /// roots advertised by GameLoop uninstall entries, including custom
+    /// InstallLocation values from either registry view.
+    pub install_dirs: Vec<String>,
+    /// False when a relevant registry source could not be enumerated or read.
+    pub registry_read_complete: bool,
     /// games currently running inside the v7 VM (empty = client idle)
     pub running_apps: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InstallationStatus {
+    Installed,
+    NotInstalled,
+    Unknown,
 }
 
 pub fn read_snapshot() -> RegistrySnapshot {
     let hklm = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE);
     let hkcu = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
 
-    let v7key = hklm.open_subkey(r"SOFTWARE\Tencent\GameLoop").ok();
-    let v7_version = v7key
-        .as_ref()
-        .and_then(|k| k.get_value::<String, _>("Version").ok())
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty());
-    let v7_install = v7key
-        .as_ref()
-        .and_then(|k| k.get_value::<String, _>("InstallPath").ok())
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty() && PathBuf::from(&s).exists());
-
-    let mut v6_installs = Vec::new();
-    for base in V6.reg_subkey_roots {
-        let Ok(key) = hklm.open_subkey(*base) else {
-            continue;
+    let views = [
+        winreg::enums::KEY_WOW64_32KEY,
+        winreg::enums::KEY_WOW64_64KEY,
+    ];
+    let mut registry_read_complete = true;
+    let mut v7_version = None;
+    let mut v7_install = None;
+    for view in views {
+        let key = match hklm
+            .open_subkey_with_flags(r"SOFTWARE\Tencent\GameLoop", winreg::enums::KEY_READ | view)
+        {
+            Ok(key) => key,
+            Err(error) => {
+                note_registry_error(&mut registry_read_complete, &error);
+                continue;
+            }
         };
-        for sub in key.enum_keys().flatten() {
-            let path = format!("{base}\\{sub}");
-            if let Ok(subkey) = hklm.open_subkey(&path) {
-                if let Ok(install) = subkey.get_value::<String, _>("InstallPath") {
-                    let install = install.trim().to_string();
-                    if !install.is_empty() && PathBuf::from(&install).exists() {
-                        v6_installs.push(install);
+        if v7_version.is_none() {
+            match key.get_value::<String, _>("Version") {
+                Ok(value) => {
+                    v7_version = Some(value.trim().to_string()).filter(|s| !s.is_empty());
+                }
+                Err(error) => note_registry_error(&mut registry_read_complete, &error),
+            }
+        }
+        if v7_install.is_none() {
+            match key.get_value::<String, _>("InstallPath") {
+                Ok(value) => {
+                    v7_install = Some(value.trim().to_string())
+                        .filter(|s| !s.is_empty() && PathBuf::from(s).is_absolute());
+                }
+                Err(error) => note_registry_error(&mut registry_read_complete, &error),
+            }
+        }
+    }
+
+    let mut v6_installs: Vec<String> = Vec::new();
+    for view in views {
+        for base in V6.reg_subkey_roots {
+            let key = match hklm.open_subkey_with_flags(*base, winreg::enums::KEY_READ | view) {
+                Ok(key) => key,
+                Err(error) => {
+                    note_registry_error(&mut registry_read_complete, &error);
+                    continue;
+                }
+            };
+            for sub in key.enum_keys() {
+                let sub = match sub {
+                    Ok(sub) => sub,
+                    Err(error) => {
+                        note_registry_error(&mut registry_read_complete, &error);
+                        continue;
                     }
+                };
+                let path = format!("{base}\\{sub}");
+                match hklm.open_subkey_with_flags(&path, winreg::enums::KEY_READ | view) {
+                    Ok(subkey) => match subkey.get_value::<String, _>("InstallPath") {
+                        Ok(install) => {
+                            let install = install.trim().to_string();
+                            if !install.is_empty()
+                                && PathBuf::from(&install).is_absolute()
+                                && !v6_installs.iter().any(|p| p.eq_ignore_ascii_case(&install))
+                            {
+                                v6_installs.push(install);
+                            }
+                        }
+                        Err(error) => note_registry_error(&mut registry_read_complete, &error),
+                    },
+                    Err(error) => note_registry_error(&mut registry_read_complete, &error),
                 }
             }
         }
     }
 
-    // Uninstall entries name the live Application dir for ANY build
-    // (DisplayIcon = ...\Application\Uninstall.exe): the one discovery
-    // source that needs no per-version knowledge at all.
+    // Uninstall entries can reveal custom locations even when the direct
+    // Tencent key is absent. Read both registry views and all entries whose
+    // product name identifies GameLoop.
     let mut uninstall_dirs = Vec::new();
+    let mut install_dirs = Vec::new();
     for root in [&hklm, &hkcu] {
-        if let Ok(key) =
-            root.open_subkey(r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\GameLoop")
-        {
-            if let Ok(icon) = key.get_value::<String, _>("DisplayIcon") {
-                let dir = PathBuf::from(icon.trim().trim_matches('"'));
-                if dir.is_absolute() {
-                    if let Some(parent) = dir.parent() {
-                        uninstall_dirs.push(parent.to_path_buf().to_string_lossy().to_string());
-                        if let Some(grand) = parent.parent() {
-                            uninstall_dirs.push(grand.to_path_buf().to_string_lossy().to_string());
-                        }
-                    }
-                }
-            }
+        for view in views {
+            read_gameloop_uninstall_entries(
+                root,
+                view,
+                &mut install_dirs,
+                &mut uninstall_dirs,
+                &mut registry_read_complete,
+            );
         }
     }
 
@@ -170,7 +222,123 @@ pub fn read_snapshot() -> RegistrySnapshot {
         v7_install,
         v6_installs,
         uninstall_dirs,
+        install_dirs,
+        registry_read_complete,
         running_apps,
+    }
+}
+
+fn read_gameloop_uninstall_entries(
+    root: &winreg::RegKey,
+    view: u32,
+    install_dirs: &mut Vec<String>,
+    uninstall_dirs: &mut Vec<String>,
+    registry_read_complete: &mut bool,
+) {
+    let path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall";
+    let key = match root.open_subkey_with_flags(path, winreg::enums::KEY_READ | view) {
+        Ok(key) => key,
+        Err(error) => {
+            note_registry_error(registry_read_complete, &error);
+            return;
+        }
+    };
+    for sub in key.enum_keys() {
+        let sub = match sub {
+            Ok(sub) => sub,
+            Err(error) => {
+                note_registry_error(registry_read_complete, &error);
+                continue;
+            }
+        };
+        let entry = match key.open_subkey_with_flags(&sub, winreg::enums::KEY_READ | view) {
+            Ok(entry) => entry,
+            Err(error) => {
+                note_registry_error(registry_read_complete, &error);
+                continue;
+            }
+        };
+        let display_name = match entry.get_value::<String, _>("DisplayName") {
+            Ok(name) => name.to_ascii_lowercase(),
+            Err(error) => {
+                note_registry_error(registry_read_complete, &error);
+                String::new()
+            }
+        };
+        if !sub.to_ascii_lowercase().contains("gameloop") && !display_name.contains("gameloop") {
+            continue;
+        }
+        match entry.get_value::<String, _>("InstallLocation") {
+            Ok(location) => {
+                if let Some(path) = absolute_registry_path(&location) {
+                    push_install_root(install_dirs, &path);
+                }
+            }
+            Err(error) => note_registry_error(registry_read_complete, &error),
+        }
+        match entry.get_value::<String, _>("DisplayIcon") {
+            Ok(icon) => {
+                if let Some(exe) = display_icon_path(&icon) {
+                    if let Some(parent) = exe.parent() {
+                        push_install_root(install_dirs, parent);
+                        push_install_root(uninstall_dirs, parent);
+                    }
+                }
+            }
+            Err(error) => note_registry_error(registry_read_complete, &error),
+        }
+    }
+}
+
+fn note_registry_error(complete: &mut bool, error: &std::io::Error) {
+    let missing_key =
+        error.kind() == std::io::ErrorKind::NotFound || matches!(error.raw_os_error(), Some(2 | 3));
+    if !missing_key {
+        *complete = false;
+    }
+}
+
+fn display_icon_path(icon: &str) -> Option<PathBuf> {
+    let value = icon.trim();
+    let path = if let Some(rest) = value.strip_prefix('"') {
+        let end = rest.find('"')?;
+        &rest[..end]
+    } else {
+        value.split(',').next().unwrap_or(value).trim()
+    };
+    let path = PathBuf::from(path);
+    path.is_absolute().then_some(path)
+}
+
+fn absolute_registry_path(path: &str) -> Option<PathBuf> {
+    let path = PathBuf::from(path.trim().trim_matches('"'));
+    if path.is_absolute() {
+        Some(path)
+    } else {
+        None
+    }
+}
+
+fn push_install_root(paths: &mut Vec<String>, path: &Path) {
+    push_path(paths, path);
+    if path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.eq_ignore_ascii_case("Application"))
+    {
+        if let Some(parent) = path.parent() {
+            push_path(paths, parent);
+        }
+    }
+}
+
+fn push_path(paths: &mut Vec<String>, path: &Path) {
+    let value = path.to_string_lossy().to_string();
+    if !paths
+        .iter()
+        .any(|existing| existing.eq_ignore_ascii_case(&value))
+    {
+        paths.push(value);
     }
 }
 
@@ -291,7 +459,11 @@ pub fn detect(running: &[String], reg: &RegistrySnapshot) -> Detected {
 /// matched family and the verdict - never other apps' process names
 /// (privacy: the full tasklist must not land in our logs). Pure, so the
 /// shapes stay pinned by tests below.
-pub fn presence_evidence_summary(names: &[String], reg: &RegistrySnapshot) -> String {
+pub fn presence_evidence_summary(
+    names: &[String],
+    reg: &RegistrySnapshot,
+    installation: InstallationStatus,
+) -> String {
     let verdict = detect(names, reg);
     let family = match verdict {
         Detected::V6Game => "v6",
@@ -299,36 +471,89 @@ pub fn presence_evidence_summary(names: &[String], reg: &RegistrySnapshot) -> St
         _ => "none",
     };
     format!(
-        "emulator evidence: procs={} family={} v7ver={} running_apps={} uninstall={} verdict={:?}",
+        "emulator evidence: procs={} family={} v7ver={} running_apps={} uninstall={} installation={:?} verdict={:?}",
         names.len(),
         family,
         reg.v7_version.as_deref().unwrap_or("-"),
         reg.running_apps.len(),
         reg.uninstall_dirs.len(),
+        installation,
         verdict,
     )
 }
 
-/// Probe once and log the evidence summary. Called ONLY on blocked
-/// starts (user-initiated, rare): the extra tasklist + registry pass
-/// never touches the per-tick hot path.
-pub fn log_presence_evidence() {
-    let names = super::sampler::query_all_proc_names().unwrap_or_default();
-    let reg = read_snapshot();
-    super::logging::info(&presence_evidence_summary(&names, &reg));
+/// Classify installation using registry-discovered custom roots and stock
+/// roots, requiring a known emulator executable rather than an empty folder.
+pub fn installation_status(reg: &RegistrySnapshot) -> InstallationStatus {
+    installation_status_with_stock_paths(
+        reg,
+        V6.stock_paths
+            .iter()
+            .chain(V7.stock_paths.iter())
+            .map(PathBuf::from),
+    )
 }
 
-/// Any install evidence at all: separates "installed but closed" from
-/// "never installed", and a mid-boot transient (helper up, family not yet)
-/// from a truly foreign build - using only existence-validated reads.
-/// v7/v6 installs arrive validated; Uninstall entries do not (only the
-/// resolver checks them), so this validates those here: a stale entry
-/// pointing at a deleted dir proves nothing installed.
-pub fn has_install_evidence(reg: &RegistrySnapshot) -> bool {
-    if reg.v7_install.is_some() || !reg.v6_installs.is_empty() {
-        return true;
+fn installation_status_with_stock_paths(
+    reg: &RegistrySnapshot,
+    stock_paths: impl Iterator<Item = PathBuf>,
+) -> InstallationStatus {
+    let mut roots = Vec::new();
+    for path in reg
+        .v7_install
+        .iter()
+        .chain(reg.v6_installs.iter())
+        .chain(reg.install_dirs.iter())
+        .chain(reg.uninstall_dirs.iter())
+        .map(PathBuf::from)
+        .chain(stock_paths)
+    {
+        if path.is_absolute()
+            && !roots.iter().any(|existing: &PathBuf| {
+                existing
+                    .to_string_lossy()
+                    .eq_ignore_ascii_case(&path.to_string_lossy())
+            })
+        {
+            roots.push(path);
+        }
     }
-    reg.uninstall_dirs.iter().any(|d| PathBuf::from(d).exists())
+
+    let executables: Vec<&str> = V6
+        .exe_names
+        .iter()
+        .chain(V7.exe_names.iter())
+        .copied()
+        .collect();
+    let mut has_unverified_root = false;
+    for root in roots {
+        match std::fs::metadata(&root) {
+            Ok(metadata) if metadata.is_dir() => {}
+            Ok(_) => continue,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(_) => {
+                has_unverified_root = true;
+                continue;
+            }
+        }
+
+        has_unverified_root = true;
+        let versioned = application_versions(&root);
+        for marker in candidate_paths(&[root], &executables, &[versioned]) {
+            match std::fs::metadata(marker) {
+                Ok(metadata) if metadata.is_file() => return InstallationStatus::Installed,
+                Ok(_) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(_) => has_unverified_root = true,
+            }
+        }
+    }
+
+    if has_unverified_root || !reg.registry_read_complete {
+        InstallationStatus::Unknown
+    } else {
+        InstallationStatus::NotInstalled
+    }
 }
 
 /// Install roots for the exe resolver, strongest evidence first:
@@ -355,14 +580,28 @@ pub fn resolve_roots(reg: &RegistrySnapshot) -> Vec<PathBuf> {
             }
         }
     }
+    for d in &reg.install_dirs {
+        let dir = PathBuf::from(d);
+        if dir.exists() {
+            push(dir.clone());
+            if let Some(parent) = dir.parent() {
+                push(parent.to_path_buf());
+            }
+        }
+    }
     if let Some(install) = &reg.v7_install {
-        push(PathBuf::from(install));
+        let dir = PathBuf::from(install);
+        if dir.exists() {
+            push(dir);
+        }
     }
     for install in &reg.v6_installs {
         let dir = PathBuf::from(install);
-        push(dir.clone());
-        if let Some(parent) = dir.parent() {
-            push(parent.to_path_buf());
+        if dir.exists() {
+            push(dir.clone());
+            if let Some(parent) = dir.parent() {
+                push(parent.to_path_buf());
+            }
         }
     }
     for stock in V6.stock_paths.iter().chain(V7.stock_paths.iter()) {
@@ -456,6 +695,8 @@ mod tests {
             v7_install: v7_install.map(str::to_string),
             v6_installs: v6_installs.iter().map(|s| s.to_string()).collect(),
             uninstall_dirs: uninstall_dirs.iter().map(|s| s.to_string()).collect(),
+            install_dirs: Vec::new(),
+            registry_read_complete: true,
             running_apps: running_apps.iter().map(|s| s.to_string()).collect(),
         }
     }
@@ -541,17 +782,52 @@ mod tests {
     }
 
     #[test]
-    fn install_evidence_separates_installed_from_clean() {
-        // validated installs count on every platform (no disk touch)
-        let with_v7 = reg(Some("7.0.19.05"), Some(r"C:\GL\v7"), vec![], vec![], vec![]);
-        assert!(has_install_evidence(&with_v7));
-        let with_v6 = reg(None, None, vec![r"C:\GL\v6"], vec![], vec![]);
-        assert!(has_install_evidence(&with_v6));
-        // Uninstall dirs are validated against the live filesystem: the
-        // temp dir exists everywhere (even Linux CI), a bogus path nowhere
-        let live = std::env::temp_dir().to_string_lossy().to_string();
-        let with_uninstall = reg(None, None, vec![], vec![live.as_str()], vec![]);
-        assert!(has_install_evidence(&with_uninstall));
+    fn installation_requires_a_known_emulator_file() {
+        let (root, cleanup) = temp_install_dir();
+        std::fs::create_dir_all(root.join("Application").join("7.0.1"))
+            .expect("create versioned application path");
+        std::fs::write(
+            root.join("Application")
+                .join("7.0.1")
+                .join("GameLoopEmulator.exe"),
+            [],
+        )
+        .expect("create emulator marker");
+        let custom = reg(None, None, vec![], vec![], vec![]);
+        let mut custom = custom;
+        custom.install_dirs.push(root.to_string_lossy().to_string());
+        assert_eq!(installation_status(&custom), InstallationStatus::Installed);
+        std::fs::remove_dir_all(cleanup).expect("remove test install directory");
+    }
+
+    #[test]
+    fn existing_but_unverified_custom_location_is_unknown() {
+        let (root, cleanup) = temp_install_dir();
+        let mut custom = empty_reg();
+        custom.install_dirs.push(root.to_string_lossy().to_string());
+        assert_eq!(installation_status(&custom), InstallationStatus::Unknown);
+        std::fs::remove_dir_all(cleanup).expect("remove test install directory");
+    }
+
+    #[test]
+    fn display_icon_yields_only_the_game_loop_install_roots() {
+        let icon = display_icon_path(r#""D:\Games\Tencent\GameLoop\Application\Uninstall.exe",0"#)
+            .expect("quoted display icon path");
+        let mut roots = Vec::new();
+        push_install_root(&mut roots, icon.parent().expect("application directory"));
+        assert_eq!(
+            roots,
+            vec![
+                r"D:\Games\Tencent\GameLoop\Application".to_string(),
+                r"D:\Games\Tencent\GameLoop".to_string()
+            ]
+        );
+        assert!(display_icon_path(r#"D:\Games\GameLoop\Uninstall.exe,0"#).is_some());
+        assert!(display_icon_path(r#""relative\Uninstall.exe",0"#).is_none());
+    }
+
+    #[test]
+    fn stale_registry_location_and_clean_machine_are_not_installed() {
         let stale = reg(
             None,
             None,
@@ -559,8 +835,55 @@ mod tests {
             vec![r"C:\definitely-not-here-zzz"],
             vec![],
         );
-        assert!(!has_install_evidence(&stale));
-        assert!(!has_install_evidence(&empty_reg()));
+        assert_eq!(
+            installation_status(&stale),
+            InstallationStatus::NotInstalled
+        );
+        assert_eq!(
+            installation_status(&empty_reg()),
+            InstallationStatus::NotInstalled
+        );
+    }
+
+    #[test]
+    fn unreadable_registry_sources_make_install_status_unknown() {
+        let mut incomplete = empty_reg();
+        incomplete.registry_read_complete = false;
+        assert_eq!(
+            installation_status_with_stock_paths(&incomplete, std::iter::empty()),
+            InstallationStatus::Unknown
+        );
+    }
+
+    #[test]
+    fn stock_location_requires_a_known_emulator_file() {
+        let (stock_path, cleanup) = temp_install_dir();
+        std::fs::write(stock_path.join("GameLoopEmulator.exe"), [])
+            .expect("create emulator marker");
+        assert_eq!(
+            installation_status_with_stock_paths(&empty_reg(), std::iter::once(stock_path),),
+            InstallationStatus::Installed
+        );
+        std::fs::remove_dir_all(cleanup).expect("remove test install directory");
+        assert_eq!(
+            installation_status_with_stock_paths(
+                &empty_reg(),
+                std::iter::once(PathBuf::from(r"C:\definitely-not-here-zzz\GameLoop")),
+            ),
+            InstallationStatus::NotInstalled
+        );
+    }
+
+    fn temp_install_dir() -> (PathBuf, PathBuf) {
+        let path = std::env::temp_dir().join(format!(
+            "laghunter-gameloop-test-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock after epoch")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&path).expect("create test install directory");
+        (path.clone(), path)
     }
 
     #[test]
@@ -576,6 +899,7 @@ mod tests {
                 vec![r"C:\GL"],
                 vec!["com.tencent.ig"],
             ),
+            InstallationStatus::Installed,
         );
         assert!(line.contains("procs=2"), "{line}");
         assert!(line.contains("family=v7"), "{line}");
@@ -587,6 +911,7 @@ mod tests {
         let closed = presence_evidence_summary(
             &["explorer.exe".into()],
             &reg(None, None, vec![], vec![r"C:\GL"], vec![]),
+            InstallationStatus::Installed,
         );
         assert!(closed.contains("verdict=Absent"), "{closed}");
     }

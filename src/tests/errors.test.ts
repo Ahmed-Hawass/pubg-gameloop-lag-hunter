@@ -41,6 +41,19 @@ describe("errorDialog", () => {
     expect(d.key).toBe("GAMELOOP_NOT_INSTALLED");
   });
 
+  it("explains when GameLoop detection itself fails", () => {
+    const d = errorDialog("GAMELOOP_DETECTION_FAILED: tasklist unavailable", en.errors, COPY);
+    expect(d.title).toBe(en.dialog.somethingWrong);
+    expect(d.body).toBe(en.errors.GAMELOOP_DETECTION_FAILED);
+    expect(d.key).toBe("GAMELOOP_DETECTION_FAILED");
+  });
+
+  it("uses a separate message when the installation status is inconclusive", () => {
+    const d = errorDialog("GAMELOOP_INSTALL_STATUS_UNKNOWN", en.errors, COPY);
+    expect(d.body).toBe(en.errors.GAMELOOP_INSTALL_STATUS_UNKNOWN);
+    expect(d.key).toBe("GAMELOOP_INSTALL_STATUS_UNKNOWN");
+  });
+
   it("maps an unrecognized emulator build to its honest copy, never the game gate", () => {
     // EMULATOR_UNKNOWN must not collapse into GAMELOOP_NOT_RUNNING: the
     // game may well be running under a build we have no card for

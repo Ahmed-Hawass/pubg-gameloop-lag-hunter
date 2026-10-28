@@ -87,6 +87,7 @@ export interface UiState {
 }
 
 export type SessionStatus = "idle" | "running" | "stopping" | "finished";
+export type GameLoopInstallationStatus = "installed" | "not_installed" | "unknown";
 
 export interface StatusPayload {
   status: SessionStatus;
@@ -317,6 +318,8 @@ export const api = {
     invoke<string[]>("delete_all_sessions", { excludeId }),
   sessionsRoot: () => invoke<string>("sessions_root"),
   getSettings: () => invoke<Settings>("get_settings"),
+  gameLoopInstallationStatus: () =>
+    invoke<GameLoopInstallationStatus>("game_loop_installation_status"),
   setLanguage: (lang: string) => invoke<string>("set_language", { lang }),
   setTheme: (theme: string) => invoke<string>("set_theme", { theme }),
   /** persist the UI zoom percent (the engine clamps to 80..=125 and

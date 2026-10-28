@@ -7,11 +7,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
+- The app now checks registered custom GameLoop locations and expected emulator files before showing the missing-install notice.
 - Each radio group is one tab stop now: the duration pills, the language, theme, zoom, and unsupported-apps choices, the page file drive and mode, and the sweep mode move with the arrow keys, Home, and End, and horizontal arrows follow the reading direction.
 - The System page shows device details while storage is still being checked, and the health page no longer starts a duplicate check while hidden.
 - A failed storage read now shows a translated retry message without hiding the rest of the device details.
 
 ### Fixed
+- Start Scan now bases its message and diagnostic log on one detection snapshot, excludes Lag Hunter itself from GameLoop detection, and avoids claiming GameLoop is absent when installation evidence is inconclusive.
 - The window now opens at the saved interface size instead of briefly showing the default size.
 - Closing the update window, or leaving it for another dialog, no longer leaves the exit confirm claiming a download is still running.
 - Back in Tools and Reports returns keyboard focus to the card or session row that opened the page, and changing a welcome slide focuses its heading instead of dropping focus to the page.

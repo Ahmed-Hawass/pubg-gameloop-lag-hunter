@@ -12,7 +12,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { TitleBar } from "./components/TitleBar";
-import { Dialog, dispatchAppDialogOpen, dispatchModalOpen } from "./components/components";
+import { Dialog, dispatchAppDialogOpen, dispatchModalOpen, IntroCard } from "./components/components";
 import { AppSidebar, type SidebarTab } from "./components/AppSidebar";
 import { MonitorView } from "./views/MonitorView";
 import { ReportsView } from "./views/ReportsView";
@@ -24,7 +24,7 @@ import { ToolsView } from "./views/ToolsView";
 import { AboutView } from "./views/AboutView";
 import { SettingsView } from "./views/SettingsView";
 import { WelcomeView } from "./views/WelcomeView";
-import { api, isWindowVisible, logFrontendInfo, onEngineState, onTrayExit, onTrayQuickScan, quitApp, revealWindow, setTrayActive, setTrayTooltip, showMainWindow, syncTrayLabels, type StatusPayload, type UpdateInfo } from "./bridge";
+import { api, isWindowVisible, logFrontendError, logFrontendInfo, onEngineState, onTrayExit, onTrayQuickScan, quitApp, revealWindow, setTrayActive, setTrayTooltip, showMainWindow, syncTrayLabels, type GameLoopInstallationStatus, type StatusPayload, type UpdateInfo } from "./bridge";
 import {
   hasLiveResult,
   quickScanIntent,
@@ -39,6 +39,7 @@ import { resolveTheme, type ThemeSetting } from "./theme";
 import { useUiZoom } from "./useUiZoom";
 import { useExitGate } from "./useExitGate";
 import { UpdateModal } from "./components/UpdateModal";
+import { INTRO_CARDS_EVENT } from "./useIntroCard";
 
 type View =
   | "monitor"
@@ -126,6 +127,33 @@ export default function App() {
       theme: Settings pills, the gaming-page link, and the page share
       one state, persisted per machine) */
   const [showUnsupported, setShowUnsupported] = useState(false);
+  const [gameLoopInstallation, setGameLoopInstallation] =
+    useState<GameLoopInstallationStatus | null>(null);
+  const [dismissedCards, setDismissedCards] = useState<string[] | null>(null);
+  const gameLoopCheckRef = useRef<Promise<GameLoopInstallationStatus> | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    gameLoopCheckRef.current ??= api.gameLoopInstallationStatus();
+    gameLoopCheckRef.current
+      .then((installation) => {
+        if (live) setGameLoopInstallation(installation);
+      })
+      .catch((error) => {
+        if (live) {
+          void logFrontendError(`GameLoop installation check failed: ${String(error)}`).catch(() => {});
+        }
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const reset = () => setDismissedCards([]);
+    window.addEventListener(INTRO_CARDS_EVENT, reset);
+    return () => window.removeEventListener(INTRO_CARDS_EVENT, reset);
+  }, []);
 
   // zoom shortcuts (browser convention, VS Code included): Ctrl+= in,
   // Ctrl+- out, Ctrl+0 reset. Arabic layouts remap these keys - the
@@ -196,6 +224,14 @@ export default function App() {
     setShowUnsupported(v);
     void api.setShowUnsupported(v).catch((error) => {
       setShowUnsupported(previous);
+      showSettingsError(error);
+    });
+  };
+  const dismissGameLoopCard = () => {
+    const previous = dismissedCards ?? [];
+    setDismissedCards([...previous, "gameloop-not-installed"]);
+    void api.dismissIntroCard("gameloop-not-installed").catch((error) => {
+      setDismissedCards(previous);
       showSettingsError(error);
     });
   };
@@ -301,6 +337,7 @@ export default function App() {
       .then((s) => {
         setDurationSecs(s.auto_stop_minutes * 60);
         setCollapsed(s.sidebar_collapsed);
+        setDismissedCards(s.dismissed_cards ?? []);
         setShowUnsupported(s.show_unsupported ?? false);
         setOnboardingDone(s.onboarding_done);
         setGameAdviceDone(s.game_advice_done);
@@ -746,6 +783,18 @@ export default function App() {
               />
             )}
             <main className="content">
+              {gameLoopInstallation === "not_installed" &&
+              dismissedCards !== null &&
+              !dismissedCards.includes("gameloop-not-installed") ? (
+                <section className="game-loop-warning">
+                  <IntroCard
+                    title={t.introGameLoopMissingTitle}
+                    body={t.introGameLoopMissingBody}
+                    dismissLabel={t.dialog.dismiss}
+                    onDismiss={dismissGameLoopCard}
+                  />
+                </section>
+              ) : null}
               {/* Every view mounts ONCE and stays alive; activation gates
                   expensive reads, while the engine caches results between
                   visits. */}

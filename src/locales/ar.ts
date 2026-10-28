@@ -124,6 +124,10 @@ export const ar: Locale = {
   // ---- error codes from the backend ----
   errors: {
     GAMELOOP_NOT_RUNNING: "لعبة PUBG Mobile ليست قيد التشغيل داخل GameLoop. شغّلها أولًا.",
+    GAMELOOP_DETECTION_FAILED:
+      "تعذّر على Lag Hunter التحقق من حالة GameLoop. تحقّق من إمكانية قراءة التطبيقات قيد التشغيل، ثم أعد المحاولة.",
+    GAMELOOP_INSTALL_STATUS_UNKNOWN:
+      "تعذّر التأكد من تثبيت GameLoop. تحقّق من ملفات تثبيته أو أعد المحاولة.",
     /** no install evidence anywhere: GameLoop was never installed here,
         so "start the game" would be the wrong advice */
     GAMELOOP_NOT_INSTALLED:
@@ -575,6 +579,9 @@ export const ar: Locale = {
   tweakHvciLockedReason: "تخضع لإدارة المسؤول أو قفل UEFI، ولا يمكن تغييرها من هنا.",
   showUnsupportedLink: "إظهار الخيارات غير المتاحة",
   tweakFailed: "تعذّر التحقق من التغيير، لذا لم يُطبَّق.",
+  introGameLoopMissingTitle: "لم يُعثر على GameLoop في هذا الجهاز",
+  introGameLoopMissingBody:
+    "لن تعمل بعض الميزات، مثل تشخيص تقطيع اللعبة والخيارات التي تتطلب GameLoop، قبل تثبيته.",
   /** storage sweep: scan four safe places, delete only the ticked ones */
   cleanupTitle: "تنظيف الملفات المؤقتة",
   introCleanupTitle: "وحدك تقرر ما يُحذف",

@@ -15,6 +15,7 @@ import { settings, systemInfo } from "./fixtures";
 const apiMock = vi.hoisted(() => ({
   getState: vi.fn(),
   getSettings: vi.fn(),
+  gameLoopInstallationStatus: vi.fn(),
   psAvailable: vi.fn(),
   getVersion: vi.fn(),
   watchGameloop: vi.fn(),
@@ -56,6 +57,7 @@ vi.mock("../bridge", () => ({
   revealWindow: vi.fn().mockResolvedValue(undefined),
   setTrayActive: vi.fn().mockResolvedValue(undefined),
   logFrontendInfo: vi.fn().mockResolvedValue(undefined),
+  logFrontendError: vi.fn().mockResolvedValue(undefined),
   onEngineState: vi.fn((cb: (ev: { payload: StatusPayload }) => void) => {
     enginePush = cb;
     return Promise.resolve(() => {});
@@ -88,6 +90,7 @@ vi.mock("../i18n", () => ({
 
 // 24-hour default file-wide (mounted views read the OS convention)
 apiMock.clockHour12.mockResolvedValue(false);
+apiMock.gameLoopInstallationStatus.mockResolvedValue("installed");
 // intro cards read the dismissal list on mount (always-mounted views)
 apiMock.getSettings.mockResolvedValue(settings());
 

@@ -928,12 +928,34 @@ pub enum Presence {
     Absent,
 }
 
+/// One internally consistent snapshot for the user-initiated Start gate.
+/// The verdict, install state, and log evidence all come from the same
+/// process list and registry read.
+pub struct StartDetectionSnapshot {
+    pub presence: Presence,
+    pub installation: super::emulator::InstallationStatus,
+    pub evidence: String,
+}
+
 /// Presence from live evidence: one tasklist + one registry snapshot.
 /// Thin I/O edge; the decision itself is the pure emulator::detect.
 pub fn presence() -> Presence {
     let names = query_all_proc_names().unwrap_or_default();
+    let names = emulator_process_names(&names);
     let reg = super::emulator::read_snapshot();
-    match super::emulator::detect(&names, &reg) {
+    presence_from_evidence(&names, &reg)
+}
+
+fn emulator_process_names(names: &[String]) -> Vec<String> {
+    names
+        .iter()
+        .filter(|name| !is_self_process(name))
+        .cloned()
+        .collect()
+}
+
+fn presence_from_evidence(names: &[String], reg: &super::emulator::RegistrySnapshot) -> Presence {
+    match super::emulator::detect(names, reg) {
         super::emulator::Detected::V6Game | super::emulator::Detected::V7Game { .. } => {
             Presence::GameRunning
         }
@@ -943,9 +965,96 @@ pub fn presence() -> Presence {
     }
 }
 
+/// Read process and registry evidence exactly once for Start Scan. Unlike
+/// the idle watcher, a failed process query must not look like "not installed".
+pub fn start_detection_snapshot() -> Result<StartDetectionSnapshot, String> {
+    let processes = query_all_process_entries()?;
+    let process_names: Vec<String> = processes
+        .iter()
+        .map(|process| process.name.clone())
+        .collect();
+    let names = emulator_process_names(&process_names);
+    let reg = super::emulator::read_snapshot();
+    let presence = presence_from_evidence(&names, &reg);
+    let installation = installation_status_with_live_processes(&reg, &processes);
+    let evidence = super::emulator::presence_evidence_summary(&names, &reg, installation);
+    Ok(StartDetectionSnapshot {
+        presence,
+        installation,
+        evidence,
+    })
+}
+
+pub fn probe_installation_status() -> Result<super::emulator::InstallationStatus, String> {
+    let reg = super::emulator::read_snapshot();
+    let registry_status = super::emulator::installation_status(&reg);
+    if registry_status == super::emulator::InstallationStatus::Installed {
+        return Ok(registry_status);
+    }
+    let processes = query_all_process_entries()?;
+    Ok(installation_status_with_live_processes(&reg, &processes))
+}
+
+fn installation_status_with_live_processes(
+    reg: &super::emulator::RegistrySnapshot,
+    processes: &[TasklistProcess],
+) -> super::emulator::InstallationStatus {
+    let registry_status = super::emulator::installation_status(reg);
+    if registry_status == super::emulator::InstallationStatus::Installed {
+        return registry_status;
+    }
+    let mut live_emulator_hint = false;
+    let is_running_install = processes.iter().any(|process| {
+        if is_self_process(&process.name)
+            || (!is_gameloop_process(&process.name)
+                && !super::emulator::is_unknown_hint(&process.name))
+        {
+            return false;
+        }
+        live_emulator_hint = true;
+        let Some(pid) = process.pid else {
+            return false;
+        };
+        let Some(path) = super::system::process_image_path(pid) else {
+            return false;
+        };
+        process_path_confirms_name(&process.name, &path)
+    });
+    if is_running_install {
+        super::emulator::InstallationStatus::Installed
+    } else if live_emulator_hint
+        && registry_status == super::emulator::InstallationStatus::NotInstalled
+    {
+        super::emulator::InstallationStatus::Unknown
+    } else {
+        registry_status
+    }
+}
+
+fn process_path_confirms_name(name: &str, path: &str) -> bool {
+    let image = std::path::Path::new(path);
+    image.is_file()
+        && image
+            .file_name()
+            .and_then(|file| file.to_str())
+            .is_some_and(|file| file.eq_ignore_ascii_case(name))
+}
+
 /// Every process name on the box (unfiltered): the presence scan above.
-/// Fail-soft like the filtered query - an unreadable table reads as empty.
+/// Query failures stay explicit so Start Scan cannot turn them into an
+/// "uninstalled" result; callers such as the idle watcher may fail soft.
 pub fn query_all_proc_names() -> Result<Vec<String>, String> {
+    query_all_process_entries()
+        .map(|processes| processes.into_iter().map(|process| process.name).collect())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TasklistProcess {
+    name: String,
+    pid: Option<u32>,
+}
+
+fn query_all_process_entries() -> Result<Vec<TasklistProcess>, String> {
     let out = output_tracked(
         Command::new(super::system::system32_exe("tasklist.exe"))
             .args(["/FO", "CSV", "/NH"])
@@ -956,29 +1065,30 @@ pub fn query_all_proc_names() -> Result<Vec<String>, String> {
     )
     .map_err(|e| format!("tasklist spawn failed: {e}"))?;
     if !out.status.success() {
-        return Ok(Vec::new());
+        return Err(format!("tasklist exited with status {}", out.status));
     }
-    Ok(parse_tasklist_names(&String::from_utf8_lossy(&out.stdout)))
+    Ok(parse_tasklist_processes(&String::from_utf8_lossy(
+        &out.stdout,
+    )))
 }
 
-/// Pure CSV first-column parse (the filtered query shares it): quoted
-/// names, any locale - only the name column is ever read here.
-fn parse_tasklist_names(text: &str) -> Vec<String> {
-    let mut names = Vec::new();
-    for line in text.lines() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-        let mut parts = line.split("\",\"");
-        if let Some(name_raw) = parts.next() {
-            let name = name_raw.trim_matches('"');
-            if !name.is_empty() {
-                names.push(name.to_string());
+fn parse_tasklist_processes(text: &str) -> Vec<TasklistProcess> {
+    text.lines()
+        .filter_map(|line| {
+            let mut fields = line.trim().split("\",\"");
+            let name = fields.next()?.trim_matches('"');
+            if name.is_empty() {
+                return None;
             }
-        }
-    }
-    names
+            let pid = fields
+                .next()
+                .and_then(|value| value.trim_matches('"').parse().ok());
+            Some(TasklistProcess {
+                name: name.to_string(),
+                pid,
+            })
+        })
+        .collect()
 }
 
 pub fn detect_emulator() -> Option<String> {
@@ -1488,7 +1598,10 @@ mod tests {
         let text = "\"GameLoopEmulator.exe\",\"8692\",\"Console\",\"1\",\"170,928 K\"\n\
                     \"explorer.exe\",\"8616\",\"Console\",\"1\",\"431,604 K\"\n\
                     \"GLABoxHeadless.exe\",\"9048\",\"Console\",\"1\",\"637,124 K\"\n";
-        let names = parse_tasklist_names(text);
+        let names: Vec<String> = parse_tasklist_processes(text)
+            .into_iter()
+            .map(|process| process.name)
+            .collect();
         assert_eq!(
             names,
             vec![
@@ -1498,6 +1611,47 @@ mod tests {
             ]
         );
         assert!(names.iter().any(|n| is_gameloop_process(n)));
+    }
+
+    #[test]
+    fn tasklist_process_rows_include_a_parseable_pid() {
+        let rows = parse_tasklist_processes(
+            "\"GameLoopEmulator.exe\",\"8692\",\"Console\",\"1\",\"170,928 K\"\n",
+        );
+        assert_eq!(
+            rows,
+            vec![TasklistProcess {
+                name: "GameLoopEmulator.exe".into(),
+                pid: Some(8692),
+            }]
+        );
+    }
+
+    #[test]
+    fn live_process_path_must_match_the_reported_image_name() {
+        let root = std::env::temp_dir().join(format!(
+            "laghunter-process-path-test-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock after epoch")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create test process directory");
+        let image = root.join("GameLoopEmulator.exe");
+        std::fs::write(&image, []).expect("create process image");
+        assert!(process_path_confirms_name(
+            "GameLoopEmulator.exe",
+            &image.to_string_lossy()
+        ));
+        assert!(!process_path_confirms_name(
+            "GameLoopAssistant.exe",
+            &image.to_string_lossy()
+        ));
+        assert!(!process_path_confirms_name(
+            "pubg-gameloop-lag-hunter.exe",
+            &image.to_string_lossy()
+        ));
+        std::fs::remove_dir_all(root).expect("remove test process directory");
     }
 
     #[test]
@@ -1514,6 +1668,47 @@ mod tests {
         // anything that doesn't carry our prefix is not us
         assert!(!is_self_process("explorer"));
         assert!(!is_self_process("chrome"));
+    }
+
+    #[test]
+    fn self_process_is_not_treated_as_an_unknown_emulator() {
+        let names = emulator_process_names(&["pubg-gameloop-lag-hunter.exe".into()]);
+        let reg = super::super::emulator::RegistrySnapshot {
+            v7_version: None,
+            v7_install: None,
+            v6_installs: Vec::new(),
+            uninstall_dirs: Vec::new(),
+            install_dirs: Vec::new(),
+            registry_read_complete: true,
+            running_apps: Vec::new(),
+        };
+
+        assert!(names.is_empty());
+        let presence = presence_from_evidence(&names, &reg);
+        let installation = super::super::emulator::installation_status(&reg);
+        assert_eq!(
+            super::super::session::start_gate_error(presence, installation),
+            Some("GAMELOOP_NOT_INSTALLED")
+        );
+    }
+
+    #[test]
+    fn unknown_emulator_processes_are_still_detected() {
+        let names = emulator_process_names(&["TencentGameLoopNext.exe".into()]);
+        let reg = super::super::emulator::RegistrySnapshot {
+            v7_version: None,
+            v7_install: None,
+            v6_installs: Vec::new(),
+            uninstall_dirs: Vec::new(),
+            install_dirs: Vec::new(),
+            registry_read_complete: true,
+            running_apps: Vec::new(),
+        };
+
+        assert_eq!(
+            presence_from_evidence(&names, &reg),
+            Presence::UnknownVersion
+        );
     }
 
     #[test]

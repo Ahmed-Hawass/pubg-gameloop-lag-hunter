@@ -85,6 +85,17 @@ async fn system_disks() -> Result<Vec<engine::system::DiskInfo>, String> {
 }
 
 #[tauri::command]
+async fn game_loop_installation_status() -> Result<engine::emulator::InstallationStatus, String> {
+    let _t = engine::logging::timed("ipc: game_loop_installation_status");
+    let res = tauri::async_runtime::spawn_blocking(engine::sampler::probe_installation_status)
+        .await
+        .map_err(|e| format!("GameLoop installation task failed: {e}"))
+        .and_then(|r| r);
+    log_err("game_loop_installation_status", &res);
+    res
+}
+
+#[tauri::command]
 async fn top_processes(force: bool) -> Result<engine::system::TopProcesses, String> {
     let _t = engine::logging::timed("ipc: top_processes");
     // first call on a run pays a PowerShell spawn - blocking pool, never the
@@ -1237,6 +1248,7 @@ pub fn run() {
             watch_gameloop,
             system_info,
             system_disks,
+            game_loop_installation_status,
             top_processes,
             end_processes,
             process_icons,
